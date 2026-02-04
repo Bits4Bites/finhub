@@ -1,0 +1,114 @@
+name: 'ci'
+
+on:
+  push:
+    branches: [ '*' ]
+    paths-ignore:
+      - '.github/dependabot.yaml'
+  pull_request:
+    types: [ opened, edited, reopened, synchronize, review_requested ]
+    branches: [ '*' ]
+  workflow_call:
+
+  # Allow manually trigger
+  workflow_dispatch:
+
+env:
+  TAG_PREFIX: v
+  DOCKER_IMAGE: btnguyen2k/qnd-papi-template # update your Docker Hub image name here
+
+jobs:
+  BuildAndTest:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: [ '3.10', '3.11', '3.12', '3.13', '3.14' ] # change target Python versions if needed
+    name: Build and Test with Python ${{ matrix.python }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Lint code
+        run: |
+          flake8 ./app
+          black --check --diff ./app
+      - name: Run tests
+        run: |
+          # Run unit tests
+          pytest
+
+  BuildDockerAndQuickTest:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        platforms: [ 'linux/amd64', 'linux/arm64' ] # change target platform list if needed
+        dockerfiles: [ 'Dockerfile' ] # add more Dockerfiles here if needed
+    name: Build and Test Docker image(s) for ${{ matrix.platforms }} with ${{ matrix.dockerfiles }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build Docker image for ${{ matrix.platforms }} with ${{ matrix.dockerfiles }}
+        uses: docker/build-push-action@v6
+        with:
+          platforms: ${{ matrix.platforms }}
+          push: false
+          load: true
+          tags: test
+          file: ./${{ matrix.dockerfiles }}
+          context: ./
+      - name: Test Docker container for ${{ matrix.platforms }} with ${{ matrix.dockerfiles }}
+        run: |
+          CONTAINER=$(docker run -d \
+            --name test \
+            -p 1234:8000 \
+            -e NUM_WORKERS=1 \
+            --platform ${{ matrix.platforms }} \
+            test)
+          sleep 20 # Wait for the container to start and bootstrap, increase wait time if needed
+          docker logs ${CONTAINER}
+          STATUS_OUTPUT=$(curl http://localhost:1234/health)
+          echo "ℹ️ Health check output: $STATUS_OUTPUT"
+          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:1234/health)
+          if [ "$STATUS_CODE" -ne 200 ]; then
+            echo "❌ Health check failed with status code $STATUS_CODE"
+            exit 1
+          fi
+
+  ReleaseDryRun:
+    if: github.event_name == 'push'
+    needs: [BuildAndTest, BuildDockerAndQuickTest]
+    runs-on: ubuntu-latest
+    outputs:
+      RESULT: ${{ steps.release_dry_run.outputs.result }}
+      VERSION: ${{ steps.release_dry_run.outputs.releaseVersion }}
+      RELEASE_NOTES: ${{ steps.release_dry_run.outputs.releaseNotes }}
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+      - name: Install Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 'lts/*'
+      - name: Release (dry-run)
+        # see https://github.com/btnguyen2k/action-semrelease for documentation
+        id: release_dry_run
+        uses: btnguyen2k/action-semrelease@v4
+        with:
+          dry-run: true
+          auto-mode: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          tag-major-release: false
+          tag-minor-release: false
+          branches: ${{ github.ref_name }}
+          tag-prefix: ${{ env.TAG_PREFIX }}
+          tag-only: true

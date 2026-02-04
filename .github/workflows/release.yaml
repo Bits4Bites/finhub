@@ -1,0 +1,257 @@
+# Automatically release a new version when a PR is merged to branch `release`
+
+name: 'release'
+on:
+  pull_request:
+    types: [ closed ]
+    branches: [ release ]
+
+env:
+  BRANCH_TO_RELEASE: 'release'
+  TAG_PREFIX: 'v'
+  FILE_CHANGELOG: 'RELEASE-NOTES.md'
+  DOCKER_IMAGE: btnguyen2k/qnd-papi-template # update your Docker Hub image name here
+
+jobs:
+  CallCI:
+    uses: ./.github/workflows/ci.yaml
+    secrets: inherit
+
+  ReleaseDryRun:
+    runs-on: ubuntu-latest
+    needs: [ CallCI ]
+    if: |
+      github.event.pull_request.merged == true
+    outputs:
+      RESULT: ${{ steps.release_dry_run.outputs.result }}
+      VERSION: ${{ steps.release_dry_run.outputs.releaseVersion }}
+      RELEASE_NOTES: ${{ steps.release_dry_run.outputs.releaseNotes }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+      - name: Install Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 'lts/*'
+      - name: Release (dry-run)
+        # see https://github.com/btnguyen2k/action-semrelease for documentation
+        id: release_dry_run
+        uses: btnguyen2k/action-semrelease@v4
+        with:
+          dry-run: true
+          auto-mode: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          tag-major-release: false
+          tag-minor-release: false
+          branches: ${{ env.BRANCH_TO_RELEASE }}
+          tag-prefix: ${{ env.TAG_PREFIX }}
+          tag-only: true
+
+  Release:
+    runs-on: ubuntu-latest
+    if: |
+      github.event.pull_request.merged == true
+    needs: [ ReleaseDryRun ]
+    permissions:
+      contents: write # to be able to publish a GitHub release
+    outputs:
+      RESULT: ${{ needs.ReleaseDryRun.outputs.RESULT }}
+      VERSION: ${{ needs.ReleaseDryRun.outputs.VERSION }}
+      RELEASE_NOTES: ${{ needs.ReleaseDryRun.outputs.RELEASE_NOTES }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Update module meta
+        run: |
+          RESULT='${{ needs.ReleaseDryRun.outputs.RESULT }}'
+          VERSION='${{ needs.ReleaseDryRun.outputs.VERSION }}'
+          RELEASE_NOTES='${{ needs.ReleaseDryRun.outputs.RELEASE_NOTES }}'
+
+          echo "🕘 Updating module meta..."
+          echo "   - RESULT: ${RESULT}"
+          echo "   - VERSION: ${VERSION}"
+          echo "   - RELEASE_NOTES: ${RELEASE_NOTES}"
+
+          if [ "${RESULT}" == "SUCCESS" ]; then
+            DATE=`date +%Y-%m-%d`
+            head -1 ${FILE_CHANGELOG} > .temp.md
+            echo -e "\n## ${DATE} - v${VERSION}\n\n${RELEASE_NOTES}" >> .temp.md
+            tail -n +2 ${FILE_CHANGELOG} >> .temp.md
+            mv -f .temp.md ${FILE_CHANGELOG}
+            echo ========== content of ${FILE_CHANGELOG} ==========
+            cat ${FILE_CHANGELOG}
+
+            echo ========== update .md files ==========
+            sed -i -E "s/<<VERSION>>/v${VERSION}/" ./*.md
+
+            echo ========== update VERSION info in app/main.py files ==========
+            sed -i -E "s/VERSION\s*=.*/VERSION = \"${VERSION}\"/" app/main.py
+
+            echo ========== commit updates ==========
+            git config --global user.email "<>"
+            git config --global user.name "CI Build"
+            git commit -am "Update ${FILE_CHANGELOG}, *.md files and version info in app/main.py for new version ${VERSION}"
+            git push origin ${BRANCH_TO_RELEASE}
+
+            echo ========== tag ==========
+            git tag -f -a "${TAG_PREFIX}${VERSION}" -m "Release ${TAG_PREFIX}/v${VERSION}"
+            git push origin "${TAG_PREFIX}${VERSION}" -f
+            echo "✅ Done."
+          else
+            echo "❎ SKIPPED."
+          fi
+      - name: Create release
+        uses: actions/github-script@v8
+        env:
+          RESULT: ${{ needs.ReleaseDryRun.outputs.RESULT }}
+          VERSION: ${{ needs.ReleaseDryRun.outputs.VERSION }}
+          RELEASE_NOTES: ${{ needs.ReleaseDryRun.outputs.RELEASE_NOTES }}
+        with:
+            script: |
+              if (process.env['RESULT'] != 'SUCCESS') {
+                console.log('❎ SKIPPED.');
+                return;
+              }
+              const {data: release} = await github.rest.repos.createRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag_name: process.env['TAG_PREFIX'] + process.env['VERSION'],
+                name: process.env['TAG_PREFIX'] + process.env['VERSION'],
+                body: process.env['RELEASE_NOTES'],
+                draft: false,
+                prerelease: false,
+              });
+              console.log('✅ Created release: ', release);
+      - name: Cleanup file .semrelease/this_release
+        run: |
+          RESULT='${{ needs.ReleaseDryRun.outputs.RESULT }}'
+          if [ "${RESULT}" = "SUCCESS" ] && [ -f .semrelease/this_release ]; then
+            VERSION='${{ needs.ReleaseDryRun.outputs.VERSION }}'
+            echo "🕘 Cleaning up file .semrelease/this_release..."
+            echo "# This file has been cleaned up post-releasing version ${VERSION}." > .semrelease/this_release
+            echo "# Generate its content quickly using the following command:" >> .semrelease/this_release
+            echo "#   git log origin..HEAD | grep \"^\s\" > .semrelease/this_release" >> .semrelease/this_release
+            git config --global user.email "<>"
+            git config --global user.name "CI Build"
+            git commit -am "Cleanup file .semrelease/this_release post-releasing version ${VERSION}"
+            git push -f
+            echo "✅ Done."
+          else
+            echo "❎ SKIPPED."
+          fi
+
+  MergeToMain:
+    runs-on: ubuntu-latest
+    needs: [ Release ]
+    permissions:
+      pull-requests: write # to be able to create PRs or comment on released PRs
+    steps:
+      - uses: actions/github-script@v8
+        env:
+          RESULT: ${{ needs.Release.outputs.RESULT }}
+          RELEASE_NOTES: ${{ needs.Release.outputs.RELEASE_NOTES }}
+        with:
+          script: |
+            if (process.env['RESULT'] != 'SUCCESS') {
+              console.log('❎ SKIPPED.');
+              return;
+            }
+            const {data: pr} = await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: "Merge to main after releasing new version ${{ needs.Release.outputs.VERSION }}",
+              body: process['env']['RELEASE_NOTES'],
+              head: process['env']['BRANCH_TO_RELEASE'],
+              base: 'main',
+              maintainer_can_modify: true,
+            });
+            console.log('✅ Created PR: ', pr);
+
+#   PublishDockerImagesLinuxBuild:
+#     if: |
+#       needs.Release.outputs.RESULT == 'SUCCESS'
+#     needs: [Release]
+#     runs-on: ubuntu-latest
+#     strategy:
+#       matrix:
+#         platforms: [ 'linux/amd64', 'linux/arm64' ] # change target platform list if needed
+#     name: Build Docker image(s) - Linux - Release Branch
+#     env:
+#       VERSION: ${{ needs.Release.outputs.VERSION }}
+#     outputs:
+#       VERSION: ${{ needs.Release.outputs.VERSION }}
+#     steps:
+#       - name: Checkout code
+#         uses: actions/checkout@v6
+#         with:
+#           ref: '${{ env.BRANCH_TO_RELEASE }}'
+#       - name: Set up Docker Buildx
+#         uses: docker/setup-buildx-action@v3
+#       - name: Login to Docker Hub
+#         uses: docker/login-action@v3
+#         with:
+#           username: ${{ secrets.DOCKER_HUB_USER }}
+#           password: ${{ secrets.DOCKER_HUB_PAT }}
+#       - name: Prepare
+#         run: |
+#           platform=${{ matrix.platforms }}
+#           echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
+#       - name: Docker meta
+#         id: meta
+#         uses: docker/metadata-action@v5
+#         with:
+#           images: ${{ env.DOCKER_IMAGE }}
+#       - name: Build and push by digest
+#         id: build
+#         uses: docker/build-push-action@v6
+#         with:
+#           platforms: ${{ matrix.platforms }}
+#           labels: ${{ steps.meta.outputs.labels }}
+#           outputs: type=image,name=${{ env.DOCKER_IMAGE }},push-by-digest=true,name-canonical=true,push=true
+#           file: ./Dockerfile
+#           context: ./
+#       - name: Export digest
+#         run: |
+#           mkdir -p /tmp/digests
+#           digest="${{ steps.build.outputs.digest }}"
+#           touch "/tmp/digests/${digest#sha256:}"
+#       - name: Upload digest
+#         uses: actions/upload-artifact@v6
+#         with:
+#           name: digests-${{ env.PLATFORM_PAIR }}
+#           path: /tmp/digests/*
+#           if-no-files-found: error
+#           retention-days: 1
+
+#   PublishDockerImagesLinuxMerge:
+#     runs-on: ubuntu-latest
+#     needs: PublishDockerImagesLinuxBuild
+#     name: Merge & Publish Docker image(s) - Linux
+#     env:
+#       VERSION: ${{ needs.PublishDockerImagesLinuxBuild.outputs.VERSION }}
+#     steps:
+#       - name: Download digests
+#         uses: actions/download-artifact@v7
+#         with:
+#           path: /tmp/digests
+#           pattern: digests-*
+#           merge-multiple: true
+#       - name: Set up Docker Buildx
+#         uses: docker/setup-buildx-action@v3
+#       - name: Docker meta
+#         id: meta
+#         uses: docker/metadata-action@v5
+#         with:
+#           images: ${{ env.DOCKER_IMAGE }}
+#       - name: Login to Docker Hub
+#         uses: docker/login-action@v3
+#         with:
+#           username: ${{ secrets.DOCKER_HUB_USER }}
+#           password: ${{ secrets.DOCKER_HUB_PAT }}
+#       - name: Create manifest list and push
+#         working-directory: /tmp/digests
+#         run: |
+#           docker buildx imagetools create \
+#             -t ${{ env.DOCKER_IMAGE }}:release \
+#             -t ${{ env.DOCKER_IMAGE }}:${{ env.VERSION }} \
+#             -t ${{ env.DOCKER_IMAGE }}:${{ github.sha }} \
+#             $(printf '${{ env.DOCKER_IMAGE }}@sha256:%s ' *)
