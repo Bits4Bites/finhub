@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 
 # from .config import settings
-from .routers import demo
+from .routers import stocks
 
 VERSION = "0.1.0"
 APP_NAME = "Hello World API"
@@ -37,7 +37,7 @@ app = FastAPI(
 )
 
 # Register routers
-app.include_router(demo.router)
+app.include_router(stocks.router)
 
 
 @app.get("/", tags=["root"])
