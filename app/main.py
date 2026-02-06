@@ -3,7 +3,7 @@ from fastapi import FastAPI
 # from .config import settings
 from .routers import stocks
 
-VERSION = "0.1.0"
+VERSION = "0.0.1"
 APP_NAME = "Hello World API"
 APP_DESCRIPTION = "A simple Hello World API server"
 
