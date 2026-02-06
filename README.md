@@ -1,43 +1,23 @@
 # qnd-papi-template
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Actions Status](https://github.com/Bits4Bites/finhub/workflows/ci/badge.svg)](https://github.com/Bits4Bites/finhub/actions)
+[![Release](https://img.shields.io/github/release/Bits4Bites/finhub.svg?style=flat-square)](RELEASE-NOTES.md)
 
-A template repository to quickly spin up a Python API server with containerization support.
-
-## 🛠 How to use this template
-
-Simple click the **Use this template** button on the top-right corner of the GitHub repository page to create your own repository based on this template.
-
-## 📋 Table of Contents
-
-- [Features](#-features)
-- [Prerequisites](#-prerequisites)
-- [Getting Started](#-getting-started)
-- [Docker Support](#-docker-support)
-- [Usage](#-usage)
-- [Contributing](#-contributing)
-- [License](#-license)
+A developer-first financial API hub for stock market data, built for frontend apps and future AI features.
 
 ## ✨ Features
 
-- **🐍 Python-based API Server**: Built with Python for rapid development and deployment
-- **🐳 Docker Ready**: Includes Dockerfile for easy containerization and deployment
-- **⚡ Quick Setup**: Minimal configuration required to get started
-- **🔧 Modular Architecture**: Clean project structure for easy customization
-- **📦 Dependency Management**: Pre-configured dependency management with requirements.txt
-- **🚀 Production Ready**: Configured for both development and production environments
-- **🔄 CI/CD Friendly**: Provided with working GitHub Actions workflows for continuous integration and deployment
+- 📈 Get stock quotes (from Yahoo Finance).
 
-## GitHub Flow
+## 📚 API
 
-This template provides working GitHub Actions workflows implementing the following GitHub Flow:
+### `/stocks/quotes`
 
-![GitHub Flow](./docs/sample_gitflow.svg)
+Get stock quotes for a list of ticker symbols.
 
-- Features are developed and merged into `dev` branch. CI workflow runs on every push.
-- Once development is complete and tested, `dev` branch is merged into `release` branch for release preparation.
-- Release workflow runs on every closed PR to `release` branch, performing tasks such as version bumping, building, testing, packaging, and publishing/deploying artifacts (if applicable).
-- Finally, `release` branch is merged into `main` branch for baseline.
+Query parameters:
+- `symbols` (required): A comma-separated list of ticker symbols to fetch quotes for. Each ticker symbol must follow Yahoo Finance's format (e.g., `AAPL` for Apple Inc., `CBA.AX` for Commonwealth Bank of Australia).
 
 ## 🤝 Contributing
 
@@ -49,7 +29,7 @@ If you find a bug or have a suggestion:
 
 1. **Search existing issues** to avoid duplicates
 2. **Create a new issue** on GitHub:
-   - Go to: https://github.com/btnguyen2k/qnd-papi-template/issues/new
+   - Go to: https://github.com/Bits4Bytes/finhub/issues/new
    - Provide a clear title and description
    - Include steps to reproduce (for bugs)
    - Add relevant labels (bug, enhancement, question, etc.)
@@ -121,9 +101,4 @@ This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md
 
 ## 📞 Contact & Support
 
-- **Issues**: [GitHub Issues](https://github.com/btnguyen2k/qnd-papi-template/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/btnguyen2k/qnd-papi-template/discussions)
-
----
-
-**Happy Coding! 🚀**
+- **Issues**: [GitHub Issues](https://github.com/Bits4Bites/finhub/issues)
