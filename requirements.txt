@@ -6,3 +6,5 @@ pytest
 flake8
 flake8-toml-config
 black
+
+yfinance==1.1.0
