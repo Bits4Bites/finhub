@@ -15,7 +15,7 @@ on:
 
 env:
   TAG_PREFIX: v
-  DOCKER_IMAGE: btnguyen2k/qnd-papi-template # update your Docker Hub image name here
+  DOCKER_IMAGE: btnguyen2k/finhub # update your Docker Hub image name here
 
 jobs:
   BuildAndTest:
