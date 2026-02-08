@@ -3,8 +3,10 @@ from typing import Any
 import yfinance as yf
 from ..models.finhub import SymbolInfo, StockQuote
 
+allowed_quote_types = {"EQUITY", "ETF"}
 
-async def get_symbol_info(symbol: str) -> SymbolInfo:
+
+def get_symbol_info(symbol: str) -> SymbolInfo | None:
     """
     Fetches detailed information about a ticker symbol.
 
@@ -14,8 +16,10 @@ async def get_symbol_info(symbol: str) -> SymbolInfo:
     :rtype: SymbolInfo
     """
     ticker = yf.Ticker(symbol)
-    return SymbolInfo(symbol=symbol, ticker=ticker)
-
+    quote_type = ticker.info.get("quoteType")
+    if quote_type in allowed_quote_types:
+        return SymbolInfo(symbol=symbol, ticker=ticker)
+    return None
 
 def get_symbol_info_raw(symbol: str) -> dict[str, Any]:
     """
@@ -46,10 +50,12 @@ def get_stock_quotes(symbols: list[str]) -> dict[str, StockQuote]:
     :return: A list of SymbolInfo objects containing stock quotes for the requested symbols.
     :rtype: list[SymbolInfo]
     """
-    tickers = yf.Tickers(" ".join(symbols))
+    tickers = yf.Tickers((" ".join(symbols)).upper())
     quotes = {}
     for symbol in symbols:
+        symbol = symbol.upper().strip()
         ticker = tickers.tickers[symbol]
-        quotes[symbol] = StockQuote(ticker)
-
+        quote_type = ticker.info.get("quoteType")
+        if quote_type in allowed_quote_types:
+            quotes[symbol] = StockQuote(ticker)
     return quotes
