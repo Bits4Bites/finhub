@@ -1,6 +1,5 @@
 from fastapi import APIRouter
 
-from ..models.finhub import SymbolInfo
 from ..schemas import finhub as schemas
 from ..services import stock as stock_service
 

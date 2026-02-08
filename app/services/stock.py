@@ -21,6 +21,7 @@ def get_symbol_info(symbol: str) -> SymbolInfo | None:
         return SymbolInfo(symbol=symbol, ticker=ticker)
     return None
 
+
 def get_symbol_info_raw(symbol: str) -> dict[str, Any]:
     """
     Fetches detailed information about a ticker symbol.

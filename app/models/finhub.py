@@ -43,6 +43,10 @@ class StockQuote(BaseModel):
     market_day_high: Optional[float]
     market_day_low: Optional[float]
     market_volume: Optional[int]
+    bid: Optional[float]
+    bid_size: Optional[int]
+    ask: Optional[float]
+    ask_size: Optional[int]
     model_config = {"arbitrary_types_allowed": True}
 
     def __init__(self, ticker: yf.Ticker):
@@ -54,6 +58,10 @@ class StockQuote(BaseModel):
             market_day_high=ticker.info.get("regularMarketDayHigh"),
             market_day_low=ticker.info.get("regularMarketDayLow"),
             market_volume=ticker.info.get("regularMarketVolume"),
+            bid=ticker.info.get("bid"),
+            bid_size=ticker.info.get("bidSize"),
+            ask=ticker.info.get("ask"),
+            ask_size=ticker.info.get("askSize"),
         )
 
 
@@ -66,7 +74,11 @@ class SymbolInfo(SymbolBase):
         super().__init__(
             symbol=symbol,
             currency=ticker.info.get("currency"),
-            exchange=ticker.info.get("fullExchangeName") if ticker.info.get("fullExchangeName") else ticker.info.get("exchange"),
+            exchange=(
+                ticker.info.get("fullExchangeName")
+                if ticker.info.get("fullExchangeName")
+                else ticker.info.get("exchange")
+            ),
             overview=SymbolOverview(ticker),
             stock_quote=StockQuote(ticker),
         )
