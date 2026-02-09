@@ -3,3 +3,4 @@
 #   git log origin..HEAD | grep "^\s" > .semrelease/this_release
 #!VERSION=0.0.2
 - (Feat) Add API to get stock symbol info.
+- (Feat) Add dividend info.
