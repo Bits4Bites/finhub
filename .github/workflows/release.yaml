@@ -10,7 +10,7 @@ env:
   BRANCH_TO_RELEASE: 'release'
   TAG_PREFIX: 'v'
   FILE_CHANGELOG: 'RELEASE-NOTES.md'
-  DOCKER_IMAGE: btnguyen2k/qnd-papi-template # update your Docker Hub image name here
+  DOCKER_IMAGE: btnguyen2k/finhub # update your Docker Hub image name here
 
 jobs:
   CallCI:
