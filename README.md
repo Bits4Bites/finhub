@@ -27,6 +27,9 @@ GET /stocks/quotes?symbols=AAPL,CBA.AX
 ```
 
 Response:
+
+<div style="max-height: 300px !important; overflow: auto;">
+  
 ```json
 {
   "status": 200,
@@ -88,6 +91,8 @@ Response:
 }
 ```
 
+</div>
+
 ### `/<symbol>/info`
 
 Get detailed information about a specific ticker symbol.
@@ -103,6 +108,9 @@ GET /stocks/AAPL/info
 ```
 
 Response:
+
+<div style="max-height: 300px !important; overflow: auto;">
+
 ```json
 {
   "status": 200,
@@ -186,6 +194,8 @@ Response:
   }
 }
 ```
+
+</div>
 
 ## 🤝 Contributing
 
