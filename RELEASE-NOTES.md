@@ -1,5 +1,11 @@
 # qnd-papi-template release notes
 
+## 2026-02-11 - v0.0.3
+
+### Added/Refactoring/Deprecation
+
+- (Feat) Add Stock history info.
+
 ## 2026-02-10 - v0.0.2
 
 ### Added/Refactoring/Deprecation
