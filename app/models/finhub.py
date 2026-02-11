@@ -11,6 +11,11 @@ class SymbolBase(BaseModel):
     model_config = {"arbitrary_types_allowed": True}
 
 
+class HistoryValueDaily(BaseModel):
+    timestamp: int
+    value: float
+
+
 class SymbolOverview(BaseModel):
     country: Optional[str] = None
     short_name: Optional[str] = None
@@ -20,7 +25,6 @@ class SymbolOverview(BaseModel):
     website: Optional[str] = None
     description: Optional[str] = None
     quote_type: Optional[str] = None
-    model_config = {"arbitrary_types_allowed": True}
 
     def __init__(self, ticker: yf.Ticker):
         super().__init__(
@@ -44,7 +48,6 @@ class SymbolDividend(BaseModel):
     trailing_annual_dividend_yield: Optional[float] = None
     last_dividend_value: Optional[float] = None
     last_dividend_date: Optional[int] = None
-    model_config = {"arbitrary_types_allowed": True}
 
     def __init__(self, ticker: yf.Ticker):
         super().__init__(
@@ -84,7 +87,6 @@ class StockQuote(BaseModel):
     target_low_price: Optional[float] = None
     target_mean_price: Optional[float] = None
     target_median_price: Optional[float] = None
-    model_config = {"arbitrary_types_allowed": True}
 
     def __init__(self, ticker: yf.Ticker):
         super().__init__(
@@ -119,11 +121,61 @@ class StockQuote(BaseModel):
         )
 
 
+class StockHistory(BaseModel):
+    recent_high_price: Optional[float] = None
+    pull_pack_percent: Optional[float] = None
+    current_volume: Optional[int] = None
+    average_volume_30d: Optional[int] = None
+    ma10: Optional[float] = None
+    ma20: Optional[float] = None
+    ma50: Optional[float] = None
+    ma100: Optional[float] = None
+    ma200: Optional[float] = None
+    rsi14: Optional[float] = None
+    rsi14_history_daily: Optional[list[HistoryValueDaily]] = None
+
+    def __init__(self, ticker: yf.Ticker):
+        super().__init__()
+        history365d = ticker.history(period="365d", interval="1d")
+        history30d = history365d.iloc[-30:]
+
+        # calculate pullback if any
+        self.recent_high_price = history30d["Close"].iloc[:-2].max()
+        current_price = history365d["Close"].iloc[-1]
+        self.pull_pack_percent = (
+            (self.recent_high_price - current_price) * 100 / self.recent_high_price if self.recent_high_price else 0
+        )
+
+        # calculate moving averages
+        self.current_volume = int(history365d["Volume"].iloc[-1])
+        self.average_volume_30d = int(history30d["Volume"].iloc[:-2].mean())
+        self.ma10 = history365d["Close"].rolling(window=10).mean().iloc[-1]
+        self.ma20 = history365d["Close"].rolling(window=20).mean().iloc[-1]
+        self.ma50 = history365d["Close"].rolling(window=50).mean().iloc[-1]
+        self.ma100 = history365d["Close"].rolling(window=100).mean().iloc[-1]
+        self.ma200 = history365d["Close"].rolling(window=200).mean().iloc[-1]
+
+        # calculate Relative Strength Index (RSI)
+        delta = history365d["Close"].diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+        rs = gain / loss
+        rsi = 100 - (100 / (1 + rs))
+        self.rsi14 = rsi.iloc[-1]
+
+        # store RSI history for the last 30 days
+        self.rsi14_history_daily = [
+            HistoryValueDaily(timestamp=int(history365d.index[-30 + i].timestamp()), value=rsi.iloc[-30 + i])
+            for i in range(0, 30)
+        ]
+        self.rsi14_history_daily.reverse()
+
+
 class SymbolInfo(SymbolBase):
     overview: Optional[SymbolOverview] = None
     stock_quote: Optional[StockQuote] = None
     dividend: Optional[SymbolDividend] = None
-    model_config = {"arbitrary_types_allowed": True}
+    stock_history: Optional[StockHistory] = None
 
     def __init__(self, symbol: str, ticker: yf.Ticker):
         super().__init__(
@@ -137,4 +189,5 @@ class SymbolInfo(SymbolBase):
             overview=SymbolOverview(ticker),
             stock_quote=StockQuote(ticker),
             dividend=SymbolDividend(ticker),
+            stock_history=StockHistory(ticker),
         )
