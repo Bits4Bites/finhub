@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Any, Optional
+from typing import Optional
 import yfinance as yf
 
 
@@ -7,8 +7,6 @@ class SymbolBase(BaseModel):
     symbol: str
     currency: str
     exchange: str
-    raw: Optional[Any] = None
-    model_config = {"arbitrary_types_allowed": True}
 
 
 class HistoryValueDaily(BaseModel):
