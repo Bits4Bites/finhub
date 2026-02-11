@@ -132,7 +132,7 @@ class StockHistory(BaseModel):
     ma100: Optional[float] = None
     ma200: Optional[float] = None
     rsi14: Optional[float] = None
-    rsi14_history: Optional[list[HistoryValueDaily]] = None
+    rsi14_history_daily: Optional[list[HistoryValueDaily]] = None
 
     def __init__(self, ticker: yf.Ticker):
         super().__init__()
@@ -164,18 +164,18 @@ class StockHistory(BaseModel):
         self.rsi14 = rsi.iloc[-1]
 
         # store RSI history for the last 30 days
-        self.rsi14_history = [
+        self.rsi14_history_daily = [
             HistoryValueDaily(timestamp=int(history365d.index[-30 + i].timestamp()), value=rsi.iloc[-30 + i])
             for i in range(0, 30)
         ]
-        self.rsi14_history.reverse()
+        self.rsi14_history_daily.reverse()
 
 
 class SymbolInfo(SymbolBase):
     overview: Optional[SymbolOverview] = None
     stock_quote: Optional[StockQuote] = None
     dividend: Optional[SymbolDividend] = None
-    history: Optional[StockHistory] = None
+    stock_history: Optional[StockHistory] = None
 
     def __init__(self, symbol: str, ticker: yf.Ticker):
         super().__init__(
@@ -189,5 +189,5 @@ class SymbolInfo(SymbolBase):
             overview=SymbolOverview(ticker),
             stock_quote=StockQuote(ticker),
             dividend=SymbolDividend(ticker),
-            history=StockHistory(ticker),
+            stock_history=StockHistory(ticker),
         )
