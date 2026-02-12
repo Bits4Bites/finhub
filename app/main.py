@@ -3,7 +3,7 @@ from fastapi import FastAPI
 # from .config import settings
 from .routers import stocks
 
-VERSION = "0.0.3"
+VERSION = "0.0.4"
 APP_NAME = "FinHub API"
 APP_DESCRIPTION = "A developer-first financial API hub for stock market data."
 
