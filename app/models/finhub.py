@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Any, Optional
+from typing import Optional
 import yfinance as yf
 
 
@@ -7,8 +7,6 @@ class SymbolBase(BaseModel):
     symbol: str
     currency: str
     exchange: str
-    raw: Optional[Any] = None
-    model_config = {"arbitrary_types_allowed": True}
 
 
 class HistoryValueDaily(BaseModel):
@@ -25,6 +23,19 @@ class SymbolOverview(BaseModel):
     website: Optional[str] = None
     description: Optional[str] = None
     quote_type: Optional[str] = None
+    total_cash: Optional[int] = None
+    total_cash_per_share: Optional[float] = None
+    total_debt: Optional[int] = None
+    total_debt_per_share: Optional[float] = None
+    total_revenue: Optional[int] = None
+    total_revenue_per_share: Optional[float] = None
+    ebitda: Optional[int] = None
+    ebitda_margins: Optional[float] = None
+    earnings_growth: Optional[float] = None
+    revenue_growth: Optional[float] = None
+    gross_margins: Optional[float] = None
+    operating_margins: Optional[float] = None
+    profit_margins: Optional[float] = None
 
     def __init__(self, ticker: yf.Ticker):
         super().__init__(
@@ -36,6 +47,19 @@ class SymbolOverview(BaseModel):
             website=ticker.info.get("website"),
             description=ticker.info.get("longBusinessSummary"),
             quote_type=ticker.info.get("quoteType"),
+            total_cash=ticker.info.get("totalCash"),
+            total_cash_per_share=ticker.info.get("totalCashPerShare"),
+            total_debt=ticker.info.get("totalDebt"),
+            total_debt_per_share=ticker.info.get("totalDebtPerShare"),
+            total_revenue=ticker.info.get("totalRevenue"),
+            total_revenue_per_share=ticker.info.get("totalRevenuePerShare"),
+            ebitda=ticker.info.get("ebitda"),
+            ebitda_margins=ticker.info.get("ebitdaMargins"),
+            earnings_growth=ticker.info.get("earningsGrowth"),
+            revenue_growth=ticker.info.get("revenueGrowth"),
+            gross_margins=ticker.info.get("grossMargins"),
+            operating_margins=ticker.info.get("operatingMargins"),
+            profit_margins=ticker.info.get("profitMargins"),
         )
 
 

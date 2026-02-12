@@ -12,3 +12,11 @@ class BaseResponse(BaseModel):
 
 class StockQuotesResponse(BaseResponse):
     data: Optional[dict[str, models.StockQuote]] = None
+
+
+class SymbolOverviewResponse(BaseResponse):
+    data: Optional[models.SymbolOverview] = None
+
+
+class SymbolInfoResponse(BaseResponse):
+    data: Optional[models.SymbolInfo] = None
