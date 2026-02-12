@@ -3,7 +3,7 @@ from fastapi import APIRouter, Query, Path
 from ..schemas import finhub as schemas
 from ..services import stock as stock_service
 
-router = APIRouter(prefix="/stocks")
+router = APIRouter(prefix="/stocks", tags=["stocks"])
 
 
 @router.get("/quotes", response_model=schemas.StockQuotesResponse, response_model_exclude_none=True)
@@ -27,6 +27,17 @@ def get_symbol_info(
     """
     info = stock_service.get_symbol_info(symbol)
     return schemas.SymbolInfoResponse(status=200, message="ok", data=info)
+
+
+@router.get("/{symbol}/overview", response_model=schemas.SymbolOverviewResponse, response_model_exclude_none=True)
+def get_symbol_overview(
+    symbol: str = Path(description="The stock symbol to fetch information for."),
+) -> schemas.SymbolOverviewResponse:
+    """
+    Get overview information for a given ticker symbol.
+    """
+    overview = stock_service.get_symbol_overview(symbol)
+    return schemas.SymbolOverviewResponse(status=200, message="ok", data=overview)
 
 
 @router.get("/{symbol}/info_debug", response_model=schemas.BaseResponse, response_model_exclude_none=True)

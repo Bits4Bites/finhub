@@ -3,9 +3,9 @@ from fastapi import FastAPI
 # from .config import settings
 from .routers import stocks
 
-VERSION = "0.0.3"
-APP_NAME = "Hello World API"
-APP_DESCRIPTION = "A simple Hello World API server"
+VERSION = "0.0.4"
+APP_NAME = "FinHub API"
+APP_DESCRIPTION = "A developer-first financial API hub for stock market data."
 
 # Initialize API server
 openapi_tags_metadata = [

@@ -1,7 +1,7 @@
 from typing import Any
 
 import yfinance as yf
-from ..models.finhub import SymbolInfo, StockQuote
+from ..models.finhub import SymbolInfo, StockQuote, SymbolOverview
 
 allowed_quote_types = {"EQUITY", "ETF"}
 
@@ -19,6 +19,22 @@ def get_symbol_info(symbol: str) -> SymbolInfo | None:
     quote_type = ticker.info.get("quoteType")
     if quote_type in allowed_quote_types:
         return SymbolInfo(symbol=symbol, ticker=ticker)
+    return None
+
+
+def get_symbol_overview(symbol: str) -> SymbolOverview | None:
+    """
+    Fetches overview information about a ticker symbol.
+
+    :param symbol: The ticker symbol to fetch information for.
+    :type symbol: str
+    :return: A SymbolOverview object containing overview information about the ticker symbol.
+    :rtype: SymbolOverview
+    """
+    ticker = yf.Ticker(symbol)
+    quote_type = ticker.info.get("quoteType")
+    if quote_type in allowed_quote_types:
+        return SymbolOverview(ticker=ticker)
     return None
 
 

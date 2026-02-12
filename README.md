@@ -197,6 +197,54 @@ Response:
 
 </div>
 
+### `/<symbol>/overview`
+
+Get overview information about a specific ticker symbol.
+
+Path parameters:
+- `symbol` (required): The ticker symbol to fetch information for. Must follow Yahoo Finance's format (e.g., `AAPL` for Apple Inc., `CBA.AX` for Commonwealth Bank of Australia).
+
+Examples:
+
+Request
+```
+GET /stocks/AAPL/overview
+```
+
+Response:
+
+<div style="max-height: 300px !important; overflow: auto;">
+
+```json
+{
+  "status": 200,
+  "message": "ok",
+  "data": {
+    "country": "United States",
+    "short_name": "Apple Inc.",
+    "long_name": "Apple Inc.",
+    "sector": "Technology",
+    "industry": "Consumer Electronics",
+    "website": "https://www.apple.com",
+    "description": "Apple Inc. designs, manufactures, and markets smartphones, personal computers, tablets, wearables, and accessories worldwide. The company offers iPhone, a line of smartphones; Mac, a line of personal computers; iPad, a line of multi-purpose tablets; and wearables, home, and accessories comprising AirPods, Apple Vision Pro, Apple TV, Apple Watch, Beats products, and HomePod, as well as Apple branded and third-party accessories. It also provides AppleCare support and cloud services; and operates various platforms, including the App Store that allow customers to discover and download applications and digital content, such as books, music, video, games, and podcasts, as well as advertising services include third-party licensing arrangements and its own advertising platforms. In addition, the company offers various subscription-based services, such as Apple Arcade, a game subscription service; Apple Fitness+, a personalized fitness service; Apple Music, which offers users a curated listening experience with on-demand radio stations; Apple News+, a subscription news and magazine service; Apple TV, which offers exclusive original content and live sports; Apple Card, a co-branded credit card; and Apple Pay, a cashless payment service, as well as licenses its intellectual property. The company serves consumers, and small and mid-sized businesses; and the education, enterprise, and government markets. It distributes third-party applications for its products through the App Store. The company also sells its products through its retail and online stores, and direct sales force; and third-party cellular network carriers and resellers. The company was formerly known as Apple Computer, Inc. and changed its name to Apple Inc. in January 2007. Apple Inc. was founded in 1976 and is headquartered in Cupertino, California.",
+    "quote_type": "EQUITY",
+    "total_cash": 66907000832,
+    "total_cash_per_share": 4.557,
+    "total_debt": 90509000704,
+    "total_revenue": 435617005568,
+    "ebitda": 152901992448,
+    "ebitda_margins": 0.35099998,
+    "earnings_growth": 0.183,
+    "revenue_growth": 0.157,
+    "gross_margins": 0.47325,
+    "operating_margins": 0.35374,
+    "profit_margins": 0.27037
+  }
+}
+```
+
+</div>
+
 ## 🤝 Contributing
 
 We welcome contributions from the community! Here's how you can help:
