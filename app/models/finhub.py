@@ -149,6 +149,7 @@ class StockHistory(BaseModel):
     recent_high_price: Optional[float] = None
     pull_pack_percent: Optional[float] = None
     current_volume: Optional[int] = None
+    yesterday_volume: Optional[int] = None
     average_volume_30d: Optional[int] = None
     ma10: Optional[float] = None
     ma20: Optional[float] = None
@@ -156,7 +157,7 @@ class StockHistory(BaseModel):
     ma100: Optional[float] = None
     ma200: Optional[float] = None
     rsi14: Optional[float] = None
-    rsi14_history_daily: Optional[list[HistoryValueDaily]] = None
+    # rsi14_history_daily: Optional[list[HistoryValueDaily]] = None
 
     def __init__(self, ticker: yf.Ticker):
         super().__init__()
@@ -172,6 +173,7 @@ class StockHistory(BaseModel):
 
         # calculate moving averages
         self.current_volume = int(history365d["Volume"].iloc[-1])
+        self.yesterday_volume = int(history365d["Volume"].iloc[-2])
         self.average_volume_30d = int(history30d["Volume"].iloc[:-2].mean())
         self.ma10 = history365d["Close"].rolling(window=10).mean().iloc[-1]
         self.ma20 = history365d["Close"].rolling(window=20).mean().iloc[-1]
@@ -187,12 +189,12 @@ class StockHistory(BaseModel):
         rsi = 100 - (100 / (1 + rs))
         self.rsi14 = rsi.iloc[-1]
 
-        # store RSI history for the last 30 days
-        self.rsi14_history_daily = [
-            HistoryValueDaily(timestamp=int(history365d.index[-30 + i].timestamp()), value=rsi.iloc[-30 + i])
-            for i in range(0, 30)
-        ]
-        self.rsi14_history_daily.reverse()
+        # # store RSI history for the last 30 days
+        # self.rsi14_history_daily = [
+        #     HistoryValueDaily(timestamp=int(history365d.index[-30 + i].timestamp()), value=rsi.iloc[-30 + i])
+        #     for i in range(0, 30)
+        # ]
+        # self.rsi14_history_daily.reverse()
 
 
 class SymbolInfo(SymbolBase):

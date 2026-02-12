@@ -1,3 +1,6 @@
 # This file has been cleaned up post-releasing version 0.0.4.
 # Generate its content quickly using the following command:
 #   git log origin..HEAD | grep "^\s" > .semrelease/this_release
+#!VERSION=0.0.5
+- (Patch) Add field yesterday_volume to StockHistory.
+- (Patch) Temporarily remove field rsi14_history_daily from StockHistory.
