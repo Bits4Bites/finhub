@@ -1,5 +1,12 @@
 # qnd-papi-template release notes
 
+## 2026-02-12 - v0.0.5
+
+### Fixed/Improvements
+
+- (Patch) Add field yesterday_volume to StockHistory.
+- (Patch) Temporarily remove field rsi14_history_daily from StockHistory.
+
 ## 2026-02-12 - v0.0.4
 
 ### Added/Refactoring/Deprecation
