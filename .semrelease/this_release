@@ -1,3 +1,5 @@
 # This file has been cleaned up post-releasing version 0.0.5.
 # Generate its content quickly using the following command:
 #   git log origin..HEAD | grep "^\s" > .semrelease/this_release
+#!VERSION=0.0.6
+- (Patch) Add 30 days history to StockHistory.
