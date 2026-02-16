@@ -9,18 +9,14 @@ class SymbolBase(BaseModel):
     exchange: str
 
 
-class HistoryValueDaily(BaseModel):
-    timestamp: int
-    value: float
-
-
-class HistoryDaily(BaseModel):
+class HistoryPoint(BaseModel):
     timestamp: int
     open: Optional[float] = None
     high: Optional[float] = None
     low: Optional[float] = None
     close: Optional[float] = None
     volume: Optional[int] = None
+    rsi14: Optional[float] = None
 
 
 class SymbolOverview(BaseModel):
@@ -166,8 +162,7 @@ class StockHistory(BaseModel):
     ma100: Optional[float] = None
     ma200: Optional[float] = None
     rsi14: Optional[float] = None
-    history_30d: Optional[list[HistoryDaily]] = None
-    # rsi14_history_daily: Optional[list[HistoryValueDaily]] = None
+    history_90d: Optional[list[HistoryPoint]] = None
 
     def __init__(self, ticker: yf.Ticker):
         super().__init__()
@@ -199,25 +194,20 @@ class StockHistory(BaseModel):
         rsi = 100 - (100 / (1 + rs))
         self.rsi14 = rsi.iloc[-1]
 
-        # store history for 30 days
-        self.history_30d = [
-            HistoryDaily(
-                timestamp=int(row.name.timestamp()),
-                open=row["Open"],
-                high=row["High"],
-                low=row["Low"],
-                close=row["Close"],
-                volume=int(row["Volume"]),
+        # store history for 90 days
+        NUM_POINTS = 90
+        self.history_90d = [
+            HistoryPoint(
+                timestamp=int(history365d.index[-NUM_POINTS + i].timestamp()),
+                open=history365d.iloc[-NUM_POINTS + i]["Open"],
+                high=history365d.iloc[-NUM_POINTS + i]["High"],
+                low=history365d.iloc[-NUM_POINTS + i]["Low"],
+                close=history365d.iloc[-NUM_POINTS + i]["Close"],
+                volume=int(history365d.iloc[-NUM_POINTS + i]["Volume"]),
+                rsi14=rsi.iloc[-NUM_POINTS + i],
             )
-            for _, row in history30d.iterrows()
+            for i in range(0, NUM_POINTS)
         ]
-
-        # # store RSI history for the last 30 days
-        # self.rsi14_history_daily = [
-        #     HistoryValueDaily(timestamp=int(history365d.index[-30 + i].timestamp()), value=rsi.iloc[-30 + i])
-        #     for i in range(0, 30)
-        # ]
-        # self.rsi14_history_daily.reverse()
 
 
 class SymbolInfo(SymbolBase):
