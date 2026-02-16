@@ -14,6 +14,15 @@ class HistoryValueDaily(BaseModel):
     value: float
 
 
+class HistoryDaily(BaseModel):
+    timestamp: int
+    open: Optional[float] = None
+    high: Optional[float] = None
+    low: Optional[float] = None
+    close: Optional[float] = None
+    volume: Optional[int] = None
+
+
 class SymbolOverview(BaseModel):
     country: Optional[str] = None
     short_name: Optional[str] = None
@@ -157,6 +166,7 @@ class StockHistory(BaseModel):
     ma100: Optional[float] = None
     ma200: Optional[float] = None
     rsi14: Optional[float] = None
+    history_30d: Optional[list[HistoryDaily]] = None
     # rsi14_history_daily: Optional[list[HistoryValueDaily]] = None
 
     def __init__(self, ticker: yf.Ticker):
@@ -188,6 +198,19 @@ class StockHistory(BaseModel):
         rs = gain / loss
         rsi = 100 - (100 / (1 + rs))
         self.rsi14 = rsi.iloc[-1]
+
+        # store history for 30 days
+        self.history_30d = [
+            HistoryDaily(
+                timestamp=int(row.name.timestamp()),
+                open=row["Open"],
+                high=row["High"],
+                low=row["Low"],
+                close=row["Close"],
+                volume=int(row["Volume"]),
+            )
+            for _, row in history30d.iterrows()
+        ]
 
         # # store RSI history for the last 30 days
         # self.rsi14_history_daily = [

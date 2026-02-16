@@ -1,5 +1,11 @@
 # qnd-papi-template release notes
 
+## 2026-02-16 - v0.0.6
+
+### Fixed/Improvements
+
+- (Patch) Add 30 days history to StockHistory.
+
 ## 2026-02-12 - v0.0.5
 
 ### Fixed/Improvements
