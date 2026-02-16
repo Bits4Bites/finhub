@@ -1,5 +1,11 @@
 # qnd-papi-template release notes
 
+## 2026-02-16 - v0.0.7
+
+### Fixed/Improvements
+
+- (Patch) Increase history data to 90 days.
+
 ## 2026-02-16 - v0.0.6
 
 ### Fixed/Improvements
