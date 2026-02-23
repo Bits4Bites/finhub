@@ -1,3 +1,4 @@
+import time
 from datetime import datetime
 
 from google import genai
@@ -6,11 +7,73 @@ from openai.types.responses import WebSearchPreviewToolParam
 from openai.types.responses.web_search_preview_tool_param import UserLocation
 
 from ..models import finhub as models
-from ..config import settings
+from ..config import settings, LLMTaskConfig
 
 geminiClients: dict[str, genai.Client] = {}
 openAIClients: dict[str, AsyncOpenAI] = {}
 azureOpenAIClients: dict[str, AsyncOpenAI] = {}
+
+
+def build_prompt_incoming_events(prompt_template: str, country: str, index: str) -> str:
+    tz = (
+        "America/New_York"
+        if country == "US"
+        else "Australia/Sydney" if country == "AU" else "Asia/Ho_Chi_Minh" if country == "VN" else "UTC"
+    )
+    index = (
+        index.upper()
+        if index
+        else (
+            "Dow Jones 30 Industrial or NASDAQ 100 or NYSE US 100 or S&P 100"
+            if country == "US"
+            else "S&P/ASX 200" if country == "AU" else "VN100 or HNX30" if country == "VN" else "N/A"
+        )
+    )
+    prompt = (
+        prompt_template.replace("{TIMEZONE}", tz)
+        .replace("{INDEX}", index)
+        .replace("{TODAY}", datetime.today().strftime("%Y-%m-%d"))
+    )
+    return prompt
+
+
+async def ai_get_incoming_events(task_cfg: LLMTaskConfig, prompt: str, country: str) -> models.LLMResponse:
+    match task_cfg.vendor.upper():
+        case "AZUREOPENAI" | "AZURE OPENAI" | "AZURE_OPENAI":
+            start = time.perf_counter()
+            client = azureOpenAIClients.get(task_cfg.tier.upper())
+            if client is None:
+                raise EnvironmentError(f"Azure OpenAI client for tier '{task_cfg.tier}' is not configured.")
+            model = task_cfg.model
+            print(
+                f"[DEBUG] ai_get_incoming_events / Country: {country} / Vendor: {task_cfg.vendor} / Tier: {task_cfg.tier} / Model: {model}\n",
+                prompt,
+            )
+            temperature = None if model.startswith("gpt-5") else 0.0
+            response = await client.responses.create(
+                model=model,
+                temperature=temperature,
+                tools=[
+                    WebSearchPreviewToolParam(
+                        type="web_search_preview",
+                        user_location=UserLocation(type="approximate", country=country),
+                    ),
+                ],
+                input=prompt,
+            )
+            print("[DEBUG] ai_get_incoming_events response:\n", response.output_text)
+            end = time.perf_counter()
+            result = models.LLMResponse(
+                completion=response.output_text,
+                time_taken_ms=int((end - start) * 1000),
+                tokens_prompt=response.usage.input_tokens,
+                tokens_completion=response.usage.output_tokens,
+                tokens_thought=0,
+                is_error=response.output_text == "" or response.status != "completed",
+            )
+            return result
+        case _:
+            raise ValueError(f"Unsupported LLM vendor: {task_cfg.vendor}")
 
 
 async def ai_get_incoming_earnings_events(country: str, index: str) -> list[models.IncomingEarningsEvent]:
@@ -23,26 +86,7 @@ async def ai_get_incoming_earnings_events(country: str, index: str) -> list[mode
     :return: A list of incoming earnings events for the specified country.
     :rtype: list[models.IncomingEarningsEvent]
     """
-    country = country.upper() if country else "US"
-    tz = (
-        "America/New_York"
-        if country == "US"
-        else "Australia/Sydney" if country == "AU" else "Asia/Ho_Chi_Minh" if country == "VN" else "UTC"
-    )
-    index = (
-        index.upper()
-        if index
-        else (
-            "Dow Jones 30 Industrial or NASDAQ 100 or NYSE US 100 or S&P 100"
-            if country == "US"
-            else "S&P/ASX 200" if country == "AU" else "VN100 or HNX30" if country == "VN" else "N/A"
-        )
-    )
-    prompt = (
-        prompt_get_incoming_earnings_events.replace("{TIMEZONE}", tz)
-        .replace("{INDEX}", index)
-        .replace("{TODAY}", datetime.today().strftime("%Y-%m-%d"))
-    )
+    prompt = build_prompt_incoming_events(prompt_get_incoming_earnings_events, country, index)
 
     task_cfg = (
         settings.llm_task_config["INCOMING_EARNINGS_EVENTS"]
@@ -52,39 +96,20 @@ async def ai_get_incoming_earnings_events(country: str, index: str) -> list[mode
     if task_cfg is None:
         raise EnvironmentError("LLM task configuration for INCOMING_EARNINGS_EVENTS is missing.")
 
-    match task_cfg.vendor.upper():
-        case "AZUREOPENAI" | "AZURE OPENAI" | "AZURE_OPENAI":
-            client = azureOpenAIClients.get(task_cfg.tier.upper())
-            if client is None:
-                raise EnvironmentError(f"Azure OpenAI client for tier '{task_cfg.tier}' is not configured.")
-            model = task_cfg.model
-            print(
-                f"[DEBUG] ai_get_incoming_earnings_event / Country: {country} / Index: {index} / Vendor: {task_cfg.vendor} / Tier: {task_cfg.tier} / Model: {model}\n",
-                prompt,
-            )
-            temperature = None if model.startswith("gpt-5") else 0.0
-            response = await client.responses.create(
-                model=model,
-                temperature=temperature,
-                tools=[
-                    WebSearchPreviewToolParam(
-                        type="web_search_preview",
-                        user_location=UserLocation(type="approximate", country=country),
-                    ),
-                ],
-                input=prompt,
-            )
-            print("[DEBUG] ai_get_incoming_earnings_event response:\n", response.output_text)
+    llm_result = await ai_get_incoming_events(task_cfg, prompt, country)
+    if llm_result.is_error:
+        print(f"[ERROR] LLM failed to generate response for incoming earnings events: {llm_result.completion}")
+        return []
 
-            # parse response.output_text as JSON array of IncomingEarningsEvent
-            try:
-                events = models.parse_incoming_earnings_events_from_json(response.output_text)
-                return events
-            except Exception as e:
-                print(f"[ERROR] Failed to parse AI response: {e}")
-                return []
-        case _:
-            raise ValueError(f"Unsupported LLM vendor: {task_cfg.vendor}")
+    print("[DEBUG] ai_get_incoming_earnings_event response:\n", llm_result.completion)
+
+    # parse response.output_text as JSON array of IncomingEarningsEvent
+    try:
+        events = models.parse_incoming_earnings_events_from_json(llm_result.completion)
+        return events
+    except Exception as e:
+        print(f"[ERROR] Failed to parse AI response: {e}")
+        return []
 
 
 async def ai_get_incoming_dividends_events(country: str, index: str) -> list[models.IncomingDividendEvent]:
@@ -97,26 +122,7 @@ async def ai_get_incoming_dividends_events(country: str, index: str) -> list[mod
     :return: A list of incoming dividend/distribution events for the specified country.
     :rtype: list[models.IncomingDividendEvent]
     """
-    country = country.upper() if country else "US"
-    tz = (
-        "America/New_York"
-        if country == "US"
-        else "Australia/Sydney" if country == "AU" else "Asia/Ho_Chi_Minh" if country == "VN" else "UTC"
-    )
-    index = (
-        index.upper()
-        if index
-        else (
-            "Dow Jones 30 Industrial or NASDAQ 100 or NYSE US 100 or S&P 100"
-            if country == "US"
-            else "S&P/ASX 200" if country == "AU" else "VN100 or HNX30" if country == "VN" else "N/A"
-        )
-    )
-    prompt = (
-        prompt_get_incoming_dividend_distribution_events.replace("{TIMEZONE}", tz)
-        .replace("{INDEX}", index)
-        .replace("{TODAY}", datetime.today().strftime("%Y-%m-%d"))
-    )
+    prompt = build_prompt_incoming_events(prompt_get_incoming_dividend_distribution_events, country, index)
 
     task_cfg = (
         settings.llm_task_config["INCOMING_DIVIDEND_EVENTS"]
@@ -126,39 +132,22 @@ async def ai_get_incoming_dividends_events(country: str, index: str) -> list[mod
     if task_cfg is None:
         raise EnvironmentError("LLM task configuration for INCOMING_DIVIDEND_EVENTS is missing.")
 
-    match task_cfg.vendor.upper():
-        case "AZUREOPENAI" | "AZURE OPENAI" | "AZURE_OPENAI":
-            client = azureOpenAIClients.get(task_cfg.tier.upper())
-            if client is None:
-                raise EnvironmentError(f"Azure OpenAI client for tier '{task_cfg.tier}' is not configured.")
-            model = task_cfg.model
-            print(
-                f"[DEBUG] ai_get_incoming_dividends_events / Country: {country} / Index: {index} / Vendor: {task_cfg.vendor} / Tier: {task_cfg.tier} / Model: {model}\n",
-                prompt,
-            )
-            temperature = None if model.startswith("gpt-5") else 0.0
-            response = await client.responses.create(
-                model=model,
-                temperature=temperature,
-                tools=[
-                    WebSearchPreviewToolParam(
-                        type="web_search_preview",
-                        user_location=UserLocation(type="approximate", country=country),
-                    ),
-                ],
-                input=prompt,
-            )
-            print("[DEBUG] ai_get_incoming_dividends_events response:\n", response.output_text)
+    llm_result = await ai_get_incoming_events(task_cfg, prompt, country)
+    if llm_result.is_error:
+        print(
+            f"[ERROR] LLM failed to generate response for incoming dividend/distribution events: {llm_result.completion}"
+        )
+        return []
 
-            # parse response.output_text as JSON array of IncomingDividendEvent
-            try:
-                events = models.parse_incoming_dividend_events_from_json(response.output_text)
-                return events
-            except Exception as e:
-                print(f"[ERROR] Failed to parse AI response: {e}")
-                return []
-        case _:
-            raise ValueError(f"Unsupported LLM vendor: {task_cfg.vendor}")
+    print("[DEBUG] ai_get_incoming_dividends_events response:\n", llm_result.completion)
+
+    # parse response.output_text as JSON array of IncomingDividendEvent
+    try:
+        events = models.parse_incoming_dividend_events_from_json(llm_result.completion)
+        return events
+    except Exception as e:
+        print(f"[ERROR] Failed to parse AI response: {e}")
+        return []
 
 
 prompt_get_incoming_earnings_events = """
