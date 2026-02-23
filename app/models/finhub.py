@@ -1,3 +1,6 @@
+import json
+from datetime import datetime
+
 from pydantic import BaseModel
 from typing import Optional
 import yfinance as yf
@@ -230,3 +233,82 @@ class SymbolInfo(SymbolBase):
             dividend=SymbolDividend(ticker),
             stock_history=StockHistory(ticker),
         )
+
+
+class EventBase(BaseModel):
+    symbol: str
+    company_name: Optional[str] = None
+    timestamp: Optional[int] = 0
+    event_category: Optional[str] = None
+
+
+class IncomingEarningsEvent(EventBase):
+    date: Optional[str] = None
+    report_period: Optional[str] = None
+    status: Optional[str] = None
+    source_name: Optional[str] = None
+    link: Optional[str] = None
+
+
+def normalize_json_str(json_str: str) -> str:
+    if json_str.startswith("```json"):
+        json_str = json_str[len("```json") :].strip()
+    if json_str.endswith("```"):
+        json_str = json_str[: -len("```")].strip()
+    return json_str
+
+
+def parse_incoming_earnings_events_from_json(json_str: str) -> list[IncomingEarningsEvent]:
+    json_str = normalize_json_str(json_str)
+    events = json.loads(json_str)
+    result = []
+    for item in events:
+        event = IncomingEarningsEvent(
+            symbol=item.get("symbol", ""),
+            company_name=item.get("company_name"),
+            event_category="Earnings",
+            date=item.get("date"),
+            report_period=item.get("type"),
+            status=item.get("status"),
+            source_name=item.get("source_name"),
+            link=item.get("link"),
+        )
+        # parse yyyy-MM-dd from event.date into event.timestamp
+        event.timestamp = int(datetime.strptime(event.date, "%Y-%m-%d").timestamp())
+        result.append(event)
+
+    return result
+
+
+class IncomingDividendEvent(EventBase):
+    date: Optional[str] = None
+    report_period: Optional[str] = None
+    status: Optional[str] = None
+    value: Optional[float] = None
+    currency: Optional[str] = None
+    source_name: Optional[str] = None
+    link: Optional[str] = None
+
+
+def parse_incoming_dividend_events_from_json(json_str: str) -> list[IncomingDividendEvent]:
+    json_str = normalize_json_str(json_str)
+    events = json.loads(json_str)
+    result = []
+    for item in events:
+        event = IncomingDividendEvent(
+            symbol=item.get("symbol", ""),
+            company_name=item.get("company_name"),
+            event_category="Dividend/Distribution",
+            date=item.get("date"),
+            report_period=item.get("type"),
+            status=item.get("status"),
+            value=item.get("value"),
+            currency=item.get("currency"),
+            source_name=item.get("source_name"),
+            link=item.get("link"),
+        )
+        # parse yyyy-MM-dd from event.date into event.timestamp
+        event.timestamp = int(datetime.strptime(event.date, "%Y-%m-%d").timestamp())
+        result.append(event)
+
+    return result

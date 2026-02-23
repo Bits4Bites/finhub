@@ -1,5 +1,6 @@
 [tool.flake8]
-max-line-length = 120
+#max-line-length = 120
+ignore = ["E501", "E203"]
 
 [tool.black]
 line-length = 120
