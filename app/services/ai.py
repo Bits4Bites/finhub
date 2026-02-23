@@ -17,8 +17,8 @@ async def ai_get_incoming_earnings_events(country: str, index: str) -> list[mode
     """
     Check for incoming earnings events for a market, using AI assistance.
 
-    :param country: Country code to filter events by (e.g., 'US', 'CN', etc.).
-    :param index: Optional stock index to filter events by (e.g., 'NASDAQ 100', 'S&P/ASX 100', etc.).
+    :param country: Country code to filter events by (e.g., 'AU', 'US', 'VN', etc.).
+    :param index: Optional stock index to filter events by (e.g., 'NASDAQ 100', 'S&P/ASX 200', etc.).
     :type country: str
     :return: A list of incoming earnings events for the specified country.
     :rtype: list[models.IncomingEarningsEvent]
@@ -91,8 +91,8 @@ async def ai_get_incoming_dividends_events(country: str, index: str) -> list[mod
     """
     Check for incoming dividend/distribution events for a market, using AI assistance.
 
-    :param country: Country code to filter events by (e.g., 'US', 'CN', etc.).
-    :param index: Optional stock index to filter events by (e.g., 'NASDAQ 100', 'S&P/ASX 100', etc.).
+    :param country: Country code to filter events by (e.g., 'AU', 'US', 'VN', etc.).
+    :param index: Optional stock index to filter events by (e.g., 'NASDAQ 100', 'S&P/ASX 200', etc.).
     :type country: str
     :return: A list of incoming dividend/distribution events for the specified country.
     :rtype: list[models.IncomingDividendEvent]
