@@ -8,3 +8,5 @@ flake8-toml-config
 black
 
 yfinance==1.2.0
+google-genai==1.64.0
+openai==2.21.0

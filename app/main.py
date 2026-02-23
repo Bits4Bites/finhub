@@ -1,9 +1,11 @@
-from fastapi import FastAPI
+import traceback
 
-# from .config import settings
-from .routers import stocks
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 
-VERSION = "0.0.7"
+from .routers import stocks, ai
+
+VERSION = "0.1.0"
 APP_NAME = "FinHub API"
 APP_DESCRIPTION = "A developer-first financial API hub for stock market data."
 
@@ -36,8 +38,22 @@ app = FastAPI(
     swagger_ui_parameters={"syntaxHighlight.theme": "obsidian"},  # Custom theme
 )
 
+
+@app.middleware("http")
+async def catch_exceptions_middleware(request: Request, call_next):
+    try:
+        return await call_next(request)
+    except Exception as exc:
+        traceback.print_exc()
+        return JSONResponse(
+            status_code=500,
+            content={"status": 500, "message": f"Error: {exc}"},
+        )
+
+
 # Register routers
 app.include_router(stocks.router)
+app.include_router(ai.router)
 
 
 @app.get("/", tags=["root"])
