@@ -20,3 +20,11 @@ class SymbolOverviewResponse(BaseResponse):
 
 class SymbolInfoResponse(BaseResponse):
     data: Optional[models.SymbolInfo] = None
+
+
+class IncomingEarningsResponse(BaseResponse):
+    data: Optional[list[models.IncomingEarningsEvent]] = None
+
+
+class IncomingDividendsResponse(BaseResponse):
+    data: Optional[list[models.IncomingDividendEvent]] = None

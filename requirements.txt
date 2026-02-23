@@ -1,10 +1,12 @@
-fastapi==0.129.0
-uvicorn[standard]==0.40.0
+fastapi==0.129.2
+uvicorn[standard]==0.41.0
 pydantic==2.12.5
-pydantic-settings==2.12
+pydantic-settings==2.13.1
 pytest
 flake8
 flake8-toml-config
 black
 
-yfinance==1.1.0
+yfinance==1.2.0
+google-genai==1.64.0
+openai==2.21.0
