@@ -1,5 +1,11 @@
 # qnd-papi-template release notes
 
+## 2026-02-23 - v0.1.0
+
+### Added/Refactoring/Deprecation
+
+- (Feat) AI-assisted to check incoming earnings/dividend/distribution events for markets AU/US/VN.
+
 ## 2026-02-16 - v0.0.7
 
 ### Fixed/Improvements
