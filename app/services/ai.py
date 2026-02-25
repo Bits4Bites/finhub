@@ -18,13 +18,14 @@ EVENT_INCOMING_DIVIDENDS = "INCOMING_DIVIDEND_EVENTS"
 
 
 def build_prompt_incoming_events(event_type: str, country: str, index: str) -> str:
+    country = country.upper() if country else "US"
     tz = (
         "America/New_York"
         if country == "US"
         else "Australia/Sydney" if country == "AU" else "Asia/Ho_Chi_Minh" if country == "VN" else "UTC"
     )
     index = (
-        index.upper()
+        index
         if index
         else (
             "Dow Jones 30 Industrial or NASDAQ 100 or NYSE US 100 or S&P 100"
@@ -37,21 +38,22 @@ def build_prompt_incoming_events(event_type: str, country: str, index: str) -> s
         raise EnvironmentError(f"Prompt template for {event_type} is missing or empty.")
     today = datetime.today()
     prompt = (
-        prompt_template.replace("{TIMEZONE}", tz)
+        prompt_template.replace("{COUNTRY}", country)
+        .replace("{TIMEZONE}", tz)
         .replace("{INDEX}", index)
         .replace("{TODAY}", today.strftime("%Y-%m-%d"))
         .replace("{START_DATE}", today.strftime("%Y-%m-%d"))
         .replace("{END_DATE}", (today + timedelta(days=60)).strftime("%Y-%m-%d"))
     )
-    if event_type in prompt_customization and country.upper() in prompt_customization[event_type]:
-        for placeholder, custom_text in prompt_customization[event_type][country.upper()].items():
+    if event_type in prompt_customization and country in prompt_customization[event_type]:
+        for placeholder, custom_text in prompt_customization[event_type][country].items():
             lines = [line.strip() for line in custom_text.strip().splitlines() if line.strip()]
             custom_text = "\n".join(lines)
             prompt = prompt.replace(f"{{{placeholder}}}", custom_text)
 
     if event_type in prompt_customization:
-        for placeholder, _ in prompt_customization[event_type]["*"].items():
-            prompt = prompt.replace(f"{{{placeholder}}}", "")
+        for placeholder, custom_text in prompt_customization[event_type]["*"].items():
+            prompt = prompt.replace(f"{{{placeholder}}}", custom_text)
 
     return prompt
 
@@ -144,7 +146,7 @@ async def ai_get_incoming_dividends_events(country: str, index: str) -> list[mod
     :return: A list of incoming dividend/distribution events for the specified country.
     :rtype: list[models.IncomingDividendEvent]
     """
-    event_type = EVENT_INCOMING_EARNINGS
+    event_type = EVENT_INCOMING_DIVIDENDS
     prompt = build_prompt_incoming_events(event_type, country, index)
     llm_result = await ai_get_incoming_events(event_type, prompt, country)
     if llm_result.is_error:
@@ -204,6 +206,38 @@ prompt_customization = {
             "CUSTOM_SEARCH": "",
             "SOURCES": "Bloomberg, Reuters, MarketScreener, Yahoo Finance, etc.",
             "BROADER_SEARCH": """ "Earnings calendar" or "Earnings season dates" """,
+        },
+    },
+    EVENT_INCOMING_DIVIDENDS: {
+        "VN": {
+            "CUSTOM_KEYWORDS": """
+                Vietnamese search keywords to use:
+                - "Lịch công bố chia cổ tức"
+                - "Lịch công bố trả cổ tức"
+                - "Trả cổ tức bằng tiền mặt"
+                - "Trả cổ tức bằng cổ phiếu"
+                - "Ngày giao dịch không hưởng quyền"
+                """,
+            "OFFICIAL_INDEX_PROVIDERS": "HOSE or HNX",
+            "CUSTOM_SEARCH": (
+                "Additional Vietnamese financial news websites can be used for cross-referencing and validation, such as: "
+                "vietstock.vn, vietnamfinance.vn, vietnambiz.vn, vnfinance.vn, thoibaotaichinhvietnam.vn, "
+                "vietnambusinessinsider.vn, and cafef.vn."
+            ),
+            "SOURCES": "HOSE, HNX, Vietstock, CafeF, VNFinance, VietnamBusinessInsider, etc.",
+            "BROADER_SEARCH": """ "Lịch công bố chia cổ tức" or "Lịch công bố trả cổ tức" """,
+        },
+        "AU": {
+            "OFFICIAL_INDEX_PROVIDERS": "ASX",
+            "SOURCES": "Market Index, CommSec, Bloomberg, Reuters, Yahoo Finance, etc.",
+            "BROADER_SEARCH": """ "Australian ex-dividend calendars" """,
+        },
+        "*": {
+            "CUSTOM_KEYWORDS": "",
+            "OFFICIAL_INDEX_PROVIDERS": "",
+            "CUSTOM_SEARCH": "",
+            "SOURCES": "Bloomberg, Reuters, MarketScreener, Yahoo Finance, etc.",
+            "BROADER_SEARCH": """ "Ex-dividend calendar" """,
         },
     },
 }

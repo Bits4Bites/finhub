@@ -58,11 +58,9 @@ At least one source from tier 1-2 preferred. Tier 3 allowed if no official sourc
 
 # OUTPUT FORMAT (STRICT)
 
-Return ONLY valid JSON.
-No markdown.
-No explanation.
-No comments.
-No trailing commas.
+Return ONLY valid, parseable JSON.
+CRITICAL: Do NOT wrap the output in ```json or ``` blocks. 
+No markdown. No explanation. No comments. No trailing commas.
 
 Structure:
 
@@ -71,8 +69,8 @@ Structure:
     "symbol": "TICKER",
     "company_name": "Company Name",
     "date": "yyyy-MM-dd",
-    "report_period": "quarterly",
-    "status": "confirmed",
+    "report_period": "quarterly, half-year, full-year, etc.",
+    "status": "confirmed | estimated",
     "source_name": "{SOURCES}",
     "link": "https://exact-source-url"
   }
@@ -84,6 +82,6 @@ Step 1: Retrieve current {INDEX} constituents from official sources.
 Step 2: Compute date window using {TIMEZONE} timezone.
 Step 3: Search for upcoming earnings announcements. {CUSTOM_SEARCH}
 Step 4: Validate each candidate against index membership, date window, and source credibility.
-Step 5: Format exactly as requested and output the JSON.
+Step 5: Format exactly as requested and output the raw JSON.
 
 Begin.
