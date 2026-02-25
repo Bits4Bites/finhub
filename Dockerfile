@@ -12,6 +12,7 @@ ADD requirements.txt $HOMEDIR
 ADD *.py $HOMEDIR
 ADD *.md $HOMEDIR
 ADD ai_clients_config.env $HOMEDIR
+ADD resources $HOMEDIR/resources
 ADD app $HOMEDIR/app
 
 RUN cd $HOMEDIR && python -m venv .venv && bash -c 'source .venv/bin/activate && pip install -U -r requirements.txt'

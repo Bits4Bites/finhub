@@ -9,6 +9,7 @@ A developer-first financial API hub for stock market data, built for frontend ap
 ## ✨ Features
 
 - 📈 Get stock quotes and other information (from Yahoo Finance).
+- 🤖 (AI Assistant) Check incoming earnings/dividend/distribution events.
 
 ## 📚 API
 
@@ -240,6 +241,216 @@ Response:
     "operating_margins": 0.35374,
     "profit_margins": 0.27037
   }
+}
+```
+
+</div>
+
+### `/ai/event/earnings`
+
+Check for incoming earnings events for a market, using AI assistance.
+
+Query parameters:
+- `country` (required): Country code to filter events by (e.g., 'AU', 'US', 'VN', etc.).
+- `index` (optional): Optional stock index to filter events by (e.g., 'NASDAQ 100', 'S&P/ASX 200', etc.).
+
+Examples:
+
+Request
+```
+GET /ai/event/earnings?country=AU'
+```
+
+Response:
+
+<div style="max-height: 300px !important; overflow: auto;">
+  
+```json
+{
+  "status": 200,
+  "message": "ok",
+  "data": [
+    {
+      "symbol": "WOW",
+      "company_name": "Woolworths Group Limited",
+      "timestamp": 1771938000,
+      "event_category": "Earnings",
+      "date": "2026-02-25",
+      "status": "confirmed",
+      "source_name": "Woolworths Group Investor Relations",
+      "link": "https://www.woolworthsgroup.com.au/au/en/investors/our-performance/results-and-presentations.html"
+    },
+    {
+      "symbol": "QAN",
+      "company_name": "Qantas Airways Limited",
+      "timestamp": 1772024400,
+      "event_category": "Earnings",
+      "date": "2026-02-26",
+      "status": "confirmed",
+      "source_name": "Qantas Investor Centre",
+      "link": "https://investor.qantas.com/investors/?page=financial-calendar"
+    },
+    {
+      "symbol": "COL",
+      "company_name": "Coles Group Limited",
+      "timestamp": 1772110800,
+      "event_category": "Earnings",
+      "date": "2026-02-27",
+      "status": "confirmed",
+      "source_name": "Coles Group ASX Announcement",
+      "link": "https://www.colesgroup.com.au/DownloadFile.axd?file=%2FReport%2FComNews%2F20260130%2F03050772.pdf"
+    }
+  ]
+}
+```
+
+</div>
+
+### `/ai/event/dividends`
+
+Check for incoming dividend/distribution events for a market, using AI assistance.
+
+Query parameters:
+- `country` (required): Country code to filter events by (e.g., 'AU', 'US', 'VN', etc.).
+- `index` (optional): Optional stock index to filter events by (e.g., 'NASDAQ 100', 'S&P/ASX 200', etc.).
+
+Examples:
+
+Request
+```
+GET /ai/event/dividends?country=AU'
+```
+
+Response:
+
+<div style="max-height: 300px !important; overflow: auto;">
+  
+```json
+{
+  "status": 200,
+  "message": "ok",
+  "data": [
+    {
+      "symbol": "ASX",
+      "company_name": "ASX Limited",
+      "timestamp": 1774184400,
+      "event_category": "Dividend/Distribution",
+      "date": "2026-03-23",
+      "status": "confirmed",
+      "value": 0.9,
+      "currency": "AUD",
+      "source_name": "ASX",
+      "link": "https://www.asx.com.au/content/dam/asx/about/media-releases/2026/02-14-january-2026-webcast-details-for-half-year-results-and-2026-key-dates.pdf"
+    },
+    {
+      "symbol": "CGF",
+      "company_name": "Challenger Limited",
+      "timestamp": 1774184400,
+      "event_category": "Dividend/Distribution",
+      "date": "2026-03-23",
+      "status": "confirmed",
+      "value": 0.155,
+      "currency": "AUD",
+      "source_name": "MarketIndex",
+      "link": "https://www.marketindex.com.au/asx/cgf"
+    },
+    {
+      "symbol": "DRR",
+      "company_name": "Deterra Royalties Ltd",
+      "timestamp": 1774184400,
+      "event_category": "Dividend/Distribution",
+      "date": "2026-03-23",
+      "status": "confirmed",
+      "value": 0.124,
+      "currency": "AUD",
+      "source_name": "MarketIndex",
+      "link": "https://www.marketindex.com.au/asx/drr"
+    },
+    {
+      "symbol": "IPH",
+      "company_name": "IPH Limited",
+      "timestamp": 1774184400,
+      "event_category": "Dividend/Distribution",
+      "date": "2026-03-23",
+      "status": "confirmed",
+      "value": 0.19,
+      "currency": "AUD",
+      "source_name": "MarketIndex",
+      "link": "https://www.marketindex.com.au/asx/iph"
+    },
+    {
+      "symbol": "VCX",
+      "company_name": "Vicinity Centres",
+      "timestamp": 1773147600,
+      "event_category": "Dividend/Distribution",
+      "date": "2026-03-11",
+      "status": "confirmed",
+      "value": 0.062,
+      "currency": "AUD",
+      "source_name": "MarketIndex",
+      "link": "https://www.marketindex.com.au/asx/vcx"
+    },
+    {
+      "symbol": "MFG",
+      "company_name": "Magellan Financial Group Ltd",
+      "timestamp": 1772974800,
+      "event_category": "Dividend/Distribution",
+      "date": "2026-03-09",
+      "status": "confirmed",
+      "value": 0.395,
+      "currency": "AUD",
+      "source_name": "MarketIndex",
+      "link": "https://www.marketindex.com.au/asx/mfg"
+    },
+    {
+      "symbol": "AMC",
+      "company_name": "Amcor Plc",
+      "timestamp": 1773579600,
+      "event_category": "Dividend/Distribution",
+      "date": "2026-03-16",
+      "status": "confirmed",
+      "value": 0.93,
+      "currency": "AUD",
+      "source_name": "MarketIndex",
+      "link": "https://www.marketindex.com.au/asx/amc"
+    },
+    {
+      "symbol": "JBH",
+      "company_name": "JB Hi-Fi Ltd",
+      "timestamp": 1773234000,
+      "event_category": "Dividend/Distribution",
+      "date": "2026-03-12",
+      "status": "confirmed",
+      "value": 2.1,
+      "currency": "AUD",
+      "source_name": "MarketIndex",
+      "link": "https://www.marketindex.com.au/asx/jbh"
+    },
+    {
+      "symbol": "PME",
+      "company_name": "Pro Medicus Ltd",
+      "timestamp": 1773838800,
+      "event_category": "Dividend/Distribution",
+      "date": "2026-03-19",
+      "status": "confirmed",
+      "value": 0.32,
+      "currency": "AUD",
+      "source_name": "MarketIndex",
+      "link": "https://www.marketindex.com.au/asx/pme"
+    },
+    {
+      "symbol": "MPL",
+      "company_name": "Medibank Private Ltd",
+      "timestamp": 1773666000,
+      "event_category": "Dividend/Distribution",
+      "date": "2026-03-17",
+      "status": "confirmed",
+      "value": 0.083,
+      "currency": "AUD",
+      "source_name": "MarketIndex",
+      "link": "https://www.marketindex.com.au/asx/mpl"
+    }
+  ]
 }
 ```
 
