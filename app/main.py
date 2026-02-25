@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse
 
 from .routers import stocks, ai
 
-VERSION = "0.1.0"
+VERSION = "0.1.1"
 APP_NAME = "FinHub API"
 APP_DESCRIPTION = "A developer-first financial API hub for stock market data."
 
