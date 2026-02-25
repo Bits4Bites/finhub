@@ -235,6 +235,15 @@ class SymbolInfo(SymbolBase):
         )
 
 
+class LLMResponse(BaseModel):
+    completion: str = ""
+    time_taken_ms: int = 0
+    tokens_prompt: int = 0
+    tokens_completion: int = 0
+    tokens_thought: int = 0
+    is_error: bool = False
+
+
 class EventBase(BaseModel):
     symbol: str
     company_name: Optional[str] = None

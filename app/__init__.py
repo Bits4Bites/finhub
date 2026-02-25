@@ -25,10 +25,6 @@ for vendor_name, api_tiers in list(config.settings.llm_config.items()):
             config.settings.llm_config[vendor_name.upper()][api_tier.upper()].vendor_name = vendor_name.upper()
             config.settings.llm_config[vendor_name.upper()][api_tier.upper()].api_tier = api_tier.upper()
 
-    # # delete the whole vendor if it has no api_tiers left
-    # if not api_tiers:
-    #     del config.settings.llm_config[vendor_name]
-
 for vendor_name, api_tiers in list(config.settings.llm_config.items()):
     # final cleanup
     for api_tier, llm_cfg in list(api_tiers.items()):

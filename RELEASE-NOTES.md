@@ -1,5 +1,11 @@
 # qnd-papi-template release notes
 
+## 2026-02-25 - v0.1.1
+
+### Fixed/Improvements
+
+- (Patch) Refactor & Optimize AI-assisted function to get incoming events.
+
 ## 2026-02-23 - v0.1.0
 
 ### Added/Refactoring/Deprecation

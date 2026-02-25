@@ -7,6 +7,7 @@ class BaseResponse(BaseModel):
     status: int
     message: str
     data: Optional[Any] = None
+    extra: Optional[Any] = None
     model_config = {"arbitrary_types_allowed": True}
 
 

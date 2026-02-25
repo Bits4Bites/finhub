@@ -8,9 +8,9 @@ router = APIRouter(prefix="/ai", tags=["ai"])
 
 @router.get("/event/earnings", response_model=schemas.IncomingEarningsResponse, response_model_exclude_none=True)
 async def get_incoming_earnings_event(
-    country: str = Query("", description="Country code to filter events by (e.g., 'US', 'CN', etc.)."),
+    country: str = Query("", description="Country code to filter events by (e.g., 'AU', 'US', 'VN', etc.)."),
     index: str = Query(
-        "", description="Optional stock index to filter events by (e.g., 'NASDAQ 100', 'S&P/ASX 100', etc.)."
+        "", description="Optional stock index to filter events by (e.g., 'NASDAQ 100', 'S&P/ASX 200', etc.)."
     ),
 ) -> schemas.IncomingEarningsResponse:
     """
@@ -22,9 +22,9 @@ async def get_incoming_earnings_event(
 
 @router.get("/event/dividends", response_model=schemas.IncomingDividendsResponse, response_model_exclude_none=True)
 async def get_incoming_dividends_event(
-    country: str = Query("", description="Country code to filter events by (e.g., 'US', 'CN', etc.)."),
+    country: str = Query("", description="Country code to filter events by (e.g., 'AU', 'US', 'VN', etc.)."),
     index: str = Query(
-        "", description="Optional stock index to filter events by (e.g., 'NASDAQ 100', 'S&P/ASX 100', etc.)."
+        "", description="Optional stock index to filter events by (e.g., 'NASDAQ 100', 'S&P/ASX 200', etc.)."
     ),
 ) -> schemas.IncomingDividendsResponse:
     """
