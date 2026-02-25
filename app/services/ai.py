@@ -1,5 +1,5 @@
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from google import genai
 from openai import AsyncOpenAI
@@ -7,14 +7,17 @@ from openai.types.responses import WebSearchPreviewToolParam
 from openai.types.responses.web_search_preview_tool_param import UserLocation
 
 from ..models import finhub as models
-from ..config import settings, LLMTaskConfig
+from ..config import settings
 
 geminiClients: dict[str, genai.Client] = {}
 openAIClients: dict[str, AsyncOpenAI] = {}
 azureOpenAIClients: dict[str, AsyncOpenAI] = {}
 
+EVENT_INCOMING_EARNINGS = "INCOMING_EARNINGS_EVENTS"
+EVENT_INCOMING_DIVIDENDS = "INCOMING_DIVIDEND_EVENTS"
 
-def build_prompt_incoming_events(prompt_template: str, country: str, index: str) -> str:
+
+def build_prompt_incoming_events(event_type: str, country: str, index: str) -> str:
     tz = (
         "America/New_York"
         if country == "US"
@@ -26,18 +29,38 @@ def build_prompt_incoming_events(prompt_template: str, country: str, index: str)
         else (
             "Dow Jones 30 Industrial or NASDAQ 100 or NYSE US 100 or S&P 100"
             if country == "US"
-            else "S&P/ASX 200" if country == "AU" else "VN100 or HNX30" if country == "VN" else "N/A"
+            else "S&P/ASX 200" if country == "AU" else "VN100 (HOSE) or HNX30 (HNX)" if country == "VN" else "N/A"
         )
     )
+    prompt_template = prompts[event_type] if event_type in prompts else ""
+    if not prompt_template:
+        raise EnvironmentError(f"Prompt template for {event_type} is missing or empty.")
+    today = datetime.today()
     prompt = (
         prompt_template.replace("{TIMEZONE}", tz)
         .replace("{INDEX}", index)
-        .replace("{TODAY}", datetime.today().strftime("%Y-%m-%d"))
+        .replace("{TODAY}", today.strftime("%Y-%m-%d"))
+        .replace("{START_DATE}", today.strftime("%Y-%m-%d"))
+        .replace("{END_DATE}", (today + timedelta(days=60)).strftime("%Y-%m-%d"))
     )
+    if event_type in prompt_customization and country.upper() in prompt_customization[event_type]:
+        for placeholder, custom_text in prompt_customization[event_type][country.upper()].items():
+            lines = [line.strip() for line in custom_text.strip().splitlines() if line.strip()]
+            custom_text = "\n".join(lines)
+            prompt = prompt.replace(f"{{{placeholder}}}", custom_text)
+
+    if event_type in prompt_customization:
+        for placeholder, _ in prompt_customization[event_type]["*"].items():
+            prompt = prompt.replace(f"{{{placeholder}}}", "")
+
     return prompt
 
 
-async def ai_get_incoming_events(task_cfg: LLMTaskConfig, prompt: str, country: str) -> models.LLMResponse:
+async def ai_get_incoming_events(event_type: str, prompt: str, country: str) -> models.LLMResponse:
+    task_cfg = settings.llm_task_config[event_type] if event_type in settings.llm_task_config else None
+    if task_cfg is None:
+        raise EnvironmentError(f"LLM task configuration for {event_type} is missing.")
+
     match task_cfg.vendor.upper():
         case "AZUREOPENAI" | "AZURE OPENAI" | "AZURE_OPENAI":
             start = time.perf_counter()
@@ -46,9 +69,11 @@ async def ai_get_incoming_events(task_cfg: LLMTaskConfig, prompt: str, country: 
                 raise EnvironmentError(f"Azure OpenAI client for tier '{task_cfg.tier}' is not configured.")
             model = task_cfg.model
             print(
-                f"[DEBUG] ai_get_incoming_events / Country: {country} / Vendor: {task_cfg.vendor} / Tier: {task_cfg.tier} / Model: {model}\n",
-                prompt,
+                f"[DEBUG] ai_get_incoming_events({event_type}) "
+                f"/ Country: {country} / Vendor: {task_cfg.vendor} / Tier: {task_cfg.tier} / Model: {model}"
             )
+            print(prompt)
+
             temperature = None if model.startswith("gpt-5") else 0.0
             response = await client.responses.create(
                 model=model,
@@ -61,7 +86,6 @@ async def ai_get_incoming_events(task_cfg: LLMTaskConfig, prompt: str, country: 
                 ],
                 input=prompt,
             )
-            print("[DEBUG] ai_get_incoming_events response:\n", response.output_text)
             end = time.perf_counter()
             result = models.LLMResponse(
                 completion=response.output_text,
@@ -71,6 +95,14 @@ async def ai_get_incoming_events(task_cfg: LLMTaskConfig, prompt: str, country: 
                 tokens_thought=0,
                 is_error=response.output_text == "" or response.status != "completed",
             )
+
+            print(
+                f"[DEBUG] ai_get_incoming_events({event_type}) response - Time taken: {result.time_taken_ms} ms, "
+                f"Prompt tokens: {result.tokens_prompt}, Completion tokens: {result.tokens_completion}, "
+                f"Thought tokens: {result.tokens_thought}, Is error: {result.is_error}"
+            )
+            print(response.output_text)
+
             return result
         case _:
             raise ValueError(f"Unsupported LLM vendor: {task_cfg.vendor}")
@@ -86,22 +118,12 @@ async def ai_get_incoming_earnings_events(country: str, index: str) -> list[mode
     :return: A list of incoming earnings events for the specified country.
     :rtype: list[models.IncomingEarningsEvent]
     """
-    prompt = build_prompt_incoming_events(prompt_get_incoming_earnings_events, country, index)
-
-    task_cfg = (
-        settings.llm_task_config["INCOMING_EARNINGS_EVENTS"]
-        if "INCOMING_EARNINGS_EVENTS" in settings.llm_task_config
-        else None
-    )
-    if task_cfg is None:
-        raise EnvironmentError("LLM task configuration for INCOMING_EARNINGS_EVENTS is missing.")
-
-    llm_result = await ai_get_incoming_events(task_cfg, prompt, country)
+    event_type = EVENT_INCOMING_EARNINGS
+    prompt = build_prompt_incoming_events(event_type, country, index)
+    llm_result = await ai_get_incoming_events(event_type, prompt, country)
     if llm_result.is_error:
         print(f"[ERROR] LLM failed to generate response for incoming earnings events: {llm_result.completion}")
         return []
-
-    print("[DEBUG] ai_get_incoming_earnings_event response:\n", llm_result.completion)
 
     # parse response.output_text as JSON array of IncomingEarningsEvent
     try:
@@ -122,24 +144,14 @@ async def ai_get_incoming_dividends_events(country: str, index: str) -> list[mod
     :return: A list of incoming dividend/distribution events for the specified country.
     :rtype: list[models.IncomingDividendEvent]
     """
-    prompt = build_prompt_incoming_events(prompt_get_incoming_dividend_distribution_events, country, index)
-
-    task_cfg = (
-        settings.llm_task_config["INCOMING_DIVIDEND_EVENTS"]
-        if "INCOMING_DIVIDEND_EVENTS" in settings.llm_task_config
-        else None
-    )
-    if task_cfg is None:
-        raise EnvironmentError("LLM task configuration for INCOMING_DIVIDEND_EVENTS is missing.")
-
-    llm_result = await ai_get_incoming_events(task_cfg, prompt, country)
+    event_type = EVENT_INCOMING_EARNINGS
+    prompt = build_prompt_incoming_events(event_type, country, index)
+    llm_result = await ai_get_incoming_events(event_type, prompt, country)
     if llm_result.is_error:
         print(
             f"[ERROR] LLM failed to generate response for incoming dividend/distribution events: {llm_result.completion}"
         )
         return []
-
-    print("[DEBUG] ai_get_incoming_dividends_events response:\n", llm_result.completion)
 
     # parse response.output_text as JSON array of IncomingDividendEvent
     try:
@@ -150,231 +162,48 @@ async def ai_get_incoming_dividends_events(country: str, index: str) -> list[mod
         return []
 
 
-prompt_get_incoming_earnings_events = """
-# ROLE
+prompts: dict[str, str] = {}
 
-You are a financial research assistant with live web search capability.
+prompt_customization = {
+    EVENT_INCOMING_EARNINGS: {
+        "VN": {
+            "CUSTOM_KEYWORDS": """
+                Vietnamese search keywords to use:
+                - "Lịch công bố BCTC"
+                - "Lịch sự kiện chứng khoán"
+                - "Báo cáo tài chính" (BCTC)
+                - "Kết quả kinh doanh" (KQKD)
+                """,
+            "OFFICIAL_INDEX_PROVIDERS": "HOSE or HNX",
+            "REPORT_PERIOD_MAPPINGS": """
+                # REPORT_PERIOD CLASSIFICATION
 
-# TIME REFERENCE
-
-- Use {TIMEZONE} timezone.
-- Define TODAY as {TODAY} in that timezone.
-- Explicitly determine:
-  START_DATE = TODAY (inclusive)
-  END_DATE = TODAY + 28 calendar days (inclusive)
-- Only include events where:
-  START_DATE <= earnings_date <= END_DATE
-- Earnings date must be strictly in the FUTURE relative to TODAY.
-
-# OBJECTIVE
-
-Find 10-20 companies that are CURRENT constituents of the {INDEX} index
-AND have an upcoming earnings or financial results announcement within the defined 28-day window.
-
-# DEFINITION OF EARNINGS
-
-Valid events include:
-- Quarterly results
-- Half-year results
-- Full-year results
-- Official interim results
-- Official financial statement release dates
-
-Do NOT include:
-- AGM notices
-- Dividend announcements only
-- Trading updates without financial results
-- Past results
-- Month-only or week-only expected timing
-
-# REQUIRED VALIDATION
-
-1. You MUST use live web search.
-2. You SHOULD verify current index membership using:
-   - Official index provider publication
-3. Earnings date must be confirmed by:
-   - Company investor relations page
-   - Official exchange announcement
-   - Official exchange filing document
-   - Reputable financial data provider (Bloomberg, Reuters, MarketScreener, Yahoo Finance, Vietstock, etc.)
-4. The earnings date must:
-   - Be explicitly stated (no inference)
-   - Fall within the 28-day window
-   - Be converted to ISO format: yyyy-MM-dd
-5. If the date is not officially confirmed but appears as an estimate
-   from a reputable financial data provider,
-   mark status as "estimated".
-6. If fewer than 10 qualifying companies are found,
-   return all that qualify.
-
-# DATA FIELDS
-
-For each company return:
-
-- symbol
-- company_name
-- date (yyyy-MM-dd)
-- report_period (quarterly | half-year | full-year | interim)
-- status (confirmed | estimated)
-- source_name
-- link (direct URL to specific page confirming the date)
-
-Reject entries if:
-- Membership cannot be verified
-- Date is outside window
-- Source is unclear
-- Link is generic homepage
-
-# OUTPUT FORMAT (STRICT)
-
-Return ONLY valid JSON.
-No markdown.
-No explanation.
-No comments.
-No trailing commas.
-
-Structure:
-
-[
-  {
-    "symbol": "TICKER",
-    "company_name": "Company Name",
-    "date": "yyyy-MM-dd",
-    "report_period": "quarterly",
-    "status": "confirmed",
-    "source_name": "ASX | HOSE | NASDAQ | etc",
-    "link": "https://exact-source-url"
-  }
-]
-
-# PROCESS
-
-Step 1: Retrieve current {INDEX} constituents from official sources.
-Step 2: Compute date window using {TIMEZONE} timezone.
-Step 3: Search for upcoming earnings announcements.
-Step 4: Validate each candidate against:
-        - Index membership
-        - Date window
-        - Source credibility
-Step 5: Return 10–20 validated results in strict JSON.
-
-Begin.
-"""
-
-prompt_get_incoming_dividend_distribution_events = """
-# ROLE
-
-You are a financial research assistant with live web search capability.
-
-# TIME REFERENCE
-
-- Use {TIMEZONE} timezone.
-- Define TODAY as {TODAY} in that timezone.
-- Explicitly determine:
-  START_DATE = TODAY (inclusive)
-  END_DATE = TODAY + 28 calendar days (inclusive)
-- Only include events where:
-  START_DATE <= dividend_date <= END_DATE
-- Dividend/distribution date must be strictly in the FUTURE relative to TODAY.
-
-# OBJECTIVE
-
-Find 10-20 companies that are CURRENT constituents of the {INDEX} index
-AND have an upcoming dividend or distribution-related event within the defined 28-day window.
-
-# DEFINITION OF VALID DIVIDEND EVENTS
-
-Valid events include:
-- Ex-dividend date
-- Ex-distribution date
-- Record date
-- Payment date
-- Distribution payment date (for REITs, ETFs, trusts)
-- Special dividend payment date
-- Interim dividend payment date
-- Final dividend payment date
-
-Do NOT include:
-- Historical dividend dates
-- Dividend announcement date only (without a confirmed ex-date or payment date)
-- Month-only or week-only timing estimates
-- Dividend reinvestment plan (DRP) notice unless a payment/ex-date is specified
-- Earnings results that merely mention dividends
-
-# REQUIRED VALIDATION
-
-1. You MUST use live web search.
-2. You SHOULD verify current index membership using:
-   - Official index provider publication
-3. Dividend/distribution date must be confirmed by at least one of:
-   - Company investor relations page
-   - Official ASX announcement
-   - Official exchange filing
-   - Reputable financial data provider (Bloomberg, Reuters, MarketScreener, Yahoo Finance, Vietstock, etc.)
-4. The dividend date must:
-   - Be explicitly stated (no inference)
-   - Fall within the 28-day window
-   - Be converted to ISO format: yyyy-MM-dd
-5. If the date is not officially confirmed but appears as an estimate
-   from a reputable financial data provider,
-   mark status as "estimated".
-6. If fewer than 10 qualifying companies are found,
-   return all that qualify.
-
-# DATA FIELDS
-
-For each company return:
-
-- symbol
-- company_name
-- date (yyyy-MM-dd)
-- event_type (ex-dividend | record | payment | distribution | special)
-- status (confirmed | estimated)
-- dividend/distribution value
-- currency
-- source_name
-- link (direct URL to specific page confirming the date)
-
-Reject entries if:
-- Date is outside window
-- Source is unclear or non-authoritative
-- Link is generic homepage
-- Date is only implied but not explicitly stated
-
-OUTPUT FORMAT (STRICT)
-
-Return ONLY valid JSON.
-No markdown.
-No explanation.
-No comments.
-No trailing commas.
-
-Structure:
-
-[
-  {
-    "symbol": "TICKER",
-    "company_name": "Company Name",
-    "date": "yyyy-MM-dd",
-    "event_type": "ex-dividend",
-    "status": "confirmed",
-    "value": 100,
-    "currency": "AUD | USD | VND | etc",
-    "source_name": "ASX | S&P Dow Jones | Bloomberg | etc",
-    "link": "https://exact-source-url"
-  }
-]
-
-PROCESS
-
-Step 1: Retrieve current {INDEX} constituents from official sources.
-Step 2: Compute date window using {TIMEZONE} timezone.
-Step 3: Search for upcoming dividend/distribution events.
-Step 4: Validate each candidate against:
-        - Index membership
-        - Date window
-        - Source credibility
-Step 5: Return 10–20 validated results in strict JSON.
-
-Begin.
-"""
+                Map as:
+                - Quarterly (Q1/Q2/Q3/Q4, quý)
+                - Half-year (6T, H1, bán niên)
+                - Full-year (annual, year-end)
+                - Interim (explicitly stated interim but not quarterly/half-year/full-year)
+                """,
+            "CUSTOM_SEARCH": (
+                "Additional Vietnamese financial news websites can be used for cross-referencing and validation, such as: "
+                "vietstock.vn, vietnamfinance.vn, vietnambiz.vn, vnfinance.vn, thoibaotaichinhvietnam.vn, "
+                "vietnambusinessinsider.vn, and cafef.vn."
+            ),
+            "SOURCES": "HOSE, HNX, Vietstock, CafeF, VNFinance, VietnamBusinessInsider, etc.",
+            "BROADER_SEARCH": """ "Lịch công bố báo cáo tài chính" or "Lịch sự kiện chứng khoán" """,
+        },
+        "AU": {
+            "OFFICIAL_INDEX_PROVIDERS": "ASX",
+            "SOURCES": "Market Index, CommSec, Bloomberg, Reuters, Yahoo Finance, etc.",
+            "BROADER_SEARCH": """ "Australian earnings calendars" or "ASX reporting season dates" """,
+        },
+        "*": {
+            "CUSTOM_KEYWORDS": "",
+            "OFFICIAL_INDEX_PROVIDERS": "",
+            "REPORT_PERIOD_MAPPINGS": "",
+            "CUSTOM_SEARCH": "",
+            "SOURCES": "Bloomberg, Reuters, MarketScreener, Yahoo Finance, etc.",
+            "BROADER_SEARCH": """ "Earnings calendar" or "Earnings season dates" """,
+        },
+    },
+}
