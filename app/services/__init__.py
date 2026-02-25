@@ -1,8 +1,12 @@
+import logging
+
 from google import genai
 from openai import AsyncOpenAI
 
 from ..config import settings
 from . import ai
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
 # initialize LLM clients based on configurations
 for vendor_name, api_tiers in list(settings.llm_config.items()):
@@ -25,22 +29,22 @@ def read_file_as_single_string(file_path) -> str:
             combined_text = "\n".join(lines)
         return combined_text
     except FileNotFoundError:
-        print(f"Error: File '{file_path}' not found.")
+        logging.error("Error: File '%s' not found.", file_path)
     except PermissionError:
-        print(f"Error: Permission denied for file '{file_path}'.")
+        logging.error("Error: Permission denied for file '%s'.", file_path)
     except Exception as e:
-        print(f"An unexpected error occurred: {e}")
+        logging.exception("An unexpected error occurred while reading file '%s': '%e'", file_path, e)
     return ""
 
 
 templ_name = ai.EVENT_INCOMING_EARNINGS
 templ_file = "./resources/prompts/incoming_earnings_events.md"
-print(f"[INFO] Loading prompt template '{templ_name}' from file {templ_file}...")
+logging.info("Loading prompt template '%s' from file '%s'...", templ_name, templ_file)
 templ_prompt = read_file_as_single_string(templ_file)
 ai.prompts[templ_name] = templ_prompt.strip()
 
 templ_name = ai.EVENT_INCOMING_DIVIDENDS
 templ_file = "./resources/prompts/incoming_dividend_distribution_events.md"
-print(f"[INFO] Loading prompt template '{templ_name}' from file {templ_file}...")
+logging.info("Loading prompt template '%s' from file '%s'...", templ_name, templ_file)
 templ_prompt = read_file_as_single_string(templ_file)
 ai.prompts[templ_name] = templ_prompt.strip()
