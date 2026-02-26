@@ -21,16 +21,24 @@ def build_prompt_incoming_events(event_type: str, country: str, index: str) -> s
     country = country.upper() if country else "US"
     tz = (
         "America/New_York"
-        if country == "US"
-        else "Australia/Sydney" if country == "AU" else "Asia/Ho_Chi_Minh" if country == "VN" else "UTC"
+        if country == "US" or country == "USA" or country == "UNITED STATES" or country == "AMERICA"
+        else (
+            "Australia/Sydney"
+            if country == "AU" or country == "AUS" or country == "AUSTRALIA"
+            else "Asia/Ho_Chi_Minh" if country == "VN" or country == "VIETNAM" else "UTC"
+        )
     )
     index = (
         index
         if index
         else (
             "Dow Jones 30 Industrial or NASDAQ 100 or NYSE US 100 or S&P 100"
-            if country == "US"
-            else "S&P/ASX 200" if country == "AU" else "VN100 (HOSE) or HNX30 (HNX)" if country == "VN" else "N/A"
+            if country == "US" or country == "USA" or country == "UNITED STATES" or country == "AMERICA"
+            else (
+                "S&P/ASX 200"
+                if country == "AU" or country == "AUS" or country == "AUSTRALIA"
+                else "VN100 (HOSE) or HNX30 (HNX)" if country == "VN" or country == "VIETNAM" else "N/A"
+            )
         )
     )
     prompt_template = prompts[event_type] if event_type in prompts else ""
