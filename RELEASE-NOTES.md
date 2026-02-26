@@ -1,5 +1,11 @@
 # FinHub release notes
 
+## 2026-02-26 - v0.1.3
+
+### Fixed/Improvements
+
+- (Patch) Fix typo.
+
 ## 2026-02-26 - v0.1.2
 
 ### Fixed/Improvements
