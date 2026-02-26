@@ -1,5 +1,12 @@
 # qnd-papi-template release notes
 
+## 2026-02-26 - v0.1.2
+
+### Fixed/Improvements
+
+- (Patch) Fix incoming dividends model fields.
+- (Patch) Accept variants of country codes/names.
+
 ## 2026-02-25 - v0.1.1
 
 ### Fixed/Improvements
