@@ -73,9 +73,9 @@ Structure:
     "symbol": "TICKER",
     "company_name": "Company Name",
     "date": "yyyy-MM-dd",
-    "event_type": "dividend | distribution",
+    "event_category": "dividend | distribution",
     "status": "declared | estimated",
-    "value": 1.23,
+    "amount": 1.23,
     "currency": "dollar, cent, etc.",
     "source_name": "{SOURCES}",
     "link": "https://exact-source-url"

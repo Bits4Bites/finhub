@@ -248,15 +248,15 @@ class EventBase(BaseModel):
     symbol: str
     company_name: Optional[str] = None
     timestamp: Optional[int] = 0
+    date: Optional[str] = None
     event_category: Optional[str] = None
+    source_name: Optional[str] = None
+    link: Optional[str] = None
 
 
 class IncomingEarningsEvent(EventBase):
-    date: Optional[str] = None
     report_period: Optional[str] = None
     status: Optional[str] = None
-    source_name: Optional[str] = None
-    link: Optional[str] = None
 
 
 def normalize_json_str(json_str: str) -> str:
@@ -273,14 +273,14 @@ def parse_incoming_earnings_events_from_json(json_str: str) -> list[IncomingEarn
     result = []
     for item in events:
         event = IncomingEarningsEvent(
-            symbol=item.get("symbol", ""),
+            symbol=item.get("symbol"),
             company_name=item.get("company_name"),
-            event_category="Earnings",
             date=item.get("date"),
-            report_period=item.get("type"),
-            status=item.get("status"),
+            event_category="Earnings",
             source_name=item.get("source_name"),
             link=item.get("link"),
+            report_period=item.get("type"),
+            status=item.get("status"),
         )
         # parse yyyy-MM-dd from event.date into event.timestamp
         event.timestamp = int(datetime.strptime(event.date, "%Y-%m-%d").timestamp())
@@ -290,13 +290,9 @@ def parse_incoming_earnings_events_from_json(json_str: str) -> list[IncomingEarn
 
 
 class IncomingDividendEvent(EventBase):
-    date: Optional[str] = None
-    report_period: Optional[str] = None
     status: Optional[str] = None
-    value: Optional[float] = None
+    amount: Optional[float] = None
     currency: Optional[str] = None
-    source_name: Optional[str] = None
-    link: Optional[str] = None
 
 
 def parse_incoming_dividend_events_from_json(json_str: str) -> list[IncomingDividendEvent]:
@@ -307,14 +303,13 @@ def parse_incoming_dividend_events_from_json(json_str: str) -> list[IncomingDivi
         event = IncomingDividendEvent(
             symbol=item.get("symbol", ""),
             company_name=item.get("company_name"),
-            event_category="Dividend/Distribution",
             date=item.get("date"),
-            report_period=item.get("type"),
-            status=item.get("status"),
-            value=item.get("value"),
-            currency=item.get("currency"),
+            event_category=item.get("event_category", "Dividend"),
             source_name=item.get("source_name"),
             link=item.get("link"),
+            status=item.get("status"),
+            amount=item.get("amount"),
+            currency=item.get("currency"),
         )
         # parse yyyy-MM-dd from event.date into event.timestamp
         event.timestamp = int(datetime.strptime(event.date, "%Y-%m-%d").timestamp())

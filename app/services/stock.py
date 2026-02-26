@@ -6,6 +6,26 @@ from ..models.finhub import SymbolInfo, StockQuote, SymbolOverview
 allowed_quote_types = {"EQUITY", "ETF"}
 
 
+def get_symbol_info_raw(symbol: str) -> dict[str, Any]:
+    """
+    Fetches detailed information about a ticker symbol.
+
+    :param symbol: The ticker symbol to fetch information for.
+    :type symbol: str
+    :return: A dictionary containing the raw ticker information.
+    :rtype: dict[str, Any]
+    """
+    ticker = yf.Ticker(symbol)
+    info = ticker.info
+    keys = list(info.keys())
+    result = dict[str, Any]()
+    for key in keys:
+        # convert camelCase to snake_case
+        snake_key = "".join(["_" + c.lower() if c.isupper() else c for c in key])
+        result[snake_key] = info[key]
+    return result
+
+
 def get_symbol_info(symbol: str) -> SymbolInfo | None:
     """
     Fetches detailed information about a ticker symbol.
@@ -36,26 +56,6 @@ def get_symbol_overview(symbol: str) -> SymbolOverview | None:
     if quote_type in allowed_quote_types:
         return SymbolOverview(ticker=ticker)
     return None
-
-
-def get_symbol_info_raw(symbol: str) -> dict[str, Any]:
-    """
-    Fetches detailed information about a ticker symbol.
-
-    :param symbol: The ticker symbol to fetch information for.
-    :type symbol: str
-    :return: A dictionary containing the raw ticker information.
-    :rtype: dict[str, Any]
-    """
-    ticker = yf.Ticker(symbol)
-    info = ticker.info
-    keys = list(info.keys())
-    result = dict[str, Any]()
-    for key in keys:
-        # convert camelCase to snake_case
-        snake_key = "".join(["_" + c.lower() if c.isupper() else c for c in key])
-        result[snake_key] = info[key]
-    return result
 
 
 def get_stock_quotes(symbols: list[str]) -> dict[str, StockQuote]:
