@@ -279,7 +279,7 @@ def parse_incoming_earnings_events_from_json(json_str: str) -> list[IncomingEarn
             event_category="Earnings",
             source_name=item.get("source_name"),
             link=item.get("link"),
-            report_period=item.get("type"),
+            report_period=item.get("report_period"),
             status=item.get("status"),
         )
         # parse yyyy-MM-dd from event.date into event.timestamp
@@ -301,7 +301,7 @@ def parse_incoming_dividend_events_from_json(json_str: str) -> list[IncomingDivi
     result = []
     for item in events:
         event = IncomingDividendEvent(
-            symbol=item.get("symbol", ""),
+            symbol=item.get("symbol"),
             company_name=item.get("company_name"),
             date=item.get("date"),
             event_category=item.get("event_category", "Dividend"),
