@@ -1,4 +1,4 @@
-# qnd-papi-template release notes
+# FinHub release notes
 
 ## 2026-02-26 - v0.1.2
 

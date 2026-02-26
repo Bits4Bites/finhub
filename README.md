@@ -1,5 +1,3 @@
-# qnd-papi-template
-
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Actions Status](https://github.com/Bits4Bites/finhub/workflows/ci/badge.svg)](https://github.com/Bits4Bites/finhub/actions)
 [![Release](https://img.shields.io/github/release/Bits4Bites/finhub.svg?style=flat-square)](RELEASE-NOTES.md)
@@ -477,8 +475,8 @@ If you find a bug or have a suggestion:
 
 2. **Clone your fork** locally:
    ```bash
-   git clone https://github.com/YOUR_USERNAME/qnd-papi-template.git
-   cd qnd-papi-template
+   git clone https://github.com/YOUR_USERNAME/finhub.git
+   cd finhub
    ```
 
 3. **Create a new branch** for your feature or fix:
