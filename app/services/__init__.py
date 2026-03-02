@@ -6,8 +6,6 @@ from openai import AsyncOpenAI
 from ..config import settings
 from . import ai
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-
 # initialize LLM clients based on configurations
 for vendor_name, api_tiers in list(settings.llm_config.items()):
     for api_tier, llm_config in list(api_tiers.items()):
@@ -45,6 +43,12 @@ ai.prompts[templ_name] = templ_prompt.strip()
 
 templ_name = ai.EVENT_INCOMING_DIVIDENDS
 templ_file = "./resources/prompts/incoming_dividend_distribution_events.md"
+logging.info("Loading prompt template '%s' from file '%s'...", templ_name, templ_file)
+templ_prompt = read_file_as_single_string(templ_file)
+ai.prompts[templ_name] = templ_prompt.strip()
+
+templ_name = ai.EVENT_ASX_UPCOMING_DIVIDENDS
+templ_file = "./resources/prompts/asx_upcoming_dividend_distribution_events.md"
 logging.info("Loading prompt template '%s' from file '%s'...", templ_name, templ_file)
 templ_prompt = read_file_as_single_string(templ_file)
 ai.prompts[templ_name] = templ_prompt.strip()

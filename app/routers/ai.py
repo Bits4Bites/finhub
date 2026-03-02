@@ -20,15 +20,20 @@ async def get_incoming_earnings_event(
     return schemas.IncomingEarningsResponse(status=200, message="ok", data=events)
 
 
-@router.get("/event/dividends", response_model=schemas.IncomingDividendsResponse, response_model_exclude_none=True)
-async def get_incoming_dividends_event(
+@router.get("/event/dividends", response_model=schemas.UpcomingDividendsResponse, response_model_exclude_none=True)
+async def get_upcoming_dividends_event(
     country: str = Query("", description="Country code to filter events by (e.g., 'AU', 'US', 'VN', etc.)."),
     index: str = Query(
         "", description="Optional stock index to filter events by (e.g., 'NASDAQ 100', 'S&P/ASX 200', etc.)."
     ),
-) -> schemas.IncomingDividendsResponse:
+) -> schemas.UpcomingDividendsResponse:
     """
-    Check for incoming dividend/distribution events for a market, using AI assistance.
+    Check for upcoming dividend/distribution events for a market, using AI assistance.
     """
-    events = await ai_service.ai_get_incoming_dividends_events(country, index)
-    return schemas.IncomingDividendsResponse(status=200, message="ok", data=events)
+    country = country.upper()
+    match country:
+        case "AU":
+            events = await ai_service.ai_get_asx_upcoming_dividends_events(index)
+        case _:
+            events = await ai_service.ai_get_incoming_dividends_events(country, index)
+    return schemas.UpcomingDividendsResponse(status=200, message="ok", data=events)

@@ -2,7 +2,7 @@ import json
 from datetime import datetime
 
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Any
 import yfinance as yf
 
 
@@ -289,27 +289,31 @@ def parse_incoming_earnings_events_from_json(json_str: str) -> list[IncomingEarn
     return result
 
 
-class IncomingDividendEvent(EventBase):
+class UpcomingDividendEvent(EventBase):
     status: Optional[str] = None
     amount: Optional[float] = None
+    dividend_yield: Optional[float] = None
     currency: Optional[str] = None
+    payment_date: Optional[str] = None
 
 
-def parse_incoming_dividend_events_from_json(json_str: str) -> list[IncomingDividendEvent]:
+def parse_incoming_dividend_events_from_json(json_str: str, default_vals: dict[str, Any] = None) -> list[UpcomingDividendEvent]:
     json_str = normalize_json_str(json_str)
     events = json.loads(json_str)
     result = []
     for item in events:
-        event = IncomingDividendEvent(
-            symbol=item.get("symbol"),
-            company_name=item.get("company_name"),
-            date=item.get("date"),
-            event_category=item.get("event_category", "Dividend"),
-            source_name=item.get("source_name"),
-            link=item.get("link"),
-            status=item.get("status"),
-            amount=item.get("amount"),
-            currency=item.get("currency"),
+        event = UpcomingDividendEvent(
+            symbol=item.get("sym", default_vals.get("sym")),
+            company_name=item.get("corp", default_vals.get("corp")),
+            date=item.get("date", default_vals.get("date")),
+            payment_date=item.get("pdate", default_vals.get("pdate")),
+            event_category=item.get("cat", default_vals.get("cat", "Dividend")),
+            source_name=item.get("src", default_vals.get("src")),
+            link=item.get("link", default_vals.get("link")),
+            status=item.get("status", default_vals.get("status")),
+            amount=item.get("amount", default_vals.get("amount")),
+            dividend_yield=item.get("yield", default_vals.get("yield")),
+            currency=item.get("currency", default_vals.get("currency")),
         )
         # parse yyyy-MM-dd from event.date into event.timestamp
         event.timestamp = int(datetime.strptime(event.date, "%Y-%m-%d").timestamp())
