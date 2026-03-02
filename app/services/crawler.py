@@ -166,7 +166,7 @@ def scrape_earnings_asx(end_date: datetime.date) -> pd.DataFrame:
 
     # before returning result:
     # - remove non-essential columns
-    cols_to_drop = ["Analyst Consensus", "Smart Score", "Follow"]
+    cols_to_drop = ["Market Cap", "EPS (Forecast)", "EPS (Actual)", "Revenue (Forecast)", "Revenue (Actual)", "Analyst Consensus", "Smart Score", "Time", "Follow"]
     for col in cols_to_drop:
         if col in final_df.columns:
             final_df = final_df.drop(columns=[col])

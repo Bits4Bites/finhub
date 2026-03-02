@@ -254,7 +254,7 @@ class EventBase(BaseModel):
     link: Optional[str] = None
 
 
-class IncomingEarningsEvent(EventBase):
+class UpcomingEarningsEvent(EventBase):
     report_period: Optional[str] = None
     status: Optional[str] = None
 
@@ -267,20 +267,20 @@ def normalize_json_str(json_str: str) -> str:
     return json_str
 
 
-def parse_incoming_earnings_events_from_json(json_str: str) -> list[IncomingEarningsEvent]:
+def parse_upcoming_earnings_events_from_json(json_str: str, default_vals: dict[str, Any] = None) -> list[UpcomingEarningsEvent]:
     json_str = normalize_json_str(json_str)
     events = json.loads(json_str)
     result = []
     for item in events:
-        event = IncomingEarningsEvent(
-            symbol=item.get("symbol"),
-            company_name=item.get("company_name"),
-            date=item.get("date"),
+        event = UpcomingEarningsEvent(
+            symbol=item.get("sym", default_vals.get("sym")),
+            company_name=item.get("corp", default_vals.get("corp")),
+            date=item.get("date", default_vals.get("date")),
             event_category="Earnings",
-            source_name=item.get("source_name"),
-            link=item.get("link"),
-            report_period=item.get("report_period"),
-            status=item.get("status"),
+            source_name=item.get("src", default_vals.get("src")),
+            link=item.get("link", default_vals.get("link")),
+            report_period=item.get("report_period", default_vals.get("report_period")),
+            status=item.get("status", default_vals.get("status")),
         )
         # parse yyyy-MM-dd from event.date into event.timestamp
         event.timestamp = int(datetime.strptime(event.date, "%Y-%m-%d").timestamp())
@@ -297,7 +297,7 @@ class UpcomingDividendEvent(EventBase):
     payment_date: Optional[str] = None
 
 
-def parse_incoming_dividend_events_from_json(json_str: str, default_vals: dict[str, Any] = None) -> list[UpcomingDividendEvent]:
+def parse_upcoming_dividend_events_from_json(json_str: str, default_vals: dict[str, Any] = None) -> list[UpcomingDividendEvent]:
     json_str = normalize_json_str(json_str)
     events = json.loads(json_str)
     result = []

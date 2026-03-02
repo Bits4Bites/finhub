@@ -23,8 +23,8 @@ class SymbolInfoResponse(BaseResponse):
     data: Optional[models.SymbolInfo] = None
 
 
-class IncomingEarningsResponse(BaseResponse):
-    data: Optional[list[models.IncomingEarningsEvent]] = None
+class UpcomingEarningsResponse(BaseResponse):
+    data: Optional[list[models.UpcomingEarningsEvent]] = None
 
 
 class UpcomingDividendsResponse(BaseResponse):

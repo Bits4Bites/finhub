@@ -1,3 +1,4 @@
+import csv
 import time
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -19,6 +20,7 @@ azureOpenAIClients: dict[str, AsyncOpenAI] = {}
 EVENT_INCOMING_EARNINGS = "INCOMING_EARNINGS_EVENTS"
 EVENT_INCOMING_DIVIDENDS = "INCOMING_DIVIDEND_EVENTS"
 EVENT_ASX_UPCOMING_DIVIDENDS = "ASX_UPCOMING_DIVIDEND_EVENTS"
+EVENT_ASX_UPCOMING_EARNINGS = "ASX_UPCOMING_EARNINGS_EVENTS"
 
 
 def build_prompt_incoming_events(event_type: str, country: str, index: str) -> str:
@@ -122,7 +124,7 @@ async def ai_get_incoming_events(event_type: str, prompt: str, country: str) -> 
             raise ValueError(f"Unsupported LLM vendor: {task_cfg.vendor}")
 
 
-async def ai_get_incoming_earnings_events(country: str, index: str) -> list[models.IncomingEarningsEvent]:
+async def ai_get_incoming_earnings_events(country: str, index: str) -> list[models.UpcomingEarningsEvent]:
     """
     Check for incoming earnings events for a market, using AI assistance.
 
@@ -169,7 +171,7 @@ async def ai_get_incoming_dividends_events(country: str, index: str) -> list[mod
 
     # parse response.output_text as JSON array of IncomingDividendEvent
     try:
-        events = models.parse_incoming_dividend_events_from_json(llm_result.completion)
+        events = models.parse_upcoming_dividend_events_from_json(llm_result.completion)
         return events
     except Exception as e:
         print(f"[ERROR] Failed to parse AI response: {e}")
@@ -276,7 +278,7 @@ async def ai_get_asx_upcoming_dividends_events(index: str = "") -> list[models.U
     if "Url" in raw_data.columns:
         raw_data = raw_data.drop(columns=["Url"])
 
-    prompt = prompt_template.replace("{RAW_INPUT_DATA}", raw_data.to_csv(index=False))
+    prompt = prompt_template.replace("{RAW_INPUT_DATA}", raw_data.to_csv(index=False, quoting=csv.QUOTE_NONNUMERIC))
     if index:
         prompt = (
             prompt
@@ -307,7 +309,68 @@ async def ai_get_asx_upcoming_dividends_events(index: str = "") -> list[models.U
         "currency": "AUD",
         "status": "declared",
     }
-    events = models.parse_incoming_dividend_events_from_json(llm_result.completion, default_vals)
+    events = models.parse_upcoming_dividend_events_from_json(llm_result.completion, default_vals)
+    return events
+
+
+async def ai_get_asx_upcoming_earnings_events(index: str = "") -> list[models.UpcomingEarningsEvent]:
+    """
+    Check for upcoming earnings events for ASX, using AI assistance.
+
+    Args:
+        index (str): Optional stock index to filter events by (e.g., 'S&P/ASX 200', etc.).
+    Returns:
+        list[models.UpcomingEarningsEvent]: A list of upcoming earnings events for ASX.
+    """
+    event_type = EVENT_ASX_UPCOMING_EARNINGS
+    prompt_template = prompts[event_type] if event_type in prompts else ""
+    if not prompt_template:
+        raise EnvironmentError(f"Prompt template for {event_type} is missing or empty.")
+
+    tz = ZoneInfo("Australia/Sydney")
+    start_date = datetime.now(tz).date()
+    end_date = start_date + timedelta(days=7)
+    raw_data = crawler_service.scrape_earnings_asx(end_date)
+    if raw_data.empty:
+        return []
+
+    # optimize tokens:
+    # - Removing column "Url"
+    if "Url" in raw_data.columns:
+        raw_data = raw_data.drop(columns=["Url"])
+
+    prompt = prompt_template.replace("{RAW_INPUT_DATA}", raw_data.to_csv(index=False, quoting=csv.QUOTE_NONNUMERIC))
+    if index:
+        prompt = (
+            prompt
+            .replace("{ROLE}", f"with live web search capability")
+            .replace("{OBJECTIVE}", f"Also, filter for companies that are CURRENT constituents of the {index} index.")
+            .replace("{VALIDATION_RULES}", f"MUST verify {index} membership using the most recent official constituent list.")
+            .replace("{PROCESS}",f"INDEX FILTERING INSTRUCTIONS (CRITICAL)\n- Use your web search to find an up-to-date list of current {index} constituents (e.g., from MarketIndex or standard financial portals).\n-Filter the CSV input. DO NOT include any company in the final output unless it is confirmed to be in the {index}.\n-Do NOT search for the earnings/financial events themselves online. Only search to verify index membership. Use the earnings data exactly as provided in the CSV.")
+        )
+    else:
+        prompt = (
+            prompt
+            .replace("{ROLE}", "")
+            .replace("{OBJECTIVE}", "")
+            .replace("{VALIDATION_RULES}", "")
+            .replace("{PROCESS}", "")
+        )
+
+    if not index:
+        llm_result = await ai_parse_upcoming_events("PARSE_UPCOMING_EARNINGS_EVENTS_NO_WEB_SEARCH", prompt, "AU")
+    else:
+        llm_result = await ai_parse_upcoming_events("PARSE_UPCOMING_EARNINGS_EVENTS_WEB_SEARCH", prompt, "AU")
+
+    if llm_result.is_error:
+        raise RuntimeError(f"[ERROR] LLM failed to generate response for upcoming earnings events: {llm_result.completion}")
+
+    default_vals = {
+        "src": "ASX",
+        "status": "estimated",
+        "report_period": "N/A",
+    }
+    events = models.parse_upcoming_earnings_events_from_json(llm_result.completion, default_vals)
     return events
 
 prompts: dict[str, str] = {}

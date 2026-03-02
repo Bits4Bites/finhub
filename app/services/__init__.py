@@ -52,3 +52,9 @@ templ_file = "./resources/prompts/asx_upcoming_dividend_distribution_events.md"
 logging.info("Loading prompt template '%s' from file '%s'...", templ_name, templ_file)
 templ_prompt = read_file_as_single_string(templ_file)
 ai.prompts[templ_name] = templ_prompt.strip()
+
+templ_name = ai.EVENT_ASX_UPCOMING_EARNINGS
+templ_file = "./resources/prompts/asx_upcoming_earnings_events.md"
+logging.info("Loading prompt template '%s' from file '%s'...", templ_name, templ_file)
+templ_prompt = read_file_as_single_string(templ_file)
+ai.prompts[templ_name] = templ_prompt.strip()
