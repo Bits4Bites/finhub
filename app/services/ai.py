@@ -218,9 +218,7 @@ async def ai_parse_upcoming_events(task_id: str, prompt: str, country: str) -> m
                 )
             else:
                 completion = await client.chat.completions.create(
-                    model=model,
-                    temperature=0.0,
-                    messages=[ChatCompletionUserMessageParam(content=prompt, role="user")]
+                    model=model, temperature=0.0, messages=[ChatCompletionUserMessageParam(content=prompt, role="user")]
                 )
                 end = time.perf_counter()
                 result = models.LLMResponse(
@@ -244,6 +242,47 @@ async def ai_parse_upcoming_events(task_id: str, prompt: str, country: str) -> m
             raise ValueError(f"Unsupported LLM vendor: {task_cfg.vendor}")
 
 
+def build_prompt_template_and_date_window(event_type: str, tz_name: str, index: str = ""):
+    prompt_template = prompts[event_type] if event_type in prompts else ""
+    if not prompt_template:
+        raise EnvironmentError(f"Prompt template for {event_type} is missing or empty.")
+
+    start_date = datetime.now(ZoneInfo(tz_name)).date()
+    if index:
+        end_date = start_date + timedelta(days=14)
+    else:
+        end_date = start_date + timedelta(days=7)
+
+    return prompt_template, start_date, end_date
+
+
+def build_prompt_asx_upcoming_events(prompt_template: str, raw_input_data: str, index: str = ""):
+    prompt = prompt_template.replace("{RAW_INPUT_DATA}", raw_input_data)
+    if index:
+        prompt = (
+            prompt.replace("{ROLE}", "with live web search capability")
+            .replace("{OBJECTIVE}", f"Also, filter for companies that are CURRENT constituents of the {index} index.")
+            .replace(
+                "{VALIDATION_RULES}", f"MUST verify {index} membership using the most recent official constituent list."
+            )
+            .replace(
+                "{PROCESS}",
+                "INDEX FILTERING INSTRUCTIONS (CRITICAL)\n"
+                + f"- Use your web search to find an up-to-date list of current {index} constituents (e.g., from MarketIndex or standard financial portals).\n"
+                + f"- Filter the CSV input. DO NOT include any company in the final output unless it is confirmed to be in the {index}.\n"
+                + "- Do NOT search for the events themselves online. Only search to verify index membership. Use the event data exactly as provided in the CSV.",
+            )
+        )
+    else:
+        prompt = (
+            prompt.replace("{ROLE}", "")
+            .replace("{OBJECTIVE}", "")
+            .replace("{VALIDATION_RULES}", "")
+            .replace("{PROCESS}", "")
+        )
+    return prompt
+
+
 async def ai_get_asx_upcoming_dividends_events(index: str = "") -> list[models.UpcomingDividendEvent]:
     """
     Check for upcoming dividend/distribution events for ASX, using AI assistance.
@@ -253,14 +292,9 @@ async def ai_get_asx_upcoming_dividends_events(index: str = "") -> list[models.U
     Returns:
         list[models.UpcomingDividendEvent]: A list of upcoming dividend/distribution events for ASX.
     """
-    event_type = EVENT_ASX_UPCOMING_DIVIDENDS
-    prompt_template = prompts[event_type] if event_type in prompts else ""
-    if not prompt_template:
-        raise EnvironmentError(f"Prompt template for {event_type} is missing or empty.")
-
-    tz = ZoneInfo("Australia/Sydney")
-    start_date = datetime.now(tz).date()
-    end_date = start_date + timedelta(days=14)
+    prompt_template, start_date, end_date = build_prompt_template_and_date_window(
+        EVENT_ASX_UPCOMING_DIVIDENDS, "Australia/Sydney", index
+    )
     raw_data = crawler_service.scrape_dividends_asx(end_date)
     if raw_data.empty:
         return []
@@ -278,31 +312,18 @@ async def ai_get_asx_upcoming_dividends_events(index: str = "") -> list[models.U
     if "Url" in raw_data.columns:
         raw_data = raw_data.drop(columns=["Url"])
 
-    prompt = prompt_template.replace("{RAW_INPUT_DATA}", raw_data.to_csv(index=False, quoting=csv.QUOTE_NONNUMERIC))
-    if index:
-        prompt = (
-            prompt
-            .replace("{ROLE}", f"with live web search capability")
-            .replace("{OBJECTIVE}", f"Also, filter for companies that are CURRENT constituents of the {index} index.")
-            .replace("{VALIDATION_RULES}", f"MUST verify {index} membership using the most recent official constituent list.")
-            .replace("{PROCESS}",f"INDEX FILTERING INSTRUCTIONS (CRITICAL)\n- Use your web search to find an up-to-date list of current {index} constituents (e.g., from MarketIndex or standard financial portals).\n-Filter the CSV input. DO NOT include any company in the final output unless it is confirmed to be in the {index}.\n-Do NOT search for the dividend events themselves online. Only search to verify index membership. Use the dividend data exactly as provided in the CSV.")
-        )
-    else:
-        prompt = (
-            prompt
-            .replace("{ROLE}", "")
-            .replace("{OBJECTIVE}", "")
-            .replace("{VALIDATION_RULES}", "")
-            .replace("{PROCESS}", "")
-        )
-
+    prompt = build_prompt_asx_upcoming_events(
+        prompt_template, raw_data.to_csv(index=False, quoting=csv.QUOTE_NONNUMERIC), index
+    )
     if not index:
         llm_result = await ai_parse_upcoming_events("PARSE_UPCOMING_DIVIDEND_EVENTS_NO_WEB_SEARCH", prompt, "AU")
     else:
         llm_result = await ai_parse_upcoming_events("PARSE_UPCOMING_DIVIDEND_EVENTS_WEB_SEARCH", prompt, "AU")
 
     if llm_result.is_error:
-        raise RuntimeError(f"[ERROR] LLM failed to generate response for upcoming dividend/distribution events: {llm_result.completion}")
+        raise RuntimeError(
+            f"[ERROR] LLM failed to generate response for upcoming dividend/distribution events: {llm_result.completion}"
+        )
 
     default_vals = {
         "src": "ASX",
@@ -322,14 +343,9 @@ async def ai_get_asx_upcoming_earnings_events(index: str = "") -> list[models.Up
     Returns:
         list[models.UpcomingEarningsEvent]: A list of upcoming earnings events for ASX.
     """
-    event_type = EVENT_ASX_UPCOMING_EARNINGS
-    prompt_template = prompts[event_type] if event_type in prompts else ""
-    if not prompt_template:
-        raise EnvironmentError(f"Prompt template for {event_type} is missing or empty.")
-
-    tz = ZoneInfo("Australia/Sydney")
-    start_date = datetime.now(tz).date()
-    end_date = start_date + timedelta(days=7)
+    prompt_template, start_date, end_date = build_prompt_template_and_date_window(
+        EVENT_ASX_UPCOMING_EARNINGS, "Australia/Sydney", index
+    )
     raw_data = crawler_service.scrape_earnings_asx(end_date)
     if raw_data.empty:
         return []
@@ -339,31 +355,18 @@ async def ai_get_asx_upcoming_earnings_events(index: str = "") -> list[models.Up
     if "Url" in raw_data.columns:
         raw_data = raw_data.drop(columns=["Url"])
 
-    prompt = prompt_template.replace("{RAW_INPUT_DATA}", raw_data.to_csv(index=False, quoting=csv.QUOTE_NONNUMERIC))
-    if index:
-        prompt = (
-            prompt
-            .replace("{ROLE}", f"with live web search capability")
-            .replace("{OBJECTIVE}", f"Also, filter for companies that are CURRENT constituents of the {index} index.")
-            .replace("{VALIDATION_RULES}", f"MUST verify {index} membership using the most recent official constituent list.")
-            .replace("{PROCESS}",f"INDEX FILTERING INSTRUCTIONS (CRITICAL)\n- Use your web search to find an up-to-date list of current {index} constituents (e.g., from MarketIndex or standard financial portals).\n-Filter the CSV input. DO NOT include any company in the final output unless it is confirmed to be in the {index}.\n-Do NOT search for the earnings/financial events themselves online. Only search to verify index membership. Use the earnings data exactly as provided in the CSV.")
-        )
-    else:
-        prompt = (
-            prompt
-            .replace("{ROLE}", "")
-            .replace("{OBJECTIVE}", "")
-            .replace("{VALIDATION_RULES}", "")
-            .replace("{PROCESS}", "")
-        )
-
+    prompt = build_prompt_asx_upcoming_events(
+        prompt_template, raw_data.to_csv(index=False, quoting=csv.QUOTE_NONNUMERIC), index
+    )
     if not index:
         llm_result = await ai_parse_upcoming_events("PARSE_UPCOMING_EARNINGS_EVENTS_NO_WEB_SEARCH", prompt, "AU")
     else:
         llm_result = await ai_parse_upcoming_events("PARSE_UPCOMING_EARNINGS_EVENTS_WEB_SEARCH", prompt, "AU")
 
     if llm_result.is_error:
-        raise RuntimeError(f"[ERROR] LLM failed to generate response for upcoming earnings events: {llm_result.completion}")
+        raise RuntimeError(
+            f"[ERROR] LLM failed to generate response for upcoming earnings events: {llm_result.completion}"
+        )
 
     default_vals = {
         "src": "ASX",
@@ -372,6 +375,7 @@ async def ai_get_asx_upcoming_earnings_events(index: str = "") -> list[models.Up
     }
     events = models.parse_upcoming_earnings_events_from_json(llm_result.completion, default_vals)
     return events
+
 
 prompts: dict[str, str] = {}
 

@@ -267,7 +267,9 @@ def normalize_json_str(json_str: str) -> str:
     return json_str
 
 
-def parse_upcoming_earnings_events_from_json(json_str: str, default_vals: dict[str, Any] = None) -> list[UpcomingEarningsEvent]:
+def parse_upcoming_earnings_events_from_json(
+    json_str: str, default_vals: dict[str, Any] = None
+) -> list[UpcomingEarningsEvent]:
     json_str = normalize_json_str(json_str)
     events = json.loads(json_str)
     result = []
@@ -297,7 +299,9 @@ class UpcomingDividendEvent(EventBase):
     payment_date: Optional[str] = None
 
 
-def parse_upcoming_dividend_events_from_json(json_str: str, default_vals: dict[str, Any] = None) -> list[UpcomingDividendEvent]:
+def parse_upcoming_dividend_events_from_json(
+    json_str: str, default_vals: dict[str, Any] = None
+) -> list[UpcomingDividendEvent]:
     json_str = normalize_json_str(json_str)
     events = json.loads(json_str)
     result = []
