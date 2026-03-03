@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python: [ '3.10', '3.11', '3.12', '3.13', '3.14' ] # change target Python versions if needed
+        python: [ '3.11', '3.12', '3.13', '3.14' ] # change target Python versions if needed
     name: Build and Test with Python ${{ matrix.python }}
     steps:
       - name: Checkout code
@@ -165,7 +165,7 @@ jobs:
           digest="${{ steps.build.outputs.digest }}"
           touch "/tmp/digests/${digest#sha256:}"
       - name: Upload digest
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: digests-${{ env.PLATFORM_PAIR }}
           path: /tmp/digests/*
@@ -180,7 +180,7 @@ jobs:
       VERSION: ${{ needs.PublishDockerImagesLinuxBuild.outputs.VERSION }}
     steps:
       - name: Download digests
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           path: /tmp/digests
           pattern: digests-*
