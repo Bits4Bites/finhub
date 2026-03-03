@@ -1,4 +1,7 @@
 from . import config
+import logging
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
 # config.settings.llm_config is in the following format:
 # {

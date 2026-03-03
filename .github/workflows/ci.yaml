@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python: [ '3.10', '3.11', '3.12', '3.13', '3.14' ] # change target Python versions if needed
+        python: [ '3.11', '3.12', '3.13', '3.14' ] # change target Python versions if needed
     name: Build and Test with Python ${{ matrix.python }}
     steps:
       - name: Checkout code

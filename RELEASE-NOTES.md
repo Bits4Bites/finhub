@@ -1,5 +1,12 @@
 # FinHub release notes
 
+## 2026-03-03 - v0.2.0
+
+### Added/Refactoring/Deprecation
+
+- (Feat) Scrape AU/US dividend data from TipRanks.
+- (Feat) Scrape AU/US earnings data from TipRanks.
+
 ## 2026-02-26 - v0.1.3
 
 ### Fixed/Improvements
