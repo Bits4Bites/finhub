@@ -18,10 +18,13 @@ async def get_incoming_earnings_event(
     """
     country = country.upper()
     match country:
-        case "AU":
+        case "AU" | "AUS" | "AUSTRALIA":
             events = await ai_service.ai_get_asx_upcoming_earnings_events(index)
+        case "US" | "USA" | "UNITED STATES":
+            events = await ai_service.ai_get_us_upcoming_earnings_events(index)
         case _:
             events = await ai_service.ai_get_incoming_earnings_events(country, index)
+
     return schemas.UpcomingEarningsResponse(status=200, message="ok", data=events)
 
 
@@ -37,8 +40,11 @@ async def get_upcoming_dividends_event(
     """
     country = country.upper()
     match country:
-        case "AU":
+        case "AU" | "AUS" | "AUSTRALIA":
             events = await ai_service.ai_get_asx_upcoming_dividends_events(index)
+        case "US" | "USA" | "UNITED STATES":
+            events = await ai_service.ai_get_us_upcoming_dividends_events(index)
         case _:
             events = await ai_service.ai_get_incoming_dividends_events(country, index)
+
     return schemas.UpcomingDividendsResponse(status=200, message="ok", data=events)

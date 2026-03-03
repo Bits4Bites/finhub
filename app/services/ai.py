@@ -1,6 +1,7 @@
 import csv
 import time
 from datetime import datetime, timedelta
+from typing import Any
 from zoneinfo import ZoneInfo
 
 from google import genai
@@ -13,14 +14,96 @@ from ..models import finhub as models
 from ..config import settings
 from ..services import crawler as crawler_service
 
-geminiClients: dict[str, genai.Client] = {}
-openAIClients: dict[str, AsyncOpenAI] = {}
-azureOpenAIClients: dict[str, AsyncOpenAI] = {}
-
 EVENT_INCOMING_EARNINGS = "INCOMING_EARNINGS_EVENTS"
 EVENT_INCOMING_DIVIDENDS = "INCOMING_DIVIDEND_EVENTS"
 EVENT_ASX_UPCOMING_DIVIDENDS = "ASX_UPCOMING_DIVIDEND_EVENTS"
 EVENT_ASX_UPCOMING_EARNINGS = "ASX_UPCOMING_EARNINGS_EVENTS"
+EVENT_US_UPCOMING_DIVIDENDS = "US_UPCOMING_DIVIDEND_EVENTS"
+EVENT_US_UPCOMING_EARNINGS = "US_UPCOMING_EARNINGS_EVENTS"
+
+geminiClients: dict[str, genai.Client] = {}
+openAIClients: dict[str, AsyncOpenAI] = {}
+azureOpenAIClients: dict[str, AsyncOpenAI] = {}
+
+prompts: dict[str, str] = {}
+
+prompt_customization = {
+    EVENT_INCOMING_EARNINGS: {
+        "VN": {
+            "CUSTOM_KEYWORDS": """
+                Vietnamese search keywords to use:
+                - "Lịch công bố BCTC"
+                - "Lịch sự kiện chứng khoán"
+                - "Báo cáo tài chính" (BCTC)
+                - "Kết quả kinh doanh" (KQKD)
+                """,
+            "OFFICIAL_INDEX_PROVIDERS": "HOSE or HNX",
+            "REPORT_PERIOD_MAPPINGS": """
+                # REPORT_PERIOD CLASSIFICATION
+
+                Map as:
+                - Quarterly (Q1/Q2/Q3/Q4, quý)
+                - Half-year (6T, H1, bán niên)
+                - Full-year (annual, year-end)
+                - Interim (explicitly stated interim but not quarterly/half-year/full-year)
+                """,
+            "CUSTOM_SEARCH": (
+                "Additional Vietnamese financial news websites can be used for cross-referencing and validation, such as: "
+                "vietstock.vn, vietnamfinance.vn, vietnambiz.vn, vnfinance.vn, thoibaotaichinhvietnam.vn, "
+                "vietnambusinessinsider.vn, and cafef.vn."
+            ),
+            "SOURCES": "HOSE, HNX, Vietstock, CafeF, VNFinance, VietnamBusinessInsider, etc.",
+            "BROADER_SEARCH": """ "Lịch công bố báo cáo tài chính" or "Lịch sự kiện chứng khoán" """,
+        },
+        "AU": {
+            "OFFICIAL_INDEX_PROVIDERS": "ASX",
+            "SOURCES": "Market Index, CommSec, Bloomberg, Reuters, Yahoo Finance, etc.",
+            "BROADER_SEARCH": """ "Australian earnings calendars" or "ASX reporting season dates" """,
+        },
+        "*": {
+            "CUSTOM_KEYWORDS": "",
+            "OFFICIAL_INDEX_PROVIDERS": "",
+            "REPORT_PERIOD_MAPPINGS": "",
+            "CUSTOM_SEARCH": "",
+            "SOURCES": "Bloomberg, Reuters, MarketScreener, Yahoo Finance, etc.",
+            "BROADER_SEARCH": """ "Earnings calendar" or "Earnings season dates" """,
+        },
+    },
+    EVENT_INCOMING_DIVIDENDS: {
+        "VN": {
+            "CUSTOM_KEYWORDS": """
+                Vietnamese search keywords to use:
+                - "Lịch công bố chia cổ tức"
+                - "Lịch công bố trả cổ tức"
+                - "Trả cổ tức bằng tiền mặt"
+                - "Trả cổ tức bằng cổ phiếu"
+                - "Ngày giao dịch không hưởng quyền"
+                """,
+            "OFFICIAL_INDEX_PROVIDERS": "HOSE or HNX",
+            "CUSTOM_SEARCH": (
+                "Additional Vietnamese financial news websites can be used for cross-referencing and validation, such as: "
+                "vietstock.vn, vietnamfinance.vn, vietnambiz.vn, vnfinance.vn, thoibaotaichinhvietnam.vn, "
+                "vietnambusinessinsider.vn, and cafef.vn."
+            ),
+            "SOURCES": "HOSE, HNX, Vietstock, CafeF, VNFinance, VietnamBusinessInsider, etc.",
+            "BROADER_SEARCH": """ "Lịch công bố chia cổ tức" or "Lịch công bố trả cổ tức" """,
+        },
+        "AU": {
+            "OFFICIAL_INDEX_PROVIDERS": "ASX",
+            "SOURCES": "Market Index, CommSec, Bloomberg, Reuters, Yahoo Finance, etc.",
+            "BROADER_SEARCH": """ "Australian ex-dividend calendars" """,
+        },
+        "*": {
+            "CUSTOM_KEYWORDS": "",
+            "OFFICIAL_INDEX_PROVIDERS": "",
+            "CUSTOM_SEARCH": "",
+            "SOURCES": "Bloomberg, Reuters, MarketScreener, Yahoo Finance, etc.",
+            "BROADER_SEARCH": """ "Ex-dividend calendar" """,
+        },
+    },
+}
+
+# ----------------------------------------------------------------------#
 
 
 def build_prompt_incoming_events(event_type: str, country: str, index: str) -> str:
@@ -178,6 +261,9 @@ async def ai_get_incoming_dividends_events(country: str, index: str) -> list[mod
         return []
 
 
+# ----------------------------------------------------------------------#
+
+
 async def ai_parse_upcoming_events(task_id: str, prompt: str, country: str) -> models.LLMResponse:
     task_cfg = settings.llm_task_config[task_id] if task_id in settings.llm_task_config else None
     if task_cfg is None:
@@ -197,6 +283,7 @@ async def ai_parse_upcoming_events(task_id: str, prompt: str, country: str) -> m
             print(prompt)
 
             if model.startswith("gpt-5"):
+                # use response API with web search tool for gpt-5* models
                 response = await client.responses.create(
                     model=model,
                     tools=[
@@ -217,6 +304,7 @@ async def ai_parse_upcoming_events(task_id: str, prompt: str, country: str) -> m
                     is_error=response.output_text == "" or response.status != "completed",
                 )
             else:
+                # use standard chat completion API for other models
                 completion = await client.chat.completions.create(
                     model=model, temperature=0.0, messages=[ChatCompletionUserMessageParam(content=prompt, role="user")]
                 )
@@ -231,7 +319,7 @@ async def ai_parse_upcoming_events(task_id: str, prompt: str, country: str) -> m
                 )
 
             print(
-                f"[DEBUG] ai_get_incoming_events({task_id}) response - Time taken: {result.time_taken_ms} ms, "
+                f"[DEBUG] ai_parse_upcoming_events({task_id}) response - Time taken: {result.time_taken_ms} ms, "
                 f"Prompt tokens: {result.tokens_prompt}, Completion tokens: {result.tokens_completion}, "
                 f"Thought tokens: {result.tokens_thought}, Is error: {result.is_error}"
             )
@@ -256,7 +344,7 @@ def build_prompt_template_and_date_window(event_type: str, tz_name: str, index: 
     return prompt_template, start_date, end_date
 
 
-def build_prompt_asx_upcoming_events(prompt_template: str, raw_input_data: str, index: str = ""):
+def build_prompt_upcoming_events(prompt_template: str, raw_input_data: str, index: str = ""):
     prompt = prompt_template.replace("{RAW_INPUT_DATA}", raw_input_data)
     if index:
         prompt = (
@@ -268,9 +356,9 @@ def build_prompt_asx_upcoming_events(prompt_template: str, raw_input_data: str, 
             .replace(
                 "{PROCESS}",
                 "INDEX FILTERING INSTRUCTIONS (CRITICAL)\n"
-                + f"- Use your web search to find an up-to-date list of current {index} constituents (e.g., from MarketIndex or standard financial portals).\n"
-                + f"- Filter the CSV input. DO NOT include any company in the final output unless it is confirmed to be in the {index}.\n"
-                + "- Do NOT search for the events themselves online. Only search to verify index membership. Use the event data exactly as provided in the CSV.",
+                f"- Use your web search to find an up-to-date list of current {index} constituents (e.g., from MarketIndex or standard financial portals).\n"
+                f"- Filter the CSV input. DO NOT include any company in the final output unless it is confirmed to be in the {index}.\n"
+                "- Do NOT search for the events themselves online. Only search to verify index membership. Use the event data exactly as provided in the CSV.",
             )
         )
     else:
@@ -283,6 +371,66 @@ def build_prompt_asx_upcoming_events(prompt_template: str, raw_input_data: str, 
     return prompt
 
 
+async def ai_get_upcoming_dividends_events(
+    country: str, event_type: str, tz_name: str, index: str = "", default_vals: dict[str, Any] = None
+) -> list[models.UpcomingDividendEvent]:
+    """
+    Check for upcoming dividend/distribution events (AU  & US only), using AI assistance.
+
+    Args:
+        country (str): Country code to filter events by (e.g., 'AU', 'US', etc.).
+        event_type (str): internal use
+        tz_name (str): Timezone name (e.g., 'Australia/Sydney', 'America/New_York') to for event filtering.
+        index (str): Optional stock index to filter events by (e.g., 'S&P/ASX 200', etc.).
+        default_vals (str): Optional, internal use
+    Returns:
+        list[models.UpcomingDividendEvent]: A list of upcoming dividend/distribution events
+    """
+    country = country.upper()
+    prompt_template, start_date, end_date = build_prompt_template_and_date_window(event_type, tz_name, index)
+    raw_data = (
+        crawler_service.scrape_dividends_asx(end_date)
+        if country == "AU" or country == "AUS" or country == "AUSTRALIA"
+        else crawler_service.scrape_dividends_us(end_date)
+    )
+    if raw_data.empty:
+        return []
+
+    # optimize tokens:
+    # - Removing rows where "Dividend Yield" < 3.00% or not in format of percentage
+    # - Removing column "Url"
+    # - If value in column "Dividend Amount" begins with "AU$"/"<AU$" or "$"/"<$", remove the prefix
+    if "Dividend Amount" in raw_data.columns:
+        raw_data["Dividend Amount"] = raw_data["Dividend Amount"].str.replace(r"^<?(AU)?\$\s*", "", regex=True)
+    if "Dividend Yield" in raw_data.columns:
+        raw_data = raw_data[raw_data["Dividend Yield"].str.endswith("%")]
+        raw_data = raw_data[raw_data["Dividend Yield"].str.rstrip("%").astype(float) >= 3.00]
+    if "Url" in raw_data.columns:
+        raw_data = raw_data.drop(columns=["Url"])
+
+    # US market: remove rows where Symbol length is greater than 4
+    if country == "US" or country == "USA" or country == "UNITED STATES":
+        if "Symbol" in raw_data.columns:
+            raw_data = raw_data[raw_data["Symbol"].str.len() <= 4]
+
+    prompt = build_prompt_upcoming_events(
+        prompt_template, raw_data.to_csv(index=False, quoting=csv.QUOTE_NONNUMERIC), index
+    )
+    llm_result = (
+        await ai_parse_upcoming_events("PARSE_UPCOMING_DIVIDEND_EVENTS_NO_WEB_SEARCH", prompt, country)
+        if not index
+        else await ai_parse_upcoming_events("PARSE_UPCOMING_DIVIDEND_EVENTS_WITH_WEB_SEARCH", prompt, country)
+    )
+
+    if llm_result.is_error:
+        raise RuntimeError(
+            f"[ERROR] LLM failed to generate response for upcoming dividend/distribution events: {llm_result.completion}"
+        )
+
+    events = models.parse_upcoming_dividend_events_from_json(llm_result.completion, default_vals)
+    return events
+
+
 async def ai_get_asx_upcoming_dividends_events(index: str = "") -> list[models.UpcomingDividendEvent]:
     """
     Check for upcoming dividend/distribution events for ASX, using AI assistance.
@@ -290,47 +438,89 @@ async def ai_get_asx_upcoming_dividends_events(index: str = "") -> list[models.U
     Args:
         index (str): Optional stock index to filter events by (e.g., 'S&P/ASX 200', etc.).
     Returns:
-        list[models.UpcomingDividendEvent]: A list of upcoming dividend/distribution events for ASX.
+        list[models.UpcomingDividendEvent]: A list of upcoming dividend/distribution events
     """
-    prompt_template, start_date, end_date = build_prompt_template_and_date_window(
-        EVENT_ASX_UPCOMING_DIVIDENDS, "Australia/Sydney", index
-    )
-    raw_data = crawler_service.scrape_dividends_asx(end_date)
-    if raw_data.empty:
-        return []
-
-    # optimize tokens:
-    # - Removing rows where "Dividend Yield" < 3.00%
-    # - Removing column "Url"
-    # - If value in column "Dividend Amount" begins with "AU$" or "<AU$", remove the prefix
-    if "Dividend Amount" in raw_data.columns:
-        raw_data["Dividend Amount"] = raw_data["Dividend Amount"].str.replace(r"^<?AU\$\s*", "", regex=True)
-    if "Dividend Yield" in raw_data.columns:
-        # remove rows where "Dividend Yield" < 3.00% or not in format of percentage
-        raw_data = raw_data[raw_data["Dividend Yield"].str.endswith("%")]
-        raw_data = raw_data[raw_data["Dividend Yield"].str.rstrip("%").astype(float) >= 3.00]
-    if "Url" in raw_data.columns:
-        raw_data = raw_data.drop(columns=["Url"])
-
-    prompt = build_prompt_asx_upcoming_events(
-        prompt_template, raw_data.to_csv(index=False, quoting=csv.QUOTE_NONNUMERIC), index
-    )
-    if not index:
-        llm_result = await ai_parse_upcoming_events("PARSE_UPCOMING_DIVIDEND_EVENTS_NO_WEB_SEARCH", prompt, "AU")
-    else:
-        llm_result = await ai_parse_upcoming_events("PARSE_UPCOMING_DIVIDEND_EVENTS_WEB_SEARCH", prompt, "AU")
-
-    if llm_result.is_error:
-        raise RuntimeError(
-            f"[ERROR] LLM failed to generate response for upcoming dividend/distribution events: {llm_result.completion}"
-        )
-
+    country = "AU"
+    event_type = EVENT_ASX_UPCOMING_DIVIDENDS
+    tz_name = "Australia/Sydney"
     default_vals = {
         "src": "ASX",
         "currency": "AUD",
         "status": "declared",
     }
-    events = models.parse_upcoming_dividend_events_from_json(llm_result.completion, default_vals)
+    return await ai_get_upcoming_dividends_events(country, event_type, tz_name, index, default_vals)
+
+
+async def ai_get_us_upcoming_dividends_events(index: str = "") -> list[models.UpcomingDividendEvent]:
+    """
+    Check for upcoming dividend/distribution events for US market, using AI assistance.
+
+    Args:
+        index (str): Optional stock index to filter events by (e.g., 'NASDAQ 100', etc.).
+    Returns:
+        list[models.UpcomingDividendEvent]: A list of upcoming dividend/distribution events
+    """
+    country = "US"
+    event_type = EVENT_US_UPCOMING_DIVIDENDS
+    tz_name = "America/New_York"
+    default_vals = {
+        "src": "Various",
+        "currency": "USD",
+        "status": "declared",
+    }
+    return await ai_get_upcoming_dividends_events(country, event_type, tz_name, index, default_vals)
+
+
+async def ai_get_upcoming_earnings_events(
+    country: str, event_type: str, tz_name: str, index: str = "", default_vals: dict[str, Any] = None
+) -> list[models.UpcomingEarningsEvent]:
+    """
+    Check for upcoming earnings events (AU  & US only), using AI assistance.
+
+    Args:
+        country (str): Country code to filter events by (e.g., 'AU', 'US', etc.).
+        event_type (str): internal use
+        tz_name (str): Timezone name (e.g., 'Australia/Sydney', 'America/New_York') to for event filtering.
+        index (str): Optional stock index to filter events by (e.g., 'S&P/ASX 200', etc.).
+        default_vals (str): Optional, internal use
+    Returns:
+        list[models.UpcomingEarningsEvent]: A list of upcoming earnings events
+    """
+    country = country.upper()
+    prompt_template, start_date, end_date = build_prompt_template_and_date_window(event_type, tz_name, index)
+    raw_data = (
+        crawler_service.scrape_earnings_asx(end_date)
+        if country == "AU" or country == "AUS" or country == "AUSTRALIA"
+        else crawler_service.scrape_earnings_us(end_date)
+    )
+    if raw_data.empty:
+        return []
+
+    # optimize tokens:
+    # - Removing column "Url"
+    if "Url" in raw_data.columns:
+        raw_data = raw_data.drop(columns=["Url"])
+
+    # US market: remove rows where Symbol length is greater than 4
+    if country == "US" or country == "USA" or country == "UNITED STATES":
+        if "Symbol" in raw_data.columns:
+            raw_data = raw_data[raw_data["Symbol"].str.len() <= 4]
+
+    prompt = build_prompt_upcoming_events(
+        prompt_template, raw_data.to_csv(index=False, quoting=csv.QUOTE_NONNUMERIC), index
+    )
+    llm_result = (
+        await ai_parse_upcoming_events("PARSE_UPCOMING_EARNINGS_EVENTS_NO_WEB_SEARCH", prompt, country)
+        if not index
+        else await ai_parse_upcoming_events("PARSE_UPCOMING_EARNINGS_EVENTS_WEB_SEARCH", prompt, country)
+    )
+
+    if llm_result.is_error:
+        raise RuntimeError(
+            f"[ERROR] LLM failed to generate response for upcoming earnings events: {llm_result.completion}"
+        )
+
+    events = models.parse_upcoming_earnings_events_from_json(llm_result.completion, default_vals)
     return events
 
 
@@ -341,116 +531,34 @@ async def ai_get_asx_upcoming_earnings_events(index: str = "") -> list[models.Up
     Args:
         index (str): Optional stock index to filter events by (e.g., 'S&P/ASX 200', etc.).
     Returns:
-        list[models.UpcomingEarningsEvent]: A list of upcoming earnings events for ASX.
+        list[models.UpcomingEarningsEvent]: A list of upcoming earnings events
     """
-    prompt_template, start_date, end_date = build_prompt_template_and_date_window(
-        EVENT_ASX_UPCOMING_EARNINGS, "Australia/Sydney", index
-    )
-    raw_data = crawler_service.scrape_earnings_asx(end_date)
-    if raw_data.empty:
-        return []
-
-    # optimize tokens:
-    # - Removing column "Url"
-    if "Url" in raw_data.columns:
-        raw_data = raw_data.drop(columns=["Url"])
-
-    prompt = build_prompt_asx_upcoming_events(
-        prompt_template, raw_data.to_csv(index=False, quoting=csv.QUOTE_NONNUMERIC), index
-    )
-    if not index:
-        llm_result = await ai_parse_upcoming_events("PARSE_UPCOMING_EARNINGS_EVENTS_NO_WEB_SEARCH", prompt, "AU")
-    else:
-        llm_result = await ai_parse_upcoming_events("PARSE_UPCOMING_EARNINGS_EVENTS_WEB_SEARCH", prompt, "AU")
-
-    if llm_result.is_error:
-        raise RuntimeError(
-            f"[ERROR] LLM failed to generate response for upcoming earnings events: {llm_result.completion}"
-        )
-
+    country = "AU"
+    event_type = EVENT_ASX_UPCOMING_EARNINGS
+    tz_name = "Australia/Sydney"
     default_vals = {
         "src": "ASX",
         "status": "estimated",
         "report_period": "N/A",
     }
-    events = models.parse_upcoming_earnings_events_from_json(llm_result.completion, default_vals)
-    return events
+    return await ai_get_upcoming_earnings_events(country, event_type, tz_name, index, default_vals)
 
 
-prompts: dict[str, str] = {}
+async def ai_get_us_upcoming_earnings_events(index: str = "") -> list[models.UpcomingEarningsEvent]:
+    """
+    Check for upcoming earnings events for US market, using AI assistance.
 
-prompt_customization = {
-    EVENT_INCOMING_EARNINGS: {
-        "VN": {
-            "CUSTOM_KEYWORDS": """
-                Vietnamese search keywords to use:
-                - "Lịch công bố BCTC"
-                - "Lịch sự kiện chứng khoán"
-                - "Báo cáo tài chính" (BCTC)
-                - "Kết quả kinh doanh" (KQKD)
-                """,
-            "OFFICIAL_INDEX_PROVIDERS": "HOSE or HNX",
-            "REPORT_PERIOD_MAPPINGS": """
-                # REPORT_PERIOD CLASSIFICATION
-
-                Map as:
-                - Quarterly (Q1/Q2/Q3/Q4, quý)
-                - Half-year (6T, H1, bán niên)
-                - Full-year (annual, year-end)
-                - Interim (explicitly stated interim but not quarterly/half-year/full-year)
-                """,
-            "CUSTOM_SEARCH": (
-                "Additional Vietnamese financial news websites can be used for cross-referencing and validation, such as: "
-                "vietstock.vn, vietnamfinance.vn, vietnambiz.vn, vnfinance.vn, thoibaotaichinhvietnam.vn, "
-                "vietnambusinessinsider.vn, and cafef.vn."
-            ),
-            "SOURCES": "HOSE, HNX, Vietstock, CafeF, VNFinance, VietnamBusinessInsider, etc.",
-            "BROADER_SEARCH": """ "Lịch công bố báo cáo tài chính" or "Lịch sự kiện chứng khoán" """,
-        },
-        "AU": {
-            "OFFICIAL_INDEX_PROVIDERS": "ASX",
-            "SOURCES": "Market Index, CommSec, Bloomberg, Reuters, Yahoo Finance, etc.",
-            "BROADER_SEARCH": """ "Australian earnings calendars" or "ASX reporting season dates" """,
-        },
-        "*": {
-            "CUSTOM_KEYWORDS": "",
-            "OFFICIAL_INDEX_PROVIDERS": "",
-            "REPORT_PERIOD_MAPPINGS": "",
-            "CUSTOM_SEARCH": "",
-            "SOURCES": "Bloomberg, Reuters, MarketScreener, Yahoo Finance, etc.",
-            "BROADER_SEARCH": """ "Earnings calendar" or "Earnings season dates" """,
-        },
-    },
-    EVENT_INCOMING_DIVIDENDS: {
-        "VN": {
-            "CUSTOM_KEYWORDS": """
-                Vietnamese search keywords to use:
-                - "Lịch công bố chia cổ tức"
-                - "Lịch công bố trả cổ tức"
-                - "Trả cổ tức bằng tiền mặt"
-                - "Trả cổ tức bằng cổ phiếu"
-                - "Ngày giao dịch không hưởng quyền"
-                """,
-            "OFFICIAL_INDEX_PROVIDERS": "HOSE or HNX",
-            "CUSTOM_SEARCH": (
-                "Additional Vietnamese financial news websites can be used for cross-referencing and validation, such as: "
-                "vietstock.vn, vietnamfinance.vn, vietnambiz.vn, vnfinance.vn, thoibaotaichinhvietnam.vn, "
-                "vietnambusinessinsider.vn, and cafef.vn."
-            ),
-            "SOURCES": "HOSE, HNX, Vietstock, CafeF, VNFinance, VietnamBusinessInsider, etc.",
-            "BROADER_SEARCH": """ "Lịch công bố chia cổ tức" or "Lịch công bố trả cổ tức" """,
-        },
-        "AU": {
-            "OFFICIAL_INDEX_PROVIDERS": "ASX",
-            "SOURCES": "Market Index, CommSec, Bloomberg, Reuters, Yahoo Finance, etc.",
-            "BROADER_SEARCH": """ "Australian ex-dividend calendars" """,
-        },
-        "*": {
-            "CUSTOM_KEYWORDS": "",
-            "OFFICIAL_INDEX_PROVIDERS": "",
-            "CUSTOM_SEARCH": "",
-            "SOURCES": "Bloomberg, Reuters, MarketScreener, Yahoo Finance, etc.",
-            "BROADER_SEARCH": """ "Ex-dividend calendar" """,
-        },
-    },
-}
+    Args:
+        index (str): Optional stock index to filter events by (e.g., 'NASDAQ 100', etc.).
+    Returns:
+        list[models.UpcomingEarningsEvent]: A list of upcoming earnings events
+    """
+    country = "US"
+    event_type = EVENT_US_UPCOMING_EARNINGS
+    tz_name = "America/New_York"
+    default_vals = {
+        "src": "Various",
+        "status": "estimated",
+        "report_period": "N/A",
+    }
+    return await ai_get_upcoming_earnings_events(country, event_type, tz_name, index, default_vals)

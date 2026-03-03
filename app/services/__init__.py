@@ -35,26 +35,27 @@ def read_file_as_single_string(file_path) -> str:
     return ""
 
 
-templ_name = ai.EVENT_INCOMING_EARNINGS
-templ_file = "./resources/prompts/incoming_earnings_events.md"
-logging.info("Loading prompt template '%s' from file '%s'...", templ_name, templ_file)
-templ_prompt = read_file_as_single_string(templ_file)
-ai.prompts[templ_name] = templ_prompt.strip()
+template_list = [
+    ai.EVENT_ASX_UPCOMING_DIVIDENDS,
+    ai.EVENT_US_UPCOMING_DIVIDENDS,
+    ai.EVENT_ASX_UPCOMING_EARNINGS,
+    ai.EVENT_US_UPCOMING_EARNINGS,
+    ai.EVENT_INCOMING_DIVIDENDS,
+    ai.EVENT_INCOMING_EARNINGS,
+]
+tmplfile_list = [
+    "./resources/prompts/asx_upcoming_dividend_distribution_events.md",
+    "./resources/prompts/us_upcoming_dividend_distribution_events.md",
+    "./resources/prompts/asx_upcoming_earnings_events.md",
+    "./resources/prompts/us_upcoming_earnings_events.md",
+    "./resources/prompts/incoming_dividend_distribution_events.md",
+    "./resources/prompts/incoming_earnings_events.md",
+]
 
-templ_name = ai.EVENT_INCOMING_DIVIDENDS
-templ_file = "./resources/prompts/incoming_dividend_distribution_events.md"
-logging.info("Loading prompt template '%s' from file '%s'...", templ_name, templ_file)
-templ_prompt = read_file_as_single_string(templ_file)
-ai.prompts[templ_name] = templ_prompt.strip()
-
-templ_name = ai.EVENT_ASX_UPCOMING_DIVIDENDS
-templ_file = "./resources/prompts/asx_upcoming_dividend_distribution_events.md"
-logging.info("Loading prompt template '%s' from file '%s'...", templ_name, templ_file)
-templ_prompt = read_file_as_single_string(templ_file)
-ai.prompts[templ_name] = templ_prompt.strip()
-
-templ_name = ai.EVENT_ASX_UPCOMING_EARNINGS
-templ_file = "./resources/prompts/asx_upcoming_earnings_events.md"
-logging.info("Loading prompt template '%s' from file '%s'...", templ_name, templ_file)
-templ_prompt = read_file_as_single_string(templ_file)
-ai.prompts[templ_name] = templ_prompt.strip()
+for tmpl_name, tmpl_file in zip(template_list, tmplfile_list):
+    logging.info("Loading template '%s' from file '%s'...", tmpl_name, tmpl_file)
+    tmpl_content = read_file_as_single_string(tmpl_file)
+    if tmpl_content:
+        ai.prompts[tmpl_name] = tmpl_content
+    else:
+        logging.error("Failed to load prompt template from file '%s'", tmpl_file)

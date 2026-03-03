@@ -74,14 +74,16 @@ def scrape_data_table(url: str) -> pd.DataFrame:
     return df
 
 
-def scrape_dividends_asx(end_date: datetime.date) -> pd.DataFrame:
+def scrape_dividends_from_tipranks(url_template: str, end_date: datetime.date, tz_name: str) -> pd.DataFrame:
     """
-    Scrapes dividend data from the TipRanks website for Australian stocks.
+    Scrapes dividend data from the TipRanks website for a given URL template and end date.
 
     Args:
-        end_date (datetime.date): The end date for scraping dividend data. The function will scrape data from the current date up to this end date.
+        url_template (str): The URL template for scraping data, with a placeholder for the date (e.g., "https://www.tipranks.com/calendars/dividends/{date}").
+        end_date (datetime.date): The end date for scraping data. The function will scrape data from the current date up to this end date.
+        tz_name (str): The name of the timezone to use for date calculations (e.g., "Australia/Sydney").
     """
-    start_date = datetime.datetime.now(ZoneInfo("Australia/Sydney")).date()
+    start_date = datetime.datetime.now(ZoneInfo(tz_name)).date()
 
     # if weekend, move to next Tuesday
     if start_date.weekday() >= 5:  # Saturday or Sunday
@@ -89,7 +91,6 @@ def scrape_dividends_asx(end_date: datetime.date) -> pd.DataFrame:
     else:
         start_date += datetime.timedelta(days=1)  # start from next day
 
-    url_template = "https://www.tipranks.com/calendars/dividends/{date}/australia"
     final_df = pd.DataFrame()
     while start_date <= end_date:
         if start_date.weekday() >= 5:  # skip if weekend
@@ -124,27 +125,47 @@ def scrape_dividends_asx(end_date: datetime.date) -> pd.DataFrame:
         cols.remove("Symbol")
         cols.remove("Ex-Dividend Date")
         final_df = final_df[["Symbol", "Ex-Dividend Date"] + cols]
-    # - add column Url with the link to the stock's page on ASX, which can be constructed from the Symbol
-    if "Symbol" in final_df.columns:
-        final_df["Url"] = final_df["Symbol"].apply(lambda x: f"https://www.asx.com.au/markets/company/{x}")
 
     return final_df
 
 
-def scrape_earnings_asx(end_date: datetime.date) -> pd.DataFrame:
+def scrape_dividends_asx(end_date: datetime.date) -> pd.DataFrame:
     """
-    Scrapes earnings announcement data from the TipRanks website for Australian stocks.
+    Scrapes dividend data from the TipRanks website for Australian stocks.
 
     Args:
-        end_date (datetime.date): The end date for scraping dividend data. The function will scrape data from the current date up to this end date.
+        end_date (datetime.date): The end date for scraping data. The function will scrape data from the current date up to this end date.
     """
-    start_date = datetime.datetime.now(ZoneInfo("Australia/Sydney")).date()
+    url_template = "https://www.tipranks.com/calendars/dividends/{date}/australia"
+    return scrape_dividends_from_tipranks(url_template, end_date, "Australia/Sydney")
+
+
+def scrape_dividends_us(end_date: datetime.date) -> pd.DataFrame:
+    """
+    Scrapes dividend data from the MarketBeat website for US stocks.
+
+    Args:
+        end_date (datetime.date): The end date for scraping data. The function will scrape data from the current date up to this end date.
+    """
+    url_template = "https://www.tipranks.com/calendars/dividends/{date}"
+    return scrape_dividends_from_tipranks(url_template, end_date, "America/New_York")
+
+
+def scrape_earnings_from_tipranks(url_template: str, end_date: datetime.date, tz_name: str) -> pd.DataFrame:
+    """
+    Scrapes earnings announcement data from a given URL template and end date.
+
+    Args:
+        url_template (str): The URL template for scraping data, with a placeholder for the date (e.g., "https://www.tipranks.com/calendars/earnings/{date}").
+        end_date (datetime.date): The end date for scraping data. The function will scrape data from the current date up to this end date.
+        tz_name (str): The name of the timezone to use for date calculations (e.g., "Australia/Sydney").
+    """
+    start_date = datetime.datetime.now(ZoneInfo(tz_name)).date()
 
     # if weekend, move to next Monday
     if start_date.weekday() >= 5:  # Saturday or Sunday
         start_date += datetime.timedelta(days=(7 - start_date.weekday()))
 
-    url_template = "https://www.tipranks.com/calendars/earnings/{date}/australia"
     final_df = pd.DataFrame()
     while start_date <= end_date:
         if start_date.weekday() >= 5:  # skip if weekend
@@ -189,8 +210,27 @@ def scrape_earnings_asx(end_date: datetime.date) -> pd.DataFrame:
         cols.remove("Symbol")
         cols.remove("Announcement Date")
         final_df = final_df[["Symbol", "Announcement Date"] + cols]
-    # - add column Url with the link to the stock's page on TipRanks, which can be constructed from the Symbol
-    if "Symbol" in final_df.columns:
-        final_df["Url"] = final_df["Symbol"].apply(lambda x: f"https://www.tipranks.com/stocks/au:{x}/earnings")
 
     return final_df
+
+
+def scrape_earnings_asx(end_date: datetime.date) -> pd.DataFrame:
+    """
+    Scrapes earnings announcement data from the TipRanks website for Australian stocks.
+
+    Args:
+        end_date (datetime.date): The end date for scraping data. The function will scrape data from the current date up to this end date.
+    """
+    url_template = "https://www.tipranks.com/calendars/earnings/{date}/australia"
+    return scrape_earnings_from_tipranks(url_template, end_date, "Australia/Sydney")
+
+
+def scrape_earnings_us(end_date: datetime.date) -> pd.DataFrame:
+    """
+    Scrapes earnings announcement data from the TipRanks website for US stocks.
+
+    Args:
+        end_date (datetime.date): The end date for scraping data. The function will scrape data from the current date up to this end date.
+    """
+    url_template = "https://www.tipranks.com/calendars/earnings/{date}"
+    return scrape_earnings_from_tipranks(url_template, end_date, "America/New_York")

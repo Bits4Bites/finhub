@@ -2,5 +2,5 @@
 # Generate its content quickly using the following command:
 #   git log origin..HEAD | grep "^\s" > .semrelease/this_release
 #!VERSION=0.2.0
-- (Feat) Scrape ASX dividend data from TipRanks.
-- (Feat) Scrape ASX earnings data from TipRanks.
+- (Feat) Scrape AU/US dividend data from TipRanks.
+- (Feat) Scrape AU/US earnings data from TipRanks.

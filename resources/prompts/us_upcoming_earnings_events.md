@@ -9,7 +9,7 @@ Task: Extract upcoming earnings/financial events from the raw CSV data below.
 
 # RULES & TRANSFORMATIONS
 
-- "link": Auto-construct using the format: "https://www.tipranks.com/stocks/au:{symbol}/earnings" where {symbol} is the stock ticker in lowercase (e.g., "XYZ" → "xyz").
+- "link": Auto-construct using the format: "https://www.tipranks.com/stocks/{symbol}/earnings" where {symbol} is the stock ticker in lowercase (e.g., "XYZ" → "xyz").
 
 {VALIDATION_RULES}
 
