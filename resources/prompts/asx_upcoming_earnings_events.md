@@ -21,7 +21,6 @@ Schema:
   {
     "sym": "EXCHANGE:TICKER",         // From Symbol and Exchange Name, and format it as EXCHANGE:TICKER, all uppercase (e.g., "Cba" becomes "ASX:CBA")
     "corp": "Company",                // Exact company name
-    "date": "YYYY-MM-DD",             // From Announcement Date
-    "link": "https://www.tipranks.com/stocks/au:{ticker}/earnings" // Auto-construct where ticker} is the stock ticker in lowercase (e.g., "XYZ" → "xyz")
+    "date": "YYYY-MM-DD"              // From Announcement Date
   }
 ]

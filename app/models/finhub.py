@@ -280,7 +280,7 @@ def parse_upcoming_earnings_events_from_json(
             exchange=item.get("exchange", default_vals.get("exchange")),
             company_name=item.get("corp", default_vals.get("corp")),
             date=item.get("date", default_vals.get("date")),
-            event_category="Earnings",
+            event_category="earnings",
             source_name=item.get("src", default_vals.get("src")),
             link=item.get("link", default_vals.get("link")),
             report_period=item.get("report_period", default_vals.get("report_period")),

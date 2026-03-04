@@ -5,6 +5,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from google import genai
+from google.genai import types
 from openai import AsyncOpenAI
 from openai.types.chat import ChatCompletionUserMessageParam
 from openai.types.responses import WebSearchPreviewToolParam
@@ -270,9 +271,9 @@ async def ai_parse_upcoming_events(task_id: str, prompt: str, country: str) -> m
     if task_cfg is None:
         raise EnvironmentError(f"LLM task configuration for {task_id} is missing.")
 
+    start = time.perf_counter()
     match task_cfg.vendor.upper():
         case "AZUREOPENAI" | "AZURE OPENAI" | "AZURE_OPENAI":
-            start = time.perf_counter()
             client = azureOpenAIClients.get(task_cfg.tier.upper())
             if client is None:
                 raise EnvironmentError(f"Azure OpenAI client for tier '{task_cfg.tier}' is not configured.")
@@ -327,6 +328,48 @@ async def ai_parse_upcoming_events(task_id: str, prompt: str, country: str) -> m
             print(result.completion)
 
             return result
+        case "GEMINI":
+            client = geminiClients.get(task_cfg.tier.upper())
+            if client is None:
+                raise EnvironmentError(f"Gemini client for tier '{task_cfg.tier}' is not configured.")
+            model = task_cfg.model
+            print(
+                f"[DEBUG] ai_parse_upcoming_events({task_id}) "
+                f"/ Country: {country} / Vendor: {task_cfg.vendor} / Tier: {task_cfg.tier} / Model: {model}"
+            )
+            print(prompt)
+
+            thinking_config = (
+                types.ThinkingConfig(thinking_level=types.ThinkingLevel.LOW) if model.startswith("gemini-3") else None
+            )
+            response = client.models.generate_content(
+                model=model,
+                contents=prompt,
+                config=types.GenerateContentConfig(temperature=0.0, thinking_config=thinking_config),
+            )
+            end = time.perf_counter()
+            result = models.LLMResponse(
+                completion=response.text,
+                time_taken_ms=int((end - start) * 1000),
+                tokens_prompt=response.usage_metadata.prompt_token_count,
+                tokens_completion=response.usage_metadata.candidates_token_count,
+                tokens_thought=(
+                    response.usage_metadata.thoughts_token_count if response.usage_metadata.thoughts_token_count else 0
+                ),
+                is_error=(
+                    (response.prompt_feedback and response.prompt_feedback.block_reason)
+                    or len(response.candidates) == 0
+                ),
+            )
+
+            print(
+                f"[DEBUG] ai_parse_upcoming_events({task_id}) response - Time taken: {result.time_taken_ms} ms, "
+                f"Prompt tokens: {result.tokens_prompt}, Completion tokens: {result.tokens_completion}, "
+                f"Thought tokens: {result.tokens_thought}, Is error: {result.is_error}"
+            )
+            print(result.completion)
+
+            return result
         case _:
             raise ValueError(f"Unsupported LLM vendor: {task_cfg.vendor}")
 
@@ -338,7 +381,11 @@ def build_prompt_template_and_date_window(event_type: str, tz_name: str, index: 
 
     start_date = datetime.now(ZoneInfo(tz_name)).date()
     if index:
-        end_date = start_date + timedelta(days=14)
+        # check if event_type contains "EARNINGS_"
+        if "_EARNINGS_" in event_type.upper():
+            end_date = start_date + timedelta(days=10)
+        else:
+            end_date = start_date + timedelta(days=14)
     else:
         end_date = start_date + timedelta(days=7)
 
@@ -593,7 +640,11 @@ async def ai_get_asx_upcoming_earnings_events(index: str = "") -> list[models.Up
         "status": "estimated",
         "report_period": "N/A",
     }
-    return await ai_get_upcoming_earnings_events(country, event_type, tz_name, index, default_vals)
+    events = await ai_get_upcoming_earnings_events(country, event_type, tz_name, index, default_vals)
+    # tokens optimization: build the source URL using code instead of asking LLM to include the URL in the output
+    for event in events:
+        event.link = f"https://www.tipranks.com/stocks/au:{event.symbol.lower().split(':')[-1]}/earnings"
+    return events
 
 
 async def ai_get_us_upcoming_earnings_events(index: str = "") -> list[models.UpcomingEarningsEvent]:
@@ -613,4 +664,8 @@ async def ai_get_us_upcoming_earnings_events(index: str = "") -> list[models.Upc
         "status": "estimated",
         "report_period": "N/A",
     }
-    return await ai_get_upcoming_earnings_events(country, event_type, tz_name, index, default_vals)
+    events = await ai_get_upcoming_earnings_events(country, event_type, tz_name, index, default_vals)
+    # tokens optimization: build the source URL using code instead of asking LLM to include the URL in the output
+    for event in events:
+        event.link = f"https://www.tipranks.com/stocks/{event.symbol.lower().split(':')[-1]}/earnings"
+    return events
