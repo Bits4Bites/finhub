@@ -469,7 +469,7 @@ async def ai_get_asx_upcoming_dividends_events(index: str = "") -> list[models.U
     events = await ai_get_upcoming_dividends_events(country, event_type, tz_name, index, default_vals)
     # tokens optimization: build the source URL using code instead of asking LLM to include the URL in the output
     for event in events:
-        event.link = f"https://www.asx.com.au/markets/company/{event.symbol.split(":")[-1]}"
+        event.link = f"https://www.asx.com.au/markets/company/{event.symbol.split(':')[-1]}"
     return events
 
 
@@ -493,7 +493,7 @@ async def ai_get_us_upcoming_dividends_events(index: str = "") -> list[models.Up
     events = await ai_get_upcoming_dividends_events(country, event_type, tz_name, index, default_vals)
     # tokens optimization: build the source URL using code instead of asking LLM to include the URL in the output
     for event in events:
-        event.link = f"https://stockanalysis.com/stocks/{event.symbol.lower().split(":")[-1]}/dividend/"
+        event.link = f"https://stockanalysis.com/stocks/{event.symbol.lower().split(':')[-1]}/dividend/"
     return events
 
 
@@ -518,7 +518,7 @@ async def ai_get_vn_upcoming_dividends_events(index: str = "") -> list[models.Up
     events = await ai_get_upcoming_dividends_events(country, event_type, tz_name, index, default_vals)
     # tokens optimization: build the source URL using code instead of asking LLM to include the URL in the output
     for event in events:
-        event.link = f"https://finance.vietstock.vn/{event.symbol.split(":")[-1]}-thong-tin.htm"
+        event.link = f"https://finance.vietstock.vn/{event.symbol.split(':')[-1]}-thong-tin.htm"
     return events
 
 
