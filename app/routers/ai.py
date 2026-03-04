@@ -23,7 +23,8 @@ async def get_incoming_earnings_event(
         case "US" | "USA" | "UNITED STATES":
             events = await ai_service.ai_get_us_upcoming_earnings_events(index)
         case _:
-            events = await ai_service.ai_get_incoming_earnings_events(country, index)
+            return schemas.UpcomingEarningsResponse(status=501, message=f"Unsupported country '{country}'")
+            # events = await ai_service.ai_get_incoming_earnings_events(country, index)
 
     return schemas.UpcomingEarningsResponse(status=200, message="ok", data=events)
 
@@ -44,7 +45,10 @@ async def get_upcoming_dividends_event(
             events = await ai_service.ai_get_asx_upcoming_dividends_events(index)
         case "US" | "USA" | "UNITED STATES":
             events = await ai_service.ai_get_us_upcoming_dividends_events(index)
+        case "VN" | "VIETNAM":
+            events = await ai_service.ai_get_vn_upcoming_dividends_events(index)
         case _:
-            events = await ai_service.ai_get_incoming_dividends_events(country, index)
+            return schemas.UpcomingDividendsResponse(status=501, message=f"Unsupported country '{country}'")
+            # events = await ai_service.ai_get_incoming_dividends_events(country, index)
 
     return schemas.UpcomingDividendsResponse(status=200, message="ok", data=events)

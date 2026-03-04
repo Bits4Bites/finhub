@@ -7,25 +7,21 @@ Task: Extract upcoming earnings/financial events from the raw CSV data below.
 
 {RAW_INPUT_DATA}
 
-# RULES & TRANSFORMATIONS
+# RULES, TRANSFORMATIONS & SCHEMA (STRICT)
 
-- "link": Auto-construct using the format: "https://www.tipranks.com/stocks/au:{symbol}/earnings" where {symbol} is the stock ticker in lowercase (e.g., "XYZ" → "xyz").
+Return ONLY raw, valid JSON. Do NOT wrap the output in Markdown blocks (no ```). Start with [ and end with ].
 
 {VALIDATION_RULES}
 
 {PROCESS}
 
-# OUTPUT FORMAT (STRICT)
-
-Return ONLY raw, valid JSON. Do NOT wrap the output in ```json or ``` or any Markdown blocks.
-Do NOT include any conversational text or explanations.
-Begin your response immediately with [ and end with ].
 Schema:
+
 [
   {
-    "sym": "Symbol",
-    "corp": "Company Name",
-    "date": "Announcement date (yyyy-MM-dd)",
-    "link": "https://source-url"
+    "sym": "EXCHANGE:TICKER",         // From Symbol and Exchange Name, and format it as EXCHANGE:TICKER, all uppercase (e.g., "Cba" becomes "ASX:CBA")
+    "corp": "Company",                // Exact company name
+    "date": "YYYY-MM-DD",             // From Announcement Date
+    "link": "https://www.tipranks.com/stocks/au:{ticker}/earnings" // Auto-construct where ticker} is the stock ticker in lowercase (e.g., "XYZ" → "xyz")
   }
 ]

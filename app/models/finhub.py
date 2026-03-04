@@ -246,6 +246,7 @@ class LLMResponse(BaseModel):
 
 class EventBase(BaseModel):
     symbol: str
+    exchange: Optional[str] = None
     company_name: Optional[str] = None
     timestamp: Optional[int] = 0
     date: Optional[str] = None
@@ -276,6 +277,7 @@ def parse_upcoming_earnings_events_from_json(
     for item in events:
         event = UpcomingEarningsEvent(
             symbol=item.get("sym", default_vals.get("sym")),
+            exchange=item.get("exchange", default_vals.get("exchange")),
             company_name=item.get("corp", default_vals.get("corp")),
             date=item.get("date", default_vals.get("date")),
             event_category="Earnings",
@@ -308,6 +310,7 @@ def parse_upcoming_dividend_events_from_json(
     for item in events:
         event = UpcomingDividendEvent(
             symbol=item.get("sym", default_vals.get("sym")),
+            exchange=item.get("exchange", default_vals.get("exchange")),
             company_name=item.get("corp", default_vals.get("corp")),
             date=item.get("date", default_vals.get("date")),
             payment_date=item.get("pdate", default_vals.get("pdate")),

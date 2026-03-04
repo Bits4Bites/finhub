@@ -1,3 +1,7 @@
 # This file has been cleaned up post-releasing version 0.2.0.
 # Generate its content quickly using the following command:
 #   git log origin..HEAD | grep "^\s" > .semrelease/this_release
+#!VERSION-0.2.1
+- (Feat) Scrape VN dividend data from VietStock.
+- (Fix) Using Playwright async on Windows with uvicorn reload enabled.
+- (Patch) Optimize tokens used scraping dividend/distribution/earnings events.

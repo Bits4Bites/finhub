@@ -1,10 +1,10 @@
-import asyncio
+# import asyncio
 import sys
 
-print(f"[DEBUG] Python version: {sys.version} / Platform: {sys.platform}")
-if sys.platform.startswith("win"):
-    print("[DEBUG] Windows - switching to WindowsProactorEventLoopPolicy...")
-    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+# print(f"[DEBUG] Python version: {sys.version} / Platform: {sys.platform}")
+# if sys.platform.startswith("win"):
+#     print("[DEBUG] Windows - switching to WindowsProactorEventLoopPolicy...")
+#     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
 if __name__ == "__main__":
     import os

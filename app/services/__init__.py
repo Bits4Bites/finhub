@@ -38,18 +38,20 @@ def read_file_as_single_string(file_path) -> str:
 template_list = [
     ai.EVENT_ASX_UPCOMING_DIVIDENDS,
     ai.EVENT_US_UPCOMING_DIVIDENDS,
+    ai.EVENT_VN_UPCOMING_DIVIDENDS,
     ai.EVENT_ASX_UPCOMING_EARNINGS,
     ai.EVENT_US_UPCOMING_EARNINGS,
-    ai.EVENT_INCOMING_DIVIDENDS,
-    ai.EVENT_INCOMING_EARNINGS,
+    # ai.EVENT_INCOMING_DIVIDENDS,
+    # ai.EVENT_INCOMING_EARNINGS,
 ]
 tmplfile_list = [
     "./resources/prompts/asx_upcoming_dividend_distribution_events.md",
     "./resources/prompts/us_upcoming_dividend_distribution_events.md",
+    "./resources/prompts/vn_upcoming_dividend_distribution_events.md",
     "./resources/prompts/asx_upcoming_earnings_events.md",
     "./resources/prompts/us_upcoming_earnings_events.md",
-    "./resources/prompts/incoming_dividend_distribution_events.md",
-    "./resources/prompts/incoming_earnings_events.md",
+    # "./resources/prompts/incoming_dividend_distribution_events.md.disabled",
+    # "./resources/prompts/incoming_earnings_events.md.disabled",
 ]
 
 for tmpl_name, tmpl_file in zip(template_list, tmplfile_list):

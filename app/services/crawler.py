@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 import cloudscraper
 from bs4 import BeautifulSoup
 import pandas as pd
+
 from playwright.async_api import async_playwright, Page
 
 
@@ -276,10 +277,21 @@ async def scrape_dividends_asx(end_date: datetime.date) -> pd.DataFrame:
     """
     url_template = "https://www.tipranks.com/calendars/dividends/{date}/australia"
     tz = "Australia/Sydney"
-    return await scrape_dividends_from_tipranks(url_template, end_date, tz)
+    df = await scrape_dividends_from_tipranks(url_template, end_date, tz)
+
+    # before returning result:
+    # - add column "Exchange Name" with value "ASX"
+    df["Exchange Name"] = "ASX"
+
+    return df
 
 
 async def tipranks_after_load_func(page: Page):
+    rfrm = page.locator("div[id='credential_picker_container']")
+    if rfrm:
+        print("Removing Credential Picker form (blocking UI)...")
+        await rfrm.evaluate("el => el.remove()")
+
     gads = page.locator("div[data-google-query-id]")
     count_gads = await gads.count() if gads else 0
     if count_gads > 0:
@@ -328,6 +340,82 @@ async def scrape_dividends_us(end_date: datetime.date) -> pd.DataFrame:
     url_template = "https://www.tipranks.com/calendars/dividends/{date}"
     tz = "America/New_York"
     return await scrape_dividends_from_tipranks_playwright(url_template, tipranks_after_load_func, end_date, tz)
+
+
+async def scrape_dividends_vn(end_date: datetime.date) -> pd.DataFrame:
+    """
+    Scrapes dividend data from the VietStock website for VN stocks.
+
+    Args:
+        end_date (datetime.date): The end date for scraping data. The function will scrape data from the current date up to this end date.
+    """
+    url_template = "https://finance.vietstock.vn/lich-su-kien.htm?from={s_date}&to={e_date}&page={page}&tab=1&group=13"
+    tz_name = "Asia/Ho_Chi_Minh"
+    start_date = datetime.datetime.now(ZoneInfo(tz_name)).date()
+
+    # if weekend, move to next Tuesday
+    if start_date.weekday() >= 5:  # Saturday or Sunday
+        start_date += datetime.timedelta(days=(1 + 7 - start_date.weekday()))
+    else:
+        start_date += datetime.timedelta(days=1)  # start from next day
+
+    final_df = pd.DataFrame()
+    page = 1
+    while True:
+        if start_date.weekday() >= 5:  # skip if weekend
+            start_date += datetime.timedelta(days=1)
+            continue
+
+        target_url = url_template.format(
+            s_date=start_date.strftime("%Y-%m-%d"),
+            e_date=end_date.strftime("%Y-%m-%d"),
+            page=page,
+        )
+        df = await scrape_data_table_playwright(target_url, None, {"id": "event-content"})
+        if df.empty or len(df.columns) < 2:
+            break
+        final_df = pd.concat([final_df, df], ignore_index=True)
+
+        # delay randomly a few seconds to avoid overwhelming the server
+        delay_seconds = random.uniform(0.25, 1.00)
+        time.sleep(delay_seconds)
+
+        page += 1
+
+    # before returning result:
+    # - remove non-essential columns
+    cols_to_drop = ["STT", "Nội dung sự kiện", "Ngày ĐKCC"]
+    for col in cols_to_drop:
+        if col in final_df.columns:
+            final_df = final_df.drop(columns=[col])
+    # - rename columns:
+    #   - "Mã CK" to "Symbol"
+    #   - "Sàn" to "Exchange"
+    #   - "Ngày GDKHQ▼" to "Ex-Dividend Date"
+    #   - "Tỷ lệ": "Dividend Yield",
+    #   - "Ngày thực hiện" to "Payment Date"
+    rename_map = {
+        "Mã CK": "Symbol",
+        "Sàn": "Exchange Name",
+        "Ngày GDKHQ▼": "Ex-Dividend Date",
+        "Tỷ lệ": "Dividend Yield",
+        "Ngày thực hiện": "Payment Date",
+    }
+    for old_col, new_col in rename_map.items():
+        if old_col in final_df.columns:
+            final_df = final_df.rename(columns={old_col: new_col})
+    # Upper case column "Exchange Name"
+    if "Exchange Name" in final_df.columns:
+        final_df["Exchange Name"] = final_df["Exchange Name"].str.upper()
+    # "Ex-Dividend Date" and "Payment Date" are in format "dd/MM/yyyy", convert to "yyyy-MM-dd"
+    for date_col in ["Ex-Dividend Date", "Payment Date"]:
+        if date_col in final_df.columns:
+            final_df[date_col] = pd.to_datetime(final_df[date_col], format="%d/%m/%Y").dt.strftime("%Y-%m-%d")
+    # - Add column "Dividend Amount" = "Dividend Yield" * 10000
+    if "Dividend Yield" in final_df.columns:
+        final_df["Dividend Amount"] = final_df["Dividend Yield"].str.replace("%", "").astype(float) * 100
+
+    return final_df
 
 
 async def scrape_earnings_from_tipranks(
