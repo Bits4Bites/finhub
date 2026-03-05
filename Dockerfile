@@ -1,5 +1,5 @@
 # Sample build command:
-# docker build --rm -t myapi:dev .
+# docker build --rm -t finhub:dev .
 
 ARG PYTHON_VERSION=3.12
 ARG PYTHON_IMG=${PYTHON_VERSION}-slim
@@ -15,7 +15,9 @@ ADD ai_clients_config.env $HOMEDIR
 ADD resources $HOMEDIR/resources
 ADD app $HOMEDIR/app
 
-RUN cd $HOMEDIR && python -m venv .venv && bash -c 'source .venv/bin/activate && pip install -U -r requirements.txt'
+RUN cd $HOMEDIR \
+    && python -m venv .venv \
+    && bash -c 'source .venv/bin/activate && pip install -U -r requirements.txt'
 
 FROM python:${PYTHON_IMG} AS runtime
 LABEL org.opencontainers.image.authors="Thanh Nguyen <btnguyen2k (at) gmail(dot)com>"
@@ -24,11 +26,15 @@ ARG USERID=1000
 ARG HOMEDIR=/qnd-papi
 RUN useradd --system --create-home --home-dir $HOMEDIR --shell /bin/bash --uid $USERID $USERNAME
 COPY --from=build --chown=$USERNAME $HOMEDIR $HOMEDIR
-USER $USERNAME
+
 WORKDIR $HOMEDIR
+ENV PLAYWRIGHT_BROWSERS_PATH=$HOMEDIR/.playwright/browsers
+RUN bash -c 'source ./.venv/bin/activate && playwright install-deps webkit'
+USER $USERNAME
+RUN bash -c 'source ./.venv/bin/activate && playwright install webkit'
 
 ENV LISTEN_PORT=8000
-ENV NUM_WORKERS=2
+ENV NUM_WORKERS=4
 EXPOSE 8000
 
 # Prevents Python from writing pyc files to disc (equivalent to python -B option)

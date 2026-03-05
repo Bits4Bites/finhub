@@ -66,13 +66,13 @@ Structure:
 
 [
   {
-    "symbol": "TICKER",
-    "company_name": "Company Name",
-    "date": "yyyy-MM-dd",
+    "sym": "EXCHANGE:TICKER",
+    "corp": "Company Name",
+    "date": "Announcement date (yyyy-MM-dd)",
     "report_period": "quarterly, half-year, full-year, etc.",
     "status": "confirmed | estimated",
-    "source_name": "{SOURCES}",
-    "link": "https://exact-source-url"
+    "src": "{SOURCES}",
+    "link": "https://source-url"
   }
 ]
 

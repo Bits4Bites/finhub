@@ -70,15 +70,17 @@ Structure:
 
 [
   {
-    "symbol": "TICKER",
-    "company_name": "Company Name",
-    "date": "yyyy-MM-dd",
-    "event_category": "dividend | distribution",
+    "sym": "EXCHANGE:TICKER",
+    "corp": "Company Name",
+    "date": "Ex-Dividend Date (yyyy-MM-dd)",
+    "pdate": "Payment Date (yyyy-MM-dd) or null",
+    "cat": "dividend | distribution",
     "status": "declared | estimated",
     "amount": 1.23,
+    "yield": 0.034,
     "currency": "dollar, cent, etc.",
-    "source_name": "{SOURCES}",
-    "link": "https://exact-source-url"
+    "src": "{SOURCES}",
+    "link": "https://source-url"
   }
 ]
 
