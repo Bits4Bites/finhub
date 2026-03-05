@@ -1,5 +1,17 @@
 # FinHub release notes
 
+## 2026-03-05 - v0.3.0
+
+### Added/Refactoring/Deprecation
+
+- (Feat) Scrape VN dividend data from VietStock.
+- (Feat) Scrape new listings from ASX.
+
+### Fixed/Improvements
+
+- (Fix) Using Playwright async on Windows with uvicorn reload enabled.
+- (Patch) Optimize tokens used scraping dividend/distribution/earnings events.
+
 ## 2026-03-03 - v0.2.0
 
 ### Added/Refactoring/Deprecation
