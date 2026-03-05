@@ -34,7 +34,7 @@ USER $USERNAME
 RUN bash -c 'source ./.venv/bin/activate && playwright install webkit'
 
 ENV LISTEN_PORT=8000
-ENV NUM_WORKERS=2
+ENV NUM_WORKERS=4
 EXPOSE 8000
 
 # Prevents Python from writing pyc files to disc (equivalent to python -B option)
