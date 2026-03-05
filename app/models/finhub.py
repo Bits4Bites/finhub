@@ -235,6 +235,16 @@ class SymbolInfo(SymbolBase):
         )
 
 
+# ----------------------------------------------------------------------#
+
+def normalize_json_str(json_str: str) -> str:
+    if json_str.startswith("```json"):
+        json_str = json_str[len("```json") :].strip()
+    if json_str.endswith("```"):
+        json_str = json_str[: -len("```")].strip()
+    return json_str
+
+
 class LLMResponse(BaseModel):
     completion: str = ""
     time_taken_ms: int = 0
@@ -253,44 +263,6 @@ class EventBase(BaseModel):
     event_category: Optional[str] = None
     source_name: Optional[str] = None
     link: Optional[str] = None
-
-
-class UpcomingEarningsEvent(EventBase):
-    report_period: Optional[str] = None
-    status: Optional[str] = None
-
-
-def normalize_json_str(json_str: str) -> str:
-    if json_str.startswith("```json"):
-        json_str = json_str[len("```json") :].strip()
-    if json_str.endswith("```"):
-        json_str = json_str[: -len("```")].strip()
-    return json_str
-
-
-def parse_upcoming_earnings_events_from_json(
-    json_str: str, default_vals: dict[str, Any] = None
-) -> list[UpcomingEarningsEvent]:
-    json_str = normalize_json_str(json_str)
-    events = json.loads(json_str)
-    result = []
-    for item in events:
-        event = UpcomingEarningsEvent(
-            symbol=item.get("sym", default_vals.get("sym")),
-            exchange=item.get("exchange", default_vals.get("exchange")),
-            company_name=item.get("corp", default_vals.get("corp")),
-            date=item.get("date", default_vals.get("date")),
-            event_category="earnings",
-            source_name=item.get("src", default_vals.get("src")),
-            link=item.get("link", default_vals.get("link")),
-            report_period=item.get("report_period", default_vals.get("report_period")),
-            status=item.get("status", default_vals.get("status")),
-        )
-        # parse yyyy-MM-dd from event.date into event.timestamp
-        event.timestamp = int(datetime.strptime(event.date, "%Y-%m-%d").timestamp())
-        result.append(event)
-
-    return result
 
 
 class UpcomingDividendEvent(EventBase):
@@ -321,6 +293,68 @@ def parse_upcoming_dividend_events_from_json(
             amount=item.get("amount", default_vals.get("amount")),
             dividend_yield=item.get("yield", default_vals.get("yield")),
             currency=item.get("currency", default_vals.get("currency")),
+        )
+        # parse yyyy-MM-dd from event.date into event.timestamp
+        event.timestamp = int(datetime.strptime(event.date, "%Y-%m-%d").timestamp())
+        result.append(event)
+
+    return result
+
+
+class UpcomingEarningsEvent(EventBase):
+    report_period: Optional[str] = None
+    status: Optional[str] = None
+
+
+def parse_upcoming_earnings_events_from_json(
+    json_str: str, default_vals: dict[str, Any] = None
+) -> list[UpcomingEarningsEvent]:
+    json_str = normalize_json_str(json_str)
+    events = json.loads(json_str)
+    result = []
+    for item in events:
+        event = UpcomingEarningsEvent(
+            symbol=item.get("sym", default_vals.get("sym")),
+            exchange=item.get("exchange", default_vals.get("exchange")),
+            company_name=item.get("corp", default_vals.get("corp")),
+            date=item.get("date", default_vals.get("date")),
+            event_category="earnings",
+            source_name=item.get("src", default_vals.get("src")),
+            link=item.get("link", default_vals.get("link")),
+            report_period=item.get("report_period", default_vals.get("report_period")),
+            status=item.get("status", default_vals.get("status")),
+        )
+        # parse yyyy-MM-dd from event.date into event.timestamp
+        event.timestamp = int(datetime.strptime(event.date, "%Y-%m-%d").timestamp())
+        result.append(event)
+
+    return result
+
+
+class ListingEvent(EventBase):
+    industry: Optional[str] = None
+    price: float = 0.0
+    currency: Optional[str] = None
+    capital: Optional[str] = None
+
+
+def parse_new_listing_events_from_json(json_str: str, default_vals: dict[str, Any] = None) -> list[ListingEvent]:
+    json_str = normalize_json_str(json_str)
+    events = json.loads(json_str)
+    result = []
+    for item in events:
+        event = ListingEvent(
+            symbol=item.get("symbol", default_vals.get("symbol")),
+            exchange=item.get("exchange", default_vals.get("exchange")),
+            company_name=item.get("company", default_vals.get("company")),
+            date=item.get("date", default_vals.get("date")),
+            event_category="listing",
+            source_name=item.get("src", default_vals.get("src")),
+            link=item.get("link", default_vals.get("link")),
+            industry=item.get("industry", default_vals.get("industry")),
+            price=item.get("price", default_vals.get("price")),
+            currency=item.get("currency", default_vals.get("currency")),
+            capital=item.get("capital", default_vals.get("capital")),
         )
         # parse yyyy-MM-dd from event.date into event.timestamp
         event.timestamp = int(datetime.strptime(event.date, "%Y-%m-%d").timestamp())

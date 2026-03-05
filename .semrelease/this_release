@@ -5,3 +5,4 @@
 - (Feat) Scrape VN dividend data from VietStock.
 - (Fix) Using Playwright async on Windows with uvicorn reload enabled.
 - (Patch) Optimize tokens used scraping dividend/distribution/earnings events.
+- (Feat) Scrape new listings from ASX.

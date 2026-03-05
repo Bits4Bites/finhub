@@ -1,31 +1,21 @@
 import csv
-import time
 from datetime import datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from google import genai
-from google.genai import types
-from openai import AsyncOpenAI
-from openai.types.chat import ChatCompletionUserMessageParam
-from openai.types.responses import WebSearchPreviewToolParam
-from openai.types.responses.web_search_preview_tool_param import UserLocation
+from bs4 import BeautifulSoup
 
+from . import ai_helper
 from ..models import finhub as models
 from ..config import settings
 from ..services import crawler as crawler_service
 
-# EVENT_INCOMING_EARNINGS = "INCOMING_EARNINGS_EVENTS"
-# EVENT_INCOMING_DIVIDENDS = "INCOMING_DIVIDEND_EVENTS"
 EVENT_ASX_UPCOMING_DIVIDENDS = "ASX_UPCOMING_DIVIDEND_EVENTS"
 EVENT_ASX_UPCOMING_EARNINGS = "ASX_UPCOMING_EARNINGS_EVENTS"
 EVENT_US_UPCOMING_DIVIDENDS = "US_UPCOMING_DIVIDEND_EVENTS"
 EVENT_US_UPCOMING_EARNINGS = "US_UPCOMING_EARNINGS_EVENTS"
 EVENT_VN_UPCOMING_DIVIDENDS = "VN_UPCOMING_DIVIDEND_EVENTS"
-
-geminiClients: dict[str, genai.Client] = {}
-openAIClients: dict[str, AsyncOpenAI] = {}
-azureOpenAIClients: dict[str, AsyncOpenAI] = {}
+EVENT_ASX_NEW_LISTINGS = "ASX_NEW_LISTING_EVENTS"
 
 prompts: dict[str, str] = {}
 
@@ -271,107 +261,12 @@ async def ai_parse_upcoming_events(task_id: str, prompt: str, country: str) -> m
     if task_cfg is None:
         raise EnvironmentError(f"LLM task configuration for {task_id} is missing.")
 
-    start = time.perf_counter()
-    match task_cfg.vendor.upper():
-        case "AZUREOPENAI" | "AZURE OPENAI" | "AZURE_OPENAI":
-            client = azureOpenAIClients.get(task_cfg.tier.upper())
-            if client is None:
-                raise EnvironmentError(f"Azure OpenAI client for tier '{task_cfg.tier}' is not configured.")
-            model = task_cfg.model
-            print(
-                f"[DEBUG] ai_parse_upcoming_events({task_id}) "
-                f"/ Country: {country} / Vendor: {task_cfg.vendor} / Tier: {task_cfg.tier} / Model: {model}"
-            )
-            print(prompt)
-
-            if model.startswith("gpt-5"):
-                # use response API with web search tool for gpt-5* models
-                response = await client.responses.create(
-                    model=model,
-                    tools=[
-                        WebSearchPreviewToolParam(
-                            type="web_search_preview",
-                            user_location=UserLocation(type="approximate", country=country),
-                        ),
-                    ],
-                    input=prompt,
-                )
-                end = time.perf_counter()
-                result = models.LLMResponse(
-                    completion=response.output_text,
-                    time_taken_ms=int((end - start) * 1000),
-                    tokens_prompt=response.usage.input_tokens,
-                    tokens_completion=response.usage.output_tokens,
-                    tokens_thought=0,
-                    is_error=response.output_text == "" or response.status != "completed",
-                )
-            else:
-                # use standard chat completion API for other models
-                completion = await client.chat.completions.create(
-                    model=model, temperature=0.0, messages=[ChatCompletionUserMessageParam(content=prompt, role="user")]
-                )
-                end = time.perf_counter()
-                result = models.LLMResponse(
-                    completion=completion.choices[0].message.content if len(completion.choices) > 0 else "",
-                    time_taken_ms=int((end - start) * 1000),
-                    tokens_prompt=completion.usage.prompt_tokens,
-                    tokens_completion=completion.usage.completion_tokens,
-                    tokens_thought=0,
-                    is_error=len(completion.choices) == 0,
-                )
-
-            print(
-                f"[DEBUG] ai_parse_upcoming_events({task_id}) response - Time taken: {result.time_taken_ms} ms, "
-                f"Prompt tokens: {result.tokens_prompt}, Completion tokens: {result.tokens_completion}, "
-                f"Thought tokens: {result.tokens_thought}, Is error: {result.is_error}"
-            )
-            print(result.completion)
-
-            return result
-        case "GEMINI":
-            client = geminiClients.get(task_cfg.tier.upper())
-            if client is None:
-                raise EnvironmentError(f"Gemini client for tier '{task_cfg.tier}' is not configured.")
-            model = task_cfg.model
-            print(
-                f"[DEBUG] ai_parse_upcoming_events({task_id}) "
-                f"/ Country: {country} / Vendor: {task_cfg.vendor} / Tier: {task_cfg.tier} / Model: {model}"
-            )
-            print(prompt)
-
-            thinking_config = (
-                types.ThinkingConfig(thinking_level=types.ThinkingLevel.LOW) if model.startswith("gemini-3") else None
-            )
-            response = client.models.generate_content(
-                model=model,
-                contents=prompt,
-                config=types.GenerateContentConfig(temperature=0.0, thinking_config=thinking_config),
-            )
-            end = time.perf_counter()
-            result = models.LLMResponse(
-                completion=response.text,
-                time_taken_ms=int((end - start) * 1000),
-                tokens_prompt=response.usage_metadata.prompt_token_count,
-                tokens_completion=response.usage_metadata.candidates_token_count,
-                tokens_thought=(
-                    response.usage_metadata.thoughts_token_count if response.usage_metadata.thoughts_token_count else 0
-                ),
-                is_error=(
-                    (response.prompt_feedback and response.prompt_feedback.block_reason)
-                    or len(response.candidates) == 0
-                ),
-            )
-
-            print(
-                f"[DEBUG] ai_parse_upcoming_events({task_id}) response - Time taken: {result.time_taken_ms} ms, "
-                f"Prompt tokens: {result.tokens_prompt}, Completion tokens: {result.tokens_completion}, "
-                f"Thought tokens: {result.tokens_thought}, Is error: {result.is_error}"
-            )
-            print(result.completion)
-
-            return result
-        case _:
-            raise ValueError(f"Unsupported LLM vendor: {task_cfg.vendor}")
+    prompt_cfg = ai_helper.PromptConfig(
+        use_web_search=task_cfg.model.startswith("gpt-5"),
+        country=country,
+        thinking_level="LOW",
+    )
+    return await ai_helper.ai_exec_prompt(task_cfg, prompt, prompt_cfg)
 
 
 def build_prompt_template_and_date_window(event_type: str, tz_name: str, index: str = ""):
@@ -668,4 +563,43 @@ async def ai_get_us_upcoming_earnings_events(index: str = "") -> list[models.Upc
     # tokens optimization: build the source URL using code instead of asking LLM to include the URL in the output
     for event in events:
         event.link = f"https://www.tipranks.com/stocks/{event.symbol.lower().split(':')[-1]}/earnings"
+    return events
+
+
+async def ai_get_asx_new_listings() -> list[models.ListingEvent]:
+    """
+    Check for new listings for ASX, using AI assistance.
+
+    Returns:
+        list[models.ListingEvent]: A list of new listing events
+    """
+    event_type = EVENT_ASX_NEW_LISTINGS
+    prompt_template = prompts[event_type] if event_type in prompts else ""
+    if not prompt_template:
+        raise EnvironmentError(f"Prompt template for {event_type} is missing or empty.")
+
+    url = "https://www.asx.com.au/listings/upcoming-floats-and-listings"
+    html_content = await crawler_service.fetch_webpage_content(url)
+    if not html_content:
+        return []
+
+    soup = BeautifulSoup(html_content, "html.parser")
+    el_list = soup.select("div.multi-column-height")
+    # join all the text from the elements, only if it contains the string "Listing date"
+    raw_input = "==========\n".join([el.get_text() for el in el_list if "Listing date" in el.get_text()])
+    prompt = prompt_template.replace("{RAW_INPUT_DATA}", raw_input)
+
+    llm_result = await ai_parse_upcoming_events("PARSE_NEW_LISTING_EVENTS_NO_WEB_SEARCH", prompt, "AU")
+    if llm_result.is_error:
+        raise RuntimeError(
+            f"[ERROR] LLM failed to generate response for new listing events: {llm_result.completion}"
+        )
+
+    default_vals = {
+        "currency": "AUD",
+        "exchange": "ASX",
+        "src": "ASX",
+        "link": "https://www.asx.com.au/listings/upcoming-floats-and-listings"
+    }
+    events = models.parse_new_listing_events_from_json(llm_result.completion, default_vals)
     return events

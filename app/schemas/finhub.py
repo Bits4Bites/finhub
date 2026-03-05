@@ -29,3 +29,7 @@ class UpcomingEarningsResponse(BaseResponse):
 
 class UpcomingDividendsResponse(BaseResponse):
     data: Optional[list[models.UpcomingDividendEvent]] = None
+
+
+class ListingsResponse(BaseResponse):
+    data: Optional[list[models.ListingEvent]] = None

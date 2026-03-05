@@ -10,6 +10,7 @@ Task: Extract upcoming earnings/financial events from the raw CSV data below.
 # RULES, TRANSFORMATIONS & SCHEMA (STRICT)
 
 Return ONLY raw, valid JSON. Do NOT wrap the output in Markdown blocks (no ```). Start with [ and end with ].
+If no data is available, return an empty array.
 
 {VALIDATION_RULES}
 
