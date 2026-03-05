@@ -591,15 +591,13 @@ async def ai_get_asx_new_listings() -> list[models.ListingEvent]:
 
     llm_result = await ai_parse_upcoming_events("PARSE_NEW_LISTING_EVENTS_NO_WEB_SEARCH", prompt, "AU")
     if llm_result.is_error:
-        raise RuntimeError(
-            f"[ERROR] LLM failed to generate response for new listing events: {llm_result.completion}"
-        )
+        raise RuntimeError(f"[ERROR] LLM failed to generate response for new listing events: {llm_result.completion}")
 
     default_vals = {
         "currency": "AUD",
         "exchange": "ASX",
         "src": "ASX",
-        "link": "https://www.asx.com.au/listings/upcoming-floats-and-listings"
+        "link": "https://www.asx.com.au/listings/upcoming-floats-and-listings",
     }
     events = models.parse_new_listing_events_from_json(llm_result.completion, default_vals)
     return events

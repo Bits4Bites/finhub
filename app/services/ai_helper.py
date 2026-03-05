@@ -25,7 +25,9 @@ class PromptConfig(BaseModel):
     thinking_level: Optional[Literal["LOW", "MEDIUM", "HIGH"]] = None
 
 
-async def ai_exec_prompt_azure_openai(task_cfg: LLMTaskConfig, prompt: str, prompt_cfg: PromptConfig = None) -> LLMResponse:
+async def ai_exec_prompt_azure_openai(
+    task_cfg: LLMTaskConfig, prompt: str, prompt_cfg: PromptConfig = None
+) -> LLMResponse:
     """
     Execute a prompt using Azure OpenAI and return the response.
     """
@@ -66,7 +68,9 @@ async def ai_exec_prompt_azure_openai(task_cfg: LLMTaskConfig, prompt: str, prom
     else:
         # use standard chat completion API for non web search tasks
         completion = await client.chat.completions.create(
-            model=task_cfg.model, temperature=0.0, messages=[ChatCompletionUserMessageParam(content=prompt, role="user")]
+            model=task_cfg.model,
+            temperature=0.0,
+            messages=[ChatCompletionUserMessageParam(content=prompt, role="user")],
         )
         end = time.perf_counter()
         result = LLMResponse(
@@ -78,7 +82,8 @@ async def ai_exec_prompt_azure_openai(task_cfg: LLMTaskConfig, prompt: str, prom
             is_error=len(completion.choices) == 0,
         )
 
-    logging.info("ai_exec_prompt_azure_openai('%s') - Time taken: %d ms / Tokens used: %d/%d/%d / Is error: %s - Response:",
+    logging.info(
+        "ai_exec_prompt_azure_openai('%s') - Time taken: %d ms / Tokens used: %d/%d/%d / Is error: %s - Response:",
         task_cfg.task_name,
         result.time_taken_ms,
         result.tokens_prompt,
@@ -131,13 +136,14 @@ async def ai_exec_prompt_gemini(task_cfg: LLMTaskConfig, prompt: str, prompt_cfg
         ),
     )
 
-    logging.info("ai_exec_prompt_gemini('%s') - Time taken: %d ms / Tokens used: %d/%d/%d / Is error: %s - Response:",
-            task_cfg.task_name,
-            result.time_taken_ms,
-            result.tokens_prompt,
-            result.tokens_thought,
-            result.tokens_completion,
-            result.is_error,
+    logging.info(
+        "ai_exec_prompt_gemini('%s') - Time taken: %d ms / Tokens used: %d/%d/%d / Is error: %s - Response:",
+        task_cfg.task_name,
+        result.time_taken_ms,
+        result.tokens_prompt,
+        result.tokens_thought,
+        result.tokens_completion,
+        result.is_error,
     )
     print(result.completion)
 

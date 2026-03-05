@@ -237,6 +237,7 @@ class SymbolInfo(SymbolBase):
 
 # ----------------------------------------------------------------------#
 
+
 def normalize_json_str(json_str: str) -> str:
     if json_str.startswith("```json"):
         json_str = json_str[len("```json") :].strip()
