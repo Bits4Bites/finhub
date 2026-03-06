@@ -1,5 +1,11 @@
 # FinHub release notes
 
+## 2026-03-06 - v0.3.1
+
+### Fixed/Improvements
+
+- (Patch) Update API endpoints with better naming conventions.
+
 ## 2026-03-05 - v0.3.0
 
 ### Added/Refactoring/Deprecation
