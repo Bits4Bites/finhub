@@ -6,7 +6,7 @@ from ..services import ai as ai_service
 router = APIRouter(prefix="/ai", tags=["ai"])
 
 
-@router.get("/event/dividends", response_model=schemas.UpcomingDividendsResponse, response_model_exclude_none=True)
+@router.get("/event/upcoming_dividends", response_model=schemas.UpcomingDividendsResponse, response_model_exclude_none=True)
 async def get_upcoming_dividends_event(
     country: str = Query("", description="Country code to filter events by (e.g., 'AU', 'US', 'VN', etc.)."),
     index: str = Query(
@@ -31,7 +31,7 @@ async def get_upcoming_dividends_event(
     return schemas.UpcomingDividendsResponse(status=200, message="ok", data=events)
 
 
-@router.get("/event/earnings", response_model=schemas.UpcomingEarningsResponse, response_model_exclude_none=True)
+@router.get("/event/upcoming_earnings", response_model=schemas.UpcomingEarningsResponse, response_model_exclude_none=True)
 async def get_upcoming_earnings_event(
     country: str = Query("", description="Country code to filter events by (e.g., 'AU', 'US', 'VN', etc.)."),
     index: str = Query(
