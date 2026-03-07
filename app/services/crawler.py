@@ -8,7 +8,7 @@ import cloudscraper
 from bs4 import BeautifulSoup
 import pandas as pd
 
-from playwright.async_api import async_playwright, Page
+from playwright.async_api import async_playwright, Page, ViewportSize
 
 
 def extract_data_table_from_html(html_content: str, table_attr_filter: dict[str, str] = None) -> pd.DataFrame:
@@ -109,7 +109,10 @@ async def fetch_webpage_content_playwright(
         try:
             async with async_playwright() as p:
                 browser = await p.webkit.launch(headless=True)
-                page = await browser.new_page()
+                page = await browser.new_page(
+                    screen=ViewportSize(width=1664, height=1110),
+                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0",
+                )
                 await page.goto(url, timeout=60000)
                 if after_load_func_async:
                     await after_load_func_async(page)
@@ -287,10 +290,10 @@ async def scrape_dividends_asx(end_date: datetime.date) -> pd.DataFrame:
 
 
 async def tipranks_after_load_func(page: Page):
-    # rfrm = page.locator("div[id='credential_picker_container']")
-    # if rfrm:
-    #     print("Removing Credential Picker form (blocking UI)...")
-    #     await rfrm.evaluate("el => el.remove()")
+    rfrm = page.locator("div[id='credential_picker_container']")
+    if rfrm:
+        print("Removing Credential Picker form (blocking UI)...")
+        await rfrm.evaluate("el => el.remove()")
 
     gads = page.locator("div[data-google-query-id]")
     count_gads = await gads.count() if gads else 0
