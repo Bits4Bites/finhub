@@ -290,26 +290,30 @@ async def scrape_dividends_asx(end_date: datetime.date) -> pd.DataFrame:
 
 
 async def tipranks_after_load_func(page: Page):
-    rfrm = page.locator("div[id='credential_picker_container']")
-    if rfrm:
-        print("Removing Credential Picker form (blocking UI)...")
-        await rfrm.evaluate("el => el.remove()")
+    # rfrm = page.locator("div[id='credential_picker_container']")
+    # if rfrm:
+    #     print("Removing Credential Picker form (blocking UI)...")
+    #     await rfrm.evaluate("el => el.remove()")
+    #     # await rfrm.evaluate("el => el.style.setProperty('display', 'none');")
 
     gads = page.locator("div[data-google-query-id]")
     count_gads = await gads.count() if gads else 0
     if count_gads > 0:
         for i in range(count_gads):
             print(f"Removing Google Ads (blocking UI) {i + 1}/{count_gads}...")
-            await gads.nth(i).evaluate("el => el.remove()")
+            # await gads.nth(i).evaluate("el => el.remove()")
+            await gads.evaluate("el => el.style.setProperty('display', 'none');")
     else:
         gads = page.locator("div[id='AdThrive_Footer_1_desktop']")
         if gads:
             print("Removing Google Ads[AdThrive_Footer_1_desktop] (blocking UI)...")
-            await gads.evaluate("el => el.remove()")
+            # await gads.evaluate("el => el.remove()")
+            await gads.evaluate("el => el.style.setProperty('display', 'none');")
         gads = page.locator("div[id='AdThrive_Header_1_desktop']")
         if gads:
             print("Removing Google Ads[AdThrive_Header_1_desktop] (blocking UI)...")
-            await gads.evaluate("el => el.remove()")
+            # await gads.evaluate("el => el.remove()")
+            await gads.evaluate("el => el.style.setProperty('display', 'none');")
 
     btn = page.locator("button[data-id='select-columns-button']")
     if btn:
