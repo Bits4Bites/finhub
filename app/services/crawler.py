@@ -227,7 +227,7 @@ async def scrape_dividends_from_tipranks(
             final_df = pd.concat([final_df, df], ignore_index=True)
 
         # delay randomly a few seconds to avoid overwhelming the server
-        delay_seconds = random.uniform(0.25, 1.00)
+        delay_seconds = random.uniform(1.00, 3.00)
         time.sleep(delay_seconds)
 
         start_date += datetime.timedelta(days=1)
@@ -384,7 +384,7 @@ async def scrape_dividends_vn(end_date: datetime.date) -> pd.DataFrame:
         final_df = pd.concat([final_df, df], ignore_index=True)
 
         # delay randomly a few seconds to avoid overwhelming the server
-        delay_seconds = random.uniform(0.25, 1.00)
+        delay_seconds = random.uniform(1.00, 3.00)
         time.sleep(delay_seconds)
 
         page += 1
@@ -466,7 +466,7 @@ async def scrape_earnings_from_tipranks(
             final_df = pd.concat([final_df, df], ignore_index=True)
 
         # delay randomly a few seconds to avoid overwhelming the server
-        delay_seconds = random.uniform(0.25, 1.00)
+        delay_seconds = random.uniform(1.00, 3.00)
         time.sleep(delay_seconds)
 
         start_date += datetime.timedelta(days=1)
