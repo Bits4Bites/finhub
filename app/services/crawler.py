@@ -287,10 +287,10 @@ async def scrape_dividends_asx(end_date: datetime.date) -> pd.DataFrame:
 
 
 async def tipranks_after_load_func(page: Page):
-    rfrm = page.locator("div[id='credential_picker_container']")
-    if rfrm:
-        print("Removing Credential Picker form (blocking UI)...")
-        await rfrm.evaluate("el => el.remove()")
+    # rfrm = page.locator("div[id='credential_picker_container']")
+    # if rfrm:
+    #     print("Removing Credential Picker form (blocking UI)...")
+    #     await rfrm.evaluate("el => el.remove()")
 
     gads = page.locator("div[data-google-query-id]")
     count_gads = await gads.count() if gads else 0
