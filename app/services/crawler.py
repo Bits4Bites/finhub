@@ -75,7 +75,7 @@ async def fetch_webpage_content(url: str, retries: int = 3, backoff_factor: floa
     Returns:
         str: The content of the webpage if successful, otherwise None.
     """
-    scraper = cloudscraper.create_scraper()
+    scraper = cloudscraper.create_scraper(browser={"browser": "chrome", "platform": "windows", "desktop": True})
     for attempt in range(retries):
         try:
             response = scraper.get(url, timeout=10)
