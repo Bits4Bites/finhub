@@ -1,3 +1,5 @@
 # This file has been cleaned up post-releasing version 0.3.1.
 # Generate its content quickly using the following command:
 #   git log origin..HEAD | grep "^\s" > .semrelease/this_release
+#!VERSION=0.3.2
+- (Patch) Specify User Agent when fetching website content.
