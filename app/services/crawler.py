@@ -203,11 +203,9 @@ async def scrape_dividends_from_tipranks(
     """
     start_date = datetime.datetime.now(ZoneInfo(tz_name)).date()
 
-    # if weekend, move to next Tuesday
+    # if weekend, move to next Monday
     if start_date.weekday() >= 5:  # Saturday or Sunday
-        start_date += datetime.timedelta(days=(1 + 7 - start_date.weekday()))
-    else:
-        start_date += datetime.timedelta(days=1)  # start from next day
+        start_date += datetime.timedelta(days=(7 - start_date.weekday()))
 
     final_df = pd.DataFrame()
     while start_date <= end_date:
@@ -360,11 +358,9 @@ async def scrape_dividends_vn(end_date: datetime.date) -> pd.DataFrame:
     tz_name = "Asia/Ho_Chi_Minh"
     start_date = datetime.datetime.now(ZoneInfo(tz_name)).date()
 
-    # if weekend, move to next Tuesday
+    # if weekend, move to next Monday
     if start_date.weekday() >= 5:  # Saturday or Sunday
-        start_date += datetime.timedelta(days=(1 + 7 - start_date.weekday()))
-    else:
-        start_date += datetime.timedelta(days=1)  # start from next day
+        start_date += datetime.timedelta(days=(7 - start_date.weekday()))
 
     final_df = pd.DataFrame()
     page = 1

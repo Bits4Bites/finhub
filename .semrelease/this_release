@@ -3,3 +3,4 @@
 #   git log origin..HEAD | grep "^\s" > .semrelease/this_release
 #!VERSION=0.3.2
 - (Patch) Specify User Agent when fetching website content.
+- (Patch) Update date range when fetching dividend data.
