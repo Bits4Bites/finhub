@@ -274,4 +274,5 @@ jobs:
         with:
           containerAppName: ${{ secrets.AZURE_CONTAINER_APP }}
           resourceGroup: ${{ secrets.AZURE_RESOURCE_GROUP }}
-          imageToDeploy: docker.io/${{ env.DOCKER_IMAGE }}:${{ env.VERSION }}
+          imageToDeploy: ${{ secrets.IMAGE_TO_DEPLOY }}:${{ env.VERSION }}
+          # imageToDeploy: docker.io/${{ env.DOCKER_IMAGE }}:${{ env.VERSION }}
