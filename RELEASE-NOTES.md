@@ -1,5 +1,12 @@
 # FinHub release notes
 
+## 2026-03-09 - v0.3.2
+
+### Fixed/Improvements
+
+- (Patch) Specify User Agent when fetching website content.
+- (Patch) Update date range when fetching dividend data.
+
 ## 2026-03-06 - v0.3.1
 
 ### Fixed/Improvements
