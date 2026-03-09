@@ -1,5 +1,11 @@
 # FinHub release notes
 
+## 2026-03-09 - v0.3.3
+
+### Fixed/Improvements
+
+- (Patch) start_date = current_date - 2 when scraping dividend events.
+
 ## 2026-03-09 - v0.3.2
 
 ### Fixed/Improvements
