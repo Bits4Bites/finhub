@@ -8,7 +8,7 @@ import cloudscraper
 from bs4 import BeautifulSoup
 import pandas as pd
 
-from playwright.async_api import async_playwright, Page
+from playwright.async_api import async_playwright, Page, ViewportSize
 
 
 def extract_data_table_from_html(html_content: str, table_attr_filter: dict[str, str] = None) -> pd.DataFrame:
@@ -75,7 +75,7 @@ async def fetch_webpage_content(url: str, retries: int = 3, backoff_factor: floa
     Returns:
         str: The content of the webpage if successful, otherwise None.
     """
-    scraper = cloudscraper.create_scraper()
+    scraper = cloudscraper.create_scraper(browser={"browser": "chrome", "platform": "windows", "desktop": True})
     for attempt in range(retries):
         try:
             response = scraper.get(url, timeout=10)
@@ -109,7 +109,10 @@ async def fetch_webpage_content_playwright(
         try:
             async with async_playwright() as p:
                 browser = await p.webkit.launch(headless=True)
-                page = await browser.new_page()
+                page = await browser.new_page(
+                    screen=ViewportSize(width=1664, height=1110),
+                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0",
+                )
                 await page.goto(url, timeout=60000)
                 if after_load_func_async:
                     await after_load_func_async(page)
@@ -200,11 +203,9 @@ async def scrape_dividends_from_tipranks(
     """
     start_date = datetime.datetime.now(ZoneInfo(tz_name)).date()
 
-    # if weekend, move to next Tuesday
+    # if weekend, move to next Monday
     if start_date.weekday() >= 5:  # Saturday or Sunday
-        start_date += datetime.timedelta(days=(1 + 7 - start_date.weekday()))
-    else:
-        start_date += datetime.timedelta(days=1)  # start from next day
+        start_date += datetime.timedelta(days=(7 - start_date.weekday()))
 
     final_df = pd.DataFrame()
     while start_date <= end_date:
@@ -224,7 +225,7 @@ async def scrape_dividends_from_tipranks(
             final_df = pd.concat([final_df, df], ignore_index=True)
 
         # delay randomly a few seconds to avoid overwhelming the server
-        delay_seconds = random.uniform(0.25, 1.00)
+        delay_seconds = random.uniform(1.00, 3.00)
         time.sleep(delay_seconds)
 
         start_date += datetime.timedelta(days=1)
@@ -287,26 +288,30 @@ async def scrape_dividends_asx(end_date: datetime.date) -> pd.DataFrame:
 
 
 async def tipranks_after_load_func(page: Page):
-    rfrm = page.locator("div[id='credential_picker_container']")
-    if rfrm:
-        print("Removing Credential Picker form (blocking UI)...")
-        await rfrm.evaluate("el => el.remove()")
+    # rfrm = page.locator("div[id='credential_picker_container']")
+    # if rfrm:
+    #     print("Removing Credential Picker form (blocking UI)...")
+    #     await rfrm.evaluate("el => el.remove()")
+    #     # await rfrm.evaluate("el => el.style.setProperty('display', 'none');")
 
     gads = page.locator("div[data-google-query-id]")
     count_gads = await gads.count() if gads else 0
     if count_gads > 0:
         for i in range(count_gads):
             print(f"Removing Google Ads (blocking UI) {i + 1}/{count_gads}...")
-            await gads.nth(i).evaluate("el => el.remove()")
+            # await gads.nth(i).evaluate("el => el.remove()")
+            await gads.evaluate("el => el.style.setProperty('display', 'none');")
     else:
         gads = page.locator("div[id='AdThrive_Footer_1_desktop']")
         if gads:
             print("Removing Google Ads[AdThrive_Footer_1_desktop] (blocking UI)...")
-            await gads.evaluate("el => el.remove()")
+            # await gads.evaluate("el => el.remove()")
+            await gads.evaluate("el => el.style.setProperty('display', 'none');")
         gads = page.locator("div[id='AdThrive_Header_1_desktop']")
         if gads:
             print("Removing Google Ads[AdThrive_Header_1_desktop] (blocking UI)...")
-            await gads.evaluate("el => el.remove()")
+            # await gads.evaluate("el => el.remove()")
+            await gads.evaluate("el => el.style.setProperty('display', 'none');")
 
     btn = page.locator("button[data-id='select-columns-button']")
     if btn:
@@ -353,11 +358,9 @@ async def scrape_dividends_vn(end_date: datetime.date) -> pd.DataFrame:
     tz_name = "Asia/Ho_Chi_Minh"
     start_date = datetime.datetime.now(ZoneInfo(tz_name)).date()
 
-    # if weekend, move to next Tuesday
+    # if weekend, move to next Monday
     if start_date.weekday() >= 5:  # Saturday or Sunday
-        start_date += datetime.timedelta(days=(1 + 7 - start_date.weekday()))
-    else:
-        start_date += datetime.timedelta(days=1)  # start from next day
+        start_date += datetime.timedelta(days=(7 - start_date.weekday()))
 
     final_df = pd.DataFrame()
     page = 1
@@ -377,7 +380,7 @@ async def scrape_dividends_vn(end_date: datetime.date) -> pd.DataFrame:
         final_df = pd.concat([final_df, df], ignore_index=True)
 
         # delay randomly a few seconds to avoid overwhelming the server
-        delay_seconds = random.uniform(0.25, 1.00)
+        delay_seconds = random.uniform(1.00, 3.00)
         time.sleep(delay_seconds)
 
         page += 1
@@ -459,7 +462,7 @@ async def scrape_earnings_from_tipranks(
             final_df = pd.concat([final_df, df], ignore_index=True)
 
         # delay randomly a few seconds to avoid overwhelming the server
-        delay_seconds = random.uniform(0.25, 1.00)
+        delay_seconds = random.uniform(1.00, 3.00)
         time.sleep(delay_seconds)
 
         start_date += datetime.timedelta(days=1)
