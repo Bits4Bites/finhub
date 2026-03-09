@@ -202,7 +202,7 @@ jobs:
           images: ${{ env.DOCKER_IMAGE }}
       - name: Build and push by digest
         id: build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           platforms: ${{ matrix.platforms }}
           labels: ${{ steps.meta.outputs.labels }}
