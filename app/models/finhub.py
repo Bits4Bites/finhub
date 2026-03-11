@@ -19,6 +19,7 @@ class HistoryPoint(BaseModel):
     low: Optional[float] = None
     close: Optional[float] = None
     volume: Optional[int] = None
+    dividends: Optional[float] = None
     rsi14: Optional[float] = None
 
 
@@ -169,7 +170,7 @@ class StockHistory(BaseModel):
 
     def __init__(self, ticker: yf.Ticker):
         super().__init__()
-        history365d = ticker.history(period="365d", interval="1d")
+        history365d = ticker.history(period="365d", interval="1d", auto_adjust=False)
         history30d = history365d.iloc[-30:]
 
         # calculate pullback if any
@@ -207,6 +208,7 @@ class StockHistory(BaseModel):
                 low=history365d.iloc[-NUM_POINTS + i]["Low"],
                 close=history365d.iloc[-NUM_POINTS + i]["Close"],
                 volume=int(history365d.iloc[-NUM_POINTS + i]["Volume"]),
+                dividends=history365d.iloc[-NUM_POINTS + i]["Dividends"],
                 rsi14=rsi.iloc[-NUM_POINTS + i],
             )
             for i in range(0, NUM_POINTS)

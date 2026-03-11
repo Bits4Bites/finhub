@@ -1,7 +1,8 @@
+from datetime import datetime, timedelta
 from typing import Any
 
 import yfinance as yf
-from ..models.finhub import SymbolInfo, StockQuote, SymbolOverview
+from ..models.finhub import SymbolInfo, StockQuote, SymbolOverview, HistoryPoint
 
 allowed_quote_types = {"EQUITY", "ETF"}
 
@@ -10,10 +11,10 @@ def get_symbol_info_raw(symbol: str) -> dict[str, Any]:
     """
     Fetches detailed information about a ticker symbol.
 
-    :param symbol: The ticker symbol to fetch information for.
-    :type symbol: str
-    :return: A dictionary containing the raw ticker information.
-    :rtype: dict[str, Any]
+    Args:
+        symbol (str): The stock symbol to fetch information for.
+    Returns:
+        dict[str, Any]: A dictionary containing the raw information about the symbol.
     """
     ticker = yf.Ticker(symbol)
     info = ticker.info
@@ -30,10 +31,10 @@ def get_symbol_info(symbol: str) -> SymbolInfo | None:
     """
     Fetches detailed information about a ticker symbol.
 
-    :param symbol: The ticker symbol to fetch information for.
-    :type symbol: str
-    :return: A SymbolInfo object containing detailed information about the ticker symbol.
-    :rtype: SymbolInfo
+    Args:
+        symbol (str): The stock symbol to fetch information for.
+    Returns:
+        SymbolInfo | None: A SymbolInfo object containing the information about the symbol, or None.
     """
     ticker = yf.Ticker(symbol)
     quote_type = ticker.info.get("quoteType")
@@ -46,10 +47,10 @@ def get_symbol_overview(symbol: str) -> SymbolOverview | None:
     """
     Fetches overview information about a ticker symbol.
 
-    :param symbol: The ticker symbol to fetch information for.
-    :type symbol: str
-    :return: A SymbolOverview object containing overview information about the ticker symbol.
-    :rtype: SymbolOverview
+    Args:
+        symbol (str): The stock symbol to fetch information for.
+    Returns:
+        SymbolOverview | None: A SymbolOverview object containing the overview information about the symbol, or None.
     """
     ticker = yf.Ticker(symbol)
     quote_type = ticker.info.get("quoteType")
@@ -62,10 +63,10 @@ def get_stock_quotes(symbols: list[str]) -> dict[str, StockQuote]:
     """
     Fetches stock quotes for a list of ticker symbols.
 
-    :param symbols: A list of ticker symbols to fetch quotes for.
-    :type symbols: list[str]
-    :return: A list of SymbolInfo objects containing stock quotes for the requested symbols.
-    :rtype: list[SymbolInfo]
+    Args:
+        symbols (list[str]): A list of stock symbols to fetch quotes for.
+    Returns:
+        dict[str, StockQuote]: A dictionary mapping each symbol to its corresponding StockQuote object.
     """
     tickers = yf.Tickers((" ".join(symbols)).upper())
     quotes = {}
@@ -76,3 +77,37 @@ def get_stock_quotes(symbols: list[str]) -> dict[str, StockQuote]:
         if quote_type in allowed_quote_types:
             quotes[symbol] = StockQuote(ticker)
     return quotes
+
+
+def get_stock_quote_at_date(symbol: str, date_str: str) -> HistoryPoint | None:
+    """
+    Fetches stock quote information for a given ticker symbol at a specific date.
+
+    Args:
+        symbol (str): The stock symbol to fetch information for.
+        date_str (str): The date to fetch the quote for (format: YYYY-MM-DD).
+    Returns:
+        HistoryPoint | None: A HistoryPoint object containing the quote information for the symbol at the specified date, or None.
+    """
+    ticker = yf.Ticker(symbol)
+    quote_type = ticker.info.get("quoteType")
+    if quote_type in allowed_quote_types:
+        try:
+            start_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+        except ValueError:
+            return None
+        end_date = start_date + timedelta(days=1)
+
+        history = ticker.history(start=start_date, end=end_date, interval="1d", auto_adjust=False)
+        if not history.empty:
+            point = history.iloc[0]
+            return HistoryPoint(
+                timestamp=point.name.timestamp(),
+                open=point["Open"],
+                high=point["High"],
+                low=point["Low"],
+                close=point["Close"],
+                volume=point["Volume"],
+                dividends=point["Dividends"],
+            )
+    return None

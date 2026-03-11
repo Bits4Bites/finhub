@@ -1,3 +1,7 @@
 # This file has been cleaned up post-releasing version 0.3.3.
 # Generate its content quickly using the following command:
 #   git log origin..HEAD | grep "^\s" > .semrelease/this_release
+#!VERSION=0.4.0
+- (Patch) Set auto_adjust=False when fetching ticker history.
+- (Feat) New API to fetch stock quote at a given date.
+- (Patch) Return dividend info in stock history.
