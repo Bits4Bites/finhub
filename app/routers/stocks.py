@@ -53,6 +53,7 @@ def get_symbol_quote_at_date(
 ) -> schemas.StockQuotesResponse:
     """
     Get stock quote information for a given ticker symbol at a specific date.
+    Note: If the date falls on a non-trading day, the API may return quote for the most recent trading day before the given date.
     """
     quote = stock_service.get_stock_quote_at_date(symbol, date_str)
     if quote is None:

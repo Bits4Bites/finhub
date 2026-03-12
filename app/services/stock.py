@@ -97,10 +97,11 @@ def get_stock_quote_at_date(symbol: str, date_str: str) -> HistoryPoint | None:
         except ValueError:
             return None
         end_date = start_date + timedelta(days=1)
+        start_date = start_date - timedelta(days=14)  # to account for weekends and holidays
 
         history = ticker.history(start=start_date, end=end_date, interval="1d", auto_adjust=False)
         if not history.empty:
-            point = history.iloc[0]
+            point = history.iloc[-1]
             return HistoryPoint(
                 timestamp=point.name.timestamp(),
                 open=point["Open"],
