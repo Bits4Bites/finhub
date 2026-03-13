@@ -1,5 +1,18 @@
 # FinHub release notes
 
+## 2026-03-13 - v0.4.0
+
+### Added/Refactoring/Deprecation
+
+- (Feat) New API to fetch stock quote at a given date.
+
+### Fixed/Improvements
+
+- (Patch) Set auto_adjust=False when fetching ticker history.
+- (Patch) Return dividend info in stock history.
+- (Patch) Improve responses with datetime fields.
+- (Improvement) APIs to fetch upcoming events use LLM only when necessary.
+
 ## 2026-03-09 - v0.3.3
 
 ### Fixed/Improvements

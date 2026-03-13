@@ -3,7 +3,7 @@ import time
 from typing import Optional, Literal
 
 from openai.types.chat import ChatCompletionUserMessageParam
-from openai.types.responses import WebSearchPreviewToolParam, ResponseStatus
+from openai.types.responses import WebSearchPreviewToolParam
 from openai.types.responses.web_search_preview_tool_param import UserLocation
 from openai import AsyncOpenAI
 
@@ -63,7 +63,7 @@ async def ai_exec_prompt_azure_openai(
             tokens_prompt=ai_response.usage.input_tokens,
             tokens_completion=ai_response.usage.output_tokens,
             tokens_thought=0,
-            is_error=not ai_response or ai_response.status != ResponseStatus("completed"),
+            is_error=not ai_response or ai_response.status != "completed",
         )
     else:
         # use standard chat completion API for non web search tasks

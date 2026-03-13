@@ -1,5 +1,8 @@
 Extract upcoming ASX listings from the RAW INPUT DATA section into a JSON array. If no data is available, return an empty array.
 
+IMPORTANT: the "Expected offer close date" is NOT the listing date. The listing date is presented next to the company name.
+Ignore the entry if the listing date is not confirmed (e.g. "TBC" or "TBA" or "TBD").
+
 Return ONLY raw, valid JSON. Do NOT wrap the output in Markdown blocks (no ```). Start with [ and end with ].
 
 Schema:
