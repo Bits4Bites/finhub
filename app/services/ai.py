@@ -9,6 +9,7 @@ from . import ai_helper
 from ..models import finhub as models
 from ..config import settings
 from ..services import crawler as crawler_service
+from ..utils import finhub as finhub_utils
 
 EVENT_ASX_UPCOMING_DIVIDENDS = "ASX_UPCOMING_DIVIDEND_EVENTS"
 EVENT_ASX_UPCOMING_EARNINGS = "ASX_UPCOMING_EARNINGS_EVENTS"
@@ -269,22 +270,22 @@ async def ai_parse_upcoming_events(task_id: str, prompt: str, country: str) -> m
     return await ai_helper.ai_exec_prompt(task_cfg, prompt, prompt_cfg)
 
 
-def build_prompt_template_and_date_window(event_type: str, tz_name: str, index: str = ""):
+def build_prompt_template_and_end_date(event_type: str, tz: ZoneInfo, index: str = ""):
     prompt_template = prompts[event_type] if event_type in prompts else ""
     if not prompt_template:
         raise EnvironmentError(f"Prompt template for {event_type} is missing or empty.")
 
-    start_date = datetime.now(ZoneInfo(tz_name)).date()
-    if index:
+    start_date = datetime.now(tz).date()
+    if index:  # if index is provided to filter events, we look further into the future to capture more relevant events
         # check if event_type contains "EARNINGS_"
         if "_EARNINGS_" in event_type.upper():
             end_date = start_date + timedelta(days=10)
         else:
             end_date = start_date + timedelta(days=14)
-    else:
+    else:  # if no index filter is provided, we can look at a shorter time window for more immediate events
         end_date = start_date + timedelta(days=7)
 
-    return prompt_template, start_date, end_date
+    return prompt_template, end_date
 
 
 def build_prompt_upcoming_events(prompt_template: str, raw_input_data: str, index: str = ""):
@@ -315,7 +316,7 @@ def build_prompt_upcoming_events(prompt_template: str, raw_input_data: str, inde
 
 
 async def ai_get_upcoming_dividends_events(
-    country: str, event_type: str, tz_name: str, index: str = "", default_vals: dict[str, Any] = None
+    country: str, event_type: str, tz: ZoneInfo, index: str = "", default_vals: dict[str, Any] = None
 ) -> list[models.UpcomingDividendEvent]:
     """
     Check for upcoming dividend/distribution events (AU, US & VN only), using AI assistance.
@@ -323,14 +324,14 @@ async def ai_get_upcoming_dividends_events(
     Args:
         country (str): Country code to filter events by (e.g., 'AU', 'US', etc.).
         event_type (str): internal use
-        tz_name (str): Timezone name (e.g., 'Australia/Sydney', 'America/New_York') to for event filtering.
+        tz (ZoneInfo): timezone for date calculations
         index (str): Optional stock index to filter events by (e.g., 'S&P/ASX 200', etc.).
         default_vals (str): Optional, internal use
     Returns:
         list[models.UpcomingDividendEvent]: A list of upcoming dividend/distribution events
     """
     country = country.upper()
-    prompt_template, start_date, end_date = build_prompt_template_and_date_window(event_type, tz_name, index)
+    prompt_template, end_date = build_prompt_template_and_end_date(event_type, tz, index)
     raw_data = (
         await crawler_service.scrape_dividends_asx(end_date)
         if country == "AU" or country == "AUS" or country == "AUSTRALIA"
@@ -378,7 +379,7 @@ async def ai_get_upcoming_dividends_events(
     llm_result = (
         await ai_parse_upcoming_events("PARSE_UPCOMING_DIVIDEND_EVENTS_NO_WEB_SEARCH", prompt, country)
         if not index
-        else await ai_parse_upcoming_events("PARSE_UPCOMING_DIVIDEND_EVENTS_WITH_WEB_SEARCH", prompt, country)
+        else await ai_parse_upcoming_events("PARSE_UPCOMING_DIVIDEND_EVENTS_WEB_SEARCH", prompt, country)
     )
 
     if llm_result.is_error:
@@ -387,6 +388,11 @@ async def ai_get_upcoming_dividends_events(
         )
 
     events = models.parse_upcoming_dividend_events_from_json(llm_result.completion, default_vals)
+    for event in events:
+        event.date = finhub_utils.yyyy_mm_dd_to_iso(event.date, tz=tz)
+        event.timestamp = int(datetime.fromisoformat(event.date).timestamp())
+        if event.payment_date:
+            event.payment_date = finhub_utils.yyyy_mm_dd_to_iso(event.payment_date, tz=tz)
     return events
 
 
@@ -401,14 +407,14 @@ async def ai_get_asx_upcoming_dividends_events(index: str = "") -> list[models.U
     """
     country = "AU"
     event_type = EVENT_ASX_UPCOMING_DIVIDENDS
-    tz_name = "Australia/Sydney"
+    tz = ZoneInfo("Australia/Sydney")
     default_vals = {
         "exchange": "ASX",
         "src": "ASX",
         "currency": "AUD",
         "status": "declared",
     }
-    events = await ai_get_upcoming_dividends_events(country, event_type, tz_name, index, default_vals)
+    events = await ai_get_upcoming_dividends_events(country, event_type, tz, index, default_vals)
     # tokens optimization: build the source URL using code instead of asking LLM to include the URL in the output
     for event in events:
         event.link = f"https://www.asx.com.au/markets/company/{event.symbol.split(':')[-1]}"
@@ -426,13 +432,13 @@ async def ai_get_us_upcoming_dividends_events(index: str = "") -> list[models.Up
     """
     country = "US"
     event_type = EVENT_US_UPCOMING_DIVIDENDS
-    tz_name = "America/New_York"
+    tz = ZoneInfo("America/New_York")
     default_vals = {
         "src": "StockAnalysis",
         "currency": "USD",
         "status": "declared",
     }
-    events = await ai_get_upcoming_dividends_events(country, event_type, tz_name, index, default_vals)
+    events = await ai_get_upcoming_dividends_events(country, event_type, tz, index, default_vals)
     # tokens optimization: build the source URL using code instead of asking LLM to include the URL in the output
     for event in events:
         event.link = f"https://stockanalysis.com/stocks/{event.symbol.lower().split(':')[-1]}/dividend/"
@@ -450,14 +456,14 @@ async def ai_get_vn_upcoming_dividends_events(index: str = "") -> list[models.Up
     """
     country = "VN"
     event_type = EVENT_VN_UPCOMING_DIVIDENDS
-    tz_name = "Asia/Ho_Chi_Minh"
+    tz = ZoneInfo("Asia/Ho_Chi_Minh")
     default_vals = {
         "cat": "dividend",
         "src": "VietStock",
         "currency": "VND",
         "status": "declared",
     }
-    events = await ai_get_upcoming_dividends_events(country, event_type, tz_name, index, default_vals)
+    events = await ai_get_upcoming_dividends_events(country, event_type, tz, index, default_vals)
     # tokens optimization: build the source URL using code instead of asking LLM to include the URL in the output
     for event in events:
         event.link = f"https://finance.vietstock.vn/{event.symbol.split(':')[-1]}-thong-tin.htm"
@@ -465,7 +471,7 @@ async def ai_get_vn_upcoming_dividends_events(index: str = "") -> list[models.Up
 
 
 async def ai_get_upcoming_earnings_events(
-    country: str, event_type: str, tz_name: str, index: str = "", default_vals: dict[str, Any] = None
+    country: str, event_type: str, tz: ZoneInfo, index: str = "", default_vals: dict[str, Any] = None
 ) -> list[models.UpcomingEarningsEvent]:
     """
     Check for upcoming earnings events (AU  & US only), using AI assistance.
@@ -473,14 +479,14 @@ async def ai_get_upcoming_earnings_events(
     Args:
         country (str): Country code to filter events by (e.g., 'AU', 'US', etc.).
         event_type (str): internal use
-        tz_name (str): Timezone name (e.g., 'Australia/Sydney', 'America/New_York') to for event filtering.
+        tz (ZoneInfo): timezone of the market
         index (str): Optional stock index to filter events by (e.g., 'S&P/ASX 200', etc.).
         default_vals (str): Optional, internal use
     Returns:
         list[models.UpcomingEarningsEvent]: A list of upcoming earnings events
     """
     country = country.upper()
-    prompt_template, start_date, end_date = build_prompt_template_and_date_window(event_type, tz_name, index)
+    prompt_template, end_date = build_prompt_template_and_end_date(event_type, tz, index)
     raw_data = (
         await crawler_service.scrape_earnings_asx(end_date)
         if country == "AU" or country == "AUS" or country == "AUSTRALIA"
@@ -514,6 +520,9 @@ async def ai_get_upcoming_earnings_events(
         )
 
     events = models.parse_upcoming_earnings_events_from_json(llm_result.completion, default_vals)
+    for event in events:
+        event.date = finhub_utils.yyyy_mm_dd_to_iso(event.date, tz)
+        event.timestamp = int(datetime.fromisoformat(event.date).timestamp())
     return events
 
 
@@ -528,14 +537,14 @@ async def ai_get_asx_upcoming_earnings_events(index: str = "") -> list[models.Up
     """
     country = "AU"
     event_type = EVENT_ASX_UPCOMING_EARNINGS
-    tz_name = "Australia/Sydney"
+    tz = ZoneInfo("Australia/Sydney")
     default_vals = {
         "exchange": "ASX",
         "src": "TipRanks",
         "status": "estimated",
         "report_period": "N/A",
     }
-    events = await ai_get_upcoming_earnings_events(country, event_type, tz_name, index, default_vals)
+    events = await ai_get_upcoming_earnings_events(country, event_type, tz, index, default_vals)
     # tokens optimization: build the source URL using code instead of asking LLM to include the URL in the output
     for event in events:
         event.link = f"https://www.tipranks.com/stocks/au:{event.symbol.lower().split(':')[-1]}/earnings"
@@ -553,13 +562,13 @@ async def ai_get_us_upcoming_earnings_events(index: str = "") -> list[models.Upc
     """
     country = "US"
     event_type = EVENT_US_UPCOMING_EARNINGS
-    tz_name = "America/New_York"
+    tz = ZoneInfo("America/New_York")
     default_vals = {
         "src": "TipRanks",
         "status": "estimated",
         "report_period": "N/A",
     }
-    events = await ai_get_upcoming_earnings_events(country, event_type, tz_name, index, default_vals)
+    events = await ai_get_upcoming_earnings_events(country, event_type, tz, index, default_vals)
     # tokens optimization: build the source URL using code instead of asking LLM to include the URL in the output
     for event in events:
         event.link = f"https://www.tipranks.com/stocks/{event.symbol.lower().split(':')[-1]}/earnings"
@@ -593,6 +602,7 @@ async def ai_get_asx_new_listings() -> list[models.ListingEvent]:
     if llm_result.is_error:
         raise RuntimeError(f"[ERROR] LLM failed to generate response for new listing events: {llm_result.completion}")
 
+    tz = ZoneInfo("Australia/Sydney")
     default_vals = {
         "currency": "AUD",
         "exchange": "ASX",
@@ -600,4 +610,7 @@ async def ai_get_asx_new_listings() -> list[models.ListingEvent]:
         "link": "https://www.asx.com.au/listings/upcoming-floats-and-listings",
     }
     events = models.parse_new_listing_events_from_json(llm_result.completion, default_vals)
+    for event in events:
+        event.date = finhub_utils.yyyy_mm_dd_to_iso(event.date, tz)
+        event.timestamp = int(datetime.fromisoformat(event.date).timestamp())
     return events
