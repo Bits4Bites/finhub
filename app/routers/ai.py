@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Query
 
 from ..schemas import finhub as schemas
-from ..services import ai as ai_service
+from ..services import ai as ai_service, stock as stock_service
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 
@@ -21,11 +21,23 @@ async def get_upcoming_dividends_event(
     country = country.upper()
     match country:
         case "AU" | "AUS" | "AUSTRALIA":
-            events = await ai_service.ai_get_asx_upcoming_dividends_events(index)
+            events = (
+                await ai_service.ai_get_asx_upcoming_dividends_events(index)
+                if index
+                else await stock_service.get_asx_upcoming_dividends_events()
+            )
         case "US" | "USA" | "UNITED STATES":
-            events = await ai_service.ai_get_us_upcoming_dividends_events(index)
+            events = (
+                await ai_service.ai_get_us_upcoming_dividends_events(index)
+                if index
+                else await stock_service.get_us_upcoming_dividends_events()
+            )
         case "VN" | "VIETNAM":
-            events = await ai_service.ai_get_vn_upcoming_dividends_events(index)
+            events = (
+                await ai_service.ai_get_vn_upcoming_dividends_events(index)
+                if index
+                else await stock_service.get_vn_upcoming_dividends_events()
+            )
         case _:
             return schemas.UpcomingDividendsResponse(status=501, message=f"Unsupported country '{country}'")
             # events = await ai_service.ai_get_incoming_dividends_events(country, index)
@@ -48,9 +60,17 @@ async def get_upcoming_earnings_event(
     country = country.upper()
     match country:
         case "AU" | "AUS" | "AUSTRALIA":
-            events = await ai_service.ai_get_asx_upcoming_earnings_events(index)
+            events = (
+                await ai_service.ai_get_asx_upcoming_earnings_events(index)
+                if index
+                else await stock_service.get_asx_upcoming_earnings_events()
+            )
         case "US" | "USA" | "UNITED STATES":
-            events = await ai_service.ai_get_us_upcoming_earnings_events(index)
+            events = (
+                await ai_service.ai_get_us_upcoming_earnings_events(index)
+                if index
+                else await stock_service.get_us_upcoming_earnings_events()
+            )
         case _:
             return schemas.UpcomingEarningsResponse(status=501, message=f"Unsupported country '{country}'")
             # events = await ai_service.ai_get_incoming_earnings_events(country, index)

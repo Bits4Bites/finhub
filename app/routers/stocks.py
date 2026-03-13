@@ -45,20 +45,20 @@ def get_symbol_info(
 
 
 @router.get(
-    "/{symbol}/quote_at/{date_str}", response_model=schemas.StockQuotesResponse, response_model_exclude_none=True
+    "/{symbol}/quote_at/{date_str}", response_model=schemas.StockQuoteAtDateResponse, response_model_exclude_none=True
 )
 def get_symbol_quote_at_date(
     symbol: str = Path(description="The stock symbol to fetch information for."),
     date_str: str = Path(description="The date to fetch the quote for (format: YYYY-MM-DD)."),
-) -> schemas.StockQuotesResponse:
+) -> schemas.StockQuoteAtDateResponse:
     """
     Get stock quote information for a given ticker symbol at a specific date.
     Note: If the date falls on a non-trading day, the API may return quote for the most recent trading day before the given date.
     """
     quote = stock_service.get_stock_quote_at_date(symbol, date_str)
     if quote is None:
-        return schemas.StockQuotesResponse(status=404, message="Symbol or quote not found")
-    return schemas.StockQuotesResponse(status=200, message="ok", data=quote)
+        return schemas.StockQuoteAtDateResponse(status=404, message="Symbol or quote not found")
+    return schemas.StockQuoteAtDateResponse(status=200, message="ok", data=quote)
 
 
 @router.get("/{symbol}/info_debug", response_model=schemas.BaseResponse, response_model_exclude_none=True)

@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 from typing import Optional, Any
 from ..models import finhub as models
+from ..models.finhub import HistoryPoint
 
 
 class BaseResponse(BaseModel):
@@ -21,6 +22,10 @@ class SymbolOverviewResponse(BaseResponse):
 
 class SymbolInfoResponse(BaseResponse):
     data: Optional[models.SymbolInfo] = None
+
+
+class StockQuoteAtDateResponse(BaseResponse):
+    data: Optional[HistoryPoint] = None
 
 
 class UpcomingEarningsResponse(BaseResponse):

@@ -1,9 +1,11 @@
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 from pydantic import BaseModel
 from typing import Optional, Any
 import yfinance as yf
+
+from ..utils import finhub as finhub_utils
 
 
 class SymbolBase(BaseModel):
@@ -14,6 +16,7 @@ class SymbolBase(BaseModel):
 
 class HistoryPoint(BaseModel):
     timestamp: int
+    timestamp_str: str
     open: Optional[float] = None
     high: Optional[float] = None
     low: Optional[float] = None
@@ -76,11 +79,13 @@ class SymbolDividend(BaseModel):
     dividend_rate: Optional[float] = None
     dividend_yield: Optional[float] = None
     ex_dividend_date: Optional[int] = None
+    ex_dividend_date_str: Optional[str] = None
     five_year_avg_dividend_yield: Optional[float] = None
     trailing_annual_dividend_rate: Optional[float] = None
     trailing_annual_dividend_yield: Optional[float] = None
     last_dividend_value: Optional[float] = None
     last_dividend_date: Optional[int] = None
+    last_dividend_date_str: Optional[str] = None
 
     def __init__(self, ticker: yf.Ticker):
         super().__init__(
@@ -93,6 +98,20 @@ class SymbolDividend(BaseModel):
             last_dividend_value=ticker.info.get("lastDividendValue"),
             last_dividend_date=ticker.info.get("lastDividendDate"),
         )
+        symbol = ticker.info.get("symbol")
+        tz = finhub_utils.tz_from_yf_ticker(symbol)
+        if self.ex_dividend_date:
+            self.ex_dividend_date_str = (
+                datetime.fromtimestamp(self.ex_dividend_date, tz=timezone.utc)
+                .replace(tzinfo=tz)
+                .isoformat(sep=" ", timespec="seconds")
+            )
+        if self.last_dividend_date:
+            self.last_dividend_date_str = (
+                datetime.fromtimestamp(self.last_dividend_date, tz=timezone.utc)
+                .replace(tzinfo=tz)
+                .isoformat(sep=" ", timespec="seconds")
+            )
 
 
 class StockQuote(BaseModel):
@@ -203,6 +222,8 @@ class StockHistory(BaseModel):
         self.history_90d = [
             HistoryPoint(
                 timestamp=int(history365d.index[-NUM_POINTS + i].timestamp()),
+                # history365d.index[-NUM_POINTS + i] is already in correct timezone
+                timestamp_str=history365d.index[-NUM_POINTS + i].isoformat(sep=" ", timespec="seconds"),
                 open=history365d.iloc[-NUM_POINTS + i]["Open"],
                 high=history365d.iloc[-NUM_POINTS + i]["High"],
                 low=history365d.iloc[-NUM_POINTS + i]["Low"],
@@ -279,6 +300,7 @@ class UpcomingDividendEvent(EventBase):
 def parse_upcoming_dividend_events_from_json(
     json_str: str, default_vals: dict[str, Any] = None
 ) -> list[UpcomingDividendEvent]:
+    default_vals = default_vals or {}
     json_str = normalize_json_str(json_str)
     events = json.loads(json_str)
     result = []
