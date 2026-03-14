@@ -3,7 +3,7 @@ import traceback
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from .routers import stocks, ai
+from .routers import ai, stocks, toz
 
 VERSION = "0.4.0"
 APP_NAME = "FinHub API"
@@ -52,8 +52,9 @@ async def catch_exceptions_middleware(request: Request, call_next):
 
 
 # Register routers
-app.include_router(stocks.router)
 app.include_router(ai.router)
+app.include_router(stocks.router)
+app.include_router(toz.router)
 
 
 @app.get("/", tags=["root"])

@@ -17,6 +17,7 @@ class SymbolBase(BaseModel):
 class HistoryPoint(BaseModel):
     timestamp: int
     timestamp_str: str
+    currency: Optional[str] = None
     open: Optional[float] = None
     high: Optional[float] = None
     low: Optional[float] = None
@@ -24,6 +25,19 @@ class HistoryPoint(BaseModel):
     volume: Optional[int] = None
     dividends: Optional[float] = None
     rsi14: Optional[float] = None
+
+    def to_currency(self, currency: str, x_rate: float) -> "HistoryPoint":
+        return self.model_copy(
+            update={
+                "currency": currency,
+                "open": self.open * x_rate if self.open else None,
+                "high": self.high * x_rate if self.high else None,
+                "low": self.low * x_rate if self.low else None,
+                "close": self.close * x_rate if self.close else None,
+                "dividends": self.dividends * x_rate if self.dividends else None,
+                "rsi14": self.rsi14 * x_rate if self.rsi14 else None,
+            }
+        )
 
 
 class SymbolOverview(BaseModel):
@@ -213,6 +227,7 @@ class StockHistory(BaseModel):
 
     def __init__(self, ticker: yf.Ticker):
         super().__init__()
+        currency = ticker.info.get("currency")
         history365d = ticker.history(period="365d", interval="1d", auto_adjust=False)
         history30d = history365d.iloc[-30:]
 
@@ -242,21 +257,22 @@ class StockHistory(BaseModel):
         self.rsi14 = rsi.iloc[-1]
 
         # store history for 90 days
-        NUM_POINTS = 90
+        num_points = 90
         self.history_90d = [
             HistoryPoint(
-                timestamp=int(history365d.index[-NUM_POINTS + i].timestamp()),
+                timestamp=int(history365d.index[-num_points + i].timestamp()),
                 # history365d.index[-NUM_POINTS + i] is already in correct timezone
-                timestamp_str=history365d.index[-NUM_POINTS + i].isoformat(sep=" ", timespec="seconds"),
-                open=history365d.iloc[-NUM_POINTS + i]["Open"],
-                high=history365d.iloc[-NUM_POINTS + i]["High"],
-                low=history365d.iloc[-NUM_POINTS + i]["Low"],
-                close=history365d.iloc[-NUM_POINTS + i]["Close"],
-                volume=int(history365d.iloc[-NUM_POINTS + i]["Volume"]),
-                dividends=history365d.iloc[-NUM_POINTS + i]["Dividends"],
-                rsi14=rsi.iloc[-NUM_POINTS + i],
+                timestamp_str=history365d.index[-num_points + i].isoformat(sep=" ", timespec="seconds"),
+                currency=currency,
+                open=history365d.iloc[-num_points + i]["Open"],
+                high=history365d.iloc[-num_points + i]["High"],
+                low=history365d.iloc[-num_points + i]["Low"],
+                close=history365d.iloc[-num_points + i]["Close"],
+                volume=int(history365d.iloc[-num_points + i]["Volume"]),
+                dividends=history365d.iloc[-num_points + i]["Dividends"],
+                rsi14=rsi.iloc[-num_points + i],
             )
-            for i in range(0, NUM_POINTS)
+            for i in range(0, num_points)
         ]
 
 

@@ -20,6 +20,10 @@ class StockQuoteResponse(BaseResponse):
     data: Optional[models.StockQuote] = None
 
 
+class StockHistoryResponse(BaseResponse):
+    data: Optional[list[HistoryPoint]] = None
+
+
 class SymbolOverviewResponse(BaseResponse):
     data: Optional[models.SymbolOverview] = None
 
