@@ -1,5 +1,11 @@
 # FinHub release notes
 
+## 2026-03-14 - v0.5.0
+
+### Added/Refactoring/Deprecation
+
+- (Feat) APIs to get Gold/Silver price.
+
 ## 2026-03-13 - v0.4.0
 
 ### Added/Refactoring/Deprecation
