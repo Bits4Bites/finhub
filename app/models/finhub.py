@@ -115,6 +115,7 @@ class SymbolDividend(BaseModel):
 
 
 class StockQuote(BaseModel):
+    currency: Optional[str] = None
     market_price: Optional[float] = None
     market_price_change: Optional[float] = None
     market_price_change_percent: Optional[float] = None
@@ -142,6 +143,7 @@ class StockQuote(BaseModel):
 
     def __init__(self, ticker: yf.Ticker):
         super().__init__(
+            currency=ticker.info.get("currency"),
             market_price=ticker.info.get("regularMarketPrice"),
             market_price_change=ticker.info.get("regularMarketChange"),
             market_price_change_percent=ticker.info.get("regularMarketChangePercent"),
@@ -170,6 +172,28 @@ class StockQuote(BaseModel):
             target_low_price=ticker.info.get("targetLowPrice"),
             target_mean_price=ticker.info.get("targetMeanPrice"),
             target_median_price=ticker.info.get("targetMedianPrice"),
+        )
+
+    def to_currency(self, currency: str, x_rate: float) -> "StockQuote":
+        return self.model_copy(
+            update={
+                "currency": currency,
+                "market_price": self.market_price * x_rate if self.market_price else None,
+                "market_price_change": self.market_price_change * x_rate if self.market_price_change else None,
+                "market_open": self.market_open * x_rate if self.market_open else None,
+                "market_day_high": self.market_day_high * x_rate if self.market_day_high else None,
+                "market_day_low": self.market_day_low * x_rate if self.market_day_low else None,
+                "fifty_two_week_high": self.fifty_two_week_high * x_rate if self.fifty_two_week_high else None,
+                "fifty_two_week_low": self.fifty_two_week_low * x_rate if self.fifty_two_week_low else None,
+                "bid": self.bid * x_rate if self.bid else None,
+                "ask": self.ask * x_rate if self.ask else None,
+                "trailing_eps": self.trailing_eps * x_rate if self.trailing_eps else None,
+                "forward_eps": self.forward_eps * x_rate if self.forward_eps else None,
+                "target_high_price": self.target_high_price * x_rate if self.target_high_price else None,
+                "target_low_price": self.target_low_price * x_rate if self.target_low_price else None,
+                "target_mean_price": self.target_mean_price * x_rate if self.target_mean_price else None,
+                "target_median_price": self.target_median_price * x_rate if self.target_median_price else None,
+            }
         )
 
 
