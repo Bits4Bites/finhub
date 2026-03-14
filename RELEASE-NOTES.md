@@ -1,5 +1,11 @@
 # FinHub release notes
 
+## 2026-03-14 - v0.5.1
+
+### Fixed/Improvements
+
+- (Fix) Fix stock symbol to EXCHANGE:CODE format.
+
 ## 2026-03-14 - v0.5.0
 
 ### Added/Refactoring/Deprecation

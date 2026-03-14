@@ -226,6 +226,7 @@ async def get_upcoming_dividends_events(
     raw_data_json = raw_data.to_json(orient="records")
     events = models.parse_upcoming_dividend_events_from_json(raw_data_json, default_vals)
     for event in events:
+        event.symbol = f"{event.exchange}:{event.symbol}"
         event.date = finhub_utils.yyyy_mm_dd_to_iso(event.date, tz=tz)
         event.timestamp = int(datetime.fromisoformat(event.date).timestamp())
         if event.payment_date:
@@ -347,6 +348,7 @@ async def get_upcoming_earnings_events(
     raw_data_json = raw_data.to_json(orient="records")
     events = models.parse_upcoming_earnings_events_from_json(raw_data_json, default_vals)
     for event in events:
+        event.symbol = f"{event.exchange}:{event.symbol}"
         event.date = finhub_utils.yyyy_mm_dd_to_iso(event.date, tz)
         event.timestamp = int(datetime.fromisoformat(event.date).timestamp())
     return events
