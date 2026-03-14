@@ -13,6 +13,47 @@ A developer-first financial API hub for stock market data, built for frontend ap
 
 View [OpenAPI spec](openapi.json).
 
+### `/ai/event/upcoming_dividends`
+
+Check for incoming dividend/distribution events for a market.
+
+Query parameters:
+- `country` (required): Country code to filter events by (e.g., `AU`, `US`, `VN`, etc.).
+- `index` (optional): Optional stock index to filter events by (e.g., `NASDAQ 100`, `S&P/ASX 200`, etc.).
+
+Examples:
+
+```
+GET /ai/event/upcoming_dividends?country=AU'
+```
+
+### `/ai/event/upcoming_earnings`
+
+Check for incoming earnings events for a market.
+
+Query parameters:
+- `country` (required): Country code to filter events by (e.g., `AU`, `US`, `VN`, etc.).
+- `index` (optional): Optional stock index to filter events by (e.g., `NASDAQ 100`, `S&P/ASX 200`, etc.).
+
+Examples:
+
+```
+GET /ai/event/upcoming_earnings?country=AU'
+```
+
+### `/ai/event/new_listings`
+
+Check for new listing events for a market.
+
+Query parameters:
+- `country` (required): Country code to filter events by (e.g., `AU`, `US`, `VN`, etc.).
+
+Examples:
+
+```
+GET /ai/event/new_listings?country=AU'
+```
+
 ### `/stocks/quotes`
 
 Get stock quotes for a list of ticker symbols.
@@ -20,64 +61,106 @@ Get stock quotes for a list of ticker symbols.
 Query parameters:
 - `symbols` (required): A comma-separated list of ticker symbols to fetch quotes for. Each ticker symbol must follow Yahoo Finance's format (e.g., `AAPL` for Apple Inc., `CBA.AX` for Commonwealth Bank of Australia).
 
-Examples:
+Example:
 
 ```
 GET /stocks/quotes?symbols=AAPL,CBA.AX
 ```
 
-### `/<symbol>/info`
-
-Get detailed information about a specific ticker symbol.
-
-Path parameters:
-- `symbol` (required): The ticker symbol to fetch information for. Must follow Yahoo Finance's format (e.g., `AAPL` for Apple Inc., `CBA.AX` for Commonwealth Bank of Australia).
-
-Examples:
-
-```
-GET /stocks/AAPL/info
-```
-
-### `/<symbol>/overview`
+### `/stocks/<symbol>/overview`
 
 Get overview information about a specific ticker symbol.
 
 Path parameters:
 - `symbol` (required): The ticker symbol to fetch information for. Must follow Yahoo Finance's format (e.g., `AAPL` for Apple Inc., `CBA.AX` for Commonwealth Bank of Australia).
 
-Examples:
+Example:
 
 ```
 GET /stocks/AAPL/overview
 ```
 
-### `/ai/event/earnings`
+### `/stocks/<symbol>/info`
 
-Check for incoming earnings events for a market, using AI assistance.
+Get detailed information about a specific ticker symbol.
 
-Query parameters:
-- `country` (required): Country code to filter events by (e.g., 'AU', 'US', 'VN', etc.).
-- `index` (optional): Optional stock index to filter events by (e.g., 'NASDAQ 100', 'S&P/ASX 200', etc.).
+Path parameters:
+- `symbol` (required): The ticker symbol to fetch information for. Must follow Yahoo Finance's format (e.g., `AAPL` for Apple Inc., `CBA.AX` for Commonwealth Bank of Australia).
+
+Example:
+
+```
+GET /stocks/AAPL/info
+```
+
+### `/stocks/<symbol>/quote_at/{date}`
+
+Get stock quote information for a given ticker symbol at a specific date.
+
+Path parameters:
+- `symbol` (required): The ticker symbol to fetch information for. Must follow Yahoo Finance's format (e.g., `AAPL` for Apple Inc., `CBA.AX` for Commonwealth Bank of Australia).
+- `date` (required): The date to fetch the stock quote for, in format `YYYY-MM-DD`. For example, `2023-01-01`.
 
 Examples:
 
 ```
-GET /ai/event/earnings?country=AU'
+GET /stocks/AAPL/quote_at/2024-01-01
 ```
 
-### `/ai/event/dividends`
+> If the date falls on a non-trading day, the API may return quote for the most recent trading day before the given date.
 
-Check for incoming dividend/distribution events for a market, using AI assistance.
+### `/toz/gold/quote`
+
+Check the current price of gold.
 
 Query parameters:
-- `country` (required): Country code to filter events by (e.g., 'AU', 'US', 'VN', etc.).
-- `index` (optional): Optional stock index to filter events by (e.g., 'NASDAQ 100', 'S&P/ASX 200', etc.).
+- `currency` (optional): The currency to return the gold price in. Defaults to `USD`. For example, `AUD`, `USD`, `EUR`, etc.
 
-Examples:
+Example:
 
 ```
-GET /ai/event/dividends?country=AU'
+GET /toz/gold/quote?currency=AUD
+```
+
+### `/toz/gold/history`
+
+Get historical gold price data.
+
+Query parameters:
+- `currency` (optional): The currency to return the gold price in. Defaults to `USD`. For example, `AUD`, `USD`, `EUR`, etc.
+- `days` (optional): The number of past days to return historical data for. Defaults to `30`. For example, `7`, `30`, `90`, etc.
+
+Example:
+
+```
+GET /toz/gold/history?currency=AUD&days=7
+```
+
+### `/toz/silver/quote`
+
+Check the current price of silver.
+
+Query parameters:
+- `currency` (optional): The currency to return the silver price in. Defaults to `USD`. For example, `AUD`, `USD`, `EUR`, etc.
+
+Example:
+
+```
+GET /toz/silver/quote?currency=AUD
+```
+
+### `/toz/silver/history`
+
+Get historical silver price data.
+
+Query parameters:
+- `currency` (optional): The currency to return the silver price in. Defaults to `USD`. For example, `AUD`, `USD`, `EUR`, etc.
+- `days` (optional): The number of past days to return historical data for. Defaults to `30`. For example, `7`, `30`, `90`, etc.
+
+Example:
+
+```
+GET /toz/gold/history?currency=AUD&days=7
 ```
 
 ## 🤝 Contributing
