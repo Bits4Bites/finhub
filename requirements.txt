@@ -1,5 +1,5 @@
 fastapi==0.135.1
-uvicorn[standard]==0.41.0
+uvicorn[standard]==0.42.0
 pydantic==2.12.5
 pydantic-settings==2.13.1
 pytest
@@ -8,11 +8,12 @@ flake8-toml-config
 black
 
 yfinance==1.2.0
-google-genai==1.66.0
-openai==2.26.0
+google-genai==1.67.0
+openai==2.28.0
 requests==2.32.5
 beautifulsoup4==4.14.3
 pandas==3.0.1
+numpy==2.4.3
 tabulate==0.10.0
 cloudscraper==1.2.71
 playwright==1.58.0
