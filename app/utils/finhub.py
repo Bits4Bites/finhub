@@ -266,7 +266,8 @@ def classify_market_cap(
     if ticker is not None:
         country = country_to_iso2(ticker.info.get("country"))
         exchange = normalize_exchange_code(ticker.info.get("fullExchangeName"))
-        exchange_symbol = f"{exchange}:{ticker.info.get("symbol").upper().split(".")[0]}"
+        symbol = ticker.info.get("symbol").upper().split(".")[0]
+        exchange_symbol = f"{exchange}:{symbol}"
         market_cap = int(ticker.info.get("marketCap")) if ticker.info.get("marketCap") is not None else 0
 
     if country == "AU" or country == "US":
