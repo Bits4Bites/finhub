@@ -44,13 +44,15 @@ def get_symbol_info(symbol: str) -> SymbolInfo | None:
 
     Args:
         symbol (str): The stock symbol to fetch information for.
+
     Returns:
         SymbolInfo | None: A SymbolInfo object containing the information about the symbol, or None.
     """
-    ticker = yf.Ticker(symbol)
+    yf_symbol = finhub_utils.to_yf_ticker(symbol)
+    ticker = yf.Ticker(yf_symbol)
     quote_type = ticker.info.get("quoteType")
     if quote_type in allowed_quote_types:
-        return SymbolInfo(symbol=symbol, ticker=ticker)
+        return SymbolInfo(ticker)
     return None
 
 
@@ -60,13 +62,15 @@ def get_symbol_overview(symbol: str) -> SymbolOverview | None:
 
     Args:
         symbol (str): The stock symbol to fetch information for.
+
     Returns:
         SymbolOverview | None: A SymbolOverview object containing the overview information about the symbol, or None.
     """
-    ticker = yf.Ticker(symbol)
+    yf_symbol = finhub_utils.to_yf_ticker(symbol)
+    ticker = yf.Ticker(yf_symbol)
     quote_type = ticker.info.get("quoteType")
     if quote_type in allowed_quote_types:
-        return SymbolOverview(ticker=ticker)
+        return SymbolOverview(ticker)
     return None
 
 
@@ -76,17 +80,21 @@ def get_stock_quotes(symbols: list[str]) -> dict[str, StockQuote]:
 
     Args:
         symbols (list[str]): A list of stock symbols to fetch quotes for.
+
     Returns:
         dict[str, StockQuote]: A dictionary mapping each symbol to its corresponding StockQuote object.
     """
-    tickers = yf.Tickers((" ".join(symbols)).upper())
+    yf_symbols = [finhub_utils.to_yf_ticker(s) for s in symbols]
+    tickers = yf.Tickers(" ".join(yf_symbols))
     quotes = {}
-    for symbol in symbols:
-        symbol = symbol.upper().strip()
-        ticker = tickers.tickers[symbol]
-        quote_type = ticker.info.get("quoteType")
-        if quote_type in allowed_quote_types:
-            quotes[symbol] = StockQuote(ticker)
+    for i in range(0, len(symbols)):
+        yf_symbol = yf_symbols[i]
+        if yf_symbol in tickers.tickers:
+            ticker = tickers.tickers[yf_symbol]
+            quote_type = ticker.info.get("quoteType") if ticker.info.get("quoteType") is not None else "NONE"
+            if quote_type in allowed_quote_types:
+                symbol = symbols[i]
+                quotes[symbol] = StockQuote(ticker)
     return quotes
 
 
@@ -129,7 +137,7 @@ def get_stock_quote_at_date(symbol: str, date_str: str) -> HistoryPoint | None:
 # ----------------------------------------------------------------------#
 
 
-def calc_end_date(tz: ZoneInfo):
+def calc_end_date_to_fetch_events(tz: ZoneInfo):
     today = datetime.now(tz).date()
     end_date = today + timedelta(days=7)
     return end_date
@@ -149,7 +157,7 @@ async def get_upcoming_dividends_events(
         list[UpcomingDividendEvent]: A list of upcoming dividend/distribution events
     """
     country = country.upper()
-    end_date = calc_end_date(tz)
+    end_date = calc_end_date_to_fetch_events(tz)
     raw_data = (
         await crawler_service.scrape_dividends_asx(end_date)
         if country == "AU" or country == "AUS" or country == "AUSTRALIA"
@@ -310,7 +318,7 @@ async def get_upcoming_earnings_events(
         list[UpcomingEarningsEvent]: A list of upcoming earnings events
     """
     country = country.upper()
-    end_date = calc_end_date(tz)
+    end_date = calc_end_date_to_fetch_events(tz)
     raw_data = (
         await crawler_service.scrape_earnings_asx(end_date)
         if country == "AU" or country == "AUS" or country == "AUSTRALIA"
@@ -393,3 +401,107 @@ async def get_us_upcoming_earnings_events() -> list[UpcomingEarningsEvent]:
     for event in events:
         event.link = f"https://www.tipranks.com/stocks/{event.symbol.lower().split(':')[-1]}/earnings"
     return events
+
+
+async def analyse_dividend_event(
+    symbol: str, ex_div_date: str, div_amount: float, ticker: yf.Ticker = None
+) -> models.DividendEventAnalysis | None:
+    """
+    Analyzes a dividend event to estimate price range and recovery probability.
+
+    Args:
+        symbol (str): Stock ticker symbol (e.g., 'AAPL', 'BHP.AX', 'HOSE:BID' etc.).
+        ex_div_date (str): Ex-dividend date in ISO format (YYYY-MM-DD).
+        div_amount (float): Dividend amount per share.
+        ticker (yf.Ticker, optional): Pre-created yfinance Ticker object for the stock for reuse/caching purpose. If not provided, it will be created within the function.
+    Returns:
+        models.DividendEventAnalysis: An object containing the analysis of the dividend event
+    """
+    yf_ticker = finhub_utils.to_yf_ticker(symbol)
+    country = finhub_utils.country_code_from_yf_ticker(yf_ticker)
+    tz = finhub_utils.tz_from_yf_ticker(yf_ticker)
+
+    ticker = yf.Ticker(yf_ticker) if ticker is None else ticker
+    quote_type = ticker.info.get("quoteType")
+    if quote_type == "NONE":
+        return None  # no data available
+    if quote_type not in allowed_quote_types:
+        raise ValueError(f"Quote type '{quote_type}' for ticker '{ticker}' is not supported for dividend analysis.")
+
+    current_price = ticker.info.get("regularMarketPrice")
+    result = models.DividendEventAnalysis(
+        overview=models.SymbolOverview(ticker),
+        price=current_price,
+        div_amount=div_amount,
+        div_yield=div_amount / current_price,
+        ex_div_date=finhub_utils.yyyy_mm_dd_to_iso(ex_div_date, tz=tz),
+    )
+    result.ex_div_date_timestamp = int(datetime.fromisoformat(result.ex_div_date).timestamp())
+
+    history = ticker.history(period="5y", interval="1d", auto_adjust=False)
+    history5y = history[:-1]
+    if len(history5y) < 90:
+        return None  # not enough data
+    history5y = history5y.tz_convert(tz)
+
+    past_dividends_analysis = finhub_utils.analyze_past_dividends(history5y, 28)
+    if past_dividends_analysis.empty:
+        return None  # not enough historical data
+    result.num_samples = len(past_dividends_analysis)
+
+    # estimate price drop
+    avg_drop_ratio = past_dividends_analysis["DropRatio"].mean()
+    std_drop_ratio = past_dividends_analysis["DropRatio"].std()
+    min_drop = div_amount * (avg_drop_ratio - std_drop_ratio)
+    max_drop = div_amount * (avg_drop_ratio + std_drop_ratio)
+    result.drop_price_min = float(current_price - max_drop)
+    result.drop_price_max = float(current_price - min_drop)
+
+    # estimate recovery days
+    median_recovery_days = past_dividends_analysis["RecoveryDays"].median()
+    std_recovery_days = past_dividends_analysis["RecoveryDays"].std()
+    result.recovery_days_min = int(median_recovery_days - std_recovery_days)
+    result.recovery_days_max = int(median_recovery_days + std_recovery_days)
+
+    # estimate recovery chance
+    total_rows = len(past_dividends_analysis)
+    num_recovery_max = (past_dividends_analysis["RecoveryDays"].notna()).sum()
+    result.recovery_probability = float(num_recovery_max / total_rows)
+
+    # estimate recovery price
+    recovery_data = past_dividends_analysis[past_dividends_analysis["RecoveryDays"].notna()]
+    if not recovery_data.empty:
+        mean_overshoot = (recovery_data["PostExDivPeak"] - recovery_data["PreExDivPrice"]).mean()
+        result.recovery_price_min = current_price
+        result.recovery_price_max = float(current_price + mean_overshoot)
+
+    # additional technical data
+    result.beta = ticker.info.get("beta")
+    history7d = history5y[-7:]
+    history7d["DVT"] = (
+        (history7d["Open"] + history7d["Close"] + history7d["High"] + history7d["Low"]) / 4 * history7d["Volume"]
+    )
+    result.avg_dvt_7d = int(history7d["DVT"].mean())
+    result.std_dvt_7d = int(history7d["DVT"].std())
+    history30d = history5y[-30:]
+    result.rsi14 = int(finhub_utils.calc_rsi(history30d, 14).iloc[-1])
+    result.avg_volume_30d = int(history30d["Volume"].mean())
+    result.std_volume_30d = int(history30d["Volume"].std())
+    result.bid_ask_spread = finhub_utils.calc_bid_ask_spread_roll(history[-30:])
+
+    result.trend_60d = finhub_utils.calc_trend_ema(history5y[-60:])
+    market_main_indices = finhub_utils.yf_tickers_for_market_indices(country)
+    if market_main_indices and len(market_main_indices) > 0:
+        market_ticker = yf.Ticker(market_main_indices[0])
+        market_history60d = market_ticker.history(period="61d", interval="1d", auto_adjust=False)[:-1]
+        market_history60d = market_history60d.tz_convert(tz)
+        result.market_trend_60d = finhub_utils.calc_trend_ema(market_history60d)
+    sector, industry = result.overview.sector, result.overview.industry
+    market_industry_indices = finhub_utils.yf_tickers_for_market_indices(country, sector, industry)
+    if market_industry_indices and len(market_industry_indices) > 0:
+        industry_ticker = yf.Ticker(market_industry_indices[0])
+        industry_history60d = industry_ticker.history(period="61d", interval="1d", auto_adjust=False)[:-1]
+        industry_history60d = industry_history60d.tz_convert(tz)
+        result.industry_trend_60d = finhub_utils.calc_trend_ema(industry_history60d)
+
+    return result

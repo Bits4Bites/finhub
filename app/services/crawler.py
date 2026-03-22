@@ -11,12 +11,13 @@ import pandas as pd
 from playwright.async_api import async_playwright, Page, ViewportSize
 
 
-def extract_data_table_from_html(html_content: str, table_attr_filter: dict[str, str] = None) -> pd.DataFrame:
+def extract_data_table_from_html(html_content: str, raw_cell_content=False, table_attr_filter=None) -> pd.DataFrame:
     """
     Extracts data from the given HTML content, assuming main content is in a table, and returns it as a Pandas DataFrame.
 
     Args:
         html_content (str): The HTML content to parse.
+        raw_cell_content (bool, optional): If False, cell content will be cleaned-up; otherwise cell's raw content will be returned.
         table_attr_filter (dict[str, str], optional): A dictionary of attribute name and values to filter the table.
             For example, {"id": "event-content"} to find a table with id="event-content".
     """
@@ -31,11 +32,16 @@ def extract_data_table_from_html(html_content: str, table_attr_filter: dict[str,
     headers_list = []
     thead = table.find("thead")
     if thead:
-        for th in thead.find_all("th"):
-            headers_list.append(th.text.strip())
+        # for th in thead.find_all("th"):
+        #     headers_list.append(th.text.strip())
+        headers_list = [th.text.strip() for th in thead.find_all("th")]
+        if len(headers_list) == 0:
+            headers_list = [td.text.strip() for td in thead.find_all("td")]
     else:
         # Fallback in case there is no <thead> tag
         headers_list = [th.text.strip() for th in table.find("tr").find_all("th")]
+        if len(headers_list) == 0:
+            headers_list = [td.text.strip() for td in table.find("tr").find_all("td")]
 
     # 2. Extract the table rows
     data = []
@@ -45,7 +51,10 @@ def extract_data_table_from_html(html_content: str, table_attr_filter: dict[str,
     for row in rows:
         cols = row.find_all("td")
         # Clean up the text (removes excess newlines/spaces common in stock tickers)
-        cols_text = [" ".join(ele.text.split()) for ele in cols]
+        if raw_cell_content:
+            cols_text = [("".join(str(child) for child in ele.contents)).strip() for ele in cols]
+        else:
+            cols_text = [" ".join(ele.text.split()) for ele in cols]
 
         if cols_text:  # Ensure the row is not empty
             data.append(cols_text)
@@ -129,12 +138,13 @@ async def fetch_webpage_content_playwright(
     return None
 
 
-async def scrape_data_table(url: str, table_attr_filter: dict[str, str] = None) -> pd.DataFrame:
+async def scrape_data_table(url: str, raw_cell_content=False, table_attr_filter=None) -> pd.DataFrame:
     """
     Scrapes data from the given URL, assuming main content is in a table, and returns it as a Pandas DataFrame.
 
     Args:
         url (str): The URL of the webpage containing the data table to scrape.
+        raw_cell_content (bool, optional): If False, cell content will be cleaned-up; otherwise cell's raw content will be returned.
         table_attr_filter (dict[str, str], optional): A dictionary of attribute name and values to filter the table.
             For example, {"id": "event-content"} to find a table with id="event-content".
     """
@@ -147,7 +157,9 @@ async def scrape_data_table(url: str, table_attr_filter: dict[str, str] = None) 
 
     # parse the HTML content and extract the data table
     logging.info("Extracting data table from the fetched content...")
-    data_table_df = extract_data_table_from_html(html_content, table_attr_filter)
+    data_table_df = extract_data_table_from_html(
+        html_content, raw_cell_content=raw_cell_content, table_attr_filter=table_attr_filter
+    )
 
     if data_table_df.empty:
         logging.warning("No data table found in the content from '%s'.", url)
@@ -156,27 +168,30 @@ async def scrape_data_table(url: str, table_attr_filter: dict[str, str] = None) 
 
 
 async def scrape_data_table_playwright(
-    url: str, after_load_func_async=None, table_attr_filter: dict[str, str] = None
+    url: str, raw_cell_content=False, after_load_func_async=None, table_attr_filter=None
 ) -> pd.DataFrame:
     """
     Scrapes data from the given URL using Playwright, assuming main content is in a table, and returns it as a Pandas DataFrame.
 
     Args:
         url (str): The URL of the webpage containing the data table to scrape.
+        raw_cell_content (bool, optional): If False, cell content will be cleaned-up; otherwise cell's raw content will be returned.
         after_load_func_async (callable, optional): A function to execute after the page has loaded, for additional interactions.
         table_attr_filter (dict[str, str], optional): A dictionary of attribute name and values to filter the table.
             For example, {"id": "event-content"} to find a table with id="event-content".
     """
     # fetch the webpage content
     logging.info("Fetching data from '%s'...", url)
-    html_content = await fetch_webpage_content_playwright(url, after_load_func_async)
+    html_content = await fetch_webpage_content_playwright(url, after_load_func_async=after_load_func_async)
     if not html_content:
         logging.error("Failed to fetch content from '%s'.", url)
         return pd.DataFrame()
 
     # parse the HTML content and extract the data table
     logging.info("Extracting data table from the fetched content...")
-    data_table_df = extract_data_table_from_html(html_content, table_attr_filter)
+    data_table_df = extract_data_table_from_html(
+        html_content, raw_cell_content=raw_cell_content, table_attr_filter=table_attr_filter
+    )
 
     if data_table_df.empty:
         logging.warning("No data table found in the content from '%s'.", url)

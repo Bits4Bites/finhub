@@ -1,14 +1,18 @@
 import csv
-from datetime import datetime, timedelta
+import json
+
+import yfinance as yf
+from datetime import datetime, timedelta, timezone
+
 from typing import Any
 from zoneinfo import ZoneInfo
 
 from bs4 import BeautifulSoup
 
 from . import ai_helper
-from ..models import finhub as models
+from ..models import finhub as models, types
 from ..config import settings
-from ..services import crawler as crawler_service
+from ..services import crawler as crawler_service, stock as stock_service
 from ..utils import finhub as finhub_utils
 
 EVENT_ASX_UPCOMING_DIVIDENDS = "ASX_UPCOMING_DIVIDEND_EVENTS"
@@ -17,244 +21,28 @@ EVENT_US_UPCOMING_DIVIDENDS = "US_UPCOMING_DIVIDEND_EVENTS"
 EVENT_US_UPCOMING_EARNINGS = "US_UPCOMING_EARNINGS_EVENTS"
 EVENT_VN_UPCOMING_DIVIDENDS = "VN_UPCOMING_DIVIDEND_EVENTS"
 EVENT_ASX_NEW_LISTINGS = "ASX_NEW_LISTING_EVENTS"
+ANALYZE_ASX_DIVIDEND = "ASX_DIVIDEND_ANALYSIS"
+ANALYZE_US_DIVIDEND = "US_DIVIDEND_ANALYSIS"
+ANALYZE_VN_DIVIDEND = "VN_DIVIDEND_ANALYSIS"
 
 prompts: dict[str, str] = {}
 
-prompt_customization = {
-    # EVENT_INCOMING_EARNINGS: {
-    #     "VN": {
-    #         "CUSTOM_KEYWORDS": """
-    #             Vietnamese search keywords to use:
-    #             - "Lịch công bố BCTC"
-    #             - "Lịch sự kiện chứng khoán"
-    #             - "Báo cáo tài chính" (BCTC)
-    #             - "Kết quả kinh doanh" (KQKD)
-    #             """,
-    #         "OFFICIAL_INDEX_PROVIDERS": "HOSE or HNX",
-    #         "REPORT_PERIOD_MAPPINGS": """
-    #             # REPORT_PERIOD CLASSIFICATION
-    #
-    #             Map as:
-    #             - Quarterly (Q1/Q2/Q3/Q4, quý)
-    #             - Half-year (6T, H1, bán niên)
-    #             - Full-year (annual, year-end)
-    #             - Interim (explicitly stated interim but not quarterly/half-year/full-year)
-    #             """,
-    #         "CUSTOM_SEARCH": (
-    #             "Additional Vietnamese financial news websites can be used for cross-referencing and validation, such as: "
-    #             "vietstock.vn, vietnamfinance.vn, vietnambiz.vn, vnfinance.vn, thoibaotaichinhvietnam.vn, "
-    #             "vietnambusinessinsider.vn, and cafef.vn."
-    #         ),
-    #         "SOURCES": "HOSE, HNX, Vietstock, CafeF, VNFinance, VietnamBusinessInsider, etc.",
-    #         "BROADER_SEARCH": """ "Lịch công bố báo cáo tài chính" or "Lịch sự kiện chứng khoán" """,
-    #     },
-    #     "AU": {
-    #         "OFFICIAL_INDEX_PROVIDERS": "ASX",
-    #         "SOURCES": "Market Index, CommSec, Bloomberg, Reuters, Yahoo Finance, etc.",
-    #         "BROADER_SEARCH": """ "Australian earnings calendars" or "ASX reporting season dates" """,
-    #     },
-    #     "*": {
-    #         "CUSTOM_KEYWORDS": "",
-    #         "OFFICIAL_INDEX_PROVIDERS": "",
-    #         "REPORT_PERIOD_MAPPINGS": "",
-    #         "CUSTOM_SEARCH": "",
-    #         "SOURCES": "Bloomberg, Reuters, MarketScreener, Yahoo Finance, etc.",
-    #         "BROADER_SEARCH": """ "Earnings calendar" or "Earnings season dates" """,
-    #     },
-    # },
-    # EVENT_INCOMING_DIVIDENDS: {
-    #     "VN": {
-    #         "CUSTOM_KEYWORDS": """
-    #             Vietnamese search keywords to use:
-    #             - "Lịch công bố chia cổ tức"
-    #             - "Lịch công bố trả cổ tức"
-    #             - "Trả cổ tức bằng tiền mặt"
-    #             - "Trả cổ tức bằng cổ phiếu"
-    #             - "Ngày giao dịch không hưởng quyền"
-    #             """,
-    #         "OFFICIAL_INDEX_PROVIDERS": "HOSE or HNX",
-    #         "CUSTOM_SEARCH": (
-    #             "Additional Vietnamese financial news websites can be used for cross-referencing and validation, such as: "
-    #             "vietstock.vn, vietnamfinance.vn, vietnambiz.vn, vnfinance.vn, thoibaotaichinhvietnam.vn, "
-    #             "vietnambusinessinsider.vn, and cafef.vn."
-    #         ),
-    #         "SOURCES": "HOSE, HNX, Vietstock, CafeF, VNFinance, VietnamBusinessInsider, etc.",
-    #         "BROADER_SEARCH": """ "Lịch công bố chia cổ tức" or "Lịch công bố trả cổ tức" """,
-    #     },
-    #     "AU": {
-    #         "OFFICIAL_INDEX_PROVIDERS": "ASX",
-    #         "SOURCES": "Market Index, CommSec, Bloomberg, Reuters, Yahoo Finance, etc.",
-    #         "BROADER_SEARCH": """ "Australian ex-dividend calendars" """,
-    #     },
-    #     "*": {
-    #         "CUSTOM_KEYWORDS": "",
-    #         "OFFICIAL_INDEX_PROVIDERS": "",
-    #         "CUSTOM_SEARCH": "",
-    #         "SOURCES": "Bloomberg, Reuters, MarketScreener, Yahoo Finance, etc.",
-    #         "BROADER_SEARCH": """ "Ex-dividend calendar" """,
-    #     },
-    # },
-}
 
-# ----------------------------------------------------------------------#
-
-
-# def build_prompt_incoming_events(event_type: str, country: str, index: str) -> str:
-#     country = country.upper() if country else "US"
-#     tz = (
-#         "America/New_York"
-#         if country == "US" or country == "USA" or country == "UNITED STATES" or country == "AMERICA"
-#         else (
-#             "Australia/Sydney"
-#             if country == "AU" or country == "AUS" or country == "AUSTRALIA"
-#             else "Asia/Ho_Chi_Minh" if country == "VN" or country == "VIETNAM" else "UTC"
-#         )
-#     )
-#     index = (
-#         index
-#         if index
-#         else (
-#             "Dow Jones 30 Industrial or NASDAQ 100 or NYSE US 100 or S&P 100"
-#             if country == "US" or country == "USA" or country == "UNITED STATES" or country == "AMERICA"
-#             else (
-#                 "S&P/ASX 200"
-#                 if country == "AU" or country == "AUS" or country == "AUSTRALIA"
-#                 else "VN100 (HOSE) or HNX30 (HNX)" if country == "VN" or country == "VIETNAM" else "N/A"
-#             )
-#         )
-#     )
-#     prompt_template = prompts[event_type] if event_type in prompts else ""
-#     if not prompt_template:
-#         raise EnvironmentError(f"Prompt template for {event_type} is missing or empty.")
-#     today = datetime.today()
-#     prompt = (
-#         prompt_template.replace("{COUNTRY}", country)
-#         .replace("{TIMEZONE}", tz)
-#         .replace("{INDEX}", index)
-#         .replace("{TODAY}", today.strftime("%Y-%m-%d"))
-#         .replace("{START_DATE}", today.strftime("%Y-%m-%d"))
-#         .replace("{END_DATE}", (today + timedelta(days=60)).strftime("%Y-%m-%d"))
-#     )
-#     if event_type in prompt_customization and country in prompt_customization[event_type]:
-#         for placeholder, custom_text in prompt_customization[event_type][country].items():
-#             lines = [line.strip() for line in custom_text.strip().splitlines() if line.strip()]
-#             custom_text = "\n".join(lines)
-#             prompt = prompt.replace(f"{{{placeholder}}}", custom_text)
-#
-#     if event_type in prompt_customization:
-#         for placeholder, custom_text in prompt_customization[event_type]["*"].items():
-#             prompt = prompt.replace(f"{{{placeholder}}}", custom_text)
-#
-#     return prompt
-
-
-# async def ai_get_incoming_events(event_type: str, prompt: str, country: str) -> models.LLMResponse:
-#     task_cfg = settings.llm_task_config[event_type] if event_type in settings.llm_task_config else None
-#     if task_cfg is None:
-#         raise EnvironmentError(f"LLM task configuration for {event_type} is missing.")
-#
-#     match task_cfg.vendor.upper():
-#         case "AZUREOPENAI" | "AZURE OPENAI" | "AZURE_OPENAI":
-#             start = time.perf_counter()
-#             client = azureOpenAIClients.get(task_cfg.tier.upper())
-#             if client is None:
-#                 raise EnvironmentError(f"Azure OpenAI client for tier '{task_cfg.tier}' is not configured.")
-#             model = task_cfg.model
-#             print(
-#                 f"[DEBUG] ai_get_incoming_events({event_type}) "
-#                 f"/ Country: {country} / Vendor: {task_cfg.vendor} / Tier: {task_cfg.tier} / Model: {model}"
-#             )
-#             print(prompt)
-#
-#             temperature = None if model.startswith("gpt-5") else 0.0
-#             response = await client.responses.create(
-#                 model=model,
-#                 temperature=temperature,
-#                 tools=[
-#                     WebSearchPreviewToolParam(
-#                         type="web_search_preview",
-#                         user_location=UserLocation(type="approximate", country=country),
-#                     ),
-#                 ],
-#                 input=prompt,
-#             )
-#             end = time.perf_counter()
-#             result = models.LLMResponse(
-#                 completion=response.output_text,
-#                 time_taken_ms=int((end - start) * 1000),
-#                 tokens_prompt=response.usage.input_tokens,
-#                 tokens_completion=response.usage.output_tokens,
-#                 tokens_thought=0,
-#                 is_error=response.output_text == "" or response.status != "completed",
-#             )
-#
-#             print(
-#                 f"[DEBUG] ai_get_incoming_events({event_type}) response - Time taken: {result.time_taken_ms} ms, "
-#                 f"Prompt tokens: {result.tokens_prompt}, Completion tokens: {result.tokens_completion}, "
-#                 f"Thought tokens: {result.tokens_thought}, Is error: {result.is_error}"
-#             )
-#             print(response.output_text)
-#
-#             return result
-#         case _:
-#             raise ValueError(f"Unsupported LLM vendor: {task_cfg.vendor}")
-
-
-# async def ai_get_incoming_earnings_events(country: str, index: str) -> list[models.UpcomingEarningsEvent]:
-#     """
-#     Check for incoming earnings events for a market, using AI assistance.
-#
-#     :param country: Country code to filter events by (e.g., 'AU', 'US', 'VN', etc.).
-#     :param index: Optional stock index to filter events by (e.g., 'NASDAQ 100', 'S&P/ASX 200', etc.).
-#     :type country: str
-#     :return: A list of incoming earnings events for the specified country.
-#     :rtype: list[models.IncomingEarningsEvent]
-#     """
-#     event_type = EVENT_INCOMING_EARNINGS
-#     prompt = build_prompt_incoming_events(event_type, country, index)
-#     llm_result = await ai_get_incoming_events(event_type, prompt, country)
-#     if llm_result.is_error:
-#         print(f"[ERROR] LLM failed to generate response for incoming earnings events: {llm_result.completion}")
-#         return []
-#
-#     # parse response.output_text as JSON array of IncomingEarningsEvent
-#     try:
-#         events = models.parse_incoming_earnings_events_from_json(llm_result.completion)
-#         return events
-#     except Exception as e:
-#         print(f"[ERROR] Failed to parse AI response: {e}")
-#         return []
-
-
-# async def ai_get_incoming_dividends_events(country: str, index: str) -> list[models.UpcomingDividendEvent]:
-#     """
-#     Check for incoming dividend/distribution events for a market, using AI assistance.
-#
-#     :param country: Country code to filter events by (e.g., 'AU', 'US', 'VN', etc.).
-#     :param index: Optional stock index to filter events by (e.g., 'NASDAQ 100', 'S&P/ASX 200', etc.).
-#     :type country: str
-#     :return: A list of incoming dividend/distribution events for the specified country.
-#     :rtype: list[models.IncomingDividendEvent]
-#     """
-#     event_type = EVENT_INCOMING_DIVIDENDS
-#     prompt = build_prompt_incoming_events(event_type, country, index)
-#     llm_result = await ai_get_incoming_events(event_type, prompt, country)
-#     if llm_result.is_error:
-#         print(
-#             f"[ERROR] LLM failed to generate response for incoming dividend/distribution events: {llm_result.completion}"
-#         )
-#         return []
-#
-#     # parse response.output_text as JSON array of IncomingDividendEvent
-#     try:
-#         events = models.parse_upcoming_dividend_events_from_json(llm_result.completion)
-#         return events
-#     except Exception as e:
-#         print(f"[ERROR] Failed to parse AI response: {e}")
-#         return []
-
-
-# ----------------------------------------------------------------------#
+async def ai_exec_prompt(
+    task_id: str, prompt: str, country: str = None, thinking_level: str = None
+) -> models.LLMResponse:
+    """
+    Executes a prompt using the appropriate LLM based on the task configuration.
+    """
+    task_cfg = settings.llm_task_config.get(task_id)
+    if not task_cfg:
+        raise ValueError(f"LLM task configuration for task_id '{task_id}' not found.")
+    prompt_cfg = ai_helper.PromptConfig(
+        use_web_search=task_cfg.model.startswith("gpt-5"),
+        country=country,
+        thinking_level=thinking_level,
+    )
+    return await ai_helper.ai_exec_prompt(task_cfg, prompt, prompt_cfg)
 
 
 async def ai_parse_upcoming_events(task_id: str, prompt: str, country: str) -> models.LLMResponse:
@@ -313,6 +101,9 @@ def build_prompt_upcoming_events(prompt_template: str, raw_input_data: str, inde
             .replace("{PROCESS}", "")
         )
     return prompt
+
+
+# ----------------------------------------------------------------------#
 
 
 async def ai_get_upcoming_dividends_events(
@@ -470,6 +261,9 @@ async def ai_get_vn_upcoming_dividends_events(index: str = "") -> list[models.Up
     return events
 
 
+# ----------------------------------------------------------------------#
+
+
 async def ai_get_upcoming_earnings_events(
     country: str, event_type: str, tz: ZoneInfo, index: str = "", default_vals: dict[str, Any] = None
 ) -> list[models.UpcomingEarningsEvent]:
@@ -575,6 +369,9 @@ async def ai_get_us_upcoming_earnings_events(index: str = "") -> list[models.Upc
     return events
 
 
+# ----------------------------------------------------------------------#
+
+
 async def ai_get_asx_new_listings() -> list[models.ListingEvent]:
     """
     Check for new listings for ASX, using AI assistance.
@@ -614,3 +411,310 @@ async def ai_get_asx_new_listings() -> list[models.ListingEvent]:
         event.date = finhub_utils.yyyy_mm_dd_to_iso(event.date, tz)
         event.timestamp = int(datetime.fromisoformat(event.date).timestamp())
     return events
+
+
+# ----------------------------------------------------------------------#
+
+dividend_capture_shortscore_rules = {
+    "ASX": {
+        types.LARGE_CAP: "<1.5%:0 | 1.5–3%:-0.12 | 3–6%: -0.24 | >6%: -0.36",
+        types.MID_CAP: "<2%:0 | 2–4%:-0.14 | 4–8%: -0.30 | >8%: -0.42",
+        types.SMALL_CAP: "<3%:0 | 3–6%:-0.18 | 6–10%: -0.36 | >10%: -0.48",
+        types.MICRO_CAP: "<4%:0 | 4-8%:-0.24 | 8–15%: -0.42 | >15%: -0.60",
+        types.NANO_CAP: "<5%:0 | 5-10%:-0.30 | 10-20%: -0.48 | >20%: -0.72",
+    },
+    "NASDAQ": {
+        types.LARGE_CAP: "<1.5%:0 | 1.5–3%:-0.08 | 3–6%: -0.16 | >6%: -0.24",
+        types.MID_CAP: "<2%:0 | 2–4%:-0.10 | 4–8%: -0.20 | >8%: -0.28",
+        types.SMALL_CAP: "<3%:0 | 3–6%:-0.12 | 6–10%: -0.24 | >10%: -0.32",
+        types.MICRO_CAP: "<4%:0 | 4-8%:-0.16 | 8–15%: -0.28 | >15%: -0.40",
+        types.NANO_CAP: "<5%:0 | 5-10%:-0.20 | 10-20%: -0.32 | >20%: -0.48",
+    },
+    "NYSE": {
+        types.LARGE_CAP: "<1.5%:0 | 1.5–3%:-0.10 | 3–6%: -0.20 | >6%: -0.30",
+        types.MID_CAP: "<2%:0 | 2–4%:-0.12 | 4–8%: -0.25 | >8%: -0.35",
+        types.SMALL_CAP: "<3%:0 | 3–6%:-0.15 | 6–10%: -0.30 | >10%: -0.40",
+        types.MICRO_CAP: "<4%:0 | 4-8%:-0.20 | 8–15%: -0.35 | >15%: -0.50",
+        types.NANO_CAP: "<5%:0 | 5-10%:-0.25 | 10-20%: -0.40 | >20%: -0.60",
+    },
+}
+
+dividend_capture_criteria = {
+    "ASX": {
+        types.LARGE_CAP: [  # >= 10B
+            "AdjRecovProb ≥65%",
+            "ExpectedPL ≥1.5%",
+            "Yield >2.0%",
+            "EstRecovDays(max) ≤5",
+            "Spread <0.003",
+            "RSI14 <70",
+            "Short Interest <5.0%",
+            "IndTrend60d >-2.0%",
+            "TrendVsInd60d >-1.0%",
+            "AvgDVT7d >20M",
+            "Liquidity >0.0006",
+        ],
+        types.MID_CAP: [  # 2B-10B
+            "AdjRecovProb ≥70%",
+            "ExpectedPL ≥2.0%",
+            "Yield >3.0%",
+            "EstRecovDays(max) ≤7",
+            "Spread <0.008",
+            "RSI14 <65",
+            "Short Interest <4.0%",
+            "IndTrend60d >-1.0%",
+            "TrendVsInd60d >-0.5%",
+            "AvgDVT7d >5M",
+            "Liquidity >0.00048",
+        ],
+        types.SMALL_CAP: [  # 300M-2B
+            "AdjRecovProb ≥75%",
+            "ExpectedPL ≥3.0%",
+            "Yield >4.5%",
+            "EstRecovDays(max) ≤10",
+            "Spread <0.015",
+            "RSI14 <60",
+            "Short Interest <2.5%",
+            "IndTrend60d >0.0%",
+            "TrendVsInd60d >0.0%",
+            "AvgDVT7d >1M",
+            "Liquidity >0.00036",
+        ],
+        types.MICRO_CAP: [  # 50M-300M
+            "AdjRecovProb ≥85%",
+            "ExpectedPL ≥5.0%",
+            "Yield >6.5%",
+            "EstRecovDays(max) ≤14",
+            "Spread <0.025",
+            "RSI14 <55",
+            "Short Interest <1.5%",
+            "IndTrend60d >1.0%",
+            "TrendVsInd60d >1.0%",
+            "AvgDVT7d >250K",
+            "Liquidity >0.00024",
+        ],
+        types.NANO_CAP: [  # <50M
+            "AdjRecovProb ≥90%",
+            "ExpectedPL ≥7.0%",
+            "Yield >8.5%",
+            "EstRecovDays(max) ≤21",
+            "Spread <0.030",
+            "RSI14 <50",
+            "Short Interest <1.0%",
+            "IndTrend60d >2.0%",
+            "TrendVsInd60d >2.0%",
+            "AvgDVT7d >50K",
+            "Liquidity >0.00012",
+        ],
+    },
+    "NASDAQ": {
+        types.LARGE_CAP: [  # >= 10B
+            "AdjRecovProb ≥65%",
+            "EstRecovDays(max) ≤3",
+            "ExpectedPL ≥0.5%",
+            "Yield >0.5%",
+            "Spread <0.0005",
+            "Beta <1.1",
+            "RSI14 <65",
+            "Short Interest <3.0%",
+            "IndTrend60d >-2.0%",
+            "TrendVsInd60d >-1.0%",
+            # "AvgDVT7d >100M",
+            "Liquidity >0.0004",
+        ],
+        types.MID_CAP: [  # 2B-10B
+            "AdjRecovProb ≥70%",
+            "EstRecovDays(max) ≤5",
+            "ExpectedPL ≥1.0%",
+            "Yield >1.0%",
+            "Spread <0.0015",
+            "Beta <1.0",
+            "RSI14 <60",
+            "Short Interest <2.0%",
+            "IndTrend60d >-1.0%",
+            "TrendVsInd60d >-0.5%",
+            # "AvgDVT7d >20M",
+            "Liquidity >0.00032",
+        ],
+        types.SMALL_CAP: [  # 300M-2B
+            "AdjRecovProb ≥80%",
+            "EstRecovDays(max) ≤8",
+            "ExpectedPL ≥1.5%",
+            "Yield >1.5%",
+            "Spread <0.004",
+            "Beta <0.9",
+            "RSI14 <55",
+            "Short Interest <1.0%",
+            "IndTrend60d >0.0%",
+            "TrendVsInd60d >0.0%",
+            # "AvgDVT7d >5M",
+            "Liquidity >0.00024",
+        ],
+    },
+    "NYSE": {
+        types.LARGE_CAP: [  # >= 10B
+            "AdjRecovProb ≥60%",
+            "EstRecovDays(max) ≤4",
+            "ExpectedPL ≥0.8%",
+            "Yield >1.0%",
+            "Spread <0.001",
+            "RSI14 <70",
+            "Short Interest <4.0%",
+            "IndTrend60d >-2.0%",
+            "TrendVsInd60 >-1.0%",
+            # "AvgDVT7d >50M",
+            "Liquidity >0.0005",
+        ],
+        types.MID_CAP: [  # 2B-10B
+            "AdjRecovProb ≥65%",
+            "EstRecovDays(max) ≤6",
+            "ExpectedPL ≥1.2%",
+            "Yield >1.5%",
+            "Spread <0.0025",
+            "RSI14 <65",
+            "Short Interest <3.0%",
+            "IndTrend60d >-1.0%",
+            "TrendVsInd60d >-0.5%",
+            # "AvgDVT7d >10M",
+            "Liquidity >0.0004",
+        ],
+        types.SMALL_CAP: [  # 300M-2B
+            "AdjRecovProb ≥75%",
+            "EstRecovDays ≤10",
+            "ExpectedPL ≥2.0%",
+            "Yield >2.5%",
+            "Spread <0.005",
+            "RSI14 <60",
+            "Short Interest <2.0%",
+            "IndTrend60d >0.0%",
+            "TrendVsInd60d >0.0%",
+            # "AvgDVT7d >2M",
+            "Liquidity >0.0003",
+        ],
+    },
+}
+
+
+async def ai_analyse_dividend_event(
+    symbol: str, ex_div_date: str, div_amount: float
+) -> models.DividendEventAnalysis | None:
+    """
+    Analyzes a dividend event using AI assistance.
+
+    Args:
+        symbol (str): Stock ticker symbol (e.g., 'AAPL', 'BHP.AX', 'HOSE:BID' etc.).
+        ex_div_date (str): Ex-dividend date in ISO format (YYYY-MM-DD).
+        div_amount (float): Dividend amount per share.
+    Returns:
+        models.DividendEventAnalysis: An object containing the analysis of the dividend event
+    """
+    yf_ticker = finhub_utils.to_yf_ticker(symbol)
+    ticker = yf.Ticker(yf_ticker)
+    result = await stock_service.analyse_dividend_event(symbol, ex_div_date, div_amount, ticker=ticker)
+    if not result:
+        return None
+
+    country = finhub_utils.country_code_from_yf_ticker(yf_ticker)
+    event_type = (
+        ANALYZE_ASX_DIVIDEND if country == "AU" else ANALYZE_VN_DIVIDEND if country == "VN" else ANALYZE_US_DIVIDEND
+    )
+    prompt_template = prompts[event_type] if event_type in prompts else ""
+    if not prompt_template:
+        result.llm_error = True
+        result.llm_error_msg = f"Prompt template for {event_type} is missing or empty."
+        return result
+
+    # CONTEXT
+    today_utc = datetime.now(timezone.utc).date()
+    prompt = (
+        prompt_template.replace("{TICKER}", finhub_utils.to_yf_ticker(result.overview.symbol))
+        .replace("{INDUSTRY}", f"{result.overview.industry}")
+        .replace("{TODAY}", today_utc.isoformat())
+        .replace("{CURRENT_PRICE}", f"{result.price:.2f}")
+        .replace("{EX_DIV_DATE}", ex_div_date)
+        .replace("{DIV_AMOUNT}", f"{div_amount:.2f}")
+        .replace("{DIV_YIELD}", f"{result.div_yield:.2%}")
+    )
+
+    # TECHNICALS
+    trend_vs_industry = (
+        result.trend_60d - result.industry_trend_60d if result.industry_trend_60d is not None else result.trend_60d
+    )
+    industry_trend_str = f"{result.industry_trend_60d:.2%}" if result.industry_trend_60d is not None else "N/A"
+    cap_size, market_index = finhub_utils.classify_market_cap(ticker)
+    cap_size_str = ""
+    if cap_size is not None:
+        cap_size_str = f"({cap_size}"
+        if market_index is not None:
+            cap_size_str += f",{market_index}"
+        cap_size_str += ")"
+    bid_ask_spread_str = f"{result.bid_ask_spread:.4f}" if result.bid_ask_spread is not None else "N/A"
+    past_dividends_analysis = f"HistExDiv(absolute prices, n={result.num_samples}): PostExPriceRange:{result.drop_price_min:.2f}-{result.drop_price_max:.2f}|RecovPriceRange:{result.recovery_price_min:.2f}-{result.recovery_price_min:.2f}|RecovDays:{result.recovery_days_min:.0f}-{result.recovery_days_max:.0f}|RecovProb:{result.recovery_probability:.0%}"
+    # history30d = ticker.history(period="31d", interval="1d", auto_adjust=False)[:-1]
+    # vol_spikes_str = "VolSpikes:None"
+    # vol_spike_series = finhub_utils.find_volume_spikes(history30d, 2)
+    # if not vol_spike_series.empty:
+    #     vol_spikes_str = "VolSpikes(Date,Close,Vol):"
+    #     for index, row in vol_spike_series.iterrows():
+    #         vol_spikes_str += f"{index.strftime("%Y-%m-%d")},{row["Close"]:.2f},{finhub_utils.number_to_human_format(row["Volume"], 2)}|"
+    #     vol_spikes_str = vol_spikes_str[:-1]
+    prompt = (
+        prompt.replace("{BETA}", f"{result.beta:.2f}")
+        .replace("{RSI}", f"{int(result.rsi14)}")
+        .replace("{RSI14}", f"{int(result.rsi14)}")
+        .replace("{RSI-14}", f"{int(result.rsi14)}")
+        .replace("{INDUSTRY_TREND}", f"{industry_trend_str}")
+        .replace("{TREND_VS_INDUSTRY}", f"{trend_vs_industry:.2%}")
+        .replace("{AVG_VOL}", f"{finhub_utils.number_to_human_format(result.avg_volume_30d, 0)}")
+        .replace("{AVG_DVT}", f"{finhub_utils.number_to_human_format(result.avg_dvt_7d, 0)}")
+        .replace("{MARKET_CAP}", f"{finhub_utils.number_to_human_format(result.overview.market_cap, 0)}")
+        .replace("{CAP_SIZE}", cap_size_str)
+        .replace("{BID_ASK_SPREAD}", bid_ask_spread_str)
+        .replace("{PAST_DIVIDENDS_ANALYSIS}", past_dividends_analysis)
+        # .replace("{VOLUME_SPIKES}", vol_spikes_str)
+    )
+
+    # CALCULATIONS
+    short_score_formula = "0"
+    if result.overview.exchange in dividend_capture_shortscore_rules:
+        if result.overview.cap_size in dividend_capture_shortscore_rules[result.overview.exchange]:
+            short_score_formula = dividend_capture_shortscore_rules[result.overview.exchange][result.overview.cap_size]
+    prompt = prompt.replace("{SHORT_SCORE_FORMULA}", short_score_formula)
+
+    # RULES
+    div_capture_rules = ""
+    if result.overview.exchange in dividend_capture_criteria:
+        if result.overview.cap_size in dividend_capture_criteria[result.overview.exchange]:
+            criteria = dividend_capture_criteria[result.overview.exchange][result.overview.cap_size]
+            for r in criteria:
+                div_capture_rules += f"[ ] {r}\n"
+            div_capture_rules = div_capture_rules.rstrip("\n")
+    prompt = prompt.replace("{DIV_CAPTURE_RULES}", div_capture_rules)
+
+    llm_result = await ai_exec_prompt("ANALYZE_DIVIDEND_EVENT_WEB_SEARCH", prompt, country)
+    if llm_result.is_error:
+        result.llm_error = True
+        result.llm_error_msg = f"LLM failed to generate response for analyzing dividend event: {llm_result.completion}"
+        return result
+
+    llm_result_obj = json.loads(llm_result.completion)
+    result.search_summary = llm_result_obj.get("search_summary")
+    result.strategy = llm_result_obj.get("strategy")
+    result.reasoning = llm_result_obj.get("reasoning")
+    result.sentiment_score = llm_result_obj.get("sent_score")
+    result.sentiment_score = float(result.sentiment_score) if result.sentiment_score is not None else None
+    result.recovery_probability_adj = llm_result_obj.get("recov_prob_adj")
+    result.recovery_probability_adj = (
+        float(result.recovery_probability_adj) if result.recovery_probability_adj is not None else None
+    )
+    result.recovery_days_adj = llm_result_obj.get("recovery_days")
+    result.drop_price_adj = llm_result_obj.get("est_post_ex_price")
+    result.recovery_price_adj = llm_result_obj.get("est_recovery_price")
+    result.expected_pl = llm_result_obj.get("expected_pl")
+    result.expected_pl = float(result.expected_pl) if result.expected_pl is not None else None
+    result.confidence_level = llm_result_obj.get("confidence")
+    result.confidence_level = float(result.confidence_level) if result.confidence_level is not None else None
+    result.risk_level = llm_result_obj.get("risk")
+    result.risk_level = float(result.risk_level) if result.risk_level is not None else None
+
+    return result

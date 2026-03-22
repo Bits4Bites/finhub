@@ -2,6 +2,7 @@ from pydantic import BaseModel
 from typing import Optional, Any
 from ..models import finhub as models
 from ..models.finhub import HistoryPoint
+from .. import config
 
 
 class BaseResponse(BaseModel):
@@ -46,3 +47,7 @@ class UpcomingDividendsResponse(BaseResponse):
 
 class ListingsResponse(BaseResponse):
     data: Optional[list[models.ListingEvent]] = None
+
+
+class IndexCompaniesResponse(BaseResponse):
+    data: Optional[list[config.CompanyBriefInfo]] = None

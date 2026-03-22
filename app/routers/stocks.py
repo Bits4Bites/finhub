@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Query, Path
 
+from .. import config
 from ..schemas import finhub as schemas
 from ..services import stock as stock_service
 
@@ -8,22 +9,26 @@ router = APIRouter(prefix="/stocks", tags=["stocks"])
 
 @router.get("/quotes", response_model=schemas.StockQuotesResponse, response_model_exclude_none=True)
 def get_stock_quotes(
-    symbols: str = Query("", description="A comma-separated list of stock symbols to fetch quotes for."),
+    symbols: str = Query(
+        description="A comma-separated list of stock symbols to fetch quotes for, should be in Yahoo Finance ticker format (e.g. AAPL, CBA.AX, BID.VN)"
+    ),
 ) -> schemas.StockQuotesResponse:
     """
-    Get stock quotes for a list of symbols.
+    Gets stock quotes for a list of symbols.
     """
-    symbol_list = [symbol.strip() for symbol in symbols.split(",")]
+    symbol_list = [symbol.strip() for symbol in symbols.upper().split(",")]
     quotes = stock_service.get_stock_quotes(symbol_list)
     return schemas.StockQuotesResponse(status=200, message="ok", data=quotes)
 
 
 @router.get("/{symbol}/overview", response_model=schemas.SymbolOverviewResponse, response_model_exclude_none=True)
 def get_symbol_overview(
-    symbol: str = Path(description="The stock symbol to fetch information for."),
+    symbol: str = Path(
+        description="The stock symbol to fetch information for, should be in Yahoo Finance ticker format (e.g. AAPL, CBA.AX, BID.VN)"
+    ),
 ) -> schemas.SymbolOverviewResponse:
     """
-    Get overview information for a given ticker symbol.
+    Gets overview information for a given ticker symbol.
     """
     overview = stock_service.get_symbol_overview(symbol)
     if overview is None:
@@ -33,10 +38,12 @@ def get_symbol_overview(
 
 @router.get("/{symbol}/info", response_model=schemas.SymbolInfoResponse, response_model_exclude_none=True)
 def get_symbol_info(
-    symbol: str = Path(description="The stock symbol to fetch information for."),
+    symbol: str = Path(
+        description="The stock symbol to fetch information for, should be in Yahoo Finance ticker format (e.g. AAPL, CBA.AX, BID.VN)"
+    ),
 ) -> schemas.SymbolInfoResponse:
     """
-    Get detailed information for a given ticker symbol.
+    Gets detailed information for a given ticker symbol.
     """
     info = stock_service.get_symbol_info(symbol)
     if info is None:
@@ -52,7 +59,7 @@ def get_symbol_quote_at_date(
     date_str: str = Path(description="The date to fetch the quote for (format: YYYY-MM-DD)."),
 ) -> schemas.StockQuoteAtDateResponse:
     """
-    Get stock quote information for a given ticker symbol at a specific date.
+    Gets stock quote information for a given ticker symbol at a specific date.
     Note: If the date falls on a non-trading day, the API may return quote for the most recent trading day before the given date.
     """
     quote = stock_service.get_stock_quote_at_date(symbol, date_str)
@@ -64,7 +71,22 @@ def get_symbol_quote_at_date(
 @router.get("/{symbol}/info_debug", response_model=schemas.BaseResponse, response_model_exclude_none=True)
 def get_symbol_info_debug(symbol: str):
     """
-    Get detailed information for a given ticker symbol (debug mode).
+    Gets detailed information for a given ticker symbol (debug mode).
     """
     info = stock_service.get_symbol_info_raw(symbol)
     return schemas.BaseResponse(status=200, message="ok", data=info)
+
+
+@router.get("/index/{index}/companies", response_model=schemas.IndexCompaniesResponse, response_model_exclude_none=True)
+def get_index_companies(
+    index: str = Path(description="The index to fetch companies for."),
+) -> schemas.IndexCompaniesResponse:
+    """
+    Gets list of companies for a given index.
+    Note: current supported indices are ASX50, ASX100, ASX200 and ASX300
+    """
+    companies = []
+    index = index.upper()
+    if index in config.market_indices.indices:
+        companies = config.market_indices.indices[index].values()
+    return schemas.IndexCompaniesResponse(status=200, message="ok", data=companies)

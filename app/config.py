@@ -38,3 +38,25 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
+class CompanyBriefInfo(BaseSettings):
+    symbol: Optional[str] = Field(default=None)
+    name: Optional[str] = Field(default=None)
+    sector: Optional[str] = Field(default=None)
+    market_cap: Optional[int] = Field(default=None)
+
+    model_config = SettingsConfigDict(
+        nested_model_default_partial_update=True,
+    )
+
+
+class MarketIndices(BaseSettings):
+    # {index -> {symbol -> CompanyBriefInfo}}
+    indices: dict[str, dict[str, CompanyBriefInfo]] = Field(default={})
+    model_config = SettingsConfigDict(
+        nested_model_default_partial_update=True,
+    )
+
+
+market_indices = MarketIndices()

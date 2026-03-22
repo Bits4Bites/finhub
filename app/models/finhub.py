@@ -1,10 +1,12 @@
 import json
+import statistics
 from datetime import datetime, timezone
 
 from pydantic import BaseModel
 from typing import Optional, Any
 import yfinance as yf
 
+from .types import MarketCapType
 from ..utils import finhub as finhub_utils
 
 
@@ -12,6 +14,21 @@ class SymbolBase(BaseModel):
     symbol: str
     currency: str
     exchange: str
+    country: str
+
+    def __init__(self, ticker: yf.Ticker, /, **data: Any):
+        super().__init__(
+            symbol=ticker.info.get("symbol"),
+            currency=ticker.info.get("currency"),
+            exchange=(
+                ticker.info.get("fullExchangeName")
+                if ticker.info.get("fullExchangeName")
+                else ticker.info.get("exchange")
+            ),
+            country=finhub_utils.country_to_iso2(ticker.info.get("country")),
+            **data,
+        )
+        self.exchange = finhub_utils.normalize_exchange_code(self.exchange)
 
 
 class HistoryPoint(BaseModel):
@@ -25,6 +42,7 @@ class HistoryPoint(BaseModel):
     volume: Optional[int] = None
     dividends: Optional[float] = None
     rsi14: Optional[float] = None
+    dvt: Optional[float] = None  # Daily Value Traded (Approximated)
 
     def to_currency(self, currency: str, x_rate: float) -> "HistoryPoint":
         return self.model_copy(
@@ -36,12 +54,12 @@ class HistoryPoint(BaseModel):
                 "close": self.close * x_rate if self.close else None,
                 "dividends": self.dividends * x_rate if self.dividends else None,
                 "rsi14": self.rsi14 * x_rate if self.rsi14 else None,
+                "dvt": self.dvt * x_rate if self.dvt else None,
             }
         )
 
 
-class SymbolOverview(BaseModel):
-    country: Optional[str] = None
+class SymbolOverview(SymbolBase):
     short_name: Optional[str] = None
     long_name: Optional[str] = None
     sector: Optional[str] = None
@@ -62,10 +80,13 @@ class SymbolOverview(BaseModel):
     gross_margins: Optional[float] = None
     operating_margins: Optional[float] = None
     profit_margins: Optional[float] = None
+    market_cap: Optional[int] = None
+    cap_size: Optional[MarketCapType] = None
+    market_index: Optional[str] = None
 
-    def __init__(self, ticker: yf.Ticker):
+    def __init__(self, ticker: yf.Ticker, /, **data: Any):
         super().__init__(
-            country=ticker.info.get("country"),
+            ticker,
             short_name=ticker.info.get("shortName"),
             long_name=ticker.info.get("longName"),
             sector=ticker.info.get("sector"),
@@ -86,7 +107,26 @@ class SymbolOverview(BaseModel):
             gross_margins=ticker.info.get("grossMargins"),
             operating_margins=ticker.info.get("operatingMargins"),
             profit_margins=ticker.info.get("profitMargins"),
+            market_cap=ticker.info.get("marketCap"),
+            **data,
         )
+        self.total_cash = int(self.total_cash) if self.total_cash is not None else None
+        self.total_cash_per_share = float(self.total_cash_per_share) if self.total_cash_per_share is not None else None
+        self.total_debt = int(self.total_debt) if self.total_debt is not None else None
+        self.total_debt_per_share = float(self.total_debt_per_share) if self.total_debt_per_share is not None else None
+        self.total_revenue = int(self.total_revenue) if self.total_revenue is not None else None
+        self.total_revenue_per_share = (
+            float(self.total_revenue_per_share) if self.total_revenue_per_share is not None else None
+        )
+        self.ebitda = int(self.ebitda) if self.ebitda is not None else None
+        self.ebitda_margins = float(self.ebitda_margins) if self.ebitda_margins is not None else None
+        self.earnings_growth = float(self.earnings_growth) if self.earnings_growth is not None else None
+        self.revenue_growth = float(self.revenue_growth) if self.revenue_growth is not None else None
+        self.gross_margins = float(self.gross_margins) if self.gross_margins is not None else None
+        self.operating_margins = float(self.operating_margins) if self.operating_margins is not None else None
+        self.profit_margins = float(self.profit_margins) if self.profit_margins is not None else None
+        self.market_cap = int(self.market_cap) if self.market_cap is not None else None
+        self.cap_size, self.market_index = finhub_utils.classify_market_cap(ticker)
 
 
 class SymbolDividend(BaseModel):
@@ -271,27 +311,28 @@ class StockHistory(BaseModel):
                 volume=int(history365d.iloc[-num_points + i]["Volume"]),
                 dividends=history365d.iloc[-num_points + i]["Dividends"],
                 rsi14=rsi.iloc[-num_points + i],
+                dvt=statistics.fmean(
+                    [
+                        history365d.iloc[-num_points + i]["High"],
+                        history365d.iloc[-num_points + i]["Low"],
+                        history365d.iloc[-num_points + i]["Open"],
+                        history365d.iloc[-num_points + i]["Close"],
+                    ]
+                )
+                * history365d.iloc[-num_points + i]["Volume"],
             )
             for i in range(0, num_points)
         ]
 
 
-class SymbolInfo(SymbolBase):
-    overview: Optional[SymbolOverview] = None
+class SymbolInfo(SymbolOverview):
     stock_quote: Optional[StockQuote] = None
     dividend: Optional[SymbolDividend] = None
     stock_history: Optional[StockHistory] = None
 
-    def __init__(self, symbol: str, ticker: yf.Ticker):
+    def __init__(self, ticker: yf.Ticker):
         super().__init__(
-            symbol=symbol,
-            currency=ticker.info.get("currency"),
-            exchange=(
-                ticker.info.get("fullExchangeName")
-                if ticker.info.get("fullExchangeName")
-                else ticker.info.get("exchange")
-            ),
-            overview=SymbolOverview(ticker),
+            ticker,
             stock_quote=StockQuote(ticker),
             dividend=SymbolDividend(ticker),
             stock_history=StockHistory(ticker),
@@ -426,3 +467,47 @@ def parse_new_listing_events_from_json(json_str: str, default_vals: dict[str, An
         result.append(event)
 
     return result
+
+
+class DividendEventAnalysis(BaseModel):
+    # ===== base info
+    overview: Optional[SymbolOverview] = None
+    price: Optional[float] = None  # current stock price
+    ex_div_date: Optional[str] = None
+    ex_div_date_timestamp: Optional[int] = None
+    div_amount: Optional[float] = None
+    div_yield: Optional[float] = None  # div_amount / price
+    # ====== analysis result
+    num_samples: Optional[int] = None  # number of historical dividend events used for analysis
+    drop_price_min: Optional[float] = None
+    drop_price_max: Optional[float] = None
+    recovery_probability: Optional[float] = None
+    recovery_days_min: Optional[int] = None
+    recovery_days_max: Optional[int] = None
+    recovery_price_min: Optional[float] = None
+    recovery_price_max: Optional[float] = None
+    # ===== technical data, used for further analysis with AI
+    beta: Optional[float] = None
+    rsi14: Optional[int] = None
+    avg_dvt_7d: Optional[int] = None
+    std_dvt_7d: Optional[int] = None
+    avg_volume_30d: Optional[int] = None
+    std_volume_30d: Optional[int] = None
+    bid_ask_spread: Optional[float] = None
+    trend_60d: Optional[float] = None
+    market_trend_60d: Optional[float] = None
+    industry_trend_60d: Optional[float] = None
+    # ====== analysis result from AI
+    llm_error: float = False
+    llm_error_msg: Optional[str] = None
+    search_summary: Optional[str] = None
+    strategy: Optional[str] = None
+    reasoning: Optional[str] = None
+    sentiment_score: Optional[float] = None
+    recovery_probability_adj: Optional[float] = None
+    recovery_days_adj: Optional[str] = None
+    drop_price_adj: Optional[str] = None
+    recovery_price_adj: Optional[str] = None
+    expected_pl: Optional[float] = None
+    confidence_level: Optional[float] = None
+    risk_level: Optional[float] = None
