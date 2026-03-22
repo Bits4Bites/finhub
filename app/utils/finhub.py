@@ -355,7 +355,6 @@ def classify_market_cap(
                 elif cap_size == types.LARGE_CAP:
                     cap_size = types.MID_CAP
 
-
     return cap_size, market_index
 
 
