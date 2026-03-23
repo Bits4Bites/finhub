@@ -24,6 +24,7 @@ def get_symbol_info_raw(symbol: str) -> dict[str, Any]:
 
     Args:
         symbol (str): The stock symbol to fetch information for.
+
     Returns:
         dict[str, Any]: A dictionary containing the raw information about the symbol.
     """
@@ -43,7 +44,7 @@ def get_symbol_info(symbol: str) -> SymbolInfo | None:
     Fetches detailed information about a ticker symbol.
 
     Args:
-        symbol (str): The stock symbol to fetch information for.
+        symbol (str): The stock symbol to fetch information for, accepting YF format (e.g. ABC.AX) or EXCHANGE:CODE (e.g. NASDAQ:XYZ).
 
     Returns:
         SymbolInfo | None: A SymbolInfo object containing the information about the symbol, or None.
@@ -61,7 +62,7 @@ def get_symbol_overview(symbol: str) -> SymbolOverview | None:
     Fetches overview information about a ticker symbol.
 
     Args:
-        symbol (str): The stock symbol to fetch information for.
+        symbol (str): The stock symbol to fetch information for, accepting YF format (e.g. ABC.AX) or EXCHANGE:CODE (e.g. NASDAQ:XYZ).
 
     Returns:
         SymbolOverview | None: A SymbolOverview object containing the overview information about the symbol, or None.
@@ -79,7 +80,7 @@ def get_stock_quotes(symbols: list[str]) -> dict[str, StockQuote]:
     Fetches stock quotes for a list of ticker symbols.
 
     Args:
-        symbols (list[str]): A list of stock symbols to fetch quotes for.
+        symbols (list[str]): A list of stock symbols to fetch quotes for, accepting YF format (e.g. ABC.AX) or EXCHANGE:CODE (e.g. NASDAQ:XYZ).
 
     Returns:
         dict[str, StockQuote]: A dictionary mapping each symbol to its corresponding StockQuote object.
@@ -103,12 +104,14 @@ def get_stock_quote_at_date(symbol: str, date_str: str) -> HistoryPoint | None:
     Fetches stock quote information for a given ticker symbol at a specific date.
 
     Args:
-        symbol (str): The stock symbol to fetch information for.
+        symbol (str): The stock symbol to fetch information for, accepting YF format (e.g. ABC.AX) or EXCHANGE:CODE (e.g. NASDAQ:XYZ).
         date_str (str): The date to fetch the quote for (format: YYYY-MM-DD).
+
     Returns:
         HistoryPoint | None: A HistoryPoint object containing the quote information for the symbol at the specified date, or None.
     """
-    ticker = yf.Ticker(symbol)
+    yf_symbol = finhub_utils.to_yf_ticker(symbol)
+    ticker = yf.Ticker(yf_symbol)
     quote_type = ticker.info.get("quoteType")
     if quote_type in allowed_quote_types:
         try:

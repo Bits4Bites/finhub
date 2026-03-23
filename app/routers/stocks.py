@@ -10,7 +10,7 @@ router = APIRouter(prefix="/stocks", tags=["stocks"])
 @router.get("/quotes", response_model=schemas.StockQuotesResponse, response_model_exclude_none=True)
 def get_stock_quotes(
     symbols: str = Query(
-        description="A comma-separated list of stock symbols to fetch quotes for, should be in Yahoo Finance ticker format (e.g. AAPL, CBA.AX, BID.VN)"
+        description="A comma-separated list of stock symbols to fetch quotes for, accepting YF format (e.g. ABC.AX) or EXCHANGE:CODE (e.g. NASDAQ:XYZ)"
     ),
 ) -> schemas.StockQuotesResponse:
     """
@@ -24,7 +24,7 @@ def get_stock_quotes(
 @router.get("/{symbol}/overview", response_model=schemas.SymbolOverviewResponse, response_model_exclude_none=True)
 def get_symbol_overview(
     symbol: str = Path(
-        description="The stock symbol to fetch information for, should be in Yahoo Finance ticker format (e.g. AAPL, CBA.AX, BID.VN)"
+        description="The stock symbol to fetch information for, accepting YF format (e.g. ABC.AX) or EXCHANGE:CODE (e.g. NASDAQ:XYZ)"
     ),
 ) -> schemas.SymbolOverviewResponse:
     """
@@ -39,7 +39,7 @@ def get_symbol_overview(
 @router.get("/{symbol}/info", response_model=schemas.SymbolInfoResponse, response_model_exclude_none=True)
 def get_symbol_info(
     symbol: str = Path(
-        description="The stock symbol to fetch information for, should be in Yahoo Finance ticker format (e.g. AAPL, CBA.AX, BID.VN)"
+        description="The stock symbol to fetch information for, accepting YF format (e.g. ABC.AX) or EXCHANGE:CODE (e.g. NASDAQ:XYZ)"
     ),
 ) -> schemas.SymbolInfoResponse:
     """
@@ -55,7 +55,9 @@ def get_symbol_info(
     "/{symbol}/quote_at/{date_str}", response_model=schemas.StockQuoteAtDateResponse, response_model_exclude_none=True
 )
 def get_symbol_quote_at_date(
-    symbol: str = Path(description="The stock symbol to fetch information for."),
+    symbol: str = Path(
+        description="The stock symbol to fetch information for, accepting YF format (e.g. ABC.AX) or EXCHANGE:CODE (e.g. NASDAQ:XYZ)"
+    ),
     date_str: str = Path(description="The date to fetch the quote for (format: YYYY-MM-DD)."),
 ) -> schemas.StockQuoteAtDateResponse:
     """
@@ -83,7 +85,7 @@ def get_index_companies(
 ) -> schemas.IndexCompaniesResponse:
     """
     Gets list of companies for a given index.
-    Note: current supported indices are ASX50, ASX100, ASX200 and ASX300
+    Note: current supported indices are ASX50, ASX100, ASX200, ASX300, NASDAQ100, SP500, SP400, SP600, VN30, VN100 and HNX30.
     """
     companies = []
     index = index.upper()

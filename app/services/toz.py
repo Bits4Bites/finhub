@@ -8,6 +8,7 @@ def get_gold_quote(currency: str = "USD") -> StockQuote | None:
 
     Args:
         currency (str): The currency code (e.g., "USD", "EUR") to get the price in.
+
     Returns:
         StockQuote | None: The current price as a StockQuote object, or None if the price could not be retrieved or the currency is not supported.
     """
@@ -38,6 +39,7 @@ def get_gold_history(currency: str = "USD", num_days: int = 30) -> list[HistoryP
     Args:
         currency (str): The currency code (e.g., "USD", "EUR") to get the prices in.
         num_days (int): The number of days of historical data to retrieve (default is 30).
+
     Returns:
         list[HistoryPoint] | None: A list of HistoryPoint objects representing the historical prices, or None if the prices could not be retrieved or the currency is not supported.
     """
@@ -85,6 +87,7 @@ def get_silver_quote(currency: str = "USD") -> StockQuote | None:
 
     Args:
         currency (str): The currency code (e.g., "USD", "EUR") to get the price in.
+
     Returns:
         StockQuote | None: The current price as a StockQuote object, or None if the price could not be retrieved or the currency is not supported.
     """
@@ -115,6 +118,7 @@ def get_silver_history(currency: str = "USD", num_days: int = 30) -> list[Histor
     Args:
         currency (str): The currency code (e.g., "USD", "EUR") to get the prices in.
         num_days (int): The number of days of historical data to retrieve (default is 30).
+
     Returns:
         list[HistoryPoint] | None: A list of HistoryPoint objects representing the historical prices, or None if the prices could not be retrieved or the currency is not supported.
     """
