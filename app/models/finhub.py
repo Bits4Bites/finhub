@@ -438,10 +438,11 @@ def parse_upcoming_earnings_events_from_json(
 
 
 class ListingEvent(EventBase):
-    industry: Optional[str] = None
+    sector: Optional[str] = None
+    principal_activities: Optional[str] = None
     price: float = 0.0
     currency: Optional[str] = None
-    capital: Optional[str] = None
+    capital: Optional[int] = None
 
 
 def parse_new_listing_events_from_json(json_str: str, default_vals: dict[str, Any] = None) -> list[ListingEvent]:
@@ -457,10 +458,11 @@ def parse_new_listing_events_from_json(json_str: str, default_vals: dict[str, An
             event_category="listing",
             source_name=item.get("src", default_vals.get("src")),
             link=item.get("link", default_vals.get("link")),
-            industry=item.get("industry", default_vals.get("industry")),
+            sector=item.get("sector", default_vals.get("sector")),
+            principal_activities=item.get("principal_activities", default_vals.get("principal_activities")),
             price=item.get("price", default_vals.get("price")),
             currency=item.get("currency", default_vals.get("currency")),
-            capital=item.get("capital", default_vals.get("capital")),
+            capital=int(item.get("capital", default_vals.get("capital"))),
         )
         # parse yyyy-MM-dd from event.date into event.timestamp
         event.timestamp = int(datetime.strptime(event.date, "%Y-%m-%d").timestamp())

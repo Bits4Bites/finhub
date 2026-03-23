@@ -11,7 +11,7 @@ import pandas as pd
 from playwright.async_api import async_playwright, Page, ViewportSize
 
 
-def extract_data_table_from_html(html_content: str, raw_cell_content=False, table_attr_filter=None) -> pd.DataFrame:
+def extract_data_table_from_html(html_content: str, *, raw_cell_content=False, table_attr_filter=None) -> pd.DataFrame:
     """
     Extracts data from the given HTML content, assuming main content is in a table, and returns it as a Pandas DataFrame.
 
@@ -20,6 +20,9 @@ def extract_data_table_from_html(html_content: str, raw_cell_content=False, tabl
         raw_cell_content (bool, optional): If False, cell content will be cleaned-up; otherwise cell's raw content will be returned.
         table_attr_filter (dict[str, str], optional): A dictionary of attribute name and values to filter the table.
             For example, {"id": "event-content"} to find a table with id="event-content".
+
+    Returns:
+        DataFrame: A Pandas DataFrame containing the extracted data.
     """
     soup = BeautifulSoup(html_content, "html.parser")
 
@@ -73,7 +76,7 @@ def extract_data_table_from_html(html_content: str, raw_cell_content=False, tabl
     return df
 
 
-async def fetch_webpage_content(url: str, retries: int = 3, backoff_factor: float = 0.5) -> str | None:
+async def fetch_webpage_content(url: str, *, retries: int = 3, backoff_factor: float = 0.5) -> str | None:
     """
     Fetches the content of a webpage, with retry logic.
 
@@ -81,6 +84,7 @@ async def fetch_webpage_content(url: str, retries: int = 3, backoff_factor: floa
         url (str): The URL of the webpage to fetch.
         retries (int, optional): Number of times to retry the request in case of failure. Defaults to 3.
         backoff_factor (float, optional): Factor for calculating sleep time between retries. Defaults to 0.5.
+
     Returns:
         str: The content of the webpage if successful, otherwise None.
     """
@@ -101,7 +105,7 @@ async def fetch_webpage_content(url: str, retries: int = 3, backoff_factor: floa
 
 
 async def fetch_webpage_content_playwright(
-    url: str, after_load_func_async=None, retries: int = 2, backoff_factor: float = 0.5
+    url: str, *, after_load_func_async=None, retries: int = 2, backoff_factor: float = 0.5
 ) -> str | None:
     """
     Fetches the content of a webpage using Playwright, with retry logic.
@@ -111,6 +115,7 @@ async def fetch_webpage_content_playwright(
         after_load_func_async (callable, optional): A function to execute after the page has loaded, for additional interactions.
         retries (int, optional): Number of times to retry the request in case of failure. Defaults to 2.
         backoff_factor (float, optional): Factor for calculating sleep time between retries. Defaults to 0.5.
+
     Returns:
         str: The content of the webpage if successful, otherwise None.
     """
@@ -138,7 +143,7 @@ async def fetch_webpage_content_playwright(
     return None
 
 
-async def scrape_data_table(url: str, raw_cell_content=False, table_attr_filter=None) -> pd.DataFrame:
+async def scrape_data_table(url: str, *, raw_cell_content=False, table_attr_filter=None) -> pd.DataFrame:
     """
     Scrapes data from the given URL, assuming main content is in a table, and returns it as a Pandas DataFrame.
 
@@ -147,6 +152,9 @@ async def scrape_data_table(url: str, raw_cell_content=False, table_attr_filter=
         raw_cell_content (bool, optional): If False, cell content will be cleaned-up; otherwise cell's raw content will be returned.
         table_attr_filter (dict[str, str], optional): A dictionary of attribute name and values to filter the table.
             For example, {"id": "event-content"} to find a table with id="event-content".
+
+    Returns:
+        DataFrame: A Pandas DataFrame containing the data table extracted from the webpage.
     """
     # fetch the webpage content
     logging.info("Fetching data from '%s'...", url)
@@ -168,7 +176,7 @@ async def scrape_data_table(url: str, raw_cell_content=False, table_attr_filter=
 
 
 async def scrape_data_table_playwright(
-    url: str, raw_cell_content=False, after_load_func_async=None, table_attr_filter=None
+    url: str, *, raw_cell_content=False, after_load_func_async=None, table_attr_filter=None
 ) -> pd.DataFrame:
     """
     Scrapes data from the given URL using Playwright, assuming main content is in a table, and returns it as a Pandas DataFrame.
@@ -179,6 +187,9 @@ async def scrape_data_table_playwright(
         after_load_func_async (callable, optional): A function to execute after the page has loaded, for additional interactions.
         table_attr_filter (dict[str, str], optional): A dictionary of attribute name and values to filter the table.
             For example, {"id": "event-content"} to find a table with id="event-content".
+
+    Returns:
+        DataFrame: A Pandas DataFrame containing the data table extracted from the webpage.
     """
     # fetch the webpage content
     logging.info("Fetching data from '%s'...", url)
@@ -203,6 +214,7 @@ async def scrape_dividends_from_tipranks(
     url_template: str,
     end_date: datetime.date = datetime.date.today() + datetime.timedelta(days=1),
     tz_name: str = "UTC",
+    *,
     use_playwright: bool = False,
     after_load_func_async=None,
 ) -> pd.DataFrame:
@@ -215,6 +227,9 @@ async def scrape_dividends_from_tipranks(
         tz_name (str): The name of the timezone to use for date calculations (e.g., "Australia/Sydney").
         use_playwright (bool): Whether to use Playwright for fetching the webpage content.
         after_load_func_async (callable, optional): A function to execute after the page has loaded, for additional interactions when using Playwright.
+
+    Returns:
+        DataFrame: A Pandas DataFrame containing the data table extracted from the webpage.
     """
     start_date = datetime.datetime.now(ZoneInfo(tz_name)).date()
 
@@ -233,7 +248,7 @@ async def scrape_dividends_from_tipranks(
 
         target_url = url_template.format(date=start_date.strftime("%Y-%m-%d"))
         df = (
-            await scrape_data_table_playwright(target_url, after_load_func_async)
+            await scrape_data_table_playwright(target_url, after_load_func_async=after_load_func_async)
             if use_playwright
             else await scrape_data_table(target_url)
         )
@@ -269,9 +284,10 @@ async def scrape_dividends_from_tipranks(
 
 async def scrape_dividends_from_tipranks_playwright(
     url_template: str,
-    after_load_func_async=None,
     end_date: datetime.date = datetime.date.today() + datetime.timedelta(days=1),
     tz_name: str = "UTC",
+    *,
+    after_load_func_async=None,
 ) -> pd.DataFrame:
     """
     Scrapes dividend data from the TipRanks website for a given URL template and end date, using Playwright.
@@ -281,6 +297,9 @@ async def scrape_dividends_from_tipranks_playwright(
         after_load_func_async (callable, optional): A function to execute after the page has loaded, for additional interactions.
         end_date (datetime.date): The end date for scraping data. The function will scrape data from the current date up to this end date.
         tz_name (str): The name of the timezone to use for date calculations (e.g., "Australia/Sydney").
+
+    Returns:
+        DataFrame: A Pandas DataFrame containing the data table extracted from the webpage.
     """
     return await scrape_dividends_from_tipranks(
         url_template, end_date, tz_name, use_playwright=True, after_load_func_async=after_load_func_async
@@ -293,6 +312,9 @@ async def scrape_dividends_asx(end_date: datetime.date) -> pd.DataFrame:
 
     Args:
         end_date (datetime.date): The end date for scraping data. The function will scrape data from the current date up to this end date.
+
+    Returns:
+        DataFrame: A Pandas DataFrame containing the data table extracted from the webpage.
     """
     url_template = "https://www.tipranks.com/calendars/dividends/{date}/australia"
     tz = "Australia/Sydney"
@@ -359,10 +381,15 @@ async def scrape_dividends_us(end_date: datetime.date) -> pd.DataFrame:
 
     Args:
         end_date (datetime.date): The end date for scraping data. The function will scrape data from the current date up to this end date.
+
+    Returns:
+        DataFrame: A Pandas DataFrame containing the data table extracted from the webpage.
     """
     url_template = "https://www.tipranks.com/calendars/dividends/{date}"
     tz = "America/New_York"
-    return await scrape_dividends_from_tipranks_playwright(url_template, tipranks_after_load_func, end_date, tz)
+    return await scrape_dividends_from_tipranks_playwright(
+        url_template, end_date, tz, after_load_func_async=tipranks_after_load_func
+    )
 
 
 async def scrape_dividends_vn(end_date: datetime.date) -> pd.DataFrame:
@@ -371,6 +398,9 @@ async def scrape_dividends_vn(end_date: datetime.date) -> pd.DataFrame:
 
     Args:
         end_date (datetime.date): The end date for scraping data. The function will scrape data from the current date up to this end date.
+
+    Returns:
+        DataFrame: A Pandas DataFrame containing the data table extracted from the webpage.
     """
     url_template = "https://finance.vietstock.vn/lich-su-kien.htm?from={s_date}&to={e_date}&page={page}&tab=1&group=13"
     tz_name = "Asia/Ho_Chi_Minh"
@@ -395,7 +425,7 @@ async def scrape_dividends_vn(end_date: datetime.date) -> pd.DataFrame:
             e_date=end_date.strftime("%Y-%m-%d"),
             page=page,
         )
-        df = await scrape_data_table_playwright(target_url, None, {"id": "event-content"})
+        df = await scrape_data_table_playwright(target_url, table_attr_filter={"id": "event-content"})
         if df.empty or len(df.columns) < 2:
             break
         final_df = pd.concat([final_df, df], ignore_index=True)
@@ -446,6 +476,7 @@ async def scrape_earnings_from_tipranks(
     url_template: str,
     end_date: datetime.date = datetime.date.today() + datetime.timedelta(days=1),
     tz_name: str = "UTC",
+    *,
     use_playwright: bool = False,
     after_load_func_async=None,
 ) -> pd.DataFrame:
@@ -458,6 +489,9 @@ async def scrape_earnings_from_tipranks(
         tz_name (str): The name of the timezone to use for date calculations (e.g., "Australia/Sydney").
         use_playwright (bool): Whether to use Playwright for fetching the webpage content.
         after_load_func_async (callable, optional): A function to execute after the page has loaded, for additional interactions when using Playwright.
+
+    Returns:
+        DataFrame: A Pandas DataFrame containing the data table extracted from the webpage.
     """
     start_date = datetime.datetime.now(ZoneInfo(tz_name)).date()
 
@@ -473,7 +507,7 @@ async def scrape_earnings_from_tipranks(
 
         target_url = url_template.format(date=start_date.strftime("%Y-%m-%d"))
         df = (
-            await scrape_data_table_playwright(target_url, after_load_func_async)
+            await scrape_data_table_playwright(target_url, after_load_func_async=after_load_func_async)
             if use_playwright
             else await scrape_data_table(target_url)
         )
@@ -519,9 +553,10 @@ async def scrape_earnings_from_tipranks(
 
 async def scrape_earnings_from_tipranks_playwright(
     url_template: str,
-    after_load_func_async=None,
     end_date: datetime.date = datetime.date.today() + datetime.timedelta(days=1),
     tz_name: str = "UTC",
+    *,
+    after_load_func_async=None,
 ) -> pd.DataFrame:
     """
     Scrapes earnings announcement data from the TipRanks website for a given URL template and end date, using Playwright.
@@ -531,6 +566,9 @@ async def scrape_earnings_from_tipranks_playwright(
         after_load_func_async (callable, optional): A function to execute after the page has loaded, for additional interactions.
         end_date (datetime.date): The end date for scraping data. The function will scrape data from the current date up to this end date.
         tz_name (str): The name of the timezone to use for date calculations (e.g., "Australia/Sydney").
+
+    Returns:
+        DataFrame: A Pandas DataFrame containing the data table extracted from the webpage.
     """
     return await scrape_earnings_from_tipranks(
         url_template, end_date, tz_name, use_playwright=True, after_load_func_async=after_load_func_async
@@ -543,6 +581,9 @@ async def scrape_earnings_asx(end_date: datetime.date) -> pd.DataFrame:
 
     Args:
         end_date (datetime.date): The end date for scraping data. The function will scrape data from the current date up to this end date.
+
+    Returns:
+        DataFrame: A Pandas DataFrame containing the data table extracted from the webpage.
     """
     url_template = "https://www.tipranks.com/calendars/earnings/{date}/australia"
     tz = "Australia/Sydney"
@@ -555,7 +596,12 @@ async def scrape_earnings_us(end_date: datetime.date) -> pd.DataFrame:
 
     Args:
         end_date (datetime.date): The end date for scraping data. The function will scrape data from the current date up to this end date.
+
+    Returns:
+        DataFrame: A Pandas DataFrame containing the data table extracted from the webpage.
     """
     url_template = "https://www.tipranks.com/calendars/earnings/{date}"
     tz = "America/New_York"
-    return await scrape_earnings_from_tipranks_playwright(url_template, tipranks_after_load_func, end_date, tz)
+    return await scrape_earnings_from_tipranks_playwright(
+        url_template, end_date, tz, after_load_func_async=tipranks_after_load_func
+    )

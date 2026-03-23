@@ -395,7 +395,10 @@ async def ai_get_asx_new_listings() -> list[models.ListingEvent]:
     raw_input = "==========\n".join([el.get_text() for el in el_list if "Listing date" in el.get_text()])
     prompt = prompt_template.replace("{RAW_INPUT_DATA}", raw_input)
 
-    llm_result = await ai_parse_upcoming_events("PARSE_NEW_LISTING_EVENTS_NO_WEB_SEARCH", prompt, "AU")
+    sectors_list = ",".join(finhub_utils.asx_sector_industry_yf_indices.keys())
+    prompt = prompt.replace("{SECTORS}", sectors_list)
+
+    llm_result = await ai_exec_prompt(task_id="PARSE_NEW_LISTING_EVENTS_NO_WEB_SEARCH", prompt=prompt, country="AU")
     if llm_result.is_error:
         raise RuntimeError(f"[ERROR] LLM failed to generate response for new listing events: {llm_result.completion}")
 
@@ -444,7 +447,7 @@ dividend_capture_criteria = {
         types.LARGE_CAP: [  # >= 10B
             "AdjRecovProb ≥65%",
             "ExpectedPL ≥1.5%",
-            "Yield >2.0%",
+            "Yield ≥2.0%",
             "EstRecovDays(max) ≤5",
             "Spread <0.003",
             "RSI14 <70",
@@ -457,7 +460,7 @@ dividend_capture_criteria = {
         types.MID_CAP: [  # 2B-10B
             "AdjRecovProb ≥70%",
             "ExpectedPL ≥2.0%",
-            "Yield >3.0%",
+            "Yield ≥3.0%",
             "EstRecovDays(max) ≤7",
             "Spread <0.008",
             "RSI14 <65",
@@ -470,7 +473,7 @@ dividend_capture_criteria = {
         types.SMALL_CAP: [  # 300M-2B
             "AdjRecovProb ≥75%",
             "ExpectedPL ≥3.0%",
-            "Yield >4.5%",
+            "Yield ≥4.5%",
             "EstRecovDays(max) ≤10",
             "Spread <0.015",
             "RSI14 <60",
@@ -483,7 +486,7 @@ dividend_capture_criteria = {
         types.MICRO_CAP: [  # 50M-300M
             "AdjRecovProb ≥85%",
             "ExpectedPL ≥5.0%",
-            "Yield >6.5%",
+            "Yield ≥6.5%",
             "EstRecovDays(max) ≤14",
             "Spread <0.025",
             "RSI14 <55",
@@ -496,7 +499,7 @@ dividend_capture_criteria = {
         types.NANO_CAP: [  # <50M
             "AdjRecovProb ≥90%",
             "ExpectedPL ≥7.0%",
-            "Yield >8.5%",
+            "Yield ≥8.5%",
             "EstRecovDays(max) ≤21",
             "Spread <0.030",
             "RSI14 <50",
@@ -512,7 +515,7 @@ dividend_capture_criteria = {
             "AdjRecovProb ≥65%",
             "EstRecovDays(max) ≤3",
             "ExpectedPL ≥0.5%",
-            "Yield >0.5%",
+            "Yield ≥0.5%",
             "Spread <0.0005",
             "Beta <1.1",
             "RSI14 <65",
@@ -526,7 +529,7 @@ dividend_capture_criteria = {
             "AdjRecovProb ≥70%",
             "EstRecovDays(max) ≤5",
             "ExpectedPL ≥1.0%",
-            "Yield >1.0%",
+            "Yield ≥1.0%",
             "Spread <0.0015",
             "Beta <1.0",
             "RSI14 <60",
@@ -540,7 +543,7 @@ dividend_capture_criteria = {
             "AdjRecovProb ≥80%",
             "EstRecovDays(max) ≤8",
             "ExpectedPL ≥1.5%",
-            "Yield >1.5%",
+            "Yield ≥1.5%",
             "Spread <0.004",
             "Beta <0.9",
             "RSI14 <55",
@@ -556,7 +559,7 @@ dividend_capture_criteria = {
             "AdjRecovProb ≥60%",
             "EstRecovDays(max) ≤4",
             "ExpectedPL ≥0.8%",
-            "Yield >1.0%",
+            "Yield ≥1.0%",
             "Spread <0.001",
             "RSI14 <70",
             "Short Interest <4.0%",
@@ -569,7 +572,7 @@ dividend_capture_criteria = {
             "AdjRecovProb ≥65%",
             "EstRecovDays(max) ≤6",
             "ExpectedPL ≥1.2%",
-            "Yield >1.5%",
+            "Yield ≥1.5%",
             "Spread <0.0025",
             "RSI14 <65",
             "Short Interest <3.0%",
@@ -582,7 +585,7 @@ dividend_capture_criteria = {
             "AdjRecovProb ≥75%",
             "EstRecovDays ≤10",
             "ExpectedPL ≥2.0%",
-            "Yield >2.5%",
+            "Yield ≥2.5%",
             "Spread <0.005",
             "RSI14 <60",
             "Short Interest <2.0%",
