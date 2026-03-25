@@ -7,3 +7,4 @@
 - (Impr) Cache US market indexes locally (NASDAQ100, SP500, SP400, SP600).
 - (Feat) Add APIs to return list of companies in an index.
 - (Refactor) Move event APIs to a new endpoint /events.
+- (Feat) Add new API to analyze a dividend event.

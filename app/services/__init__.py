@@ -36,22 +36,22 @@ def read_file_as_single_string(file_path) -> str:
 
 
 template_list = [
-    ai.EVENT_ASX_UPCOMING_DIVIDENDS,
-    ai.EVENT_US_UPCOMING_DIVIDENDS,
-    ai.EVENT_VN_UPCOMING_DIVIDENDS,
-    ai.EVENT_ASX_UPCOMING_EARNINGS,
-    ai.EVENT_US_UPCOMING_EARNINGS,
+    # ai.EVENT_ASX_UPCOMING_DIVIDENDS,
+    # ai.EVENT_US_UPCOMING_DIVIDENDS,
+    # ai.EVENT_VN_UPCOMING_DIVIDENDS,
+    # ai.EVENT_ASX_UPCOMING_EARNINGS,
+    # ai.EVENT_US_UPCOMING_EARNINGS,
     ai.EVENT_ASX_NEW_LISTINGS,
     ai.ANALYZE_ASX_DIVIDEND,
     ai.ANALYZE_US_DIVIDEND,
     ai.ANALYZE_VN_DIVIDEND,
 ]
 tmplfile_list = [
-    "./resources/prompts/asx_upcoming_dividend_distribution_events.md",
-    "./resources/prompts/us_upcoming_dividend_distribution_events.md",
-    "./resources/prompts/vn_upcoming_dividend_distribution_events.md",
-    "./resources/prompts/asx_upcoming_earnings_events.md",
-    "./resources/prompts/us_upcoming_earnings_events.md",
+    # "./resources/prompts/asx_upcoming_dividend_distribution_events.md",
+    # "./resources/prompts/us_upcoming_dividend_distribution_events.md",
+    # "./resources/prompts/vn_upcoming_dividend_distribution_events.md",
+    # "./resources/prompts/asx_upcoming_earnings_events.md",
+    # "./resources/prompts/us_upcoming_earnings_events.md",
     "./resources/prompts/asx_new_listings.md",
     "./resources/prompts/analyze_asx_dividend.md",
     "./resources/prompts/analyze_us_dividend.md",

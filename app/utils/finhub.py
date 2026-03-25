@@ -37,6 +37,142 @@ asx_sector_industry_yf_indices = {
     "INDUSTRIALS": "^AXNJ",
 }
 
+us_main_yf_indices = [
+    "^DWCF",  # Dow Jones U.S. Total Stock Mark
+    "^IXIC",  # NASDAQ Composite
+    "^SPX",   # SP500
+    "^RUI",   # Russell 1000
+]
+
+us_sector_yf_indices = {
+    "ENERGY": "^SP500-1010",
+    "BASIC MATERIALS": "^SP500-15",
+    "INDUSTRIALS": "^SP500-20",
+    "CONSUMER CYCLICAL": "^SP500-25",
+    "CONSUMER DEFENSIVE": "^SP500-30",
+    "HEALTHCARE": "^SP500-35",
+    "FINANCIAL SERVICES": "^SP500-40",
+    "TECHNOLOGY": "^SP500-45",
+    "COMMUNICATION SERVICES": "^SP500-50",
+    "UTILITIES": "^SP500-55",
+    "REAL ESTATE": "^SP500-60",
+}
+
+us_industry_yf_indices = {
+    "ENERGY": {
+        "OIL & GAS E&P": "^SP500-10102020",
+        "OIL & GAS EQUIPMENT & SERVICES": "^SP500-10101020",
+        "OIL & GAS INTEGRATED": "^SP500-10102010",
+        "OIL & GAS MIDSTREAM": "^SP500-10102040",  # mapped to GICS sub-industry "Oil & Gas Storage & Transportation"
+        "OIL & GAS REFINING & MARKETING": "^SP500-10102030",
+        "OIL & GAS DRILLING": "^SP500-10101010",
+        "THERMAL COAL": "^SP500-10102050",  # mapped to GICS sub-industry "Coal & Consumable Fuels"
+        "URANIUM": "URA",  # No GICS sub-industry for Uranium, so using the Global X Uranium ETF as a proxy
+    },
+    "BASIC MATERIALS": {
+        "COMMODITY CHEMICALS": "^SP500-15101010",
+        "CHEMICALS": "^SP500-15101020",  # mapped to GICS sub-industry "Diversified Chemicals"
+        "AGRICULTURAL INPUTS": "^SP500-15101030",  # mapped to GICS sub-industry "Fertilizers & Agricultural Chemicals"
+        "INDUSTRIAL GASES": "^SP500-15101040",
+        "SPECIALTY CHEMICALS": "^SP500-15101050",
+        "BUILDING MATERIALS": "^SP500-15102010",  # mapped to GICS sub-industry "Construction Materials"
+        "METAL, GLASS & PLASTIC CONTAINERS": "^SP500-15103010",
+        "PAPER & PLASTIC PACKAGING PRODUCTS & MATERIALS": "^SP500-15103020",
+        "ALUMINUM": "^SP500-15104010",
+        "OTHER INDUSTRIAL METALS & MINING": "^SP500-15104020",  # mapped to GICS sub-industry "Diversified Metals & Mining"
+        "COPPER": "^SP500-15104025",
+        "GOLD": "^SP500-15104030",
+        "OTHER PRECIOUS METALS & MINING": "^SP500-15104040",  # mapped to GICS sub-industry "Precious Metals & Minerals"
+        "SILVER": "^SP500-15104045",
+        "COKING COAL": "^SP500-15104050",  # mapped to GICS sub-industry "Steel"
+        "STEEL": "^SP500-15104050",
+        "LUMBER & WOOD PRODUCTION": "^SP500-15105010",  # mapped to GICS sub-industry "Forest Products"
+        "PAPER & PAPER PRODUCTS": "^SP500-15105020",  # mapped to GICS sub-industry "Paper Products"
+    },
+    "INDUSTRIALS": {
+        "AEROSPACE & DEFENSE": "^SP500-20101010",
+        "BUILDING PRODUCTS & EQUIPMENT": "^SP500-20102010",  # mapped to GICS sub-industry "Building Products"
+        "ENGINEERING & CONSTRUCTION": "^SP500-20103010",  # mapped to GICS sub-industry "Construction & Engineering"
+        "ELECTRICAL EQUIPMENT & PARTS": "^SP500-20104010",  # mapped to GICS sub-industry "Electrical Components & Equipment"
+        "HEAVY ELECTRICAL EQUIPMENT": "^SP500-20104020",
+        "CONGLOMERATES": "^SP500-20105010",  # mapped to GICS sub-industry "Industrial Conglomerates"
+        "CONSTRUCTION MACHINERY & HEAVY TRANSPORTATION EQUIPMENT": "^SP500-20106010",
+        "FARM & HEAVY CONSTRUCTION MACHINERY": "^SP500-20106015", # mapped to GICS sub-industry "Agricultural & Farm Machinery"
+        "TOOLS & ACCESSORIES": "^SP500-20106020",  # mapped to GICS sub-industry "Industrial Machinery & Supplies & Components"
+        "METAL FABRICATION": "^SP500-20106020",  # mapped to GICS sub-industry "Industrial Machinery & Supplies & Components"
+        "SPECIALTY INDUSTRIAL MACHINERY": "^SP500-20106020",  # mapped to GICS sub-industry "Industrial Machinery & Supplies & Components"
+        "INDUSTRIAL DISTRIBUTION": "^SP500-20107010",  # mapped to GICS sub-industry "Trading Companies & Distributors"
+        "COMMERCIAL PRINTING": "^SP500-20201010",
+        "POLLUTION & TREATMENT CONTROLS": "^SP500-20201050",  # mapped to GICS sub-industry "Environmental & Facilities Services"
+        "WASTE MANAGEMENT": "^SP500-20201050",  # mapped to GICS sub-industry "Environmental & Facilities Services"
+        "OFFICE SERVICES & SUPPLIES": "^SP500-20201060",
+        "SPECIALTY BUSINESS SERVICES": "^SP500-20201070",  # mapped to GICS sub-industry "Diversified Support Services"
+        "SECURITY & PROTECTION SERVICES": "^SP500-20201080",  # mapped to GICS sub-industry "Security & Alarm Services"
+        "STAFFING & EMPLOYMENT SERVICES": "^SP500-20202010",  # mapped to GICS sub-industry "Human Resource & Employment Services"
+        "CONSULTING SERVICES": "^SP500-20202020",  # mapped to GICS sub-industry "Research & Consulting Services"
+        "DATA PROCESSING & OUTSOURCED SERVICES": "^SP500-20202030",
+        "INTEGRATED FREIGHT & LOGISTICS": "^SP500-20301010",  # mapped to GICS sub-industry "Air Freight & Logistics"
+        "AIRLINES": "^SP500-20302010",  # mapped to GICS sub-industry "Passenger Airlines"
+        "MARINE SHIPPING": "^SP500-20303010",  # mapped to GICS sub-industry "Marine Transportation"
+        "RAILROADS": "^SP500-20304010",  # mapped to GICS sub-industry "Rail Transportation"
+        "TRUCKING": "^SP500-20304030",  # mapped to GICS sub-industry "Cargo Ground Transportation"
+        "PASSENGER GROUND TRANSPORTATION": "^SP500-20304040",
+        "AIRPORT SERVICES": "^SP500-20305010",
+        "HIGHWAYS & RAILTRACKS": "^SP500-20305020",
+        "MARINE PORTS & SERVICES": "^SP500-20305030",
+        "RENTAL & LEASING SERVICES": "^SP500-202010",  # no exact GICS sub-industry mapping, map to industry "Commercial Services & Supplies"
+    },
+    "CONSUMER CYCLICAL": {
+        "AUTO PARTS": "^SP500-25101010",  # mapped to GICS sub-industry "Automotive Parts & Equipment"
+        "TIRES & RUBBER": "^SP500-25101020",
+        "AUTO MANUFACTURERS": "^SP500-25102010",  # mapped to GICS sub-industry "Automobile Manufacturers"
+        "MOTORCYCLE MANUFACTURERS": "^SP500-25102010",
+        "CONSUMER ELECTRONICS": "^SP500-25201010",
+        "FURNISHINGS, FIXTURES & APPLIANCES": "^SP500-25201020",  # mapped to GICS sub-industry "Home Furnishings"
+        "RESIDENTIAL CONSTRUCTION": "^SP500-25201030",  # mapped to GICS sub-industry "HOMEBUILDING"
+        "HOUSEHOLD APPLIANCES": "^SP500-25201040",
+        "HOUSEWARES & SPECIALTIES": "^SP500-25201050",
+        "RECREATIONAL VEHICLES": "^SP500-25202010",  # mapped to GICS sub-industry "Leisure Products"
+        "LUXURY GOODS": "^SP500-25203010",  # mapped to GICS sub-industry "Apparel, Accessories & Luxury Goods"
+        "APPAREL MANUFACTURING": "^SP500-25203010",  # mapped to GICS sub-industry "Apparel, Accessories & Luxury Goods"
+        "FOOTWEAR & ACCESSORIES": "^SP500-25203020",  # mapped to GICS sub-industry "Footwear"
+        "TEXTILE MANUFACTURING": "^SP500-25203030",  # mapped to GICS sub-industry "Textiles"
+        "GAMBLING": "^SP500-25301010",  # mapped to GICS sub-industry "Casinos & Gaming"
+        "RESORTS & CASINOS": "^SP500-25301010",  # mapped to GICS sub-industry "Casinos & Gaming"
+        "LODGING": "^SP500-25301020",  # mapped to GICS sub-industry "Hotels, Resorts & Cruise Lines"
+        "TRAVEL SERVICES": "^SP500-25301020",  # mapped to GICS sub-industry "Hotels, Resorts & Cruise Lines"
+        "LEISURE": "^SP500-25301030",  # mapped to GICS sub-industry "Leisure Facilities"
+        "RESTAURANTS": "^SP500-25301040",
+        "EDUCATION SERVICES": "^SP500-25302010",
+        "PERSONAL SERVICES": "^SP500-25302020",  # mapped to GICS sub-industry "Specialized Consumer Services"
+        "DISTRIBUTORS": "^SP500-25501010",
+        "DEPARTMENT STORES": "^SP500-25503030",  # mapped to GICS sub-industry "Broadline Retail"
+        "INTERNET RETAIL": "^SP500-25503030",  # mapped to GICS sub-industry "Broadline Retail"
+        "APPAREL RETAIL": "^SP500-25504010",
+        "COMPUTER & ELECTRONICS RETAIL": "^SP500-25504020",
+        "HOME IMPROVEMENT RETAIL": "^SP500-25504030",
+        "SPECIALTY RETAIL": "^SP500-25504040",  # mapped to GICS sub-industry "Other Specialty Retail"
+        "AUTO & TRUCK DEALERSHIPS": "^SP500-25504050",  # mapped to GICS sub-industry "Automotive Retail"
+        "HOMEFURNISHING RETAIL": "^SP500-25504060",
+        "PACKAGING & CONTAINERS": "^SP500-25201050",  # mapped to GICS sub-industry "Housewares & Specialties"
+    },
+    "CONSUMER DEFENSIVE": {
+        "DRUG RETAIL": "^SP500-30101010",
+        "FOOD DISTRIBUTION": "^SP500-30101020",  # mapped to GICS sub-industry "Food Distributors"
+        "GROCERY STORES": "^SP500-30101030",  # mapped to GICS sub-industry "Food Retail"
+        "DISCOUNT STORES": "^SP500-30101040",  # mapped to GICS sub-industry "Consumer Staples Merchandise Retail"
+        "BEVERAGES - BREWERS": "^SP500-30201010",  # mapped to GICS sub-industry "Brewers"
+        "DISTILLERS & VINTNERS": "^SP500-30201020",
+        "BEVERAGES - NON-ALCOHOLIC": "^SP500-30201030",  # mapped to GICS sub-industry "Soft Drinks & Non-alcoholic Beverages"
+        "FARM PRODUCTS": "^SP500-30202010",  # mapped to GICS sub-industry "Agricultural Products & Services"
+        "CONFECTIONERS": "^SP500-30202030",  # mapped to GICS sub-industry "Packaged Foods & Meats"
+        "PACKAGED FOODS": "^SP500-30202030",  # mapped to GICS sub-industry "Packaged Foods & Meats"
+        "TOBACCO": "^SP500-30203010",
+        "HOUSEHOLD & PERSONAL PRODUCTS": "^SP500-3030",  # mapped to GICS industry-group "Household & Personal Products"
+        "EDUCATION & TRAINING SERVICES": "^SP500-25302010",  # mapped to GICS sub-industry "Education Services"
+    }
+}
+
 
 def country_to_iso2(country: str) -> str:
     """
@@ -264,7 +400,7 @@ def classify_market_cap(
     cap_size: types.MarketCapType = None
     market_index = None
     if ticker is not None:
-        country = country_to_iso2(ticker.info.get("country"))
+        country = country_to_iso2(ticker.info.get("country", ticker.info.get("region", "US")))
         exchange = normalize_exchange_code(ticker.info.get("fullExchangeName"))
         symbol = ticker.info.get("symbol").upper().split(".")[0]
         exchange_symbol = f"{exchange}:{symbol}"

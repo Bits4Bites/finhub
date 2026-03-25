@@ -25,9 +25,10 @@ class SymbolBase(BaseModel):
                 if ticker.info.get("fullExchangeName")
                 else ticker.info.get("exchange")
             ),
-            country=finhub_utils.country_to_iso2(ticker.info.get("country")),
+            country=ticker.info.get("country", ticker.info.get("region", "US")),
             **data,
         )
+        self.country = finhub_utils.country_to_iso2(self.country)
         self.exchange = finhub_utils.normalize_exchange_code(self.exchange)
 
 

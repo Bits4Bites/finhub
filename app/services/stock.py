@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
+import pandas as pd
 import yfinance as yf
 from ..models import finhub as models
 from ..models.finhub import (
@@ -479,17 +480,25 @@ async def get_us_upcoming_earnings_events(index: str = "") -> list[UpcomingEarni
     return events
 
 
+# ----------------------------------------------------------------------#
+
+
 async def analyse_dividend_event(
-    symbol: str, ex_div_date: str, div_amount: float, ticker: yf.Ticker = None
+    *,
+    ticker: yf.Ticker = None,
+    symbol: str,
+    ex_date: str,
+    div_amount: float,
 ) -> models.DividendEventAnalysis | None:
     """
     Analyzes a dividend event to estimate price range and recovery probability.
 
     Args:
-        symbol (str): Stock ticker symbol (e.g., 'AAPL', 'BHP.AX', 'HOSE:BID' etc.).
-        ex_div_date (str): Ex-dividend date in ISO format (YYYY-MM-DD).
-        div_amount (float): Dividend amount per share.
         ticker (yf.Ticker, optional): Pre-created yfinance Ticker object for the stock for reuse/caching purpose. If not provided, it will be created within the function.
+        symbol (str): Stock ticker symbol (e.g., 'AAPL', 'BHP.AX', 'HOSE:BID' etc.).
+        ex_date (str): Ex-dividend date in ISO format (YYYY-MM-DD).
+        div_amount (float): Dividend amount per share.
+
     Returns:
         models.DividendEventAnalysis: An object containing the analysis of the dividend event
     """
@@ -510,7 +519,7 @@ async def analyse_dividend_event(
         price=current_price,
         div_amount=div_amount,
         div_yield=div_amount / current_price,
-        ex_div_date=finhub_utils.yyyy_mm_dd_to_iso(ex_div_date, tz=tz),
+        ex_div_date=finhub_utils.yyyy_mm_dd_to_iso(ex_date, tz=tz),
     )
     result.ex_div_date_timestamp = int(datetime.fromisoformat(result.ex_div_date).timestamp())
 
@@ -519,6 +528,11 @@ async def analyse_dividend_event(
     if len(history5y) < 90:
         return None  # not enough data
     history5y = history5y.tz_convert(tz)
+
+    # recalculate div-yield
+    idx = history5y.index[-1] - pd.Timedelta(days=365)
+    sum_div = float(history5y[idx:]["Dividends"].sum())
+    result.div_yield = sum_div / current_price
 
     past_dividends_analysis = finhub_utils.analyze_past_dividends(history5y, 28)
     if past_dividends_analysis.empty:
@@ -530,13 +544,14 @@ async def analyse_dividend_event(
     std_drop_ratio = past_dividends_analysis["DropRatio"].std()
     min_drop = div_amount * (avg_drop_ratio - std_drop_ratio)
     max_drop = div_amount * (avg_drop_ratio + std_drop_ratio)
-    result.drop_price_min = float(current_price - max_drop)
-    result.drop_price_max = float(current_price - min_drop)
+    # technically cant be lower than 0.0, right?
+    result.drop_price_min = max(0.0, float(current_price - max_drop))
+    result.drop_price_max = max(0.0, float(current_price - min_drop))
 
     # estimate recovery days
     median_recovery_days = past_dividends_analysis["RecoveryDays"].median()
     std_recovery_days = past_dividends_analysis["RecoveryDays"].std()
-    result.recovery_days_min = int(median_recovery_days - std_recovery_days)
+    result.recovery_days_min = max(1, int(median_recovery_days - std_recovery_days))
     result.recovery_days_max = int(median_recovery_days + std_recovery_days)
 
     # estimate recovery chance

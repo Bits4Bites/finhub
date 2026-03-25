@@ -51,3 +51,7 @@ class ListingsResponse(BaseResponse):
 
 class IndexCompaniesResponse(BaseResponse):
     data: Optional[list[config.CompanyBriefInfo]] = None
+
+
+class AnalyzeDividendEventResponse(BaseResponse):
+    data: Optional[models.DividendEventAnalysis] = None

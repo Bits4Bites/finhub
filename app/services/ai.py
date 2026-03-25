@@ -1,10 +1,8 @@
-import csv
 import json
 
 import yfinance as yf
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
-from typing import Any
 from zoneinfo import ZoneInfo
 
 from bs4 import BeautifulSoup
@@ -45,328 +43,328 @@ async def ai_exec_prompt(
     return await ai_helper.ai_exec_prompt(task_cfg, prompt, prompt_cfg)
 
 
-async def ai_parse_upcoming_events(task_id: str, prompt: str, country: str) -> models.LLMResponse:
-    task_cfg = settings.llm_task_config[task_id] if task_id in settings.llm_task_config else None
-    if task_cfg is None:
-        raise EnvironmentError(f"LLM task configuration for {task_id} is missing.")
-
-    prompt_cfg = ai_helper.PromptConfig(
-        use_web_search=task_cfg.model.startswith("gpt-5"),
-        country=country,
-        thinking_level="LOW",
-    )
-    return await ai_helper.ai_exec_prompt(task_cfg, prompt, prompt_cfg)
-
-
-def build_prompt_template_and_end_date(event_type: str, tz: ZoneInfo, index: str = ""):
-    prompt_template = prompts[event_type] if event_type in prompts else ""
-    if not prompt_template:
-        raise EnvironmentError(f"Prompt template for {event_type} is missing or empty.")
-
-    start_date = datetime.now(tz).date()
-    if index:  # if index is provided to filter events, we look further into the future to capture more relevant events
-        # check if event_type contains "EARNINGS_"
-        if "_EARNINGS_" in event_type.upper():
-            end_date = start_date + timedelta(days=10)
-        else:
-            end_date = start_date + timedelta(days=14)
-    else:  # if no index filter is provided, we can look at a shorter time window for more immediate events
-        end_date = start_date + timedelta(days=7)
-
-    return prompt_template, end_date
+# async def ai_parse_upcoming_events(task_id: str, prompt: str, country: str) -> models.LLMResponse:
+#     task_cfg = settings.llm_task_config[task_id] if task_id in settings.llm_task_config else None
+#     if task_cfg is None:
+#         raise EnvironmentError(f"LLM task configuration for {task_id} is missing.")
+#
+#     prompt_cfg = ai_helper.PromptConfig(
+#         use_web_search=task_cfg.model.startswith("gpt-5"),
+#         country=country,
+#         thinking_level="LOW",
+#     )
+#     return await ai_helper.ai_exec_prompt(task_cfg, prompt, prompt_cfg)
 
 
-def build_prompt_upcoming_events(prompt_template: str, raw_input_data: str, index: str = ""):
-    prompt = prompt_template.replace("{RAW_INPUT_DATA}", raw_input_data)
-    if index:
-        prompt = (
-            prompt.replace("{ROLE}", "with live web search capability")
-            .replace("{OBJECTIVE}", f"Also, filter for companies that are CURRENT constituents of the {index} index.")
-            .replace(
-                "{VALIDATION_RULES}", f"MUST verify {index} membership using the most recent official constituent list."
-            )
-            .replace(
-                "{PROCESS}",
-                "INDEX FILTERING INSTRUCTIONS (CRITICAL)\n"
-                f"- Use your web search to find an up-to-date list of current {index} constituents (e.g., from MarketIndex or standard financial portals).\n"
-                f"- Filter the CSV input. DO NOT include any company in the final output unless it is confirmed to be in the {index}.\n"
-                "- Do NOT search for the events themselves online. Only search to verify index membership. Use the event data exactly as provided in the CSV.",
-            )
-        )
-    else:
-        prompt = (
-            prompt.replace("{ROLE}", "")
-            .replace("{OBJECTIVE}", "")
-            .replace("{VALIDATION_RULES}", "")
-            .replace("{PROCESS}", "")
-        )
-    return prompt
+# def build_prompt_template_and_end_date(event_type: str, tz: ZoneInfo, index: str = ""):
+#     prompt_template = prompts[event_type] if event_type in prompts else ""
+#     if not prompt_template:
+#         raise EnvironmentError(f"Prompt template for {event_type} is missing or empty.")
+#
+#     start_date = datetime.now(tz).date()
+#     if index:  # if index is provided to filter events, we look further into the future to capture more relevant events
+#         # check if event_type contains "EARNINGS_"
+#         if "_EARNINGS_" in event_type.upper():
+#             end_date = start_date + timedelta(days=10)
+#         else:
+#             end_date = start_date + timedelta(days=14)
+#     else:  # if no index filter is provided, we can look at a shorter time window for more immediate events
+#         end_date = start_date + timedelta(days=7)
+#
+#     return prompt_template, end_date
 
 
-# ----------------------------------------------------------------------#
-
-
-async def ai_get_upcoming_dividends_events(
-    country: str, event_type: str, tz: ZoneInfo, index: str = "", default_vals: dict[str, Any] = None
-) -> list[models.UpcomingDividendEvent]:
-    """
-    Check for upcoming dividend/distribution events (AU, US & VN only), using AI assistance.
-
-    Args:
-        country (str): Country code to filter events by (e.g., 'AU', 'US', etc.).
-        event_type (str): internal use
-        tz (ZoneInfo): timezone for date calculations
-        index (str): Optional stock index to filter events by (e.g., 'S&P/ASX 200', etc.).
-        default_vals (str): Optional, internal use
-    Returns:
-        list[models.UpcomingDividendEvent]: A list of upcoming dividend/distribution events
-    """
-    country = country.upper()
-    prompt_template, end_date = build_prompt_template_and_end_date(event_type, tz, index)
-    raw_data = (
-        await crawler_service.scrape_dividends_asx(end_date)
-        if country == "AU" or country == "AUS" or country == "AUSTRALIA"
-        else (
-            await crawler_service.scrape_dividends_vn(end_date)
-            if country == "VN" or country == "VIETNAM"
-            else await crawler_service.scrape_dividends_us(end_date)
-        )
-    )
-    if raw_data.empty:
-        return []
-
-    # optimize tokens:
-    # - Removing rows where "Dividend Yield" too small (< 3.50%/AU, < 2.5%/US, < 10%/VN) or not in format of percentage
-    # - Removing column "Url"
-    # - If value in column "Dividend Amount" begins with "AU$"/"<AU$" or "$"/"<$", remove the prefix
-    if "Dividend Amount" in raw_data.columns:
-        raw_data["Dividend Amount"] = (
-            raw_data["Dividend Amount"].astype(str).str.replace(r"^(AU\$|<AU\$|\$|<\$)", "", regex=True)
-        )
-    if "Dividend Yield" in raw_data.columns:
-        raw_data = raw_data[raw_data["Dividend Yield"].str.endswith("%")]
-        if country == "AU" or country == "AUS" or country == "AUSTRALIA":
-            raw_data = raw_data[raw_data["Dividend Yield"].str.rstrip("%").astype(float) >= 3.5]
-        elif country == "US" or country == "UNITED STATES":
-            raw_data = raw_data[raw_data["Dividend Yield"].str.rstrip("%").astype(float) >= 2.5]
-        elif country == "VN" or country == "VIETNAM":
-            raw_data = raw_data[raw_data["Dividend Yield"].str.rstrip("%").astype(float) >= 10]
-    if "Url" in raw_data.columns:
-        raw_data = raw_data.drop(columns=["Url"])
-
-    # US market: remove rows "Exchange Name" is not "NASDAQ" or "NYSE"
-    if country == "US" or country == "USA" or country == "UNITED STATES":
-        if "Exchange Name" in raw_data.columns:
-            raw_data = raw_data[raw_data["Exchange Name"].isin(["NASDAQ", "NYSE"])]
-
-    # VN market: copy Symbol column to Company Name
-    if country == "VN" or country == "VIETNAM":
-        if "Symbol" in raw_data.columns and "Company Name" not in raw_data.columns:
-            raw_data["Company Name"] = raw_data["Symbol"]
-
-    prompt = build_prompt_upcoming_events(
-        prompt_template, raw_data.to_csv(index=False, quoting=csv.QUOTE_NONNUMERIC), index
-    )
-    llm_result = (
-        await ai_parse_upcoming_events("PARSE_UPCOMING_DIVIDEND_EVENTS_NO_WEB_SEARCH", prompt, country)
-        if not index
-        else await ai_parse_upcoming_events("PARSE_UPCOMING_DIVIDEND_EVENTS_WEB_SEARCH", prompt, country)
-    )
-
-    if llm_result.is_error:
-        raise RuntimeError(
-            f"[ERROR] LLM failed to generate response for upcoming dividend/distribution events: {llm_result.completion}"
-        )
-
-    events = models.parse_upcoming_dividend_events_from_json(llm_result.completion, default_vals)
-    for event in events:
-        event.date = finhub_utils.yyyy_mm_dd_to_iso(event.date, tz=tz)
-        event.timestamp = int(datetime.fromisoformat(event.date).timestamp())
-        if event.payment_date:
-            event.payment_date = finhub_utils.yyyy_mm_dd_to_iso(event.payment_date, tz=tz)
-    return events
-
-
-async def ai_get_asx_upcoming_dividends_events(index: str = "") -> list[models.UpcomingDividendEvent]:
-    """
-    Check for upcoming dividend/distribution events for ASX, using AI assistance.
-
-    Args:
-        index (str): Optional stock index to filter events by (e.g., 'S&P/ASX 200', etc.).
-    Returns:
-        list[models.UpcomingDividendEvent]: A list of upcoming dividend/distribution events
-    """
-    country = "AU"
-    event_type = EVENT_ASX_UPCOMING_DIVIDENDS
-    tz = ZoneInfo("Australia/Sydney")
-    default_vals = {
-        "exchange": "ASX",
-        "src": "ASX",
-        "currency": "AUD",
-        "status": "declared",
-    }
-    events = await ai_get_upcoming_dividends_events(country, event_type, tz, index, default_vals)
-    # tokens optimization: build the source URL using code instead of asking LLM to include the URL in the output
-    for event in events:
-        event.link = f"https://www.asx.com.au/markets/company/{event.symbol.split(':')[-1]}"
-    return events
-
-
-async def ai_get_us_upcoming_dividends_events(index: str = "") -> list[models.UpcomingDividendEvent]:
-    """
-    Check for upcoming dividend/distribution events for US market, using AI assistance.
-
-    Args:
-        index (str): Optional stock index to filter events by (e.g., 'NASDAQ 100', etc.).
-    Returns:
-        list[models.UpcomingDividendEvent]: A list of upcoming dividend/distribution events
-    """
-    country = "US"
-    event_type = EVENT_US_UPCOMING_DIVIDENDS
-    tz = ZoneInfo("America/New_York")
-    default_vals = {
-        "src": "StockAnalysis",
-        "currency": "USD",
-        "status": "declared",
-    }
-    events = await ai_get_upcoming_dividends_events(country, event_type, tz, index, default_vals)
-    # tokens optimization: build the source URL using code instead of asking LLM to include the URL in the output
-    for event in events:
-        event.link = f"https://stockanalysis.com/stocks/{event.symbol.lower().split(':')[-1]}/dividend/"
-    return events
-
-
-async def ai_get_vn_upcoming_dividends_events(index: str = "") -> list[models.UpcomingDividendEvent]:
-    """
-    Check for upcoming dividend/distribution events for VN market, using AI assistance.
-
-    Args:
-        index (str): Optional stock index to filter events by (e.g., 'VN30', etc.).
-    Returns:
-        list[models.UpcomingDividendEvent]: A list of upcoming dividend/distribution events
-    """
-    country = "VN"
-    event_type = EVENT_VN_UPCOMING_DIVIDENDS
-    tz = ZoneInfo("Asia/Ho_Chi_Minh")
-    default_vals = {
-        "cat": "dividend",
-        "src": "VietStock",
-        "currency": "VND",
-        "status": "declared",
-    }
-    events = await ai_get_upcoming_dividends_events(country, event_type, tz, index, default_vals)
-    # tokens optimization: build the source URL using code instead of asking LLM to include the URL in the output
-    for event in events:
-        event.link = f"https://finance.vietstock.vn/{event.symbol.split(':')[-1]}-thong-tin.htm"
-    return events
+# def build_prompt_upcoming_events(prompt_template: str, raw_input_data: str, index: str = ""):
+#     prompt = prompt_template.replace("{RAW_INPUT_DATA}", raw_input_data)
+#     if index:
+#         prompt = (
+#             prompt.replace("{ROLE}", "with live web search capability")
+#             .replace("{OBJECTIVE}", f"Also, filter for companies that are CURRENT constituents of the {index} index.")
+#             .replace(
+#                 "{VALIDATION_RULES}", f"MUST verify {index} membership using the most recent official constituent list."
+#             )
+#             .replace(
+#                 "{PROCESS}",
+#                 "INDEX FILTERING INSTRUCTIONS (CRITICAL)\n"
+#                 f"- Use your web search to find an up-to-date list of current {index} constituents (e.g., from MarketIndex or standard financial portals).\n"
+#                 f"- Filter the CSV input. DO NOT include any company in the final output unless it is confirmed to be in the {index}.\n"
+#                 "- Do NOT search for the events themselves online. Only search to verify index membership. Use the event data exactly as provided in the CSV.",
+#             )
+#         )
+#     else:
+#         prompt = (
+#             prompt.replace("{ROLE}", "")
+#             .replace("{OBJECTIVE}", "")
+#             .replace("{VALIDATION_RULES}", "")
+#             .replace("{PROCESS}", "")
+#         )
+#     return prompt
 
 
 # ----------------------------------------------------------------------#
 
 
-async def ai_get_upcoming_earnings_events(
-    country: str, event_type: str, tz: ZoneInfo, index: str = "", default_vals: dict[str, Any] = None
-) -> list[models.UpcomingEarningsEvent]:
-    """
-    Check for upcoming earnings events (AU  & US only), using AI assistance.
+# async def ai_get_upcoming_dividends_events(
+#     country: str, event_type: str, tz: ZoneInfo, index: str = "", default_vals: dict[str, Any] = None
+# ) -> list[models.UpcomingDividendEvent]:
+#     """
+#     Check for upcoming dividend/distribution events (AU, US & VN only), using AI assistance.
+#
+#     Args:
+#         country (str): Country code to filter events by (e.g., 'AU', 'US', etc.).
+#         event_type (str): internal use
+#         tz (ZoneInfo): timezone for date calculations
+#         index (str): Optional stock index to filter events by (e.g., 'S&P/ASX 200', etc.).
+#         default_vals (str): Optional, internal use
+#     Returns:
+#         list[models.UpcomingDividendEvent]: A list of upcoming dividend/distribution events
+#     """
+#     country = country.upper()
+#     prompt_template, end_date = build_prompt_template_and_end_date(event_type, tz, index)
+#     raw_data = (
+#         await crawler_service.scrape_dividends_asx(end_date)
+#         if country == "AU" or country == "AUS" or country == "AUSTRALIA"
+#         else (
+#             await crawler_service.scrape_dividends_vn(end_date)
+#             if country == "VN" or country == "VIETNAM"
+#             else await crawler_service.scrape_dividends_us(end_date)
+#         )
+#     )
+#     if raw_data.empty:
+#         return []
+#
+#     # optimize tokens:
+#     # - Removing rows where "Dividend Yield" too small (< 3.50%/AU, < 2.5%/US, < 10%/VN) or not in format of percentage
+#     # - Removing column "Url"
+#     # - If value in column "Dividend Amount" begins with "AU$"/"<AU$" or "$"/"<$", remove the prefix
+#     if "Dividend Amount" in raw_data.columns:
+#         raw_data["Dividend Amount"] = (
+#             raw_data["Dividend Amount"].astype(str).str.replace(r"^(AU\$|<AU\$|\$|<\$)", "", regex=True)
+#         )
+#     if "Dividend Yield" in raw_data.columns:
+#         raw_data = raw_data[raw_data["Dividend Yield"].str.endswith("%")]
+#         if country == "AU" or country == "AUS" or country == "AUSTRALIA":
+#             raw_data = raw_data[raw_data["Dividend Yield"].str.rstrip("%").astype(float) >= 3.5]
+#         elif country == "US" or country == "UNITED STATES":
+#             raw_data = raw_data[raw_data["Dividend Yield"].str.rstrip("%").astype(float) >= 2.5]
+#         elif country == "VN" or country == "VIETNAM":
+#             raw_data = raw_data[raw_data["Dividend Yield"].str.rstrip("%").astype(float) >= 10]
+#     if "Url" in raw_data.columns:
+#         raw_data = raw_data.drop(columns=["Url"])
+#
+#     # US market: remove rows "Exchange Name" is not "NASDAQ" or "NYSE"
+#     if country == "US" or country == "USA" or country == "UNITED STATES":
+#         if "Exchange Name" in raw_data.columns:
+#             raw_data = raw_data[raw_data["Exchange Name"].isin(["NASDAQ", "NYSE"])]
+#
+#     # VN market: copy Symbol column to Company Name
+#     if country == "VN" or country == "VIETNAM":
+#         if "Symbol" in raw_data.columns and "Company Name" not in raw_data.columns:
+#             raw_data["Company Name"] = raw_data["Symbol"]
+#
+#     prompt = build_prompt_upcoming_events(
+#         prompt_template, raw_data.to_csv(index=False, quoting=csv.QUOTE_NONNUMERIC), index
+#     )
+#     llm_result = (
+#         await ai_parse_upcoming_events("PARSE_UPCOMING_DIVIDEND_EVENTS_NO_WEB_SEARCH", prompt, country)
+#         if not index
+#         else await ai_parse_upcoming_events("PARSE_UPCOMING_DIVIDEND_EVENTS_WEB_SEARCH", prompt, country)
+#     )
+#
+#     if llm_result.is_error:
+#         raise RuntimeError(
+#             f"[ERROR] LLM failed to generate response for upcoming dividend/distribution events: {llm_result.completion}"
+#         )
+#
+#     events = models.parse_upcoming_dividend_events_from_json(llm_result.completion, default_vals)
+#     for event in events:
+#         event.date = finhub_utils.yyyy_mm_dd_to_iso(event.date, tz=tz)
+#         event.timestamp = int(datetime.fromisoformat(event.date).timestamp())
+#         if event.payment_date:
+#             event.payment_date = finhub_utils.yyyy_mm_dd_to_iso(event.payment_date, tz=tz)
+#     return events
 
-    Args:
-        country (str): Country code to filter events by (e.g., 'AU', 'US', etc.).
-        event_type (str): internal use
-        tz (ZoneInfo): timezone of the market
-        index (str): Optional stock index to filter events by (e.g., 'S&P/ASX 200', etc.).
-        default_vals (str): Optional, internal use
-    Returns:
-        list[models.UpcomingEarningsEvent]: A list of upcoming earnings events
-    """
-    country = country.upper()
-    prompt_template, end_date = build_prompt_template_and_end_date(event_type, tz, index)
-    raw_data = (
-        await crawler_service.scrape_earnings_asx(end_date)
-        if country == "AU" or country == "AUS" or country == "AUSTRALIA"
-        else await crawler_service.scrape_earnings_us(end_date)
-    )
-    if raw_data.empty:
-        return []
 
-    # optimize tokens:
-    # - Removing column "Url"
-    if "Url" in raw_data.columns:
-        raw_data = raw_data.drop(columns=["Url"])
-
-    # US market: remove rows "Exchange Name" is not "NASDAQ" or "NYSE"
-    if country == "US" or country == "USA" or country == "UNITED STATES":
-        if "Exchange Name" in raw_data.columns:
-            raw_data = raw_data[raw_data["Exchange Name"].isin(["NASDAQ", "NYSE"])]
-
-    prompt = build_prompt_upcoming_events(
-        prompt_template, raw_data.to_csv(index=False, quoting=csv.QUOTE_NONNUMERIC), index
-    )
-    llm_result = (
-        await ai_parse_upcoming_events("PARSE_UPCOMING_EARNINGS_EVENTS_NO_WEB_SEARCH", prompt, country)
-        if not index
-        else await ai_parse_upcoming_events("PARSE_UPCOMING_EARNINGS_EVENTS_WEB_SEARCH", prompt, country)
-    )
-
-    if llm_result.is_error:
-        raise RuntimeError(
-            f"[ERROR] LLM failed to generate response for upcoming earnings events: {llm_result.completion}"
-        )
-
-    events = models.parse_upcoming_earnings_events_from_json(llm_result.completion, default_vals)
-    for event in events:
-        event.date = finhub_utils.yyyy_mm_dd_to_iso(event.date, tz)
-        event.timestamp = int(datetime.fromisoformat(event.date).timestamp())
-    return events
+# async def ai_get_asx_upcoming_dividends_events(index: str = "") -> list[models.UpcomingDividendEvent]:
+#     """
+#     Check for upcoming dividend/distribution events for ASX, using AI assistance.
+#
+#     Args:
+#         index (str): Optional stock index to filter events by (e.g., 'S&P/ASX 200', etc.).
+#     Returns:
+#         list[models.UpcomingDividendEvent]: A list of upcoming dividend/distribution events
+#     """
+#     country = "AU"
+#     event_type = EVENT_ASX_UPCOMING_DIVIDENDS
+#     tz = ZoneInfo("Australia/Sydney")
+#     default_vals = {
+#         "exchange": "ASX",
+#         "src": "ASX",
+#         "currency": "AUD",
+#         "status": "declared",
+#     }
+#     events = await ai_get_upcoming_dividends_events(country, event_type, tz, index, default_vals)
+#     # tokens optimization: build the source URL using code instead of asking LLM to include the URL in the output
+#     for event in events:
+#         event.link = f"https://www.asx.com.au/markets/company/{event.symbol.split(':')[-1]}"
+#     return events
 
 
-async def ai_get_asx_upcoming_earnings_events(index: str = "") -> list[models.UpcomingEarningsEvent]:
-    """
-    Check for upcoming earnings events for ASX, using AI assistance.
+# async def ai_get_us_upcoming_dividends_events(index: str = "") -> list[models.UpcomingDividendEvent]:
+#     """
+#     Check for upcoming dividend/distribution events for US market, using AI assistance.
+#
+#     Args:
+#         index (str): Optional stock index to filter events by (e.g., 'NASDAQ 100', etc.).
+#     Returns:
+#         list[models.UpcomingDividendEvent]: A list of upcoming dividend/distribution events
+#     """
+#     country = "US"
+#     event_type = EVENT_US_UPCOMING_DIVIDENDS
+#     tz = ZoneInfo("America/New_York")
+#     default_vals = {
+#         "src": "StockAnalysis",
+#         "currency": "USD",
+#         "status": "declared",
+#     }
+#     events = await ai_get_upcoming_dividends_events(country, event_type, tz, index, default_vals)
+#     # tokens optimization: build the source URL using code instead of asking LLM to include the URL in the output
+#     for event in events:
+#         event.link = f"https://stockanalysis.com/stocks/{event.symbol.lower().split(':')[-1]}/dividend/"
+#     return events
 
-    Args:
-        index (str): Optional stock index to filter events by (e.g., 'S&P/ASX 200', etc.).
-    Returns:
-        list[models.UpcomingEarningsEvent]: A list of upcoming earnings events
-    """
-    country = "AU"
-    event_type = EVENT_ASX_UPCOMING_EARNINGS
-    tz = ZoneInfo("Australia/Sydney")
-    default_vals = {
-        "exchange": "ASX",
-        "src": "TipRanks",
-        "status": "estimated",
-        "report_period": "N/A",
-    }
-    events = await ai_get_upcoming_earnings_events(country, event_type, tz, index, default_vals)
-    # tokens optimization: build the source URL using code instead of asking LLM to include the URL in the output
-    for event in events:
-        event.link = f"https://www.tipranks.com/stocks/au:{event.symbol.lower().split(':')[-1]}/earnings"
-    return events
+
+# async def ai_get_vn_upcoming_dividends_events(index: str = "") -> list[models.UpcomingDividendEvent]:
+#     """
+#     Check for upcoming dividend/distribution events for VN market, using AI assistance.
+#
+#     Args:
+#         index (str): Optional stock index to filter events by (e.g., 'VN30', etc.).
+#     Returns:
+#         list[models.UpcomingDividendEvent]: A list of upcoming dividend/distribution events
+#     """
+#     country = "VN"
+#     event_type = EVENT_VN_UPCOMING_DIVIDENDS
+#     tz = ZoneInfo("Asia/Ho_Chi_Minh")
+#     default_vals = {
+#         "cat": "dividend",
+#         "src": "VietStock",
+#         "currency": "VND",
+#         "status": "declared",
+#     }
+#     events = await ai_get_upcoming_dividends_events(country, event_type, tz, index, default_vals)
+#     # tokens optimization: build the source URL using code instead of asking LLM to include the URL in the output
+#     for event in events:
+#         event.link = f"https://finance.vietstock.vn/{event.symbol.split(':')[-1]}-thong-tin.htm"
+#     return events
 
 
-async def ai_get_us_upcoming_earnings_events(index: str = "") -> list[models.UpcomingEarningsEvent]:
-    """
-    Check for upcoming earnings events for US market, using AI assistance.
+# ----------------------------------------------------------------------#
 
-    Args:
-        index (str): Optional stock index to filter events by (e.g., 'NASDAQ 100', etc.).
-    Returns:
-        list[models.UpcomingEarningsEvent]: A list of upcoming earnings events
-    """
-    country = "US"
-    event_type = EVENT_US_UPCOMING_EARNINGS
-    tz = ZoneInfo("America/New_York")
-    default_vals = {
-        "src": "TipRanks",
-        "status": "estimated",
-        "report_period": "N/A",
-    }
-    events = await ai_get_upcoming_earnings_events(country, event_type, tz, index, default_vals)
-    # tokens optimization: build the source URL using code instead of asking LLM to include the URL in the output
-    for event in events:
-        event.link = f"https://www.tipranks.com/stocks/{event.symbol.lower().split(':')[-1]}/earnings"
-    return events
+
+# async def ai_get_upcoming_earnings_events(
+#     country: str, event_type: str, tz: ZoneInfo, index: str = "", default_vals: dict[str, Any] = None
+# ) -> list[models.UpcomingEarningsEvent]:
+#     """
+#     Check for upcoming earnings events (AU  & US only), using AI assistance.
+#
+#     Args:
+#         country (str): Country code to filter events by (e.g., 'AU', 'US', etc.).
+#         event_type (str): internal use
+#         tz (ZoneInfo): timezone of the market
+#         index (str): Optional stock index to filter events by (e.g., 'S&P/ASX 200', etc.).
+#         default_vals (str): Optional, internal use
+#     Returns:
+#         list[models.UpcomingEarningsEvent]: A list of upcoming earnings events
+#     """
+#     country = country.upper()
+#     prompt_template, end_date = build_prompt_template_and_end_date(event_type, tz, index)
+#     raw_data = (
+#         await crawler_service.scrape_earnings_asx(end_date)
+#         if country == "AU" or country == "AUS" or country == "AUSTRALIA"
+#         else await crawler_service.scrape_earnings_us(end_date)
+#     )
+#     if raw_data.empty:
+#         return []
+#
+#     # optimize tokens:
+#     # - Removing column "Url"
+#     if "Url" in raw_data.columns:
+#         raw_data = raw_data.drop(columns=["Url"])
+#
+#     # US market: remove rows "Exchange Name" is not "NASDAQ" or "NYSE"
+#     if country == "US" or country == "USA" or country == "UNITED STATES":
+#         if "Exchange Name" in raw_data.columns:
+#             raw_data = raw_data[raw_data["Exchange Name"].isin(["NASDAQ", "NYSE"])]
+#
+#     prompt = build_prompt_upcoming_events(
+#         prompt_template, raw_data.to_csv(index=False, quoting=csv.QUOTE_NONNUMERIC), index
+#     )
+#     llm_result = (
+#         await ai_parse_upcoming_events("PARSE_UPCOMING_EARNINGS_EVENTS_NO_WEB_SEARCH", prompt, country)
+#         if not index
+#         else await ai_parse_upcoming_events("PARSE_UPCOMING_EARNINGS_EVENTS_WEB_SEARCH", prompt, country)
+#     )
+#
+#     if llm_result.is_error:
+#         raise RuntimeError(
+#             f"[ERROR] LLM failed to generate response for upcoming earnings events: {llm_result.completion}"
+#         )
+#
+#     events = models.parse_upcoming_earnings_events_from_json(llm_result.completion, default_vals)
+#     for event in events:
+#         event.date = finhub_utils.yyyy_mm_dd_to_iso(event.date, tz)
+#         event.timestamp = int(datetime.fromisoformat(event.date).timestamp())
+#     return events
+
+
+# async def ai_get_asx_upcoming_earnings_events(index: str = "") -> list[models.UpcomingEarningsEvent]:
+#     """
+#     Check for upcoming earnings events for ASX, using AI assistance.
+#
+#     Args:
+#         index (str): Optional stock index to filter events by (e.g., 'S&P/ASX 200', etc.).
+#     Returns:
+#         list[models.UpcomingEarningsEvent]: A list of upcoming earnings events
+#     """
+#     country = "AU"
+#     event_type = EVENT_ASX_UPCOMING_EARNINGS
+#     tz = ZoneInfo("Australia/Sydney")
+#     default_vals = {
+#         "exchange": "ASX",
+#         "src": "TipRanks",
+#         "status": "estimated",
+#         "report_period": "N/A",
+#     }
+#     events = await ai_get_upcoming_earnings_events(country, event_type, tz, index, default_vals)
+#     # tokens optimization: build the source URL using code instead of asking LLM to include the URL in the output
+#     for event in events:
+#         event.link = f"https://www.tipranks.com/stocks/au:{event.symbol.lower().split(':')[-1]}/earnings"
+#     return events
+
+
+# async def ai_get_us_upcoming_earnings_events(index: str = "") -> list[models.UpcomingEarningsEvent]:
+#     """
+#     Check for upcoming earnings events for US market, using AI assistance.
+#
+#     Args:
+#         index (str): Optional stock index to filter events by (e.g., 'NASDAQ 100', etc.).
+#     Returns:
+#         list[models.UpcomingEarningsEvent]: A list of upcoming earnings events
+#     """
+#     country = "US"
+#     event_type = EVENT_US_UPCOMING_EARNINGS
+#     tz = ZoneInfo("America/New_York")
+#     default_vals = {
+#         "src": "TipRanks",
+#         "status": "estimated",
+#         "report_period": "N/A",
+#     }
+#     events = await ai_get_upcoming_earnings_events(country, event_type, tz, index, default_vals)
+#     # tokens optimization: build the source URL using code instead of asking LLM to include the URL in the output
+#     for event in events:
+#         event.link = f"https://www.tipranks.com/stocks/{event.symbol.lower().split(':')[-1]}/earnings"
+#     return events
 
 
 # ----------------------------------------------------------------------#
@@ -599,21 +597,27 @@ dividend_capture_criteria = {
 
 
 async def ai_analyse_dividend_event(
-    symbol: str, ex_div_date: str, div_amount: float
+    *,
+    symbol: str,
+    ex_date: str,
+    div_amount: float,
 ) -> models.DividendEventAnalysis | None:
     """
     Analyzes a dividend event using AI assistance.
 
     Args:
         symbol (str): Stock ticker symbol (e.g., 'AAPL', 'BHP.AX', 'HOSE:BID' etc.).
-        ex_div_date (str): Ex-dividend date in ISO format (YYYY-MM-DD).
+        ex_date (str): Ex-dividend date in ISO format (YYYY-MM-DD).
         div_amount (float): Dividend amount per share.
+
     Returns:
         models.DividendEventAnalysis: An object containing the analysis of the dividend event
     """
     yf_ticker = finhub_utils.to_yf_ticker(symbol)
     ticker = yf.Ticker(yf_ticker)
-    result = await stock_service.analyse_dividend_event(symbol, ex_div_date, div_amount, ticker=ticker)
+    result = await stock_service.analyse_dividend_event(
+        ticker=ticker, symbol=symbol, ex_date=ex_date, div_amount=div_amount
+    )
     if not result:
         return None
 
@@ -634,7 +638,7 @@ async def ai_analyse_dividend_event(
         .replace("{INDUSTRY}", f"{result.overview.industry}")
         .replace("{TODAY}", today_utc.isoformat())
         .replace("{CURRENT_PRICE}", f"{result.price:.2f}")
-        .replace("{EX_DIV_DATE}", ex_div_date)
+        .replace("{EX_DIV_DATE}", ex_date)
         .replace("{DIV_AMOUNT}", f"{div_amount:.2f}")
         .replace("{DIV_YIELD}", f"{result.div_yield:.2%}")
     )
