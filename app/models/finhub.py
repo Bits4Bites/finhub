@@ -499,7 +499,7 @@ class DividendEventAnalysis(BaseModel):
     bid_ask_spread: Optional[float] = None
     trend_60d: Optional[float] = None
     market_trend_60d: Optional[float] = None
-    industry_trend_60d: Optional[float] = None
+    peer_trend_60d: Optional[float] = None
     # ====== analysis result from AI
     llm_error: float = False
     llm_error_msg: Optional[str] = None

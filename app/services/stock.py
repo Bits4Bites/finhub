@@ -503,7 +503,7 @@ async def analyse_dividend_event(
         models.DividendEventAnalysis: An object containing the analysis of the dividend event
     """
     yf_ticker = finhub_utils.to_yf_ticker(symbol)
-    country = finhub_utils.country_code_from_yf_ticker(yf_ticker)
+    # country = finhub_utils.country_code_from_yf_ticker(yf_ticker)
     tz = finhub_utils.tz_from_yf_ticker(yf_ticker)
 
     ticker = yf.Ticker(yf_ticker) if ticker is None else ticker
@@ -581,18 +581,19 @@ async def analyse_dividend_event(
     result.bid_ask_spread = finhub_utils.calc_bid_ask_spread_roll(history[-30:])
 
     result.trend_60d = finhub_utils.calc_trend_ema(history5y[-60:])
-    market_main_indices = finhub_utils.yf_tickers_for_market_indices(country)
-    if market_main_indices and len(market_main_indices) > 0:
-        market_ticker = yf.Ticker(market_main_indices[0])
-        market_history60d = market_ticker.history(period="61d", interval="1d", auto_adjust=False)[:-1]
-        market_history60d = market_history60d.tz_convert(tz)
-        result.market_trend_60d = finhub_utils.calc_trend_ema(market_history60d)
-    sector, industry = result.overview.sector, result.overview.industry
-    market_industry_indices = finhub_utils.yf_tickers_for_market_indices(country, sector, industry)
-    if market_industry_indices and len(market_industry_indices) > 0:
-        industry_ticker = yf.Ticker(market_industry_indices[0])
-        industry_history60d = industry_ticker.history(period="61d", interval="1d", auto_adjust=False)[:-1]
-        industry_history60d = industry_history60d.tz_convert(tz)
-        result.industry_trend_60d = finhub_utils.calc_trend_ema(industry_history60d)
+    market_ticker = finhub_utils.lookup_market_yf_static_ticker(ticker=ticker)
+    if market_ticker is not None:
+        mt = yf.Ticker(market_ticker)
+        if "symbol" in mt.info:
+            market_history60d = mt.history(period="61d", interval="1d", auto_adjust=False)[:-1]
+            market_history60d = market_history60d.tz_convert(tz)
+            result.market_trend_60d = finhub_utils.calc_trend_ema(market_history60d)
+    peer_ticker = finhub_utils.lookup_peer_yf_static_ticker(ticker=ticker)
+    if peer_ticker is not None:
+        pt = yf.Ticker(peer_ticker)
+        if "symbol" in pt.info:
+            peer_history60d = pt.history(period="61d", interval="1d", auto_adjust=False)[:-1]
+            peer_history60d = peer_history60d.tz_convert(tz)
+            result.peer_trend_60d = finhub_utils.calc_trend_ema(peer_history60d)
 
     return result

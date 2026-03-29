@@ -9,42 +9,45 @@ import yfinance as yf
 from .. import config
 from ..models import types
 
-asx_main_yf_indices = [
-    "^AORD",  # ASX All Ordinaries
-    "^ATLI",  # ASX20
-    "^AFLI",  # ASX50
-    "^ATOI",  # ASX100
-    "^AXJO",  # ASX200
-    "^AXKO",  # ASX300
-]
-
-asx_sector_industry_yf_indices = {
-    "COMMUNICATION SERVICES": "^AXTJ",
-    "COMMUNICATIONS SERVICES": "^AXTJ",
-    "TECHNOLOGY": "^AXIJ",  # S&P/ASX 200 Information Technology (Sector)
-    "INFORMATION TECHNOLOGY": "^AXIJ",  # S&P/ASX 200 Information Technology (Sector)
-    "HEALTHCARE": "^AXHJ",
-    "HEALTH CARE": "^AXHJ",
-    "BASIC MATERIALS": "AXMJ",
-    "REAL ESTATE": "^AXRE",
-    "ENERGY": "^AXEJ",
-    "CONSUMER DEFENSIVE": "^AXSJ",  # S&P/ASX 200 Consumer Staples (Sector)
-    "CONSUMER CYCLICAL": "^AXDJ",  # S&P/ASX 200 Consumer Discretionary (Sector)
-    "FINANCIAL SERVICES": "^AXFJ",  # S&P/ASX 200 Financials (Sector)
-    "UTILITY": "^AXUJ",
-    "UTILITIES": "^AXUJ",
-    "INDUSTRIAL": "^AXNJ",
-    "INDUSTRIALS": "^AXNJ",
+asx_index_yf_static_tickers = {
+    "ASX20": "^ATLI",
+    "ASX50": "^AFLI",
+    "ASX100": "^ATOI",
+    "ASX200": "^AXJO",
+    "ASX300": "^AXKO",
+    "ASX": "^AORD",  # ASX All Ordinaries
 }
 
-us_main_yf_indices = [
-    "^DWCF",  # Dow Jones U.S. Total Stock Mark
-    "^IXIC",  # NASDAQ Composite
-    "^SPX",   # SP500
-    "^RUI",   # Russell 1000
-]
+asx_sector_yf_static_tickers = {
+    "ENERGY": "^AXEJ",
+    "BASIC MATERIALS": "^AXMJ",
+    "INDUSTRIALS": "^AXNJ",
+    "CONSUMER CYCLICAL": "^AXDJ",  # S&P/ASX 200 Consumer Discretionary (Sector)
+    "CONSUMER DEFENSIVE": "^AXSJ",  # S&P/ASX 200 Consumer Staples (Sector)
+    "HEALTHCARE": "^AXHJ",
+    "FINANCIAL SERVICES": "^AXFJ",  # S&P/ASX 200 Financials (Sector)
+    "TECHNOLOGY": "^AXIJ",  # S&P/ASX 200 Information Technology (Sector)
+    "COMMUNICATION SERVICES": "^AXTJ",
+    "UTILITIES": "^AXUJ",
+    "REAL ESTATE": "^AXRE",
+}
 
-us_sector_yf_indices = {
+us_index_yf_static_tickers = {
+    "NASDAQ100": "^NDX",
+    "NASDAQ": "^IXIC",  # NASDAQ Composite
+    "SP500": "^SPX",  # ^GSPC
+    "SP400": "^MID",  # SP400
+    "SP600": "^SP600"
+}
+
+# us_main_yf_indices = [
+#     "^DWCF",  # Dow Jones U.S. Total Stock Mark
+#     "^IXIC",  # NASDAQ Composite
+#     "^SPX",   # SP500
+#     "^RUI",   # Russell 1000
+# ]
+
+us_sector_yf_static_tickers = {
     "ENERGY": "^SP500-1010",
     "BASIC MATERIALS": "^SP500-15",
     "INDUSTRIALS": "^SP500-20",
@@ -58,7 +61,7 @@ us_sector_yf_indices = {
     "REAL ESTATE": "^SP500-60",
 }
 
-us_industry_yf_indices = {
+us_industry_yf_static_tickers = {
     "ENERGY": {
         "OIL & GAS E&P": "^SP500-10102020",
         "OIL & GAS EQUIPMENT & SERVICES": "^SP500-10101020",
@@ -170,7 +173,96 @@ us_industry_yf_indices = {
         "TOBACCO": "^SP500-30203010",
         "HOUSEHOLD & PERSONAL PRODUCTS": "^SP500-3030",  # mapped to GICS industry-group "Household & Personal Products"
         "EDUCATION & TRAINING SERVICES": "^SP500-25302010",  # mapped to GICS sub-industry "Education Services"
-    }
+    },
+    "HEALTHCARE": {
+        "MEDICAL INSTRUMENTS & SUPPLIES": "^SP500-35101010",  # mapped to GICS industry "Health Care Equipment & Supplies"
+        "MEDICAL DEVICES": "^SP500-35101010",  # mapped to GICS industry "Health Care Equipment & Supplies"
+        "MEDICAL DISTRIBUTION": "^SP500-35102010",  # mapped to GICS sub-industry "Health Care Distributors"
+        "HEALTH CARE SERVICES": "^SP500-35102015",
+        "MEDICAL CARE FACILITIES": "^SP500-35102020",  # mapped to GICS sub-industry "Health Care Facilities"
+        "HEALTHCARE PLANS": "^SP500-35102030",  # mapped to GICS sub-industry "Managed Health Care"
+        "HEALTH INFORMATION SERVICES": "^SP500-35103010",  # mapped to GICS sub-industry "Health Care Technology"
+        "BIOTECHNOLOGY": "^SP500-35201010",
+        "DRUG MANUFACTURERS - GENERAL": "^SP500-35202010",  # mapped to GICS sub-industry "Pharmaceuticals"
+        "DRUG MANUFACTURERS - SPECIALTY & GENERIC": "^SP500-35202010",  # mapped to GICS sub-industry "Pharmaceuticals"
+        "DIAGNOSTICS & RESEARCH": "^SP500-35203010",  # mapped to GICS sub-industry "Life Sciences Tools & Services"
+    },
+    "FINANCIAL SERVICES": {
+        "BANKS - DIVERSIFIED": "^SP500-40101010",  # mapped to GICS sub-industry "Diversified Banks"
+        "BANKS - REGIONAL": "^SP500-40101015",  # mapped to GICS sub-industry "Regional Banks"
+        "DIVERSIFIED FINANCIAL SERVICES": "^SP500-40201020",
+        "FINANCIAL CONGLOMERATES": "^SP500-40201030",  # mapped to GICS sub-industry "Multi-sector Holdings"
+        "SPECIALIZED FINANCE": "^SP500-40201040",
+        "MORTGAGE FINANCE": "^SP500-40201050",  # mapped to GICS sub-industry "Commercial & Residential Mortgage Finance"
+        "TRANSACTION & PAYMENT PROCESSING SERVICES": "^SP500-40201060",
+        "CREDIT SERVICES": "^SP500-40202010",  # mapped to GICS sub-industry "Consumer Finance"
+        "ASSET MANAGEMENT": "^SP500-40203010",  # mapped to GICS sub-industry "Asset Management & Custody Banks"
+        # "INVESTMENT BANKING & BROKERAGE": "^SP500-40203020",
+        "CAPITAL MARKETS": "^SP500-40203030",  # mapped to GICS sub-industry "Diversified Capital Markets"
+        "FINANCIAL DATA & STOCK EXCHANGES": "^SP500-40203040",  # mapped to GICS sub-industry "Financial Exchanges & Data"
+        "MORTGAGE REITS": "^SP500-40204010",
+        "INSURANCE BROKERS": "^SP500-40301010",
+        "INSURANCE - LIFE": "^SP500-40301020",  # mapped to GICS sub-industry "Life & Health Insurance"
+        "INSURANCE - DIVERSIFIED": "^SP500-40301030",  # mapped to GICS sub-industry "Multi-line Insurance"
+        "INSURANCE - SPECIALTY": "^SP500-40301040",  # mapped to GICS sub-industry "Property & Casualty Insurance"
+        "INSURANCE - PROPERTY & CASUALTY": "^SP500-40301040",  # mapped to GICS sub-industry "Property & Casualty Insurance"
+        "INSURANCE - REINSURANCE": "^SP500-40301050",  # mapped to GICS sub-industry "Reinsurance"
+    },
+    "TECHNOLOGY": {
+        "INFORMATION TECHNOLOGY SERVICES": "^SP500-45102010",  # mapped to GICS sub-industry "IT Consulting & Other Services"
+        "SOFTWARE - INFRASTRUCTURE": "^SP500-45102030",  # mapped to GICS sub-industry "Internet Services & Infrastructure"
+        "SOFTWARE - APPLICATION": "^SP500-45103010",  # mapped to GICS sub-industry "Application Software"
+        "SYSTEMS SOFTWARE": "^SP500-45103020",
+        "COMMUNICATION EQUIPMENT": "^SP500-45201020",  # mapped to GICS sub-industry "Communications Equipment"
+        "CONSUMER ELECTRONICS": "^SP500-45202030",  # mapped to GICS sub-industry "Technology Hardware, Storage & Peripherals"
+        "COMPUTER HARDWARE": "^SP500-45202030",  # mapped to GICS sub-industry "Technology Hardware, Storage & Peripherals"
+        "SCIENTIFIC & TECHNICAL INSTRUMENTS": "^SP500-45203010",  # mapped to GICS sub-industry "Electronic Equipment & Instruments"
+        "SOLAR": "^SP500-45203015",  # mapped to GICS sub-industry "Electronic Components"
+        "ELECTRONIC COMPONENTS": "^SP500-45203015",
+        "ELECTRONIC MANUFACTURING SERVICES": "^SP500-45203020",
+        "ELECTRONICS & COMPUTER DISTRIBUTION": "^SP500-45203030",  # mapped to GICS sub-industry "Technology Distributors"
+        "SEMICONDUCTOR EQUIPMENT & MATERIALS": "^SP500-45301010",  # mapped to GICS sub-industry "Semiconductor Materials & Equipment"
+        "SEMICONDUCTORS": "^SP500-45301020",
+    },
+    "COMMUNICATION SERVICES": {
+        "ALTERNATIVE CARRIERS": "^SP500-50101010",
+        "TELECOM SERVICES": "^SP500-5010",  # mapped to GICS industry group "Telecommunication Services"
+        "ADVERTISING AGENCIES": "^SP500-50201010",  # mapped to GICS sub-industry "Advertising"
+        "BROADCASTING": "^SP500-50201020",
+        "CABLE & SATELLITE": "^SP500-50201030",
+        "PUBLISHING": "^SP500-50201040",
+        "ENTERTAINMENT": "^SP500-50202010",  # mapped to GICS sub-industry "Movies & Entertainment"
+        "ELECTRONIC GAMING & MULTIMEDIA": "^SP500-50202020",  # mapped to GICS sub-industry "Interactive Home Entertainment"
+        "INTERNET CONTENT & INFORMATION": "^SP500-50203010",  # mapped to GICS sub-industry "Interactive Media & Services"
+    },
+    "UTILITIES": {
+        "UTILITIES - REGULATED ELECTRIC": "^SP500-55101010",  # mapped to GICS sub-industry "Electric Utilities"
+        "UTILITIES - REGULATED GAS": "^SP500-55102010",  # mapped to GICS sub-industry "Gas Utilities"
+        "UTILITIES - DIVERSIFIED": "^SP500-55103010",  # mapped to GICS sub-industry "Multi-Utilities"
+        "UTILITIES - REGULATED WATER": "^SP500-55104010",  # mapped to GICS sub-industry "Water Utilities"
+        "UTILITIES - INDEPENDENT POWER PRODUCERS": "^SP500-55105010",  # mapped to GICS sub-industry "Independent Power Producers & Energy Traders"
+        "UTILITIES - RENEWABLE": "^SP500-55105020",  # mapped to GICS sub-industry "Renewable Electricity"
+    },
+    "REAL ESTATE": {
+        "REIT - DIVERSIFIED": "^SP500-60101010",  # mapped to GICS sub-industry "Diversified REITs"
+        "REIT - INDUSTRIAL": "^SP500-60102510",  # mapped to GICS sub-industry "Industrial REITs"
+        "REIT - HOTEL & MOTEL": "^SP500-60103010",  # mapped to GICS sub-industry "Hotel & Resort REITs"
+        "REIT - OFFICE": "^SP500-60104010",  # mapped to GICS sub-industry "Office REITs"
+        "REIT - HEALTHCARE FACILITIES": "^SP500-60105010",  # mapped to GICS sub-industry "Health Care REITs"
+        "REIT - RESIDENTIAL": "^SP500-60106010",  # mapped to GICS sub-industry "Multi-family Residential REITs"
+        "SINGLE-FAMILY RESIDENTIAL REITS": "^SP500-60106020",
+        "REIT - RETAIL": "^SP500-60107010",  # mapped to GICS sub-industry "Retail REITs"
+        "REIT - SPECIALTY": "^SP500-60108010",  # mapped to GICS sub-industry "Other Specialized REITs"
+        "SELF-STORAGE REITS": "^SP500-60108020",
+        "TELECOM TOWER REITS": "^SP500-60108030",
+        "TIMBER REITS": "^SP500-60108040",
+        "DATA CENTER REITS": "^SP500-60108050",
+        "REAL ESTATE - DIVERSIFIED": "^SP500-60201010",  # mapped to GICS sub-industry "Diversified Real Estate Activities"
+        "REAL ESTATE OPERATING COMPANIES": "^SP500-60201020",
+        "REAL ESTATE - DEVELOPMENT": "^SP500-60201030",  # mapped to GICS sub-industry "Real Estate Development"
+        "REAL ESTATE SERVICES": "^SP500-60201040",
+        "REIT - MORTGAGE": "^SP500-40204010",  # mapped to GICS sub-industry "Mortgage REITs" under Finance sector!
+    },
 }
 
 
@@ -195,32 +287,82 @@ def normalize_exchange_code(exchange: str) -> str:
     return "NASDAQ" if "NASDAQ" in e else "NYSE" if "NY" in e else e
 
 
-def yf_tickers_for_market_indices(country: str, sector: str = None, industry: str = None) -> list[str] | None:
+def lookup_market_yf_static_ticker(
+    *,
+    ticker: yf.Ticker = None,
+    symbol: str = None,
+) -> str | None:
     """
-    Returns list of market indices as Yahoo Finance symbols.
+    Lookup a "market static ticker" (YF format) for a given stock.
+    For example "market static ticker" for CBA.AX should be ASX20/ASX50, "market static ticker" for AAPL should be NASDAQ100.
 
     Args:
-        country (str): The country to filter for.
-        sector (str, optional): The sector to filter for. Defaults to "".
-        industry (str, optional): The industry to filter for. Defaults to "".
+        ticker (yf.Ticker): The stock to look up market ticker for.
+        symbol (str): The stock symbol to look up market ticker for.
 
     Returns:
-        list[str]: The list of market indices as Yahoo Finance symbols.
+        str: The market static ticker as a Yahoo Finance ticker.
 
-        If only country is supplied (e.g. no sector or industry), major indices for that country are returned.
-        - Australia: returns S&P/ASX ALL ORDINARIES, ASX20, ASX50, ASX100, ASX200 and ASX300 indices.
-
-        If sector/industry is supplied, indices for that sector/industry are returned.
-        - Australia: return sector indices if found. Otherwise, return the major indices.
-
-        Otherwise, None is returned.
+    Remarks:
+        Only supply either ticker or symbol. If both are supplied, tickr takes precedence.
     """
-    country = country.upper()
-    if country == "AU" or country == "AUS" or country == "AUSTRALIA":
-        sector = sector.upper() if sector else None
-        if sector and sector in asx_sector_industry_yf_indices:
-            return [asx_sector_industry_yf_indices[sector]]
-        return asx_main_yf_indices.copy()
+    if ticker is not None:
+        symbol = to_exchange_ticker(ticker=ticker)
+    else:
+        symbol = to_exchange_ticker(symbol=symbol)
+    exchange = symbol.split(":")[0]
+    if exchange == "ASX":
+        for index in asx_index_yf_static_tickers.keys():
+            if is_in_index(symbol, index):
+                return asx_index_yf_static_tickers[index]
+        return asx_index_yf_static_tickers["ASX"]
+    if exchange == "NASDAQ":
+        return us_index_yf_static_tickers["NASDAQ100"] if is_in_index(symbol, "NASDAQ100") else us_index_yf_static_tickers["NASDAQ"]
+
+    return None
+
+
+def lookup_peer_yf_static_ticker(
+    *,
+    ticker: yf.Ticker = None,
+    symbol: str = None,
+    sector: str = None,
+    industry: str = None,
+) -> str | None:
+    """
+    Lookup a "market static ticker" (YF format) for a given stock.
+    For example "market static ticker" for CBA.AX should be ASX20/ASX50, "market static ticker" for AAPL should be NASDAQ100.
+
+    Args:
+        ticker (yf.Ticker): The stock to look up market ticker for.
+        symbol (str): The stock symbol to look up market ticker for.
+        sector (str): The sector to look up market ticker for.
+        industry (str, optional): The industry to filter for.
+
+    Returns:
+        str: The market static ticker as a Yahoo Finance ticker.
+
+    Remarks:
+        Only supply either ticker or symbol/sector/industry. If both are supplied, tickr takes precedence.
+    """
+    if ticker is not None:
+        symbol = to_exchange_ticker(ticker=ticker)
+        sector = ticker.info.get("sector")
+        industry = ticker.info.get("industry")
+    else:
+        symbol = to_exchange_ticker(symbol=symbol)
+    exchange = symbol.split(":")[0]
+    sector = sector.upper() if sector is not None else None
+    industry = industry.upper() if industry is not None else None
+    if exchange == "ASX":
+        if sector in asx_sector_yf_static_tickers:
+            return asx_sector_yf_static_tickers[sector]
+    if exchange == "NASDAQ" or exchange == "NYSE":
+        if sector in us_industry_yf_static_tickers and industry in us_industry_yf_static_tickers[sector]:
+            return us_industry_yf_static_tickers[sector][industry]
+        if sector in us_sector_yf_static_tickers:
+            return us_sector_yf_static_tickers[sector]
+
     return None
 
 
@@ -313,7 +455,7 @@ def yyyy_mm_dd_to_iso(yyyy_mm_dd: str, tz: ZoneInfo = None, tz_name: str = None)
         return None
 
 
-def to_exchange_ticker(symbol: str) -> str:
+def to_exchange_ticker(*, ticker: yf.Ticker = None, symbol: str = None) -> str | None:
     """
     Converts a stock symbol to EXCHANGE:CODE format
     - If symbol is already in format EXCHANGE:CODE, it is returned as is.
@@ -321,19 +463,28 @@ def to_exchange_ticker(symbol: str) -> str:
     - Otherwise, return symbol as is.
 
     Args:
+        ticker (yf.Ticker, optional): The ticker to convert to EXCHANGE:CODE.
         symbol (str): The stock symbol to convert to EXCHANGE:CODE format.
 
     Returns:
         str: The stock symbol as EXCHANGE:CODE.
+
+    Remarks:
+        Supply either ticker or symbol. If both are supplied, ticker takes precedence.
     """
-    symbol = symbol.upper()
-    if "." in symbol:
-        code, suffix = symbol.split(".", 1)
-        if suffix == "AX":
-            return f"ASX:{code}"
-        elif suffix == "VN":
-            return f"VN:{code}"
-    return symbol
+    if ticker is None and symbol is None:
+        return None
+
+    if ticker is None and ":" in symbol:
+        return symbol.upper()
+
+    ticker = yf.Ticker(symbol) if ticker is None else ticker
+    exchange = normalize_exchange_code(ticker.info.get("fullExchangeName", ticker.info.get("exchange", "")))
+    symbol = ticker.info.get("symbol")
+    if symbol.endswith(".VN") or symbol.endswith(".AX"):
+        return f"{exchange}:{symbol[:-3]}"
+    else:
+        return f"{exchange}:{symbol}"
 
 
 def to_yf_ticker(symbol: str) -> str:
@@ -366,7 +517,7 @@ def is_in_index(symbol: str, index: str) -> bool:
     Checks if a stock symbol in a market index.
 
     Args:
-        symbol (str): The stock symbol to check.
+        symbol (str): The stock symbol to check, should be in format EXCHANGE:CODE.
         index (str): The market index.
 
     Returns:
@@ -374,7 +525,7 @@ def is_in_index(symbol: str, index: str) -> bool:
     """
     index = index.upper()
     if index in config.market_indices.indices:
-        symbol = to_exchange_ticker(symbol)
+        symbol = to_exchange_ticker(symbol=symbol)
         return symbol in config.market_indices.indices[index]
     return False
 

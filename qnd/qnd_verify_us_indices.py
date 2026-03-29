@@ -2,15 +2,8 @@
 # $ python -m qnd.qnd_verify_us_indices
 
 import asyncio
-import collections
 import json
 import logging
-from typing import Any
-
-import yfinance as yf
-
-from app.services import crawler as crawler_service, stock as stock_service
-from app.models import finhub as models
 
 from app.utils import finhub as finhub_utils
 
@@ -59,7 +52,7 @@ async def main():
 
         sector = ticker_info["sector"] if "sector" in ticker_info else None
         sector = sector.upper() if sector is not None else "NONE"
-        if sector != "CONSUMER DEFENSIVE":
+        if sector != "REAL ESTATE":
             continue
 
         found_sector = sector in finhub_utils.us_sector_yf_indices
@@ -78,5 +71,6 @@ async def main():
     print(f"Number of found/total: {num_found_sector}-{num_found_industry} / {num_total}")
     print(f"Unique sectors found: {sectors.keys()}")
     print(f"Unique industries found: {industries.keys()}")
+
 
 asyncio.run(main())
