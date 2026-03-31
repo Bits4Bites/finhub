@@ -287,7 +287,7 @@ async def get_asx_upcoming_dividends_events(index: str = "") -> list[UpcomingDiv
     }
     events = await get_upcoming_dividends_events(country, tz, default_vals=default_vals, index=index)
     if index:
-        events = [e for e in events if finhub_utils.is_in_index(e.symbol, index)]
+        events = [e for e in events if finhub_utils.is_in_index(index=index, symbol=e.symbol)]
 
     for event in events:
         event.link = f"https://www.asx.com.au/markets/company/{event.symbol.split(':')[-1]}"
@@ -318,7 +318,7 @@ async def get_us_upcoming_dividends_events(index: str = "") -> list[UpcomingDivi
     }
     events = await get_upcoming_dividends_events(country, tz, default_vals=default_vals, index=index)
     if index:
-        events = [e for e in events if finhub_utils.is_in_index(e.symbol, index)]
+        events = [e for e in events if finhub_utils.is_in_index(index=index, symbol=e.symbol)]
 
     for event in events:
         event.link = f"https://stockanalysis.com/stocks/{event.symbol.lower().split(':')[-1]}/dividend/"
@@ -350,7 +350,7 @@ async def get_vn_upcoming_dividends_events(index: str = "") -> list[UpcomingDivi
     }
     events = await get_upcoming_dividends_events(country, tz, default_vals=default_vals, index=index)
     if index:
-        events = [e for e in events if finhub_utils.is_in_index(e.symbol, index)]
+        events = [e for e in events if finhub_utils.is_in_index(index=index, symbol=e.symbol)]
 
     for event in events:
         event.link = f"https://finance.vietstock.vn/{event.symbol.split(':')[-1]}-thong-tin.htm"
@@ -442,7 +442,7 @@ async def get_asx_upcoming_earnings_events(index: str = "") -> list[UpcomingEarn
     }
     events = await get_upcoming_earnings_events(country, tz, default_vals=default_vals, index=index)
     if index:
-        events = [e for e in events if finhub_utils.is_in_index(e.symbol, index)]
+        events = [e for e in events if finhub_utils.is_in_index(index=index, symbol=e.symbol)]
 
     for event in events:
         event.link = f"https://www.tipranks.com/stocks/au:{event.symbol.lower().split(':')[-1]}/earnings"
@@ -473,7 +473,7 @@ async def get_us_upcoming_earnings_events(index: str = "") -> list[UpcomingEarni
     }
     events = await get_upcoming_earnings_events(country, tz, default_vals=default_vals, index=index)
     if index:
-        events = [e for e in events if finhub_utils.is_in_index(e.symbol, index)]
+        events = [e for e in events if finhub_utils.is_in_index(index=index, symbol=e.symbol)]
 
     for event in events:
         event.link = f"https://www.tipranks.com/stocks/{event.symbol.lower().split(':')[-1]}/earnings"
@@ -503,7 +503,6 @@ async def analyse_dividend_event(
         models.DividendEventAnalysis: An object containing the analysis of the dividend event
     """
     yf_ticker = finhub_utils.to_yf_ticker(symbol)
-    # country = finhub_utils.country_code_from_yf_ticker(yf_ticker)
     tz = finhub_utils.tz_from_yf_ticker(yf_ticker)
 
     ticker = yf.Ticker(yf_ticker) if ticker is None else ticker

@@ -621,7 +621,8 @@ async def ai_analyse_dividend_event(
     if not result:
         return None
 
-    country = finhub_utils.country_code_from_yf_ticker(yf_ticker)
+    # country = finhub_utils.country_code_from_yf_ticker(yf_ticker)
+    country = result.overview.country
     event_type = (
         ANALYZE_ASX_DIVIDEND if country == "AU" else ANALYZE_VN_DIVIDEND if country == "VN" else ANALYZE_US_DIVIDEND
     )
@@ -645,9 +646,13 @@ async def ai_analyse_dividend_event(
 
     # TECHNICALS
     trend_vs_industry = (
-        result.trend_60d - result.industry_trend_60d if result.industry_trend_60d is not None else result.trend_60d
+        result.trend_60d - result.peer_trend_60d if result.peer_trend_60d is not None else result.trend_60d
     )
-    industry_trend_str = f"{result.industry_trend_60d:.2%}" if result.industry_trend_60d is not None else "N/A"
+    industry_trend_str = (
+        f"{result.peer_trend_60d:.2%}"
+        if result.peer_trend_60d is not None
+        else f"{result.market_trend_60d}" if result.market_trend_60d is not None else "N/A"
+    )
     cap_size, market_index = finhub_utils.classify_market_cap(ticker)
     cap_size_str = ""
     if cap_size is not None:
@@ -656,7 +661,7 @@ async def ai_analyse_dividend_event(
             cap_size_str += f",{market_index}"
         cap_size_str += ")"
     bid_ask_spread_str = f"{result.bid_ask_spread:.4f}" if result.bid_ask_spread is not None else "N/A"
-    past_dividends_analysis = f"HistExDiv(absolute prices, n={result.num_samples}): PostExPriceRange:{result.drop_price_min:.2f}-{result.drop_price_max:.2f}|RecovPriceRange:{result.recovery_price_min:.2f}-{result.recovery_price_min:.2f}|RecovDays:{result.recovery_days_min:.0f}-{result.recovery_days_max:.0f}|RecovProb:{result.recovery_probability:.0%}"
+    past_dividends_analysis = f"HistExDiv(absolute prices, n={result.num_samples}): DropPriceRange:{result.drop_price_min:.2f}-{result.drop_price_max:.2f}|RecovPriceRange:{result.recovery_price_min:.2f}-{result.recovery_price_min:.2f}|RecovDays:{result.recovery_days_min:.0f}-{result.recovery_days_max:.0f}|RecovProb:{result.recovery_probability:.0%}"
     # history30d = ticker.history(period="31d", interval="1d", auto_adjust=False)[:-1]
     # vol_spikes_str = "VolSpikes:None"
     # vol_spike_series = finhub_utils.find_volume_spikes(history30d, 2)
@@ -679,6 +684,12 @@ async def ai_analyse_dividend_event(
         .replace("{BID_ASK_SPREAD}", bid_ask_spread_str)
         .replace("{PAST_DIVIDENDS_ANALYSIS}", past_dividends_analysis)
         # .replace("{VOLUME_SPIKES}", vol_spikes_str)
+        .replace("{RECOVERY_DAYS_MIN}", f"{result.recovery_days_min:.0f}")
+        .replace("{RECOVERY_DAYS_MAX}", f"{result.recovery_days_max:.0f}")
+        .replace("{DROP_PRICE_MIN}", f"{result.drop_price_min:.2f}")
+        .replace("{DROP_PRICE_MAX}", f"{result.drop_price_max:.2f}")
+        .replace("{RECOVERY_PRICE_MIN}", f"{result.recovery_price_min:.2f}")
+        .replace("{RECOVERY_PRICE_MAX}", f"{result.recovery_price_max:.2f}")
     )
 
     # CALCULATIONS
@@ -715,7 +726,7 @@ async def ai_analyse_dividend_event(
         float(result.recovery_probability_adj) if result.recovery_probability_adj is not None else None
     )
     result.recovery_days_adj = llm_result_obj.get("recovery_days")
-    result.drop_price_adj = llm_result_obj.get("est_post_ex_price")
+    result.drop_price_adj = llm_result_obj.get("est_drop_price")
     result.recovery_price_adj = llm_result_obj.get("est_recovery_price")
     result.expected_pl = llm_result_obj.get("expected_pl")
     result.expected_pl = float(result.expected_pl) if result.expected_pl is not None else None
