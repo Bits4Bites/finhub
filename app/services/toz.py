@@ -58,22 +58,22 @@ def get_gold_history(currency: str = "USD", num_days: int = 30) -> list[HistoryP
     ticker = yf.Ticker("GC=F")  # Gold Futures
     hist = ticker.history(period=f"{num_days}d", interval="1d", auto_adjust=False)
 
-    points = []
-    for index, row in hist.iterrows():
-        point = HistoryPoint(
-            timestamp=int(index.timestamp()),
-            timestamp_str=index.isoformat(sep=" ", timespec="seconds"),
+    points = [
+        HistoryPoint(
+            timestamp=int(hist.index[i].timestamp()),
+            timestamp_str=hist.index[i].isoformat(sep=" ", timespec="seconds"),
             currency=currency,
-            open=row["Open"],
-            high=row["High"],
-            low=row["Low"],
-            close=row["Close"],
-            volume=int(row["Volume"]),
+            open=hist.iloc[i]["Open"],
+            high=hist.iloc[i]["High"],
+            low=hist.iloc[i]["Low"],
+            close=hist.iloc[i]["Close"],
+            volume=int(hist.iloc[i]["Volume"]),
         )
-        if currency != "" and currency != "USD":
-            # finally, convert the price to the specified currency
-            point = point.to_currency(currency, x_rate)
-        points.append(point)
+        for i in range(0, len(hist))
+    ]
+    if currency != "" and currency != "USD":
+        for i in range(0, len(points)):
+            points[i] = points[i].to_currency(currency, x_rate)
 
     return points
 
@@ -137,21 +137,21 @@ def get_silver_history(currency: str = "USD", num_days: int = 30) -> list[Histor
     ticker = yf.Ticker("SI=F")  # SILVER Futures
     hist = ticker.history(period=f"{num_days}d", interval="1d", auto_adjust=False)
 
-    points = []
-    for index, row in hist.iterrows():
-        point = HistoryPoint(
-            timestamp=int(index.timestamp()),
-            timestamp_str=index.isoformat(sep=" ", timespec="seconds"),
+    points = [
+        HistoryPoint(
+            timestamp=int(hist.index[i].timestamp()),
+            timestamp_str=hist.index[i].isoformat(sep=" ", timespec="seconds"),
             currency=currency,
-            open=row["Open"],
-            high=row["High"],
-            low=row["Low"],
-            close=row["Close"],
-            volume=int(row["Volume"]),
+            open=hist.iloc[i]["Open"],
+            high=hist.iloc[i]["High"],
+            low=hist.iloc[i]["Low"],
+            close=hist.iloc[i]["Close"],
+            volume=int(hist.iloc[i]["Volume"]),
         )
-        if currency != "" and currency != "USD":
-            # finally, convert the price to the specified currency
-            point = point.to_currency(currency, x_rate)
-        points.append(point)
+        for i in range(0, len(hist))
+    ]
+    if currency != "" and currency != "USD":
+        for i in range(0, len(points)):
+            points[i] = points[i].to_currency(currency, x_rate)
 
     return points
