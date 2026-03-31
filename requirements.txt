@@ -1,4 +1,4 @@
-fastapi==0.135.1
+fastapi==0.135.2
 uvicorn[standard]==0.42.0
 pydantic==2.12.5
 pydantic-settings==2.13.1
@@ -8,9 +8,9 @@ flake8-toml-config
 black
 
 yfinance==1.2.0
-google-genai==1.68.0
-openai==2.29.0
-requests==2.32.5
+google-genai==1.69.0
+openai==2.30.0
+requests==2.33.0
 beautifulsoup4==4.14.3
 pandas==3.0.1
 numpy==2.4.3
