@@ -393,7 +393,7 @@ async def ai_get_asx_new_listings() -> list[models.ListingEvent]:
     raw_input = "==========\n".join([el.get_text() for el in el_list if "Listing date" in el.get_text()])
     prompt = prompt_template.replace("{RAW_INPUT_DATA}", raw_input)
 
-    sectors_list = ",".join(finhub_utils.asx_sector_industry_yf_indices.keys())
+    sectors_list = ",".join(finhub_utils.asx_sector_yf_static_tickers.keys())
     prompt = prompt.replace("{SECTORS}", sectors_list)
 
     llm_result = await ai_exec_prompt(task_id="PARSE_NEW_LISTING_EVENTS_NO_WEB_SEARCH", prompt=prompt, country="AU")

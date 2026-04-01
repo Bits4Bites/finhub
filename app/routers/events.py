@@ -1,17 +1,20 @@
+import logging
+
 from fastapi import APIRouter, Query
 
 from ..schemas import finhub as schemas
 from ..services import ai as ai_service, stock as stock_service
+from ..utils import finhub as finhub_utils
 
 router = APIRouter(prefix="/events", tags=["events"])
 
 
 @router.get("/upcoming_dividends", response_model=schemas.UpcomingDividendsResponse, response_model_exclude_none=True)
 async def get_upcoming_dividends_event(
-    country: str = Query(description="Country code to filter events by (only 'AU, 'US' and 'VN' are supported)."),
+    country: str = Query(description="Country code to filter events by (only 'AU', 'US' and 'VN' are supported)."),
     index: str = Query(
         "",
-        description="Optional stock index to filter events by (support 'NASDAQ100', 'SP500', 'SP400', 'SP600', 'ASX20', 'ASX50', 'ASX100', 'ASX200' and 'ASX300').",
+        description="Optional stock index to filter events by (support 'ASX20', 'ASX50', 'ASX100', 'ASX200', 'ASX300', 'NASDAQ100', 'SP500', 'SP400', 'SP600', 'VN30' and 'VN100').",
     ),
 ) -> schemas.UpcomingDividendsResponse:
     """
@@ -28,15 +31,32 @@ async def get_upcoming_dividends_event(
         case _:
             return schemas.UpcomingDividendsResponse(status=501, message=f"Unsupported country '{country}'")
 
+    for event in events:
+        for index in ["ASX300", "NASDAQ100", "SP500", "SP400", "VN100"]:
+            if finhub_utils.is_in_index(index=index, symbol=event.symbol):
+                if (
+                    (event.symbol.startswith("ASX:") and event.dividend_yield >= 0.02)
+                    or (event.symbol.startswith("NASDAQ:") and event.dividend_yield >= 0.005)
+                    or (event.symbol.startswith("NYSE:") and event.dividend_yield >= 0.01)
+                    or (event.symbol.startswith("HOSE:") and event.dividend_yield >= 0.15)
+                ):
+                    logging.info(
+                        f"Upcoming dividend event: {event.symbol} ({index}) / {event.date[:10]} / {event.amount} ({event.dividend_yield:.2%})"
+                    )
+                    event.analysis = await stock_service.analyse_dividend_event(
+                        symbol=event.symbol, div_amount=event.amount, ex_date=event.date[:10]
+                    )
+                break
+
     return schemas.UpcomingDividendsResponse(status=200, message="ok", data=events)
 
 
 @router.get("/upcoming_earnings", response_model=schemas.UpcomingEarningsResponse, response_model_exclude_none=True)
 async def get_upcoming_earnings_event(
-    country: str = Query(description="Country code to filter events by (only 'AU, 'US' and 'VN' are supported)."),
+    country: str = Query(description="Country code to filter events by (only 'AU', 'US' and 'VN' are supported)."),
     index: str = Query(
         "",
-        description="Optional stock index to filter events by (support 'NASDAQ100', 'SP500', 'SP400', 'SP600', 'ASX20', 'ASX50', 'ASX100', 'ASX200' and 'ASX300').",
+        description="Optional stock index to filter events by (support 'ASX20', 'ASX50', 'ASX100', 'ASX200', 'ASX300', 'NASDAQ100', 'SP500', 'SP400', 'SP600', 'VN30' and 'VN100').",
     ),
 ) -> schemas.UpcomingEarningsResponse:
     """
@@ -56,7 +76,7 @@ async def get_upcoming_earnings_event(
 
 @router.get("/new_listings", response_model=schemas.ListingsResponse, response_model_exclude_none=True)
 async def get_new_listings(
-    country: str = Query("", description="Country code to filter events by (e.g., 'AU', 'US', 'VN', etc.)."),
+    country: str = Query("", description="Country code to filter events by (only 'AU' is supported)."),
 ) -> schemas.ListingsResponse:
     """
     Check for new listing events for a market, using AI assistance.

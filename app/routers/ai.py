@@ -12,9 +12,11 @@ router = APIRouter(prefix="/ai", tags=["ai"])
     response_model_exclude_none=True,
 )
 async def analyse_dividend_event(
-    symbol: str = Query(description="The stock symbol"),
+    symbol: str = Query(
+        description="The stock symbol. Accept Yahoo Finance format (CBA.AX for Commonwealth Bank of Australia) or EXCHANGE:CODE format (NASDAQ:AAPL for Apple Inc.)."
+    ),
     ex_date: str = Query(description="Ex-Dividend date in format YYYY-MM-DD"),
-    div_amount: float = Query(description="The dividend amount as float number, without currency symbol"),
+    div_amount: float = Query(description="The dividend amount as float number, without currency symbol (e.g. 1.23)"),
 ) -> schemas.AnalyzeDividendEventResponse:
     """
     Analyzes a dividend event.

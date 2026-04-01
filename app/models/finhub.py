@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import statistics
 from datetime import datetime, timezone
@@ -377,6 +379,7 @@ class UpcomingDividendEvent(EventBase):
     dividend_yield: Optional[float] = None
     currency: Optional[str] = None
     payment_date: Optional[str] = None
+    analysis: Optional[DividendEventAnalysis] = None
 
 
 def parse_upcoming_dividend_events_from_json(

@@ -1,3 +1,4 @@
+import math
 from datetime import datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -533,7 +534,8 @@ async def analyse_dividend_event(
     sum_div = float(history5y[idx:]["Dividends"].sum())
     result.div_yield = sum_div / current_price
 
-    past_dividends_analysis = finhub_utils.analyze_past_dividends(history5y, 28)
+    recovery_days_threshold = 28
+    past_dividends_analysis = finhub_utils.analyze_past_dividends(history5y, recovery_days_threshold)
     if past_dividends_analysis.empty:
         return None  # not enough historical data
     result.num_samples = len(past_dividends_analysis)
@@ -550,8 +552,12 @@ async def analyse_dividend_event(
     # estimate recovery days
     median_recovery_days = past_dividends_analysis["RecoveryDays"].median()
     std_recovery_days = past_dividends_analysis["RecoveryDays"].std()
-    result.recovery_days_min = max(1, int(median_recovery_days - std_recovery_days))
-    result.recovery_days_max = int(median_recovery_days + std_recovery_days)
+    if math.isnan(median_recovery_days) or math.isnan(std_recovery_days):
+        result.recovery_days_min = recovery_days_threshold + 1
+        result.recovery_days_max = result.recovery_days_min + 1
+    else:
+        result.recovery_days_min = max(1, int(median_recovery_days - std_recovery_days))
+        result.recovery_days_max = int(median_recovery_days + std_recovery_days)
 
     # estimate recovery chance
     total_rows = len(past_dividends_analysis)

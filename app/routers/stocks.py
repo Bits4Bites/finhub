@@ -85,7 +85,7 @@ def get_index_companies(
 ) -> schemas.IndexCompaniesResponse:
     """
     Gets list of companies for a given index.
-    Note: current supported indices are ASX50, ASX100, ASX200, ASX300, NASDAQ100, SP500, SP400, SP600, VN30, VN100 and HNX30.
+    Note: current supported indices are ASX20, ASX50, ASX100, ASX200, ASX300, NASDAQ100, SP500, SP400, SP600, VN30, VN100 and HNX30.
     """
     companies = []
     index = index.upper()

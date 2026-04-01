@@ -13,103 +13,151 @@ A developer-first financial API hub for stock market data, built for frontend ap
 
 View [OpenAPI spec](openapi.json).
 
-### `/ai/event/upcoming_dividends`
+### `GET /ai/analyze_dividend_event`
+
+Analyzes a dividend event.
+
+Query parameters:
+- `symbol` (required): The stock symbol. Accept Yahoo Finance format (`CBA.AX` for Commonwealth Bank of Australia) or EXCHANGE:CODE format (`NASDAQ:AAPL` for Apple Inc.).
+- `ex_date` (required): The ex-dividend date in `YYYY-MM-DD` format (e.g., `2026-04-01`).
+- `div_amount` (required): The dividend amount as float number, without currency symbol (e.g., `0.50`).
+
+Examples:
+
+```shell
+curl -X 'GET' \
+  'http://localhost:8000/ai/analyze_dividend_event?symbol=AAPL&ex_date=2026-02-09&div_amount=0.26' \
+  -H 'accept: application/json'
+```
+
+### `GET /events/upcoming_dividends`
 
 Check for incoming dividend/distribution events for a market.
 
 Query parameters:
-- `country` (required): Country code to filter events by (e.g., `AU`, `US`, `VN`, etc.).
-- `index` (optional): Optional stock index to filter events by (e.g., `NASDAQ 100`, `S&P/ASX 200`, etc.).
+- `country` (required): Country code to filter events by (only `AU`, `US` and `VN` are supported).
+- `index` (optional): Optional stock index to filter events by (support `ASX20`, `ASX50`, `ASX100`, `ASX200`, `ASX300`, `NASDAQ100`, `SP500`, `SP400`, `SP600`, `VN30` and `VN100`).
 
 Examples:
 
-```
-GET /ai/event/upcoming_dividends?country=AU'
+```shell
+curl -X 'GET' \
+  'http://localhost:8000/events/upcoming_dividends?country=AU&index=ASX200' \
+  -H 'accept: application/json'
 ```
 
-### `/ai/event/upcoming_earnings`
+### `get /events/upcoming_earnings`
 
 Check for incoming earnings events for a market.
 
 Query parameters:
-- `country` (required): Country code to filter events by (e.g., `AU`, `US`, `VN`, etc.).
-- `index` (optional): Optional stock index to filter events by (e.g., `NASDAQ 100`, `S&P/ASX 200`, etc.).
+- `country` (required): Country code to filter events by (only `AU`, `US` and `VN` are supported).
+- `index` (optional): Optional stock index to filter events by (support `ASX20`, `ASX50`, `ASX100`, `ASX200`, `ASX300`, `NASDAQ100`, `SP500`, `SP400`, `SP600`, `VN30` and `VN100`).
 
 Examples:
 
-```
-GET /ai/event/upcoming_earnings?country=AU'
+```shell
+curl -X 'GET' \
+  'http://localhost:8000/events/upcoming_earnings?country=AU&index=ASX200' \
+  -H 'accept: application/json'
 ```
 
-### `/ai/event/new_listings`
+### `GET /events/new_listings`
 
 Check for new listing events for a market.
 
 Query parameters:
-- `country` (required): Country code to filter events by (e.g., `AU`, `US`, `VN`, etc.).
+- `country` (required): Country code to filter events by (only `AU` is supported).
 
 Examples:
 
-```
-GET /ai/event/new_listings?country=AU'
+```shell
+curl -X 'GET' \
+  'http://localhost:8000/events/new_listings?country=AU' \
+  -H 'accept: application/json'
 ```
 
-### `/stocks/quotes`
+### `GET /stocks/quotes`
 
 Get stock quotes for a list of ticker symbols.
 
 Query parameters:
-- `symbols` (required): A comma-separated list of ticker symbols to fetch quotes for. Each ticker symbol must follow Yahoo Finance's format (e.g., `AAPL` for Apple Inc., `CBA.AX` for Commonwealth Bank of Australia).
+- `symbols` (required): A comma-separated list of stock symbols to fetch quotes for, accepting Yahoo Finance format (`CBA.AX` for Commonwealth Bank of Australia) or EXCHANGE:CODE (`NASDAQ:AAPL` for Apple Inc.)
 
 Example:
 
-```
-GET /stocks/quotes?symbols=AAPL,CBA.AX
+```shell
+curl -X 'GET' \
+  'http://localhost:8000/stocks/quotes?symbols=AAPL%2CASX%3ACBA' \
+  -H 'accept: application/json'
 ```
 
-### `/stocks/<symbol>/overview`
+### `GET /stocks/<symbol>/overview`
 
 Get overview information about a specific ticker symbol.
 
 Path parameters:
-- `symbol` (required): The ticker symbol to fetch information for. Must follow Yahoo Finance's format (e.g., `AAPL` for Apple Inc., `CBA.AX` for Commonwealth Bank of Australia).
+- `symbol` (required): The ticker symbol to fetch information for, accepting Yahoo Finance format (`CBA.AX` for Commonwealth Bank of Australia) or EXCHANGE:CODE (`NASDAQ:AAPL` for Apple Inc.)
 
 Example:
 
-```
-GET /stocks/AAPL/overview
+```shell
+curl -X 'GET' \
+  'http://localhost:8000/stocks/AAPL/overview' \
+  -H 'accept: application/json'
 ```
 
-### `/stocks/<symbol>/info`
+### `GET /stocks/<symbol>/info`
 
 Get detailed information about a specific ticker symbol.
 
 Path parameters:
-- `symbol` (required): The ticker symbol to fetch information for. Must follow Yahoo Finance's format (e.g., `AAPL` for Apple Inc., `CBA.AX` for Commonwealth Bank of Australia).
+- `symbol` (required): The ticker symbol to fetch information for, accepting Yahoo Finance format (`CBA.AX` for Commonwealth Bank of Australia) or EXCHANGE:CODE (`NASDAQ:AAPL` for Apple Inc.)
 
 Example:
 
-```
-GET /stocks/AAPL/info
+```shell
+curl -X 'GET' \
+  'http://localhost:8000/stocks/AAPL/info' \
+  -H 'accept: application/json'
 ```
 
-### `/stocks/<symbol>/quote_at/{date}`
+### `GET /stocks/<symbol>/quote_at/<date>`
 
 Get stock quote information for a given ticker symbol at a specific date.
 
 Path parameters:
-- `symbol` (required): The ticker symbol to fetch information for. Must follow Yahoo Finance's format (e.g., `AAPL` for Apple Inc., `CBA.AX` for Commonwealth Bank of Australia).
-- `date` (required): The date to fetch the stock quote for, in format `YYYY-MM-DD`. For example, `2023-01-01`.
+- `symbol` (required): The ticker symbol to fetch information for, accepting Yahoo Finance format (`CBA.AX` for Commonwealth Bank of Australia) or EXCHANGE:CODE (`NASDAQ:AAPL` for Apple Inc.)
+- `date` (required): The date to fetch the stock quote for, in format `YYYY-MM-DD` (e.g. `2026-04-01`).
 
 Examples:
 
-```
-GET /stocks/AAPL/quote_at/2024-01-01
+```shell
+curl -X 'GET' \
+  'http://localhost:8000/stocks/AAPL/quote_at/2026-04-01' \
+  -H 'accept: application/json'
 ```
 
 > If the date falls on a non-trading day, the API may return quote for the most recent trading day before the given date.
 
-### `/toz/gold/quote`
+### `GET /stocks/index/<index>/companies`
+
+Gets list of companies for a given index. Note: current supported indices are `ASX20`, `ASX50`, `ASX100`, `ASX200`, `ASX300`, `NASDAQ100`, `SP500`, `SP400`, `SP600`, `VN30`, `VN100` and `HNX30`.
+
+Path parameters:
+- `index` (required): The index to fetch companies for.
+
+Examples:
+
+```shell
+curl -X 'GET' \
+  'http://localhost:8000/stocks/index/NASDAQ100/companies' \
+  -H 'accept: application/json'
+```
+
+> Warning: the data may not be up-to-date as the API currently relies on static data files for index constituents, which are updated periodically.
+
+### `GET /toz/gold/quote`
 
 Check the current price of gold.
 
@@ -118,11 +166,13 @@ Query parameters:
 
 Example:
 
-```
-GET /toz/gold/quote?currency=AUD
+```shell
+curl -X 'GET' \
+  'http://localhost:8000/toz/gold/quote?currency=AUD' \
+  -H 'accept: application/json'
 ```
 
-### `/toz/gold/history`
+### `GET /toz/gold/history`
 
 Get historical gold price data.
 
@@ -132,11 +182,13 @@ Query parameters:
 
 Example:
 
-```
-GET /toz/gold/history?currency=AUD&days=7
+```shell
+curl -X 'GET' \
+  'http://localhost:8000/toz/gold/history?currency=AUD&days=30' \
+  -H 'accept: application/json'
 ```
 
-### `/toz/silver/quote`
+### `GET /toz/silver/quote`
 
 Check the current price of silver.
 
@@ -145,11 +197,13 @@ Query parameters:
 
 Example:
 
-```
-GET /toz/silver/quote?currency=AUD
+```shell
+curl -X 'GET' \
+  'http://localhost:8000/toz/silver/quote?currency=AUD' \
+  -H 'accept: application/json'
 ```
 
-### `/toz/silver/history`
+### `GET /toz/silver/history`
 
 Get historical silver price data.
 
@@ -159,8 +213,10 @@ Query parameters:
 
 Example:
 
-```
-GET /toz/gold/history?currency=AUD&days=7
+```shell
+curl -X 'GET' \
+  'http://localhost:8000/toz/silver/history?currency=AUD&days=30' \
+  -H 'accept: application/json'
 ```
 
 ## 🤝 Contributing
