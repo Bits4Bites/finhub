@@ -12,7 +12,7 @@ google-genai==1.69.0
 openai==2.30.0
 requests==2.33.0
 beautifulsoup4==4.14.3
-pandas==3.0.1
+pandas==3.0.2
 tabulate==0.10.0
 cloudscraper==1.2.71
 playwright==1.58.0
