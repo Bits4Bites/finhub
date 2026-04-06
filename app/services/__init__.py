@@ -1,6 +1,7 @@
 import logging
 
 from google import genai
+from google.genai.types import HttpOptions
 from openai import AsyncOpenAI
 
 from ..config import settings
@@ -10,17 +11,21 @@ from . import ai, ai_helper
 for vendor_name, api_tiers in list(settings.llm_config.items()):
     for api_tier, llm_config in list(api_tiers.items()):
         if vendor_name.upper() == "GEMINI":
-            ai_helper.geminiClients[api_tier.upper()] = genai.Client(api_key=llm_config.api_key)
+            ai_helper.geminiClients[api_tier.upper()] = genai.Client(
+                api_key=llm_config.api_key, http_options=HttpOptions(timeout=180000)
+            )
         if vendor_name.upper() == "AZURE_OPENAI" or vendor_name.upper() == "AZUREOPENAI":
             ai_helper.azureOpenAIClients[api_tier.upper()] = AsyncOpenAI(
-                api_key=llm_config.api_key, base_url=llm_config.endpoint
+                api_key=llm_config.api_key, base_url=llm_config.endpoint, project="FinHub", timeout=180
             )
         if vendor_name.upper() == "OPENROUTER" or vendor_name.upper() == "OPEN_ROUTER":
             ai_helper.openRouterClients[api_tier.upper()] = AsyncOpenAI(
-                api_key=llm_config.api_key, base_url=llm_config.endpoint
+                api_key=llm_config.api_key, base_url=llm_config.endpoint, project="FinHub", timeout=180
             )
         if vendor_name.upper() == "OPENAI":
-            ai_helper.openAIClients[api_tier.upper()] = AsyncOpenAI(api_key=llm_config.api_key)
+            ai_helper.openAIClients[api_tier.upper()] = AsyncOpenAI(
+                api_key=llm_config.api_key, project="FinHub", timeout=180
+            )
 
 
 # load prompt templates
