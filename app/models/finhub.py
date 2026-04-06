@@ -22,11 +22,7 @@ class SymbolBase(BaseModel):
         super().__init__(
             symbol=ticker.info.get("symbol"),
             currency=ticker.info.get("currency"),
-            exchange=(
-                ticker.info.get("fullExchangeName")
-                if ticker.info.get("fullExchangeName")
-                else ticker.info.get("exchange")
-            ),
+            exchange=ticker.info.get("fullExchangeName", ticker.info.get("exchange")),
             country=ticker.info.get("country", ticker.info.get("region", "US")),
             **data,
         )
@@ -441,12 +437,56 @@ def parse_upcoming_earnings_events_from_json(
     return result
 
 
+class ListingOutlook(BaseModel):
+    direction: Optional[str] = None
+    reason: Optional[str] = None
+    confidence: Optional[int] = None
+
+
+class ListingAnalysis(BaseModel):
+    status: Optional[str] = None
+    data_quality: Optional[str] = None
+    search_findings: Optional[str] = None
+    stance: Optional[str] = None
+    catalyst: Optional[str] = None
+    risks: Optional[list[str]] = None
+    outlook: Optional[dict[str, ListingOutlook]] = None
+
+
+def parse_listing_analysis_from_json(json_str: str, default_vals: dict[str, Any] = None) -> dict[str, ListingAnalysis]:
+    json_str = normalize_json_str(json_str)
+    analysis = json.loads(json_str)
+    result = {}
+    default_vals = {} if default_vals is None else default_vals
+    for k, v in analysis.items():
+        result[k] = ListingAnalysis(
+            status=v.get("status", default_vals.get("status")),
+            data_quality=v.get("data_quality", default_vals.get("data_quality")),
+            search_findings=v.get("search_findings", default_vals.get("search_findings")),
+            stance=v.get("stance", default_vals.get("stance")),
+            catalyst=v.get("catalyst", default_vals.get("catalyst")),
+            risks=v.get("risks", default_vals.get("risks")),
+        )
+        if "outlook" in v:
+            result[k].outlook = {}
+            if "w2" in v["outlook"]:
+                result[k].outlook["w2"] = ListingOutlook(
+                    direction=v["outlook"]["w2"].get("dir"),
+                    reason=v["outlook"]["w2"].get("reason"),
+                    confidence=v["outlook"]["w2"].get("confidence"),
+                )
+
+    return result
+
+
 class ListingEvent(EventBase):
     sector: Optional[str] = None
+    industry: Optional[str] = None
     principal_activities: Optional[str] = None
     price: float = 0.0
     currency: Optional[str] = None
     capital: Optional[int] = None
+    analysis: Optional[ListingAnalysis] = None
 
 
 def parse_new_listing_events_from_json(json_str: str, default_vals: dict[str, Any] = None) -> list[ListingEvent]:
@@ -504,7 +544,7 @@ class DividendEventAnalysis(BaseModel):
     market_trend_60d: Optional[float] = None
     peer_trend_60d: Optional[float] = None
     # ====== analysis result from AI
-    llm_error: float = False
+    llm_error: bool = False
     llm_error_msg: Optional[str] = None
     search_summary: Optional[str] = None
     strategy: Optional[str] = None
