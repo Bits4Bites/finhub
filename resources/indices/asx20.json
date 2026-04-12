@@ -1,0 +1,105 @@
+{
+    "date": "2026-03-21",
+    "data": [
+        {
+            "symbol": "ASX:ALL",
+            "company": "ARISTOCRAT LEISURE LIMITED",
+            "sector": "Gaming"
+        },
+        {
+            "symbol": "ASX:ANZ",
+            "company": "ANZ GROUP HOLDINGS LIMITED",
+            "sector": "Banks"
+        },
+        {
+            "symbol": "ASX:BHP",
+            "company": "BHP GROUP LIMITED",
+            "sector": "Crude Oil, Bulks"
+        },
+        {
+            "symbol": "ASX:BXB",
+            "company": "BRAMBLES LIMITED",
+            "sector": "Transportation & Logistics"
+        },
+        {
+            "symbol": "ASX:CBA",
+            "company": "COMMONWEALTH BANK OF AUSTRALIA",
+            "sector": "Banks"
+        },
+        {
+            "symbol": "ASX:COL",
+            "company": "COLES GROUP LIMITED",
+            "sector": "Food, Beverages & Tobacco"
+        },
+        {
+            "symbol": "ASX:CSL",
+            "company": "CSL LIMITED",
+            "sector": "Pharmaceuticals & Biotech/Lifesciences"
+        },
+        {
+            "symbol": "ASX:FMG",
+            "company": "FORTESCUE LIMITED",
+            "sector": "Iron Ore"
+        },
+        {
+            "symbol": "ASX:GMG",
+            "company": "GOODMAN GROUP",
+            "sector": "Infra & Property Developers"
+        },
+        {
+            "symbol": "ASX:MQG",
+            "company": "MACQUARIE GROUP LIMITED",
+            "sector": "Wealth Management & Investments"
+        },
+        {
+            "symbol": "ASX:NAB",
+            "company": "NATIONAL AUSTRALIA BANK LIMITED",
+            "sector": "Banks"
+        },
+        {
+            "symbol": "ASX:QBE",
+            "company": "QBE INSURANCE GROUP LIMITED",
+            "sector": "Insurance"
+        },
+        {
+            "symbol": "ASX:RIO",
+            "company": "RIO TINTO LIMITED",
+            "sector": "Aluminium, Bauxite & Alumina, Bulks"
+        },
+        {
+            "symbol": "ASX:STO",
+            "company": "SANTOS LIMITED",
+            "sector": "NatGas"
+        },
+        {
+            "symbol": "ASX:TCL",
+            "company": "TRANSURBAN GROUP LIMITED",
+            "sector": "Infrastructure & Utilities"
+        },
+        {
+            "symbol": "ASX:TLS",
+            "company": "TELSTRA GROUP LIMITED",
+            "sector": "Telecommunication"
+        },
+        {
+            "symbol": "ASX:WBC",
+            "company": "WESTPAC BANKING CORPORATION",
+            "sector": "Banks"
+        },
+        {
+            "symbol": "ASX:WDS",
+            "company": "WOODSIDE ENERGY GROUP LIMITED",
+            "sector": "NatGas"
+        },
+        {
+            "symbol": "ASX:WES",
+            "company": "WESFARMERS LIMITED",
+            "sector": "Consumer Products & Services"
+        },
+        {
+            "symbol": "ASX:WOW",
+            "company": "WOOLWORTHS GROUP LIMITED",
+            "sector": "Food, Beverages & Tobacco"
+        }
+    ]
+}

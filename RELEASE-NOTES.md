@@ -1,5 +1,23 @@
 # FinHub release notes
 
+## 2026-04-12 - v0.6.0
+
+### Added/Refactoring/Deprecation
+
+- (Feat) Add OpenRouter client
+- (Feat) Add APIs to return list of companies in an index
+- (Feat) Add new API to analyze a dividend event
+- (Feat) Add proxy mode
+- (Refactor) Move event APIs to a new endpoint /events
+
+### Fixed/Improvements
+
+- (Impr) Cache AU market indexes locally (ASX20, ASX50, ASX100, ASX200, ASX300)
+- (Impr) Cache VN market indexes locally (VN30, VN100, HNX30)
+- (Impr) Cache US market indexes locally (NASDAQ100, SP500, SP400, SP600)
+- (Impr) Add event analysis to API /events/new_listings
+- (Patch) Code cleanup
+
 ## 2026-03-14 - v0.5.1
 
 ### Fixed/Improvements
