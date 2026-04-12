@@ -8,7 +8,7 @@ flake8-toml-config
 black
 
 yfinance==1.2.1
-google-genai==1.70.0
+google-genai==1.72.0
 openai==2.31.0
 requests==2.33.1
 beautifulsoup4==4.14.3
