@@ -1,5 +1,5 @@
 {
-    "date": "2026-03-22",
+    "date": "2026-04-12",
     "data": [
         {
             "symbol": "NYSE:AA",
@@ -140,11 +140,6 @@
             "symbol": "NYSE:ASB",
             "company": "Associated Bank",
             "sector": "Financials"
-        },
-        {
-            "symbol": "NYSE:ASGN",
-            "company": "ASGN Inc.",
-            "sector": "Information Technology"
         },
         {
             "symbol": "NYSE:ASH",
@@ -432,11 +427,6 @@
             "sector": "Industrials"
         },
         {
-            "symbol": "NASDAQ:COHR",
-            "company": "Coherent Corp.",
-            "sector": "Information Technology"
-        },
-        {
             "symbol": "NASDAQ:COKE",
             "company": "Coca-Cola Consolidated",
             "sector": "Consumer Staples"
@@ -490,6 +480,11 @@
             "symbol": "NYSE:CSL",
             "company": "Carlisle Companies",
             "sector": "Industrials"
+        },
+        {
+            "symbol": "NYSE:CTRE",
+            "company": "CareTrust REIT",
+            "sector": "Real Estate"
         },
         {
             "symbol": "NYSE:CUBE",
@@ -847,11 +842,6 @@
             "sector": "Industrials"
         },
         {
-            "symbol": "NASDAQ:GTM",
-            "company": "ZoomInfo",
-            "sector": "Communication Services"
-        },
-        {
             "symbol": "NYSE:GWRE",
             "company": "Guidewire Software",
             "sector": "Information Technology"
@@ -947,6 +937,11 @@
             "sector": "Utilities"
         },
         {
+            "symbol": "NASDAQ:IDCC",
+            "company": "InterDigital",
+            "sector": "Information Technology"
+        },
+        {
             "symbol": "NASDAQ:ILMN",
             "company": "Illumina, Inc.",
             "sector": "Health Care"
@@ -1012,11 +1007,6 @@
             "sector": "Industrials"
         },
         {
-            "symbol": "NYSE:KMPR",
-            "company": "Kemper Corporation",
-            "sector": "Financials"
-        },
-        {
             "symbol": "NYSE:KNF",
             "company": "Knife River Corporation",
             "sector": "Materials"
@@ -1069,11 +1059,6 @@
         {
             "symbol": "NASDAQ:LFUS",
             "company": "Littelfuse",
-            "sector": "Information Technology"
-        },
-        {
-            "symbol": "NASDAQ:LITE",
-            "company": "Lumentum Holdings",
             "sector": "Information Technology"
         },
         {
@@ -1149,6 +1134,11 @@
         {
             "symbol": "NYSE:MMS",
             "company": "Maximus Inc.",
+            "sector": "Industrials"
+        },
+        {
+            "symbol": "NYSE:MOG.A",
+            "company": "Moog Inc.",
             "sector": "Industrials"
         },
         {
@@ -1273,7 +1263,7 @@
         },
         {
             "symbol": "NYSE:NWE",
-            "company": "NorthWestern Corporation",
+            "company": "NorthWestern Energy",
             "sector": "Utilities"
         },
         {
@@ -1303,7 +1293,7 @@
         },
         {
             "symbol": "NYSE:OGS",
-            "company": "ONE Gas",
+            "company": "One Gas",
             "sector": "Utilities"
         },
         {
@@ -1592,11 +1582,6 @@
             "sector": "Industrials"
         },
         {
-            "symbol": "NASDAQ:SATS",
-            "company": "EchoStar",
-            "sector": "Communication Services"
-        },
-        {
             "symbol": "NASDAQ:SBRA",
             "company": "Sabra Health Care REIT",
             "sector": "Real Estate"
@@ -1637,6 +1622,11 @@
             "sector": "Financials"
         },
         {
+            "symbol": "NASDAQ:SITM",
+            "company": "SiTime",
+            "sector": "Information Technology"
+        },
+        {
             "symbol": "NASDAQ:SLAB",
             "company": "Silicon Labs",
             "sector": "Information Technology"
@@ -1660,6 +1650,11 @@
             "symbol": "NYSE:SNX",
             "company": "TD Synnex",
             "sector": "Information Technology"
+        },
+        {
+            "symbol": "NASDAQ:SOLS",
+            "company": "Solstice Advanced Materials",
+            "sector": "Materials"
         },
         {
             "symbol": "NYSE:SON",
@@ -1860,6 +1855,11 @@
             "symbol": "NYSE:VFC",
             "company": "VF Corporation",
             "sector": "Consumer Discretionary"
+        },
+        {
+            "symbol": "NASDAQ:VICR",
+            "company": "Vicor Corporation",
+            "sector": "Industrials"
         },
         {
             "symbol": "NYSE:VLY",

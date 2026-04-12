@@ -1,5 +1,5 @@
 {
-    "date": "2026-03-22",
+    "date": "2026-04-12",
     "data": [
         {
             "symbol": "NYSE:AAMI",
@@ -117,6 +117,11 @@
             "sector": "Financials"
         },
         {
+            "symbol": "NYSE:AGX",
+            "company": "Argan, Inc.",
+            "sector": "Industrials"
+        },
+        {
             "symbol": "NASDAQ:AGYS",
             "company": "Agilysys, Inc.",
             "sector": "Information Technology"
@@ -125,11 +130,6 @@
             "symbol": "NASDAQ:AHCO",
             "company": "AdaptHealth Corp.",
             "sector": "Health Care"
-        },
-        {
-            "symbol": "NYSE:AHH",
-            "company": "Armada Hoffler Properties, Inc.",
-            "sector": "Real Estate"
         },
         {
             "symbol": "NASDAQ:AIN",
@@ -145,11 +145,6 @@
             "symbol": "NYSE:AKR",
             "company": "Acadia Realty Trust",
             "sector": "Real Estate"
-        },
-        {
-            "symbol": "NYSE:AL",
-            "company": "Air Lease Corporation",
-            "sector": "Industrials"
         },
         {
             "symbol": "NYSE:ALG",
@@ -212,11 +207,6 @@
             "sector": "Consumer Staples"
         },
         {
-            "symbol": "NASDAQ:ANGI",
-            "company": "Angi Inc.",
-            "sector": "Communication Services"
-        },
-        {
             "symbol": "NASDAQ:ANIP",
             "company": "ANI Pharmaceuticals, Inc.",
             "sector": "Health Care"
@@ -277,6 +267,11 @@
             "sector": "Real Estate"
         },
         {
+            "symbol": "NYSE:ASGN",
+            "company": "ASGN Inc.",
+            "sector": "Information Technology"
+        },
+        {
             "symbol": "NASDAQ:ASO",
             "company": "Academy Sports + Outdoors",
             "sector": "Consumer Discretionary"
@@ -297,9 +292,9 @@
             "sector": "Information Technology"
         },
         {
-            "symbol": "NYSE:ATGE",
-            "company": "Adtalem Global Education",
-            "sector": "Consumer Discretionary"
+            "symbol": "NYSE:ATMU",
+            "company": "Atmus Filtration Technologies Inc.",
+            "sector": "Industrials"
         },
         {
             "symbol": "NYSE:AUB",
@@ -330,11 +325,6 @@
             "symbol": "NYSE:AX",
             "company": "Axos Financial, Inc.",
             "sector": "Financials"
-        },
-        {
-            "symbol": "NYSE:AXL",
-            "company": "American Axle &amp; Manufacturing, Inc.",
-            "sector": "Consumer Discretionary"
         },
         {
             "symbol": "NASDAQ:AZTA",
@@ -422,14 +412,14 @@
             "sector": "Health Care"
         },
         {
-            "symbol": "NASDAQ:BLMN",
-            "company": "Bloomin' Brands, Inc.",
-            "sector": "Consumer Discretionary"
-        },
-        {
             "symbol": "NYSE:BMI",
             "company": "Badger Meter, Inc.",
             "sector": "Information Technology"
+        },
+        {
+            "symbol": "NYSE:BNL",
+            "company": "Broadstone Net Lease, Inc.",
+            "sector": "Real Estate"
         },
         {
             "symbol": "NYSE:BOH",
@@ -494,11 +484,6 @@
         {
             "symbol": "NASDAQ:CARG",
             "company": "CarGurus",
-            "sector": "Communication Services"
-        },
-        {
-            "symbol": "NYSE:CARS",
-            "company": "Cars.com",
             "sector": "Communication Services"
         },
         {
@@ -612,6 +597,11 @@
             "sector": "Information Technology"
         },
         {
+            "symbol": "NASDAQ:COCO",
+            "company": "The Vita Coco Company",
+            "sector": "Consumer Staples"
+        },
+        {
             "symbol": "NASDAQ:COHU",
             "company": "Cohu, Inc.",
             "sector": "Information Technology"
@@ -697,11 +687,6 @@
             "sector": "Health Care"
         },
         {
-            "symbol": "NASDAQ:CTRE",
-            "company": "CareTrust REIT, Inc.",
-            "sector": "Real Estate"
-        },
-        {
             "symbol": "NYSE:CTS",
             "company": "CTS Corporation",
             "sector": "Information Technology"
@@ -730,6 +715,11 @@
             "symbol": "NYSE:CVI",
             "company": "CVR Energy, Inc.",
             "sector": "Energy"
+        },
+        {
+            "symbol": "NYSE:CVSA",
+            "company": "Covista Inc.",
+            "sector": "Consumer Discretionary"
         },
         {
             "symbol": "NYSE:CWEN",
@@ -777,6 +767,11 @@
             "sector": "Consumer Discretionary"
         },
         {
+            "symbol": "NYSE:DCH",
+            "company": "Dauch Corporation",
+            "sector": "Consumer Discretionary"
+        },
+        {
             "symbol": "NASDAQ:DCOM",
             "company": "Dime Community Bancshares, Inc.",
             "sector": "Financials"
@@ -820,11 +815,6 @@
             "symbol": "NYSE:DNOW",
             "company": "NOW Inc",
             "sector": "Industrials"
-        },
-        {
-            "symbol": "NYSE:DOCN",
-            "company": "DigitalOcean Holdings, Inc.",
-            "sector": "Information Technology"
         },
         {
             "symbol": "NASDAQ:DORM",
@@ -1167,6 +1157,11 @@
             "sector": "Industrials"
         },
         {
+            "symbol": "NASDAQ:GTM",
+            "company": "ZoomInfo",
+            "sector": "Communication Services"
+        },
+        {
             "symbol": "NYSE:GTY",
             "company": "Getty Realty Corp.",
             "sector": "Real Estate"
@@ -1322,11 +1317,6 @@
             "sector": "Health Care"
         },
         {
-            "symbol": "NASDAQ:IDCC",
-            "company": "InterDigital, Inc.",
-            "sector": "Information Technology"
-        },
-        {
             "symbol": "NYSE:IIIN",
             "company": "Insteel Industries, Inc.",
             "sector": "Industrials"
@@ -1345,11 +1335,6 @@
             "symbol": "NASDAQ:INDV",
             "company": "Indivior",
             "sector": "Health Care"
-        },
-        {
-            "symbol": "NYSE:INN",
-            "company": "Summit Hotel Properties, Inc.",
-            "sector": "Real Estate"
         },
         {
             "symbol": "NASDAQ:INSP",
@@ -1462,6 +1447,11 @@
             "sector": "Information Technology"
         },
         {
+            "symbol": "NYSE:KMPR",
+            "company": "Kemper Corporation",
+            "sector": "Financials"
+        },
+        {
             "symbol": "NYSE:KMT",
             "company": "Kennametal",
             "sector": "Industrials"
@@ -1485,11 +1475,6 @@
             "symbol": "NYSE:KOP",
             "company": "Koppers Holdings, Inc.",
             "sector": "Materials"
-        },
-        {
-            "symbol": "NYSE:KREF",
-            "company": "KKR Real Estate Finance Trust, Inc.",
-            "sector": "Financials"
         },
         {
             "symbol": "NASDAQ:KRYS",
@@ -1517,6 +1502,11 @@
             "sector": "Materials"
         },
         {
+            "symbol": "NASDAQ:LAUR",
+            "company": "Laureate Education, Inc.",
+            "sector": "Consumer Discretionary"
+        },
+        {
             "symbol": "NYSE:LBRT",
             "company": "Liberty Energy, Inc.",
             "sector": "Energy"
@@ -1535,6 +1525,11 @@
             "symbol": "NASDAQ:LGIH",
             "company": "LGI Homes",
             "sector": "Consumer Discretionary"
+        },
+        {
+            "symbol": "NASDAQ:LIF",
+            "company": "Life360",
+            "sector": "Information Technology"
         },
         {
             "symbol": "NASDAQ:LGND",
@@ -1587,14 +1582,29 @@
             "sector": "Real Estate"
         },
         {
+            "symbol": "NYSE:LTH",
+            "company": "Life Time Group Holdings, Inc.",
+            "sector": "Consumer Discretionary"
+        },
+        {
             "symbol": "NYSE:LUMN",
             "company": "Lumen Technologies",
             "sector": "Communication Services"
         },
         {
+            "symbol": "NYSE:LW",
+            "company": "Lamb Weston",
+            "sector": "Consumer Staples"
+        },
+        {
             "symbol": "NYSE:LXP",
             "company": "Lexington Realty Trust",
             "sector": "Real Estate"
+        },
+        {
+            "symbol": "NASDAQ:LYFT",
+            "company": "Lyft, Inc.",
+            "sector": "Industrials"
         },
         {
             "symbol": "NASDAQ:LZ",
@@ -1722,9 +1732,9 @@
             "sector": "Consumer Discretionary"
         },
         {
-            "symbol": "NYSE:MOG.A",
-            "company": "Moog Inc.",
-            "sector": "Industrials"
+            "symbol": "NYSE:MOH",
+            "company": "Molina Healthcare",
+            "sector": "Health Care"
         },
         {
             "symbol": "NYSE:MPT",
@@ -1757,6 +1767,11 @@
             "sector": "Communication Services"
         },
         {
+            "symbol": "NASDAQ:MTCH",
+            "company": "Match Group",
+            "sector": "Communication Services"
+        },
+        {
             "symbol": "NYSE:MTH",
             "company": "Meritage Homes Corporation",
             "sector": "Consumer Discretionary"
@@ -1785,11 +1800,6 @@
             "symbol": "NYSE:MXL",
             "company": "MaxLinear, Inc.",
             "sector": "Information Technology"
-        },
-        {
-            "symbol": "NASDAQ:MYGN",
-            "company": "Myriad Genetics, Inc.",
-            "sector": "Health Care"
         },
         {
             "symbol": "NASDAQ:MYRG",
@@ -1977,6 +1987,11 @@
             "sector": "Energy"
         },
         {
+            "symbol": "NYSE:PAYC",
+            "company": "Paycom",
+            "sector": "Industrials"
+        },
+        {
             "symbol": "NASDAQ:PAYO",
             "company": "Payoneer Global Inc.",
             "sector": "Financials"
@@ -2065,11 +2080,6 @@
             "symbol": "NASDAQ:PLAB",
             "company": "Photronics, Inc.",
             "sector": "Information Technology"
-        },
-        {
-            "symbol": "NASDAQ:PLAY",
-            "company": "Dave &amp; Buster's Entertainment, Inc.",
-            "sector": "Consumer Discretionary"
         },
         {
             "symbol": "NASDAQ:PLMR",
@@ -2262,6 +2272,11 @@
             "sector": "Real Estate"
         },
         {
+            "symbol": "NYSE:RITM",
+            "company": "Rithm Capital",
+            "sector": "Financials"
+        },
+        {
             "symbol": "NYSE:RNG",
             "company": "RingCentral, Inc.",
             "sector": "Information Technology"
@@ -2422,11 +2437,6 @@
             "sector": "Consumer Discretionary"
         },
         {
-            "symbol": "NASDAQ:SITM",
-            "company": "SiTime",
-            "sector": "Information Technology"
-        },
-        {
             "symbol": "NYSE:SKT",
             "company": "Tanger Factory Outlet Centers, Inc.",
             "sector": "Real Estate"
@@ -2487,14 +2497,14 @@
             "sector": "Financials"
         },
         {
-            "symbol": "NASDAQ:SOLS",
-            "company": "Solstice Advanced Materials",
-            "sector": "Materials"
-        },
-        {
             "symbol": "NASDAQ:SONO",
             "company": "Sonos, Inc.",
             "sector": "Consumer Discretionary"
+        },
+        {
+            "symbol": "NYSE:SPHR",
+            "company": "Sphere Entertainment",
+            "sector": "Communication Services"
         },
         {
             "symbol": "NASDAQ:SPNT",
@@ -2552,11 +2562,6 @@
             "sector": "Health Care"
         },
         {
-            "symbol": "NYSE:SXC",
-            "company": "SunCoke Energy, Inc.",
-            "sector": "Materials"
-        },
-        {
             "symbol": "NYSE:SXI",
             "company": "Standex International Corporation",
             "sector": "Industrials"
@@ -2600,11 +2605,6 @@
             "symbol": "NYSE:TFX",
             "company": "Teleflex",
             "sector": "Health Care"
-        },
-        {
-            "symbol": "NYSE:TGNA",
-            "company": "Tegna",
-            "sector": "Communication Services"
         },
         {
             "symbol": "NYSE:TGTX",
@@ -2680,11 +2680,6 @@
             "symbol": "NASDAQ:TRUP",
             "company": "Trupanion",
             "sector": "Financials"
-        },
-        {
-            "symbol": "NYSE:TWI",
-            "company": "Titan International, Inc.",
-            "sector": "Materials"
         },
         {
             "symbol": "NYSE:TWO",
@@ -2802,14 +2797,14 @@
             "sector": "Information Technology"
         },
         {
+            "symbol": "NYSE:VGNT",
+            "company": "Versigent PLC",
+            "sector": "Consumer Discretionary"
+        },
+        {
             "symbol": "NASDAQ:VIAV",
             "company": "VIAVI Solutions",
             "sector": "Information Technology"
-        },
-        {
-            "symbol": "NASDAQ:VICR",
-            "company": "Vicor Corporation",
-            "sector": "Industrials"
         },
         {
             "symbol": "NASDAQ:VIR",
@@ -2850,6 +2845,11 @@
             "symbol": "NYSE:VSCO",
             "company": "Victoria's Secret",
             "sector": "Consumer Discretionary"
+        },
+        {
+            "symbol": "NASDAQ:VSEC",
+            "company": "VSE Corporation",
+            "sector": "Industrials"
         },
         {
             "symbol": "NYSE:VSH",
