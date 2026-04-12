@@ -25,7 +25,9 @@ async def get_upcoming_dividends_event(
     Check for upcoming dividend/distribution events for a market.
     """
     if settings_finhub_proxy.proxy_mode.upper() == "REDIRECT":
-        next_url = f"{settings_finhub_proxy.url_web_crawl_node.rstrip("/")}{str(router.prefix)}/upcoming_dividends?country={country}&index={index}"
+        proxy_url = settings_finhub_proxy.url_web_crawl_node.rstrip("/")
+        prefix = str(router.prefix)
+        next_url = f"{proxy_url}{prefix}/upcoming_dividends?country={country}&index={index}"
         logging.info(f"Redirecting request to {next_url}")
         return RedirectResponse(url=next_url, status_code=307)
 
@@ -66,7 +68,9 @@ async def get_upcoming_earnings_event(
     Check for upcoming earnings events for a market.
     """
     if settings_finhub_proxy.proxy_mode.upper() == "REDIRECT":
-        next_url = f"{settings_finhub_proxy.url_web_crawl_node.rstrip("/")}{str(router.prefix)}/upcoming_earnings?country={country}&index={index}"
+        proxy_url = settings_finhub_proxy.url_web_crawl_node.rstrip("/")
+        prefix = str(router.prefix)
+        next_url = f"{proxy_url}{prefix}/upcoming_earnings?country={country}&index={index}"
         logging.info(f"Redirecting request to {next_url}")
         return RedirectResponse(url=next_url, status_code=307)
 
@@ -91,9 +95,9 @@ async def get_new_listings(
     Note: currently only AU is supported.
     """
     if settings_finhub_proxy.proxy_mode.upper() == "REDIRECT":
-        next_url = (
-            f"{settings_finhub_proxy.url_web_crawl_node.rstrip("/")}{str(router.prefix)}/new_listings?country={country}"
-        )
+        proxy_url = settings_finhub_proxy.url_web_crawl_node.rstrip("/")
+        prefix = str(router.prefix)
+        next_url = f"{proxy_url}{prefix}/new_listings?country={country}"
         logging.info(f"Redirecting request to {next_url}")
         return RedirectResponse(url=next_url, status_code=307)
 
