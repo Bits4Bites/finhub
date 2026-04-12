@@ -1,14 +1,3 @@
-# This file has been cleaned up post-releasing version 0.5.1.
+# This file has been cleaned up post-releasing version 0.6.0.
 # Generate its content quickly using the following command:
 #   git log origin..HEAD | grep "^\s" > .semrelease/this_release
-#!VERSION=0.6.0
-- (Impr) Cache AU market indexes locally (ASX20, ASX50, ASX100, ASX200, ASX300)
-- (Impr) Cache VN market indexes locally (VN30, VN100, HNX30)
-- (Impr) Cache US market indexes locally (NASDAQ100, SP500, SP400, SP600)
-- (Impr) Add event analysis to API /events/new_listings
-- (Feat) Add OpenRouter client
-- (Feat) Add APIs to return list of companies in an index
-- (Feat) Add new API to analyze a dividend event
-- (Feat) Add proxy mode
-- (Refactor) Move event APIs to a new endpoint /events
-- (Patch) Code cleanup
