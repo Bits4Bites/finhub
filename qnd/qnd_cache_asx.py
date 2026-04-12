@@ -24,7 +24,7 @@ def load_csv_with_pandas(file_path):
 
 
 async def main():
-    pd_data = load_csv_with_pandas("./.cache/ASX_Listed_Companies.csv")
+    pd_data = load_csv_with_pandas("./.cache_data/ASX_Listed_Companies.csv")
 
     cache_data = {}
     num_total = len(pd_data)
@@ -57,7 +57,7 @@ async def main():
             print(f"Total symbols: {num_total} / Cached symbols: {num_cached}")
 
     print(f"Total symbols: {num_total} / Cached symbols: {num_cached}")
-    with open("./.cache/asx_cache.json", "w", encoding="utf-8") as cache_file:
+    with open("./.cache_data/asx_cache.json", "w", encoding="utf-8") as cache_file:
         json.dump(cache_data, cache_file, ensure_ascii=False, indent=4)
 
 

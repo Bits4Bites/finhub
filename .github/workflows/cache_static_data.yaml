@@ -34,18 +34,6 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-      - name: Cache ASX
-        run: |
-          python -m qnd.qnd_cache_asx
-          git add .
-          git commit -am "Cache ASX data"
-          echo "✅ ASX data cached and committed."
-      - name: Cache SP1500
-        run: |
-          python -m qnd.qnd_cache_sp1500
-          git add .
-          git commit -am "Cache SP1500 data"
-          echo "✅ SP1500 data cached and committed."
       - name: Update ASX Indices
         run: |
           python -m qnd.qnd_update_asx_indices
@@ -64,6 +52,18 @@ jobs:
           git add .
           git commit -am "Update VN indices"
           echo "✅ VN indices updated and committed."
+      - name: Cache ASX
+        run: |
+          python -m qnd.qnd_cache_asx
+          git add .
+          git commit -am "Cache ASX data"
+          echo "✅ ASX data cached and committed."
+      - name: Cache SP1500
+        run: |
+          python -m qnd.qnd_cache_sp1500
+          git add .
+          git commit -am "Cache SP1500 data"
+          echo "✅ SP1500 data cached and committed."
       - name: Push changes
         run: |
           git push origin ${WORK_BRANCH}
