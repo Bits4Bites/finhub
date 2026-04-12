@@ -7,7 +7,7 @@ import json
 import pandas as pd
 import yfinance as yf
 
-from app.services import stock as stock_service
+from app.services import stock as stock_service, crawler as crawler_service
 from app.models import finhub as models
 
 
@@ -24,7 +24,15 @@ def load_csv_with_pandas(file_path):
 
 
 async def main():
-    pd_data = load_csv_with_pandas("./.cache_data/ASX_Listed_Companies.csv")
+    # fetch data from web as CSV
+    csv_data = await crawler_service.fetch_webpage_content("https://asx.api.markitdigital.com/asx-research/1.0/companies/directory/file")
+
+    cache_filename = "./.cache_data/ASX_Listed_Companies.csv"
+    # write CSV data to file
+    with open(cache_filename, "w", encoding="utf-8") as cache_file:
+        cache_file.write(csv_data)
+
+    pd_data = load_csv_with_pandas(cache_filename)
 
     cache_data = {}
     num_total = len(pd_data)
