@@ -9,7 +9,7 @@ from bs4 import BeautifulSoup
 
 from . import ai_helper
 from ..models import finhub as models, types
-from ..config import settings
+from ..config import settings_llm
 from ..services import crawler as crawler_service, stock as stock_service
 from ..utils import finhub as finhub_utils
 
@@ -29,7 +29,7 @@ async def ai_exec_prompt(
     """
     Executes a prompt using the appropriate LLM based on the task configuration.
     """
-    task_cfg = settings.llm_task_config.get(task_id)
+    task_cfg = settings_llm.llm_task_config.get(task_id)
     if not task_cfg:
         raise ValueError(f"LLM task configuration for task_id '{task_id}' not found.")
     prompt_cfg = ai_helper.PromptConfig(

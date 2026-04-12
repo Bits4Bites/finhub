@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Literal
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -26,7 +26,7 @@ class LLMTaskConfig(BaseSettings):
     model: str = ""
 
 
-class Settings(BaseSettings):
+class LLMSettings(BaseSettings):
     llm_config: dict[str, dict[str, LLMConfig]] = Field(alias="FINHUB_LLM", default={})
     llm_task_config: dict[str, LLMTaskConfig] = Field(alias="FINHUB_LLM_TASK", default={})
     model_config = SettingsConfigDict(
@@ -37,7 +37,19 @@ class Settings(BaseSettings):
     )
 
 
-settings = Settings()
+settings_llm = LLMSettings()
+
+
+class FinHubProxySettings(BaseSettings):
+    proxy_mode: Literal["None", "Redirect", "Forward"] = Field(default="None", alias="FINHUB_PROXY_MODE")
+    url_web_crawl_node: str = Field(default="", alias="FINHUB_URL_WEB_CRAWL_NODE")
+    model_config = SettingsConfigDict(
+        env_file="ai_clients_config.env",
+        env_file_encoding="utf-8",
+    )
+
+
+settings_finhub_proxy = FinHubProxySettings()
 
 
 class CompanyBriefInfo(BaseSettings):

@@ -18,19 +18,19 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(level
 #     }
 # }
 # vendor_name and api_tier are initially empty, we want to populate their values from the keys
-for vendor_name, api_tiers in list(config.settings.llm_config.items()):
-    config.settings.llm_config[vendor_name.upper()] = api_tiers.copy()
+for vendor_name, api_tiers in list(config.settings_llm.llm_config.items()):
+    config.settings_llm.llm_config[vendor_name.upper()] = api_tiers.copy()
     for api_tier, llm_cfg in list(api_tiers.items()):
         # remove any entries that have empty api_key and empty endpoint
         # or empty models list
         if (not llm_cfg.api_key and not llm_cfg.endpoint) or llm_cfg.models is None or not llm_cfg.models:
             del api_tiers[api_tier]
         else:
-            config.settings.llm_config[vendor_name.upper()][api_tier.upper()] = llm_cfg.copy()
-            config.settings.llm_config[vendor_name.upper()][api_tier.upper()].vendor_name = vendor_name.upper()
-            config.settings.llm_config[vendor_name.upper()][api_tier.upper()].api_tier = api_tier.upper()
+            config.settings_llm.llm_config[vendor_name.upper()][api_tier.upper()] = llm_cfg.copy()
+            config.settings_llm.llm_config[vendor_name.upper()][api_tier.upper()].vendor_name = vendor_name.upper()
+            config.settings_llm.llm_config[vendor_name.upper()][api_tier.upper()].api_tier = api_tier.upper()
 
-for vendor_name, api_tiers in list(config.settings.llm_config.items()):
+for vendor_name, api_tiers in list(config.settings_llm.llm_config.items()):
     # final cleanup
     for api_tier, llm_cfg in list(api_tiers.items()):
         if not llm_cfg.vendor_name or not llm_cfg.api_tier:
@@ -38,7 +38,7 @@ for vendor_name, api_tiers in list(config.settings.llm_config.items()):
 
     # delete the whole vendor if it has no api_tiers left
     if not api_tiers:
-        del config.settings.llm_config[vendor_name]
+        del config.settings_llm.llm_config[vendor_name]
 
 # config.settings.llm_task_config is in the following format:
 # {
@@ -50,14 +50,14 @@ for vendor_name, api_tiers in list(config.settings.llm_config.items()):
 #     )
 # }
 # task_name is initially empty, we want to populate its value from the keys
-for task_name, llm_task_config in list(config.settings.llm_task_config.items()):
-    config.settings.llm_task_config[task_name.upper()] = llm_task_config.copy()
-    config.settings.llm_task_config[task_name.upper()].task_name = task_name.upper()
+for task_name, llm_task_config in list(config.settings_llm.llm_task_config.items()):
+    config.settings_llm.llm_task_config[task_name.upper()] = llm_task_config.copy()
+    config.settings_llm.llm_task_config[task_name.upper()].task_name = task_name.upper()
 
-for task_name, llm_cfg in list(config.settings.llm_task_config.items()):
+for task_name, llm_cfg in list(config.settings_llm.llm_task_config.items()):
     # remove any entries that have empty vendor or empty tier or empty model
     if not llm_cfg.task_name or not llm_cfg.vendor or not llm_cfg.tier or not llm_cfg.model:
-        del config.settings.llm_task_config[task_name]
+        del config.settings_llm.llm_task_config[task_name]
 
 
 def read_file_as_single_string(file_path) -> str:

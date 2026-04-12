@@ -572,7 +572,7 @@ async def analyse_dividend_event(
         result.recovery_price_max = float(current_price + mean_overshoot)
 
     # additional technical data
-    result.beta = ticker.info.get("beta")
+    result.beta = ticker.info.get("beta", 0)
     history7d = history5y[-7:]
     history7d["DVT"] = (
         (history7d["Open"] + history7d["Close"] + history7d["High"] + history7d["Low"]) / 4 * history7d["Volume"]

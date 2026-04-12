@@ -4,11 +4,11 @@ from google import genai
 from google.genai.types import HttpOptions
 from openai import AsyncOpenAI
 
-from ..config import settings
+from ..config import settings_llm
 from . import ai, ai_helper
 
 # initialize LLM clients based on configurations
-for vendor_name, api_tiers in list(settings.llm_config.items()):
+for vendor_name, api_tiers in list(settings_llm.llm_config.items()):
     for api_tier, llm_config in list(api_tiers.items()):
         if vendor_name.upper() == "GEMINI":
             ai_helper.geminiClients[api_tier.upper()] = genai.Client(

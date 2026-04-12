@@ -475,6 +475,18 @@ def parse_listing_analysis_from_json(json_str: str, default_vals: dict[str, Any]
                     reason=v["outlook"]["w2"].get("reason"),
                     confidence=v["outlook"]["w2"].get("confidence"),
                 )
+            if "m1" in v["outlook"]:
+                result[k].outlook["m1"] = ListingOutlook(
+                    direction=v["outlook"]["m1"].get("dir"),
+                    reason=v["outlook"]["m1"].get("reason"),
+                    confidence=v["outlook"]["m1"].get("confidence"),
+                )
+            if "m3" in v["outlook"]:
+                result[k].outlook["m3"] = ListingOutlook(
+                    direction=v["outlook"]["m3"].get("dir"),
+                    reason=v["outlook"]["m3"].get("reason"),
+                    confidence=v["outlook"]["m3"].get("confidence"),
+                )
 
     return result
 

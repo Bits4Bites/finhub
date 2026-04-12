@@ -34,18 +34,12 @@ async def get_upcoming_dividends_event(
     for event in events:
         for index in ["ASX300", "NASDAQ100", "SP500", "SP400", "VN100"]:
             if finhub_utils.is_in_index(index=index, symbol=event.symbol):
-                if (
-                    (event.symbol.startswith("ASX:") and event.dividend_yield >= 0.02)
-                    or (event.symbol.startswith("NASDAQ:") and event.dividend_yield >= 0.005)
-                    or (event.symbol.startswith("NYSE:") and event.dividend_yield >= 0.01)
-                    or (event.symbol.startswith("HOSE:") and event.dividend_yield >= 0.15)
-                ):
-                    logging.info(
-                        f"Upcoming dividend event: {event.symbol} ({index}) / {event.date[:10]} / {event.amount} ({event.dividend_yield:.2%})"
-                    )
-                    event.analysis = await stock_service.analyse_dividend_event(
-                        symbol=event.symbol, div_amount=event.amount, ex_date=event.date[:10]
-                    )
+                logging.info(
+                    f"Upcoming dividend event: {event.symbol} ({index}) / {event.date[:10]} / {event.amount} ({event.dividend_yield:.2%})"
+                )
+                event.analysis = await stock_service.analyse_dividend_event(
+                    symbol=event.symbol, div_amount=event.amount, ex_date=event.date[:10]
+                )
                 break
 
     return schemas.UpcomingDividendsResponse(status=200, message="ok", data=events)

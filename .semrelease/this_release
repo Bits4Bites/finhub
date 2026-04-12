@@ -9,4 +9,6 @@
 - (Feat) Add OpenRouter client
 - (Feat) Add APIs to return list of companies in an index
 - (Feat) Add new API to analyze a dividend event
+- (Feat) Add proxy mode
 - (Refactor) Move event APIs to a new endpoint /events
+- (Patch) Code cleanup
