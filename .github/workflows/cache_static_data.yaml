@@ -1,0 +1,84 @@
+name: "Cache Static Data"
+
+on:
+  schedule:
+    # run every Saturday at 00:00 UTC
+    - cron: '0 0 * * 6'
+
+  # Allow manually trigger
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  WORK_BRANCH: cache-static-data
+
+jobs:
+  CacheStaticData:
+    name: Cache Static Data
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+      - name: Create new branch
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email ""
+          git checkout -b ${WORK_BRANCH}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '>=3.12'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Cache ASX
+        run: |
+          python -m qnd.qnd_cache_asx
+          git add .
+          git commit -am "Cache ASX data"
+          echo "✅ ASX data cached and committed."
+      - name: Cache SP1500
+        run: |
+          python -m qnd.qnd_cache_sp1500
+          git add .
+          git commit -am "Cache SP1500 data"
+          echo "✅ SP1500 data cached and committed."
+      - name: Update ASX Indices
+        run: |
+          python -m qnd.qnd_update_asx_indices
+          git add .
+          git commit -am "Update ASX indices"
+          echo "✅ ASX indices updated and committed."
+      - name: Update US Indices
+        run: |
+          python -m qnd.qnd_update_us_indices
+          git add .
+          git commit -am "Update US indices"
+          echo "✅ US indices updated and committed."
+      - name: Update VN Indices
+        run: |
+          python -m qnd.qnd_update_vn_indices
+          git add .
+          git commit -am "Update VN indices"
+          echo "✅ VN indices updated and committed."
+      - name: Push changes
+        run: |
+          git push origin ${WORK_BRANCH}
+          echo "✅ Branch ${WORK_BRANCH} pushed to origin"
+      - name: Create Pull Request
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const {data: pr} = await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: "Cache Static Data",
+              body: "Update static data for ASX, SP1500, and ASX/US/VN indices.",
+              head: "${{ env.WORK_BRANCH }}",
+              base: "main",
+              maintainer_can_modify: true,
+            });
+            console.log("✅ Created PR: ", pr);
