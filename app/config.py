@@ -44,7 +44,7 @@ class FinHubProxySettings(BaseSettings):
     proxy_mode: Literal["None", "Redirect", "Forward"] = Field(default="None", alias="FINHUB_PROXY_MODE")
     url_web_crawl_node: str = Field(default="", alias="FINHUB_URL_WEB_CRAWL_NODE")
     model_config = SettingsConfigDict(
-        env_file="ai_clients_config.env",
+        env_file="finhub_proxy_config.env",
         env_file_encoding="utf-8",
     )
 

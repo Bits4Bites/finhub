@@ -276,3 +276,9 @@ jobs:
           resourceGroup: ${{ secrets.AZURE_RESOURCE_GROUP }}
           imageToDeploy: ${{ secrets.IMAGE_TO_DEPLOY }}:${{ env.VERSION }}
           # imageToDeploy: docker.io/${{ env.DOCKER_IMAGE }}:${{ env.VERSION }}
+      - name: Deploy (Lite)
+        uses: azure/container-apps-deploy-action@v2
+        with:
+          containerAppName: ${{ secrets.AZURE_CONTAINER_APP_LITE }}
+          resourceGroup: ${{ secrets.AZURE_RESOURCE_GROUP_LITE }}
+          imageToDeploy: ${{ secrets.IMAGE_TO_DEPLOY }}:${{ env.VERSION }}
