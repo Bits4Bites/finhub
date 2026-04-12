@@ -12,6 +12,9 @@ permissions:
   contents: write
   pull-requests: write
 
+env:
+  WORK_BRANCH: cache-static-data
+
 jobs:
   CacheStaticData:
     name: Cache Static Data
@@ -23,9 +26,7 @@ jobs:
         run: |
           git config user.name "GitHub Actions"
           git config user.email ""
-          DATE=`date +%Y-%m-%d`
-          export BRANCH=cache-static-data-${DATE}
-          git checkout -b $BRANCH
+          git checkout -b ${WORK_BRANCH}
       - uses: actions/setup-python@v6
         with:
           python-version: '>=3.12'
@@ -65,19 +66,18 @@ jobs:
           echo "✅ VN indices updated and committed."
       - name: Push changes
         run: |
-          git push origin $BRANCH
-          echo "✅ Branch $BRANCH pushed to origin"
+          git push origin ${WORK_BRANCH}
+          echo "✅ Branch ${WORK_BRANCH} pushed to origin"
       - name: Create Pull Request
         uses: actions/github-script@v9
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const {data: pr} = await github.rest.pulls.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: "Cache Static Data ${{ BRANCH }}",
-              body: "Cache Static Data ${{ BRANCH }}",
-              head: "${{ BRANCH }},
+              title: "Cache Static Data",
+              body: "Update static data for ASX, SP1500, and ASX/US/VN indices.",
+              head: "${{ env.WORK_BRANCH }}",
               base: "main",
               maintainer_can_modify: true,
             });
