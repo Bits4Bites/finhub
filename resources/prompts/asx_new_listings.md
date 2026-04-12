@@ -1,22 +1,30 @@
-Extract upcoming ASX listings from the RAW INPUT DATA section into a JSON array. If no data is available, return an empty array.
+TASK: Extract upcoming ASX listings from RAW INPUT DATA into a JSON array. If none, return [].
 
-IMPORTANT: the "Expected offer close date" is NOT the listing date. The listing date is presented next to the company name.
-Ignore the entry if the listing date is not confirmed (e.g. "TBC" or "TBA" or "TBD").
+Rules:
+- Listing date is next to company name (NOT "Expected offer close date").
+- Skip entries with unconfirmed dates (TBC/TBA/TBD).
+- Map principal_activities to ONE sector from: {SECTORS}
+  (normalize synonyms, e.g. "INFORMATION TECHNOLOGY" → TECHNOLOGY).
 
-Return ONLY raw, valid JSON. Do NOT wrap the output in Markdown blocks (no ```). Start with [ and end with ].
+Output:
+- Raw JSON only (no markdown/text), starting with [ and ending with ].
 
 Schema:
 [
   {
-    "symbol": "ASX:{ticker}",  // where {ticker} is the ASX ticker symbol, upper case
-    "company": "string",       // Company name
-    "date": "YYYY-MM-DD",      // Expected Listing date 
-    "price": 0.0,              // Extract Issue price as a float (e.g., 0.20). Remove currency symbols/text
-    "industry": "string",      // Map from Principal activities
-    "capital": "string"        // Map from Capital to be raised
-  }}
+    "symbol": "ASX:{TICKER}",
+    "company": "string",
+    "date": "YYYY-MM-DD",
+    "price": 0.0,
+    "principal_activities": "string",
+    "sector": "string",
+    "capital": 0
+  }
 ]
 
-# RAW INPUT DATA
+Notes:
+- price: float, strip currency/text.
+- capital: int, strip currency/commas.
 
+RAW INPUT DATA:
 {RAW_INPUT_DATA}

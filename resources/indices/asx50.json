@@ -1,0 +1,255 @@
+{
+    "date": "2026-03-21",
+    "data": [
+        {
+            "symbol": "ASX:CBA",
+            "company": "Commonwealth Bank",
+            "sector": "Financials"
+        },
+        {
+            "symbol": "ASX:CSL",
+            "company": "CSL Limited",
+            "sector": "Health Care"
+        },
+        {
+            "symbol": "ASX:BHP",
+            "company": "BHP Group Limited",
+            "sector": "Materials"
+        },
+        {
+            "symbol": "ASX:WBC",
+            "company": "Westpac Banking Corp",
+            "sector": "Financials"
+        },
+        {
+            "symbol": "ASX:NAB",
+            "company": "National Aust. Bank",
+            "sector": "Financials"
+        },
+        {
+            "symbol": "ASX:ANZ",
+            "company": "ANZ Banking Group Limited",
+            "sector": "Financials"
+        },
+        {
+            "symbol": "ASX:WOW",
+            "company": "Woolworths Group Limited",
+            "sector": "Consumer Staples"
+        },
+        {
+            "symbol": "ASX:MQG",
+            "company": "Macquarie Group Limited",
+            "sector": "Financials"
+        },
+        {
+            "symbol": "ASX:WES",
+            "company": "Wesfarmers Limited",
+            "sector": "Consumer Discretionary"
+        },
+        {
+            "symbol": "ASX:TLS",
+            "company": "Telstra Corporation",
+            "sector": "Telecommunication Services"
+        },
+        {
+            "symbol": "ASX:TCL",
+            "company": "Transurban Group FP Ordinary/Units Stapled Securities",
+            "sector": "Industrials"
+        },
+        {
+            "symbol": "ASX:RIO",
+            "company": "RIO Tinto Limited",
+            "sector": "Materials"
+        },
+        {
+            "symbol": "ASX:FMG",
+            "company": "Fortescue Metals Group",
+            "sector": "Materials"
+        },
+        {
+            "symbol": "ASX:GMG",
+            "company": "Goodman Group FP Ordinary/Units Stapled Securities",
+            "sector": "Real Estate"
+        },
+        {
+            "symbol": "ASX:WPL",
+            "company": "Woodside Petroleum",
+            "sector": "Energy"
+        },
+        {
+            "symbol": "ASX:ALL",
+            "company": "Aristocrat Leisure",
+            "sector": "Consumer Discretionary"
+        },
+        {
+            "symbol": "ASX:NCM",
+            "company": "Newcrest Mining",
+            "sector": "Materials"
+        },
+        {
+            "symbol": "ASX:COL",
+            "company": "Coles Group",
+            "sector": "Consumer Staples"
+        },
+        {
+            "symbol": "ASX:BXB",
+            "company": "Brambles Limited",
+            "sector": "Industrials"
+        },
+        {
+            "symbol": "ASX:SCG",
+            "company": "Scentre Group FP Ordinary/Units Stapled Securities",
+            "sector": "Real Estate"
+        },
+        {
+            "symbol": "ASX:QBE",
+            "company": "QBE Insurance Group",
+            "sector": "Financials"
+        },
+        {
+            "symbol": "ASX:SYD",
+            "company": "SYD Airport FP Ordinary/Units Stapled Securities",
+            "sector": "Industrials"
+        },
+        {
+            "symbol": "ASX:AMC",
+            "company": "Amcor Plc Cdi 1:1 Foreign Exempt NYSE",
+            "sector": "Materials"
+        },
+        {
+            "symbol": "ASX:IAG",
+            "company": "Insurance Australia",
+            "sector": "Financials"
+        },
+        {
+            "symbol": "ASX:ASX",
+            "company": "ASX Limited",
+            "sector": "Financials"
+        },
+        {
+            "symbol": "ASX:SUN",
+            "company": "Suncorp Group Limited",
+            "sector": "Financials"
+        },
+        {
+            "symbol": "ASX:STO",
+            "company": "Santos Limited",
+            "sector": "Energy"
+        },
+        {
+            "symbol": "ASX:FPH",
+            "company": "Fisher & Paykel H Foreign Exempt NZX",
+            "sector": "Health Care"
+        },
+        {
+            "symbol": "ASX:RHC",
+            "company": "Ramsay Health Care",
+            "sector": "Health Care"
+        },
+        {
+            "symbol": "ASX:SHL",
+            "company": "Sonic Healthcare",
+            "sector": "Health Care"
+        },
+        {
+            "symbol": "ASX:DXS",
+            "company": "Dexus FP Units Stapled Securities",
+            "sector": "Real Estate"
+        },
+        {
+            "symbol": "ASX:REA",
+            "company": "REA Group",
+            "sector": ""
+        },
+        {
+            "symbol": "ASX:APA",
+            "company": "APA Group FP Units Stapled Securities",
+            "sector": "Utilities"
+        },
+        {
+            "symbol": "ASX:JHX",
+            "company": "James Hardie Indust Chess Depositary Interests 1:1",
+            "sector": "Materials"
+        },
+        {
+            "symbol": "ASX:ORG",
+            "company": "Origin Energy",
+            "sector": "Energy"
+        },
+        {
+            "symbol": "ASX:AGL",
+            "company": "AGL Energy Limited",
+            "sector": "Utilities"
+        },
+        {
+            "symbol": "ASX:COH",
+            "company": "Cochlear Limited",
+            "sector": "Health Care"
+        },
+        {
+            "symbol": "ASX:MGR",
+            "company": "Mirvac Group FP Ordinary/Units Stapled Securities",
+            "sector": "Real Estate"
+        },
+        {
+            "symbol": "ASX:A2M",
+            "company": "The a2 Milk Company",
+            "sector": "Consumer Staples"
+        },
+        {
+            "symbol": "ASX:GPT",
+            "company": "GPT Group FP Ordinary/Units Stapled Securities",
+            "sector": "Real Estate"
+        },
+        {
+            "symbol": "ASX:SGP",
+            "company": "Stockland FP Ordinary/Units Stapled Securities",
+            "sector": "Real Estate"
+        },
+        {
+            "symbol": "ASX:S32",
+            "company": "SOUTH32 Limited",
+            "sector": "Materials"
+        },
+        {
+            "symbol": "ASX:XRO",
+            "company": "Xero Limited",
+            "sector": "Information Technology"
+        },
+        {
+            "symbol": "ASX:MFG",
+            "company": "Magellan Fin Group Limited",
+            "sector": "Financials"
+        },
+        {
+            "symbol": "ASX:NST",
+            "company": "Northern Star",
+            "sector": "Materials"
+        },
+        {
+            "symbol": "ASX:LLC",
+            "company": "Lendlease Group FP Ordinary/Units Stapled Securities",
+            "sector": "Real Estate"
+        },
+        {
+            "symbol": "ASX:RMD",
+            "company": "Resmed Inc Cdi 10:1 Foreign Exempt NYSE",
+            "sector": "Health Care"
+        },
+        {
+            "symbol": "ASX:AZJ",
+            "company": "Aurizon Holdings Limited",
+            "sector": "Industrials"
+        },
+        {
+            "symbol": "ASX:AIA",
+            "company": "Auckland Internation Foreign Exempt NZX",
+            "sector": "Industrials"
+        },
+        {
+            "symbol": "ASX:APT",
+            "company": "Afterpay Limited",
+            "sector": "Information Technology"
+        }
+    ]
+}
