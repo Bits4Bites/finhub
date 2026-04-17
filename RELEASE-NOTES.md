@@ -1,5 +1,11 @@
 # FinHub release notes
 
+## 2026-04-17 - v0.6.1
+
+### Fixed/Improvements
+
+- (Patch) Authenticate AzureOpenAI with SP
+
 ## 2026-04-12 - v0.6.0
 
 ### Added/Refactoring/Deprecation
