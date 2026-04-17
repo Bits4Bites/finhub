@@ -32,7 +32,7 @@ def extract_data_table_from_html(html_content: str, *, raw_cell_content=False, t
         return pd.DataFrame()
 
     # 1. Extract the table headers
-    headers_list = []
+    # headers_list = None
     thead = table.find("thead")
     if thead:
         # for th in thead.find_all("th"):
@@ -42,9 +42,10 @@ def extract_data_table_from_html(html_content: str, *, raw_cell_content=False, t
             headers_list = [td.text.strip() for td in thead.find_all("td")]
     else:
         # Fallback in case there is no <thead> tag
-        headers_list = [th.text.strip() for th in table.find("tr").find_all("th")]
+        tr = table.find("tr")
+        headers_list = [th.text.strip() for th in (tr.find_all("th") if tr else [])]
         if len(headers_list) == 0:
-            headers_list = [td.text.strip() for td in table.find("tr").find_all("td")]
+            headers_list = [td.text.strip() for td in (tr.find_all("td") if tr else [])]
 
     # 2. Extract the table rows
     data = []

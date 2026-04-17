@@ -20,11 +20,13 @@ openAIClients: dict[str, AsyncOpenAI] = {}
 openRouterClients: dict[str, AsyncOpenAI] = {}
 azureOpenAIClients: dict[str, AsyncOpenAI] = {}
 
+ThinkingLevel = Literal["LOW", "MEDIUM", "HIGH"]
+
 
 class PromptConfig(BaseModel):
     use_web_search: bool = False
     country: Optional[str] = None  # for web search location context
-    thinking_level: Optional[Literal["LOW", "MEDIUM", "HIGH"]] = None
+    thinking_level: Optional[ThinkingLevel] = None
 
 
 async def ai_exec_prompt_openai_client(
@@ -60,25 +62,25 @@ async def ai_exec_prompt_openai_client(
         result = LLMResponse(
             completion=ai_response.output_text,
             time_taken_ms=int((end - start) * 1000),
-            tokens_prompt=ai_response.usage.input_tokens,
-            tokens_completion=ai_response.usage.output_tokens,
+            tokens_prompt=ai_response.usage.input_tokens if ai_response.usage else 0,
+            tokens_completion=ai_response.usage.output_tokens if ai_response.usage else 0,
             tokens_thought=0,
             is_error=not ai_response or ai_response.status != "completed",
         )
     else:
         # use standard chat completion API for non web search tasks
         completion = await client.chat.completions.create(
-            extra_headers={"X-OpenRouter-Title": "FinHub"},
+            # extra_headers={"X-OpenRouter-Title": "FinHub"},
             model=task_cfg.model,
             temperature=0.0,
             messages=[ChatCompletionUserMessageParam(content=prompt, role="user")],
         )
         end = time.perf_counter()
         result = LLMResponse(
-            completion=completion.choices[0].message.content if len(completion.choices) > 0 else "",
+            completion=completion.choices[0].message.content or "" if len(completion.choices) > 0 else "",
             time_taken_ms=int((end - start) * 1000),
-            tokens_prompt=completion.usage.prompt_tokens,
-            tokens_completion=completion.usage.completion_tokens,
+            tokens_prompt=completion.usage.prompt_tokens if completion.usage else 0,
+            tokens_completion=completion.usage.completion_tokens if completion.usage else 0,
             tokens_thought=0,
             is_error=len(completion.choices) == 0,
         )
@@ -160,16 +162,14 @@ async def ai_exec_prompt_gemini(task_cfg: LLMTaskConfig, prompt: str, prompt_cfg
     )
     end = time.perf_counter()
     result = LLMResponse(
-        completion=ai_response.text,
+        completion=ai_response.text or "",
         time_taken_ms=int((end - start) * 1000),
-        tokens_prompt=ai_response.usage_metadata.prompt_token_count,
-        tokens_completion=ai_response.usage_metadata.candidates_token_count,
-        tokens_thought=(
-            ai_response.usage_metadata.thoughts_token_count if ai_response.usage_metadata.thoughts_token_count else 0
-        ),
+        tokens_prompt=ai_response.usage_metadata.prompt_token_count or 0 if ai_response.usage_metadata else 0,
+        tokens_completion=ai_response.usage_metadata.candidates_token_count or 0 if ai_response.usage_metadata else 0,
+        tokens_thought=ai_response.usage_metadata.thoughts_token_count or 0 if ai_response.usage_metadata else 0,
         is_error=(
-            (ai_response.prompt_feedback and ai_response.prompt_feedback.block_reason)
-            or len(ai_response.candidates) == 0
+            (ai_response.prompt_feedback is not None and ai_response.prompt_feedback.block_reason is not None)
+            or len(ai_response.candidates or []) == 0
         ),
     )
 

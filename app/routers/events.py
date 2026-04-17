@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Query
 from fastapi.responses import RedirectResponse
 
 from app.schemas.finhub import UpcomingDividendsResponse, UpcomingEarningsResponse, ListingsResponse
@@ -14,7 +14,6 @@ router = APIRouter(prefix="/events", tags=["events"])
 
 @router.get("/upcoming_dividends", response_model=schemas.UpcomingDividendsResponse, response_model_exclude_none=True)
 async def get_upcoming_dividends_event(
-    request: Request,
     country: str = Query(description="Country code to filter events by (only 'AU', 'US' and 'VN' are supported)."),
     index: str = Query(
         "",
@@ -46,10 +45,10 @@ async def get_upcoming_dividends_event(
         for index in ["ASX300", "NASDAQ100", "SP500", "SP400", "VN100"]:
             if finhub_utils.is_in_index(index=index, symbol=event.symbol):
                 logging.info(
-                    f"Upcoming dividend event: {event.symbol} ({index}) / {event.date[:10]} / {event.amount} ({event.dividend_yield:.2%})"
+                    f"Upcoming dividend event: {event.symbol} ({index}) / {event.date[:10] if event.date else ""} / {event.amount} ({event.dividend_yield:.2%})"
                 )
                 event.analysis = await stock_service.analyse_dividend_event(
-                    symbol=event.symbol, div_amount=event.amount, ex_date=event.date[:10]
+                    symbol=event.symbol, div_amount=event.amount or 0, ex_date=event.date[:10] if event.date else ""
                 )
                 break
 

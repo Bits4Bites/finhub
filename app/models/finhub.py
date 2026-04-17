@@ -151,7 +151,7 @@ class SymbolDividend(BaseModel):
             last_dividend_value=ticker.info.get("lastDividendValue"),
             last_dividend_date=ticker.info.get("lastDividendDate"),
         )
-        symbol = ticker.info.get("symbol")
+        symbol = ticker.info.get("symbol", "")
         tz = finhub_utils.tz_from_yf_ticker(symbol)
         if self.ex_dividend_date:
             self.ex_dividend_date_str = (
@@ -401,7 +401,7 @@ def parse_upcoming_dividend_events_from_json(
             currency=item.get("currency", default_vals.get("currency")),
         )
         # parse yyyy-MM-dd from event.date into event.timestamp
-        event.timestamp = int(datetime.strptime(event.date, "%Y-%m-%d").timestamp())
+        event.timestamp = int(datetime.strptime(event.date or "", "%Y-%m-%d").timestamp())
         result.append(event)
 
     return result
@@ -415,6 +415,7 @@ class UpcomingEarningsEvent(EventBase):
 def parse_upcoming_earnings_events_from_json(
     json_str: str, default_vals: dict[str, Any] = None
 ) -> list[UpcomingEarningsEvent]:
+    default_vals = default_vals or {}
     json_str = normalize_json_str(json_str)
     events = json.loads(json_str)
     result = []
@@ -431,7 +432,7 @@ def parse_upcoming_earnings_events_from_json(
             status=item.get("status", default_vals.get("status")),
         )
         # parse yyyy-MM-dd from event.date into event.timestamp
-        event.timestamp = int(datetime.strptime(event.date, "%Y-%m-%d").timestamp())
+        event.timestamp = int(datetime.strptime(event.date or "", "%Y-%m-%d").timestamp())
         result.append(event)
 
     return result
@@ -454,10 +455,10 @@ class ListingAnalysis(BaseModel):
 
 
 def parse_listing_analysis_from_json(json_str: str, default_vals: dict[str, Any] = None) -> dict[str, ListingAnalysis]:
+    default_vals = default_vals or {}
     json_str = normalize_json_str(json_str)
     analysis = json.loads(json_str)
     result = {}
-    default_vals = {} if default_vals is None else default_vals
     for k, v in analysis.items():
         result[k] = ListingAnalysis(
             status=v.get("status", default_vals.get("status")),
@@ -502,6 +503,7 @@ class ListingEvent(EventBase):
 
 
 def parse_new_listing_events_from_json(json_str: str, default_vals: dict[str, Any] = None) -> list[ListingEvent]:
+    default_vals = default_vals or {}
     json_str = normalize_json_str(json_str)
     events = json.loads(json_str)
     result = []
@@ -521,7 +523,7 @@ def parse_new_listing_events_from_json(json_str: str, default_vals: dict[str, An
             capital=int(item.get("capital", default_vals.get("capital"))),
         )
         # parse yyyy-MM-dd from event.date into event.timestamp
-        event.timestamp = int(datetime.strptime(event.date, "%Y-%m-%d").timestamp())
+        event.timestamp = int(datetime.strptime(event.date or "", "%Y-%m-%d").timestamp())
         result.append(event)
 
     return result
@@ -529,7 +531,7 @@ def parse_new_listing_events_from_json(json_str: str, default_vals: dict[str, An
 
 class DividendEventAnalysis(BaseModel):
     # ===== base info
-    overview: Optional[SymbolOverview] = None
+    overview: SymbolOverview = None
     price: Optional[float] = None  # current stock price
     ex_div_date: Optional[str] = None
     ex_div_date_timestamp: Optional[int] = None
