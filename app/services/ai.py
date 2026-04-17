@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 from bs4 import BeautifulSoup
 
 from . import ai_helper
+from .ai_helper import ThinkingLevel
 from ..models import finhub as models, types
 from ..config import settings_llm
 from ..services import crawler as crawler_service, stock as stock_service
@@ -24,7 +25,7 @@ prompts: dict[str, str] = {}
 
 
 async def ai_exec_prompt(
-    task_id: str, prompt: str, country: str = None, thinking_level: str = None
+    task_id: str, prompt: str, country: str = None, thinking_level: ThinkingLevel = None
 ) -> models.LLMResponse:
     """
     Executes a prompt using the appropriate LLM based on the task configuration.
@@ -96,7 +97,7 @@ async def _analyze_asx_listings(events: list[models.ListingEvent]) -> list[model
             companies += f" | Listed: {e.date} (${e.price:.2f})"
         else:
             companies += f" | IPO: {e.date} (${e.price:.2f})"
-        companies += f" | MCap: ${finhub_utils.number_to_human_format(e.capital, 2)}"
+        companies += f" | MCap: ${finhub_utils.number_to_human_format(e.capital or 0, 2)}"
         companies += f" | Sector: {e.sector}"
         companies += f" | Activities: {e.principal_activities}"
         companies += "\n"
@@ -126,8 +127,8 @@ async def ai_get_asx_new_listings() -> list[models.ListingEvent]:
     events = await _analyze_asx_listings(events)
     tz = ZoneInfo("Australia/Sydney")
     for event in events:
-        event.date = finhub_utils.yyyy_mm_dd_to_iso(event.date, tz)
-        event.timestamp = int(datetime.fromisoformat(event.date).timestamp())
+        event.date = finhub_utils.yyyy_mm_dd_to_iso(event.date or "", tz)
+        event.timestamp = int(datetime.fromisoformat(event.date or "").timestamp())
     return events
 
 
@@ -352,7 +353,10 @@ async def ai_analyse_dividend_event(
     # CONTEXT
     today_utc = datetime.now(timezone.utc).date()
     prompt = (
-        prompt_template.replace("{TICKER}", finhub_utils.to_yf_ticker(result.overview.symbol))
+        prompt_template.replace(
+            "{TICKER}",
+            finhub_utils.to_yf_ticker(result.overview.symbol),
+        )
         .replace("{INDUSTRY}", f"{result.overview.industry}")
         .replace("{TODAY}", today_utc.isoformat())
         .replace("{CURRENT_PRICE}", f"{result.price:.2f}")
@@ -362,9 +366,7 @@ async def ai_analyse_dividend_event(
     )
 
     # TECHNICALS
-    trend_vs_industry = (
-        result.trend_60d - result.peer_trend_60d if result.peer_trend_60d is not None else result.trend_60d
-    )
+    trend_vs_industry = result.trend_60d or 0 - result.peer_trend_60d if result.peer_trend_60d else result.trend_60d
     industry_trend_str = (
         f"{result.peer_trend_60d:.2%}"
         if result.peer_trend_60d is not None
@@ -389,14 +391,17 @@ async def ai_analyse_dividend_event(
     #     vol_spikes_str = vol_spikes_str[:-1]
     prompt = (
         prompt.replace("{BETA}", f"{result.beta:.2f}")
-        .replace("{RSI}", f"{int(result.rsi14)}")
-        .replace("{RSI14}", f"{int(result.rsi14)}")
-        .replace("{RSI-14}", f"{int(result.rsi14)}")
+        .replace("{RSI}", f"{int(result.rsi14 or 0)}")
+        .replace("{RSI14}", f"{int(result.rsi14 or 0)}")
+        .replace("{RSI-14}", f"{int(result.rsi14 or 0)}")
         .replace("{INDUSTRY_TREND}", f"{industry_trend_str}")
         .replace("{TREND_VS_INDUSTRY}", f"{trend_vs_industry:.2%}")
-        .replace("{AVG_VOL}", f"{finhub_utils.number_to_human_format(result.avg_volume_30d, 0)}")
-        .replace("{AVG_DVT}", f"{finhub_utils.number_to_human_format(result.avg_dvt_7d, 0)}")
-        .replace("{MARKET_CAP}", f"{finhub_utils.number_to_human_format(result.overview.market_cap, 0)}")
+        .replace("{AVG_VOL}", f"{finhub_utils.number_to_human_format(result.avg_volume_30d or 0, 0)}")
+        .replace("{AVG_DVT}", f"{finhub_utils.number_to_human_format(result.avg_dvt_7d or 0, 0)}")
+        .replace(
+            "{MARKET_CAP}",
+            f"{finhub_utils.number_to_human_format(result.overview.market_cap or 0, 0)}",
+        )
         .replace("{CAP_SIZE}", cap_size_str)
         .replace("{BID_ASK_SPREAD}", bid_ask_spread_str)
         .replace("{PAST_DIVIDENDS_ANALYSIS}", past_dividends_analysis)
