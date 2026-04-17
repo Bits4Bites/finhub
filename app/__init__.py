@@ -3,7 +3,14 @@ import json
 from . import config
 import logging
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+
+class CustomLoggerConfig(logging.Logger):
+    def __init__(self, name, level=logging.NOTSET):
+        super().__init__(name, logging.WARNING if name.startswith("azure.") else level)
+
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(name)s: %(message)s")
+logging.setLoggerClass(CustomLoggerConfig)
 
 # config.settings.llm_config is in the following format:
 # {

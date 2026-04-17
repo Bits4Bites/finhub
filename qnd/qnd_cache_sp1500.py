@@ -69,7 +69,7 @@ async def main():
             print(f"Total symbols: {num_total} / Cached symbols: {num_cached}")
 
     print(f"Total symbols: {num_total} / Cached symbols: {num_cached}")
-    with open("./.cache/sp1500_cache.json", "w", encoding="utf-8") as cache_file:
+    with open("./.cache_data/sp1500_cache.json", "w", encoding="utf-8") as cache_file:
         json.dump(cache_data, cache_file, ensure_ascii=False, indent=4)
 
 

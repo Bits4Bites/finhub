@@ -1,5 +1,5 @@
 {
-    "date": "2026-03-21",
+    "date": "2026-04-12",
     "data": [
         {
             "symbol": "ASX:ALL",
@@ -57,6 +57,11 @@
             "sector": "Banks"
         },
         {
+            "symbol": "ASX:NST",
+            "company": "NORTHERN STAR RESOURCES LIMITED",
+            "sector": "Gold & Silver"
+        },
+        {
             "symbol": "ASX:QBE",
             "company": "QBE INSURANCE GROUP LIMITED",
             "sector": "Insurance"
@@ -65,11 +70,6 @@
             "symbol": "ASX:RIO",
             "company": "RIO TINTO LIMITED",
             "sector": "Aluminium, Bauxite & Alumina, Bulks"
-        },
-        {
-            "symbol": "ASX:STO",
-            "company": "SANTOS LIMITED",
-            "sector": "NatGas"
         },
         {
             "symbol": "ASX:TCL",

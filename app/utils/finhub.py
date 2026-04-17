@@ -58,9 +58,9 @@ def lookup_market_yf_static_ticker(
         Only supply either ticker or symbol. If both are supplied, tickr takes precedence.
     """
     if ticker is not None:
-        symbol = to_exchange_ticker(ticker=ticker)
+        symbol = to_exchange_ticker(ticker=ticker) or ""
     else:
-        symbol = to_exchange_ticker(symbol=symbol)
+        symbol = to_exchange_ticker(symbol=symbol) or ""
     exchange = symbol.split(":")[0]
     if exchange == "ASX":
         for index in asx_index_yf_static_tickers.keys():
@@ -106,14 +106,14 @@ def lookup_peer_yf_static_ticker(
         Only supply either ticker or symbol/sector/industry. If both are supplied, tickr takes precedence.
     """
     if ticker is not None:
-        symbol = to_exchange_ticker(ticker=ticker)
-        sector = ticker.info.get("sector")
-        industry = ticker.info.get("industry")
+        symbol = to_exchange_ticker(ticker=ticker) or ""
+        sector = ticker.info.get("sector", "")
+        industry = ticker.info.get("industry", "")
     else:
-        symbol = to_exchange_ticker(symbol=symbol)
+        symbol = to_exchange_ticker(symbol=symbol) or ""
     exchange = symbol.split(":")[0]
-    sector = sector.upper() if sector is not None else None
-    industry = industry.upper() if industry is not None else None
+    sector = sector.upper() if sector else ""
+    industry = industry.upper() if industry else ""
     if exchange == "ASX":
         if sector in asx_sector_yf_static_tickers:
             return asx_sector_yf_static_tickers[sector]
@@ -235,12 +235,13 @@ def to_exchange_ticker(*, ticker: yf.Ticker = None, symbol: str = None) -> str |
     if ticker is None and symbol is None:
         return None
 
+    symbol = symbol or ""
     if ticker is None and ":" in symbol:
         return symbol.upper()
 
     ticker = yf.Ticker(symbol) if ticker is None else ticker
     exchange = normalize_exchange_code(ticker.info.get("fullExchangeName", ticker.info.get("exchange", "")))
-    symbol = ticker.info.get("symbol")
+    symbol = ticker.info.get("symbol", "")
     if symbol.endswith(".VN") or symbol.endswith(".AX"):
         return f"{exchange}:{symbol[:-3]}"
     else:
@@ -290,9 +291,9 @@ def is_in_index(*, index: str, ticker: yf.Ticker = None, symbol: str = None) -> 
     index = index.upper()
     if index in config.market_indices.indices:
         if ticker is not None:
-            symbol = to_exchange_ticker(ticker=ticker)
+            symbol = to_exchange_ticker(ticker=ticker) or ""
         else:
-            symbol = to_exchange_ticker(symbol=symbol)
+            symbol = to_exchange_ticker(symbol=symbol) or ""
         return symbol in config.market_indices.indices[index]
     return False
 
@@ -320,13 +321,15 @@ def classify_market_cap(
     if ticker is not None:
         country = country_to_iso2(ticker.info.get("country", ticker.info.get("region", "US")))
         exchange = normalize_exchange_code(ticker.info.get("fullExchangeName", ticker.info.get("exchange", "")))
-        symbol = ticker.info.get("symbol").upper()
+        symbol = ticker.info.get("symbol", "").upper()
         if country != "US":
             # e.g. AU or VN
             symbol = symbol.split(".")[0]
         exchange_symbol = f"{exchange}:{symbol}"
-        market_cap = int(ticker.info.get("marketCap")) if ticker.info.get("marketCap") is not None else 0
+        market_cap = int(ticker.info.get("marketCap", 0))
 
+    exchange_symbol = exchange_symbol or ""
+    market_cap = market_cap or 0
     if country == "AU" or country == "US":
         if market_cap >= 10_000_000_000:
             cap_size = types.LARGE_CAP

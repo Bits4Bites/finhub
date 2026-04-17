@@ -1,5 +1,5 @@
 {
-    "date": "2026-03-22",
+    "date": "2026-04-12",
     "data": [
         {
             "symbol": "NYSE:MMM",
@@ -447,6 +447,11 @@
             "sector": "Consumer Discretionary"
         },
         {
+            "symbol": "NASDAQ:CASY",
+            "company": "Casey's",
+            "sector": "Consumer Staples"
+        },
+        {
             "symbol": "NYSE:CAT",
             "company": "Caterpillar Inc.",
             "sector": "Industrials"
@@ -579,6 +584,11 @@
         {
             "symbol": "NASDAQ:CTSH",
             "company": "Cognizant",
+            "sector": "Information Technology"
+        },
+        {
+            "symbol": "NYSE:COHR",
+            "company": "Coherent Corp.",
             "sector": "Information Technology"
         },
         {
@@ -820,6 +830,11 @@
             "symbol": "NASDAQ:EBAY",
             "company": "eBay Inc.",
             "sector": "Consumer Discretionary"
+        },
+        {
+            "symbol": "NASDAQ:SATS",
+            "company": "EchoStar",
+            "sector": "Communication Services"
         },
         {
             "symbol": "NYSE:ECL",
@@ -1167,11 +1182,6 @@
             "sector": "Consumer Discretionary"
         },
         {
-            "symbol": "NASDAQ:HOLX",
-            "company": "Hologic",
-            "sector": "Health Care"
-        },
-        {
             "symbol": "NYSE:HD",
             "company": "Home Depot (The)",
             "sector": "Consumer Discretionary"
@@ -1417,11 +1427,6 @@
             "sector": "Information Technology"
         },
         {
-            "symbol": "NYSE:LW",
-            "company": "Lamb Weston",
-            "sector": "Consumer Staples"
-        },
-        {
             "symbol": "NYSE:LVS",
             "company": "Las Vegas Sands",
             "sector": "Consumer Discretionary"
@@ -1477,6 +1482,11 @@
             "sector": "Consumer Discretionary"
         },
         {
+            "symbol": "NASDAQ:LITE",
+            "company": "Lumentum",
+            "sector": "Information Technology"
+        },
+        {
             "symbol": "NYSE:LYB",
             "company": "LyondellBasell",
             "sector": "Materials"
@@ -1515,11 +1525,6 @@
             "symbol": "NYSE:MA",
             "company": "Mastercard",
             "sector": "Financials"
-        },
-        {
-            "symbol": "NASDAQ:MTCH",
-            "company": "Match Group",
-            "sector": "Communication Services"
         },
         {
             "symbol": "NYSE:MKC",
@@ -1589,11 +1594,6 @@
         {
             "symbol": "NASDAQ:MRNA",
             "company": "Moderna",
-            "sector": "Health Care"
-        },
-        {
-            "symbol": "NYSE:MOH",
-            "company": "Molina Healthcare",
             "sector": "Health Care"
         },
         {
@@ -1809,11 +1809,6 @@
         {
             "symbol": "NASDAQ:PAYX",
             "company": "Paychex",
-            "sector": "Industrials"
-        },
-        {
-            "symbol": "NYSE:PAYC",
-            "company": "Paycom",
             "sector": "Industrials"
         },
         {
@@ -2365,6 +2360,11 @@
             "symbol": "NASDAQ:VRTX",
             "company": "Vertex Pharmaceuticals",
             "sector": "Health Care"
+        },
+        {
+            "symbol": "NYSE:VRT",
+            "company": "Vertiv",
+            "sector": "Industrials"
         },
         {
             "symbol": "NASDAQ:VTRS",

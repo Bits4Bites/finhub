@@ -1,5 +1,6 @@
 import logging
 
+from azure.identity import get_bearer_token_provider, EnvironmentCredential
 from google import genai
 from google.genai.types import HttpOptions
 from openai import AsyncOpenAI
@@ -15,8 +16,9 @@ for vendor_name, api_tiers in list(settings_llm.llm_config.items()):
                 api_key=llm_config.api_key, http_options=HttpOptions(timeout=180000)
             )
         if vendor_name.upper() == "AZURE_OPENAI" or vendor_name.upper() == "AZUREOPENAI":
+            token_provider = get_bearer_token_provider(EnvironmentCredential(), "https://ai.azure.com/.default")
             ai_helper.azureOpenAIClients[api_tier.upper()] = AsyncOpenAI(
-                api_key=llm_config.api_key, base_url=llm_config.endpoint, project="FinHub", timeout=180
+                api_key=token_provider(), base_url=llm_config.endpoint, project="FinHub", timeout=180
             )
         if vendor_name.upper() == "OPENROUTER" or vendor_name.upper() == "OPEN_ROUTER":
             ai_helper.openRouterClients[api_tier.upper()] = AsyncOpenAI(
@@ -51,7 +53,7 @@ template_list = [
     ai.ANALYZE_US_DIVIDEND,
     ai.ANALYZE_VN_DIVIDEND,
 ]
-tmplfile_list = [
+template_file_list = [
     "./resources/prompts/asx_new_listings.md",
     "./resources/prompts/analyze_asx_listings.md",
     "./resources/prompts/analyze_asx_dividend.md",
@@ -59,7 +61,7 @@ tmplfile_list = [
     "./resources/prompts/analyze_vn_dividend.md",
 ]
 
-for tmpl_name, tmpl_file in zip(template_list, tmplfile_list):
+for tmpl_name, tmpl_file in zip(template_list, template_file_list):
     logging.info("Loading template '%s' from file '%s'...", tmpl_name, tmpl_file)
     tmpl_content = read_file_as_single_string(tmpl_file)
     if tmpl_content:

@@ -252,12 +252,12 @@ async def get_upcoming_dividends_events(
     # - convert value of yield column from percent string to float. E.g. "3.5%" -> 0.035
     raw_data["yield"] = raw_data["yield"].str.rstrip("%").astype(float) / 100
 
-    raw_data_json = raw_data.to_json(orient="records")
+    raw_data_json = raw_data.to_json(orient="records") or ""
     events = models.parse_upcoming_dividend_events_from_json(raw_data_json, default_vals)
     for event in events:
         event.symbol = f"{event.exchange}:{event.symbol}"
-        event.date = finhub_utils.yyyy_mm_dd_to_iso(event.date, tz=tz)
-        event.timestamp = int(datetime.fromisoformat(event.date).timestamp())
+        event.date = finhub_utils.yyyy_mm_dd_to_iso(event.date or "", tz=tz)
+        event.timestamp = int(datetime.fromisoformat(event.date or "").timestamp())
         if event.payment_date:
             event.payment_date = finhub_utils.yyyy_mm_dd_to_iso(event.payment_date, tz=tz)
     return events
@@ -409,12 +409,12 @@ async def get_upcoming_earnings_events(
         inplace=True,
     )
 
-    raw_data_json = raw_data.to_json(orient="records")
+    raw_data_json = raw_data.to_json(orient="records") or ""
     events = models.parse_upcoming_earnings_events_from_json(raw_data_json, default_vals)
     for event in events:
         event.symbol = f"{event.exchange}:{event.symbol}"
-        event.date = finhub_utils.yyyy_mm_dd_to_iso(event.date, tz)
-        event.timestamp = int(datetime.fromisoformat(event.date).timestamp())
+        event.date = finhub_utils.yyyy_mm_dd_to_iso(event.date or "", tz)
+        event.timestamp = int(datetime.fromisoformat(event.date or "").timestamp())
     return events
 
 
@@ -513,15 +513,15 @@ async def analyse_dividend_event(
     if quote_type not in allowed_quote_types:
         raise ValueError(f"Quote type '{quote_type}' for ticker '{ticker}' is not supported for dividend analysis.")
 
-    current_price = ticker.info.get("regularMarketPrice")
+    current_price = ticker.info.get("regularMarketPrice", 0)
     result = models.DividendEventAnalysis(
         overview=models.SymbolOverview(ticker),
         price=current_price,
         div_amount=div_amount,
-        div_yield=div_amount / current_price,
+        div_yield=(div_amount / current_price) if current_price else None,
         ex_div_date=finhub_utils.yyyy_mm_dd_to_iso(ex_date, tz=tz),
     )
-    result.ex_div_date_timestamp = int(datetime.fromisoformat(result.ex_div_date).timestamp())
+    result.ex_div_date_timestamp = int(datetime.fromisoformat(result.ex_div_date or "").timestamp())
 
     history = ticker.history(period="5y", interval="1d", auto_adjust=False)
     history5y = history[:-1]
@@ -554,7 +554,7 @@ async def analyse_dividend_event(
     std_recovery_days = past_dividends_analysis["RecoveryDays"].std()
     if math.isnan(median_recovery_days) or math.isnan(std_recovery_days):
         result.recovery_days_min = recovery_days_threshold + 1
-        result.recovery_days_max = result.recovery_days_min + 1
+        result.recovery_days_max = result.recovery_days_min or 0 + 1
     else:
         result.recovery_days_min = max(1, int(median_recovery_days - std_recovery_days))
         result.recovery_days_max = int(median_recovery_days + std_recovery_days)
