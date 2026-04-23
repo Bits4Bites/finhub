@@ -9,6 +9,7 @@ from app.utils import finhub as finhub_utils
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
+
 def read_file_as_single_string(file_path) -> str:
     try:
         with open(file_path, "r", encoding="utf-8") as file:

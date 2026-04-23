@@ -21,6 +21,7 @@ def convert_market_cap(market_cap_str):
     else:
         return float(market_cap_str)
 
+
 async def update_vn_index_hose():
     url = "https://stockanalysis.com/list/ho-chi-minh-stock-exchange/"
     data = await crawler_service.scrape_data_table(url, table_attr_filter={"id": "main-table"})
@@ -44,7 +45,7 @@ async def update_vn_index_hose():
         if old_col in data.columns:
             data = data.rename(columns={old_col: new_col})
     data["symbol"] = data["symbol"].apply(lambda x: "HOSE:" + x.strip())
-    data["market_cap"] = data["market_cap"].apply(lambda x: int(x))
+    data["market_cap"] = data["market_cap"].astype(int)
 
     timestamp = datetime.now().strftime("%Y-%m-%d")
 
@@ -92,7 +93,7 @@ async def update_vn_index_hnx():
         if old_col in data.columns:
             data = data.rename(columns={old_col: new_col})
     data["symbol"] = data["symbol"].apply(lambda x: "HNX:" + x.strip())
-    data["market_cap"] = data["market_cap"].apply(lambda x: int(x))
+    data["market_cap"] = data["market_cap"].astype(int)
 
     timestamp = datetime.now().strftime("%Y-%m-%d")
 

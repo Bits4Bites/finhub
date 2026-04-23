@@ -7,6 +7,7 @@ from datetime import datetime
 
 from app.services import crawler as crawler_service
 
+
 async def update_asx_index(index: str, num_check: int):
     url = "https://www.dividenddates.com.au/asx-300-list/"
     to_file = "resources/indices/asx300.json"

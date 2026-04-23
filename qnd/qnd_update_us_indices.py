@@ -7,6 +7,7 @@ from datetime import datetime
 
 from app.services import crawler as crawler_service
 
+
 async def update_us_index(index: str, num_check: int):
     url = None
     table_attr_filter = None
