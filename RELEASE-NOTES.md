@@ -1,5 +1,11 @@
 # FinHub release notes
 
+## 2026-04-23 - v0.6.2
+
+### Fixed/Improvements
+
+- (Impr) Add payout_frequency field to SymbolDividend.
+
 ## 2026-04-17 - v0.6.1
 
 ### Fixed/Improvements
