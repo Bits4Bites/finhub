@@ -4,6 +4,7 @@ import json
 import statistics
 from datetime import datetime, timezone
 
+import pandas as pd
 from pydantic import BaseModel
 from typing import Optional, Any
 import yfinance as yf
@@ -131,6 +132,7 @@ class SymbolOverview(SymbolBase):
 class SymbolDividend(BaseModel):
     dividend_rate: Optional[float] = None
     dividend_yield: Optional[float] = None
+    payout_frequency: Optional[int] = None
     ex_dividend_date: Optional[int] = None
     ex_dividend_date_str: Optional[str] = None
     five_year_avg_dividend_yield: Optional[float] = None
@@ -165,6 +167,11 @@ class SymbolDividend(BaseModel):
                 .replace(tzinfo=tz)
                 .isoformat(sep=" ", timespec="seconds")
             )
+
+        # calculate payout frequency
+        history365d = ticker.history(period="365d", interval="1d", auto_adjust=False)
+        idx = history365d.index[-1] - pd.Timedelta(days=365)
+        self.payout_frequency = int((history365d[idx:]["Dividends"] > 0).sum())
 
 
 class StockQuote(BaseModel):
