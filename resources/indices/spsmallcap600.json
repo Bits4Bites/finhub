@@ -1,5 +1,5 @@
 {
-    "date": "2026-04-12",
+    "date": "2026-04-24",
     "data": [
         {
             "symbol": "NYSE:AAMI",
@@ -765,6 +765,11 @@
             "symbol": "NYSE:DAN",
             "company": "Dana Incorporated",
             "sector": "Consumer Discretionary"
+        },
+        {
+            "symbol": "NYSE:DBD",
+            "company": "Diebold Nixdorf",
+            "sector": "Information Technology"
         },
         {
             "symbol": "NYSE:DCH",
@@ -2385,11 +2390,6 @@
             "symbol": "NASDAQ:SEDG",
             "company": "SolarEdge",
             "sector": "Information Technology"
-        },
-        {
-            "symbol": "NYSE:SEE",
-            "company": "Sealed Air",
-            "sector": "Materials"
         },
         {
             "symbol": "NYSE:SEM",

@@ -1,5 +1,5 @@
 {
-    "date": "2026-04-12",
+    "date": "2026-04-24",
     "data": [
         {
             "symbol": "NYSE:AA",
@@ -312,11 +312,6 @@
             "sector": "Consumer Staples"
         },
         {
-            "symbol": "NASDAQ:CASY",
-            "company": "Casey's General Stores",
-            "sector": "Consumer Staples"
-        },
-        {
             "symbol": "NYSE:CAVA",
             "company": "Cava Group",
             "sector": "Consumer Discretionary"
@@ -544,6 +539,11 @@
         {
             "symbol": "NYSE:DLB",
             "company": "Dolby",
+            "sector": "Information Technology"
+        },
+        {
+            "symbol": "NYSE:DOCN",
+            "company": "DigitalOcean",
             "sector": "Information Technology"
         },
         {
