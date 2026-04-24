@@ -27,7 +27,7 @@ async def get_upcoming_dividends_event(
         proxy_url = settings_finhub_proxy.url_web_crawl_node.rstrip("/")
         prefix = str(router.prefix)
         next_url = f"{proxy_url}{prefix}/upcoming_dividends?country={country}&index={index}"
-        logging.info(f"Redirecting request to {next_url}")
+        logging.info(f"Redirecting request to {next_url.replace("\r\n", "").replace("\n", "")}")
         return RedirectResponse(url=next_url, status_code=307)
 
     country = country.upper()
@@ -71,7 +71,7 @@ async def get_upcoming_earnings_event(
         proxy_url = settings_finhub_proxy.url_web_crawl_node.rstrip("/")
         prefix = str(router.prefix)
         next_url = f"{proxy_url}{prefix}/upcoming_earnings?country={country}&index={index}"
-        logging.info(f"Redirecting request to {next_url}")
+        logging.info(f"Redirecting request to {next_url.replace("\r\n", "").replace("\n", "")}")
         return RedirectResponse(url=next_url, status_code=307)
 
     country = country.upper()
@@ -98,7 +98,7 @@ async def get_new_listings(
         proxy_url = settings_finhub_proxy.url_web_crawl_node.rstrip("/")
         prefix = str(router.prefix)
         next_url = f"{proxy_url}{prefix}/new_listings?country={country}"
-        logging.info(f"Redirecting request to {next_url}")
+        logging.info(f"Redirecting request to {next_url.replace("\r\n", "").replace("\n", "")}")
         return RedirectResponse(url=next_url, status_code=307)
 
     country = country.upper()
