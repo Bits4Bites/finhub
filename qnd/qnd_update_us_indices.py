@@ -89,7 +89,8 @@ async def update_us_index(index: str, num_check: int):
         "date": timestamp,
         "data": data_obj,
     }
-    json.dump(final_obj, open(to_file, "w"), indent=4)
+    with open(to_file, "w") as f:
+        json.dump(final_obj, f, indent=4)
     print(f"{index} data with {len(data)} rows has been updated and saved to {to_file}.")
 
 
