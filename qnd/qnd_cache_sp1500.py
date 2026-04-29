@@ -6,7 +6,7 @@ import json
 import logging
 import yfinance as yf
 
-from app.services import crawler as crawler_service, stock as stock_service
+from app.services import stock as stock_service
 from app.models import finhub as models
 
 

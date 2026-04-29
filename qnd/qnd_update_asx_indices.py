@@ -7,6 +7,7 @@ from datetime import datetime
 
 from app.services import crawler as crawler_service
 
+
 async def update_asx_index(index: str, num_check: int):
     url = "https://www.dividenddates.com.au/asx-300-list/"
     to_file = "resources/indices/asx300.json"
@@ -59,7 +60,8 @@ async def update_asx_index(index: str, num_check: int):
         "date": timestamp,
         "data": data_obj,
     }
-    json.dump(final_obj, open(to_file, "w"), indent=4)
+    with open(to_file, "w") as f:
+        json.dump(final_obj, f, indent=4)
     print(f"{index} data with {len(data)} rows has been updated and saved to {to_file}.")
 
 

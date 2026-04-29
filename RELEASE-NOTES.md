@@ -1,5 +1,12 @@
 # FinHub release notes
 
+## 2026-04-29 - v0.6.3
+
+### Fixed/Improvements
+
+- (Patch) Fix CodeQL warnings.
+- (Impr) Added field asset_type to SymbolOverview
+
 ## 2026-04-23 - v0.6.2
 
 ### Fixed/Improvements
