@@ -10,6 +10,7 @@ from app.utils import finhub as finhub_utils
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
+
 def verify1layer(name: str, data: dict[str, str]):
     logging.info(f"Checking '{name}'...")
     for k, symbol in data.items():
