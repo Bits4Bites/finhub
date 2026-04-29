@@ -3,3 +3,4 @@
 #   git log origin..HEAD | grep "^\s" > .semrelease/this_release
 #!VERSION=0.6.3
 - (Patch) Fix CodeQL warnings.
+- (Impr) Added field asset_type to SymbolOverview

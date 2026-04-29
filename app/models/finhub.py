@@ -9,7 +9,18 @@ from pydantic import BaseModel
 from typing import Optional, Any
 import yfinance as yf
 
-from .types import MarketCapType
+from .types import (
+    MarketCapType,
+    AssetType,
+    ETF_ASSET,
+    MUTUAL_FUND_ASSET,
+    CRYPTO_ASSET,
+    STANDARD_ASSET,
+    REIT_ASSET,
+    LIC_ASSET,
+    HYBRID_ASSET,
+    OTHER_ASSET,
+)
 from ..utils import finhub as finhub_utils
 
 
@@ -67,6 +78,7 @@ class SymbolOverview(SymbolBase):
     website: Optional[str] = None
     description: Optional[str] = None
     quote_type: Optional[str] = None
+    asset_type: Optional[AssetType] = None
     total_cash: Optional[int] = None
     total_cash_per_share: Optional[float] = None
     total_debt: Optional[int] = None
@@ -127,6 +139,28 @@ class SymbolOverview(SymbolBase):
         self.profit_margins = float(self.profit_margins) if self.profit_margins is not None else None
         self.market_cap = int(self.market_cap) if self.market_cap is not None else None
         self.cap_size, self.market_index = finhub_utils.classify_market_cap(ticker)
+
+        # detect asset type
+        match self.quote_type:
+            case "ETF":
+                self.asset_type = ETF_ASSET
+            case "MUTUALFUND":
+                self.asset_type = MUTUAL_FUND_ASSET
+            case "CRYPTOCURRENCY":
+                self.asset_type = CRYPTO_ASSET
+            case "EQUITY":
+                self.asset_type = STANDARD_ASSET
+                sector = self.sector.upper()
+                industry = self.industry.upper()
+                name = self.long_name
+                if sector == "REAL ESTATE" and "REIT" in industry:
+                    self.asset_type = REIT_ASSET
+                elif "ASSET MANAGEMENT" in industry or "Investment" in name:
+                    self.asset_type = LIC_ASSET
+                elif "Note" in name or "Hybrid" in name:
+                    self.asset_type = HYBRID_ASSET
+            case "_":
+                self.asset_type = OTHER_ASSET
 
 
 class SymbolDividend(BaseModel):
@@ -527,7 +561,7 @@ def parse_new_listing_events_from_json(json_str: str, default_vals: dict[str, An
             principal_activities=item.get("principal_activities", default_vals.get("principal_activities")),
             price=item.get("price", default_vals.get("price")),
             currency=item.get("currency", default_vals.get("currency")),
-            capital=int(item.get("capital", default_vals.get("capital"))),
+            capital=int(item.get("capital", default_vals.get("capital", 0))),
         )
         # parse yyyy-MM-dd from event.date into event.timestamp
         event.timestamp = int(datetime.strptime(event.date or "", "%Y-%m-%d").timestamp())
