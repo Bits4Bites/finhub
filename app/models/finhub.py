@@ -150,9 +150,9 @@ class SymbolOverview(SymbolBase):
                 self.asset_type = CRYPTO_ASSET
             case "EQUITY":
                 self.asset_type = STANDARD_ASSET
-                sector = self.sector.upper()
-                industry = self.industry.upper()
-                name = self.long_name
+                sector = self.sector.upper() if self.sector else ""
+                industry = self.industry.upper() if self.industry else ""
+                name = self.long_name or self.short_name or ""
                 if sector == "REAL ESTATE" and "REIT" in industry:
                     self.asset_type = REIT_ASSET
                 elif "ASSET MANAGEMENT" in industry or "Investment" in name:
@@ -337,32 +337,35 @@ class StockHistory(BaseModel):
         self.rsi14 = rsi.iloc[-1]
 
         # store history for 90 days
-        num_points = 90
-        self.history_90d = [
-            HistoryPoint(
-                timestamp=int(history365d.index[-num_points + i].timestamp()),
-                # history365d.index[-NUM_POINTS + i] is already in correct timezone
-                timestamp_str=history365d.index[-num_points + i].isoformat(sep=" ", timespec="seconds"),
-                currency=currency,
-                open=history365d.iloc[-num_points + i]["Open"],
-                high=history365d.iloc[-num_points + i]["High"],
-                low=history365d.iloc[-num_points + i]["Low"],
-                close=history365d.iloc[-num_points + i]["Close"],
-                volume=int(history365d.iloc[-num_points + i]["Volume"]),
-                dividends=history365d.iloc[-num_points + i]["Dividends"],
-                rsi14=rsi.iloc[-num_points + i],
-                dvt=statistics.fmean(
-                    [
-                        history365d.iloc[-num_points + i]["High"],
-                        history365d.iloc[-num_points + i]["Low"],
-                        history365d.iloc[-num_points + i]["Open"],
-                        history365d.iloc[-num_points + i]["Close"],
-                    ]
+        if len(history365d) < 30:
+            self.history_90d = []
+        else:
+            num_points = 90 if len(history365d) >= 90 else 60 if len(history365d) >= 60 else 30
+            self.history_90d = [
+                HistoryPoint(
+                    timestamp=int(history365d.index[-num_points + i].timestamp()),
+                    # history365d.index[-NUM_POINTS + i] is already in correct timezone
+                    timestamp_str=history365d.index[-num_points + i].isoformat(sep=" ", timespec="seconds"),
+                    currency=currency,
+                    open=history365d.iloc[-num_points + i]["Open"],
+                    high=history365d.iloc[-num_points + i]["High"],
+                    low=history365d.iloc[-num_points + i]["Low"],
+                    close=history365d.iloc[-num_points + i]["Close"],
+                    volume=int(history365d.iloc[-num_points + i]["Volume"]),
+                    dividends=history365d.iloc[-num_points + i]["Dividends"],
+                    rsi14=rsi.iloc[-num_points + i],
+                    dvt=statistics.fmean(
+                        [
+                            history365d.iloc[-num_points + i]["High"],
+                            history365d.iloc[-num_points + i]["Low"],
+                            history365d.iloc[-num_points + i]["Open"],
+                            history365d.iloc[-num_points + i]["Close"],
+                        ]
+                    )
+                    * history365d.iloc[-num_points + i]["Volume"],
                 )
-                * history365d.iloc[-num_points + i]["Volume"],
-            )
-            for i in range(0, num_points)
-        ]
+                for i in range(0, num_points)
+            ]
 
 
 class SymbolInfo(SymbolOverview):

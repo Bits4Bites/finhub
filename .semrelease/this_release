@@ -1,3 +1,5 @@
 # This file has been cleaned up post-releasing version 0.6.3.
 # Generate its content quickly using the following command:
 #   git log origin..HEAD | grep "^\s" > .semrelease/this_release
+#!VERSION=0.6.4
+- (Fix) Edge case where a ticker has recently listed and has no price history.

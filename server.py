@@ -20,8 +20,8 @@ if __name__ == "__main__":
         listen_port = 8000
 
     reload = os.getenv("RELOAD", "false").lower() == "true"
-    if sys.platform.startswith("win"):
-        reload = True
+    # if sys.platform.startswith("win"):
+    #     reload = True
 
     import uvicorn
     loop = "none" if sys.platform.startswith("win") else "auto"
