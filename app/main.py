@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse
 
 from .routers import ai, events, stocks, toz
 
-VERSION = "0.6.3"
+VERSION = "0.6.4"
 APP_NAME = "FinHub API"
 APP_DESCRIPTION = "A developer-first financial API hub for stock market data."
 
