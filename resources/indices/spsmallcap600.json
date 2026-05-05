@@ -1,5 +1,5 @@
 {
-    "date": "2026-04-24",
+    "date": "2026-05-05",
     "data": [
         {
             "symbol": "NYSE:AAMI",
@@ -1087,11 +1087,6 @@
             "sector": "Industrials"
         },
         {
-            "symbol": "NASDAQ:GDEN",
-            "company": "Golden Entertainment",
-            "sector": "Consumer Discretionary"
-        },
-        {
             "symbol": "NASDAQ:GDYN",
             "company": "Grid Dynamics Holdings, Inc.",
             "sector": "Information Technology"
@@ -1525,6 +1520,11 @@
             "symbol": "NYSE:LEG",
             "company": "Leggett &amp; Platt",
             "sector": "Consumer Discretionary"
+        },
+        {
+            "symbol": "NASDAQ:LFST",
+            "company": "Lifestance Health",
+            "sector": "Health Care"
         },
         {
             "symbol": "NASDAQ:LGIH",
