@@ -26,11 +26,11 @@ jobs:
         run: |
           git config user.name "GitHub Actions"
           git config user.email ""
-          git checkout -b ${WORK_BRANCH}
+          git pull
+          git checkout ${WORK_BRANCH}
       - name: Sync code to the latest version
         run: |
           git config pull.rebase true
-          git pull origin ${WORK_BRANCH}
           git pull origin main
       - uses: actions/setup-python@v6
         with:
