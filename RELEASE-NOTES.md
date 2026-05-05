@@ -1,5 +1,11 @@
 # FinHub release notes
 
+## 2026-05-05 - v0.6.4
+
+### Fixed/Improvements
+
+- (Fix) Edge case where a ticker has recently listed and has no price history.
+
 ## 2026-04-29 - v0.6.3
 
 ### Fixed/Improvements
