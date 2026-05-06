@@ -1,3 +1,5 @@
 # This file has been cleaned up post-releasing version 0.7.0.
 # Generate its content quickly using the following command:
 #   git log origin..HEAD | grep "^\s" > .semrelease/this_release
+#!VERSION=0.7.1
+- (Fix) API /ai/analyze_portfolio outputs invalid fields.
