@@ -52,6 +52,7 @@ template_list = [
     ai.ANALYZE_ASX_DIVIDEND,
     ai.ANALYZE_US_DIVIDEND,
     ai.ANALYZE_VN_DIVIDEND,
+    ai.ANALYZE_PORTFOLIO,
 ]
 template_file_list = [
     "./resources/prompts/asx_new_listings.md",
@@ -59,6 +60,7 @@ template_file_list = [
     "./resources/prompts/analyze_asx_dividend.md",
     "./resources/prompts/analyze_us_dividend.md",
     "./resources/prompts/analyze_vn_dividend.md",
+    "./resources/prompts/analyze_portfolio.md",
 ]
 
 for tmpl_name, tmpl_file in zip(template_list, template_file_list):

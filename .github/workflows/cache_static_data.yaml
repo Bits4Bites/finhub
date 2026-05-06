@@ -30,7 +30,6 @@ jobs:
           git checkout ${WORK_BRANCH}
       - name: Sync code to the latest version
         run: |
-          git config pull.rebase true
           git pull origin main
       - uses: actions/setup-python@v6
         with:

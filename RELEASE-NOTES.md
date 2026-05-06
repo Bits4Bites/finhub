@@ -1,5 +1,11 @@
 # FinHub release notes
 
+## 2026-05-06 - v0.7.0
+
+### Added/Refactoring/Deprecation
+
+- (Feat) New API to analyze portfolio.
+
 ## 2026-05-05 - v0.6.4
 
 ### Fixed/Improvements
