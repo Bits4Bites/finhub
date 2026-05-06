@@ -44,4 +44,4 @@ async def analyze_portfolio(
     )
     if result.llm_error:
         return schemas_ai.AnalyzePortfolioResponse(status=500, message=result.llm_error_msg or "Unknown error")
-    return schemas_ai.AnalyzePortfolioResponse(status=200, message="ok", analysis=result.analysis)
+    return schemas_ai.AnalyzePortfolioResponse(status=200, message="ok", data=result)
