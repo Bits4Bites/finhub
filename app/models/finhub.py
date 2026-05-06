@@ -573,6 +573,12 @@ def parse_new_listing_events_from_json(json_str: str, default_vals: dict[str, An
     return result
 
 
+class BaseAIResult(BaseModel):
+    llm_error: bool = False
+    llm_error_msg: Optional[str] = None
+    llm_response: Optional[str] = None
+
+
 class DividendEventAnalysis(BaseModel):
     # ===== base info
     overview: SymbolOverview = None
@@ -615,3 +621,7 @@ class DividendEventAnalysis(BaseModel):
     expected_pl: Optional[float] = None
     confidence_level: Optional[float] = None
     risk_level: Optional[float] = None
+
+
+class PortfolioAnalysis(BaseAIResult):
+    analysis: str = ""

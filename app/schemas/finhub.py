@@ -5,6 +5,10 @@ from ..models.finhub import HistoryPoint
 from .. import config
 
 
+class BaseRequest(BaseModel):
+    model_config = {"arbitrary_types_allowed": True}
+
+
 class BaseResponse(BaseModel):
     status: int
     message: str
@@ -51,7 +55,3 @@ class ListingsResponse(BaseResponse):
 
 class IndexCompaniesResponse(BaseResponse):
     data: Optional[list[config.CompanyBriefInfo]] = None
-
-
-class AnalyzeDividendEventResponse(BaseResponse):
-    data: Optional[models.DividendEventAnalysis] = None
