@@ -1,30 +1,30 @@
 {
-    "date": "2026-04-24",
+    "date": "2026-05-05",
     "data": [
         {
             "symbol": "HOSE:VIC",
             "company": "Vingroup JSC",
-            "market_cap": 1608480000000000
+            "market_cap": 1645970000000000
         },
         {
             "symbol": "HOSE:VHM",
             "company": "Vinhomes JSC",
-            "market_cap": 612000000000000
+            "market_cap": 621040000000000
         },
         {
             "symbol": "HOSE:VCB",
             "company": "Joint Stock Commercial Bank for Foreign Trade of Vietnam",
-            "market_cap": 524740000000000
+            "market_cap": 507190000000000
         },
         {
             "symbol": "HOSE:BID",
             "company": "Joint Stock Commercial Bank for Investment and Development of Vietnam",
-            "market_cap": 292090000000000
+            "market_cap": 297390000000000
         },
         {
             "symbol": "HOSE:CTG",
             "company": "Vietnam Joint Stock Commercial Bank for Industry and Trade",
-            "market_cap": 275730000000000
+            "market_cap": 274170000000000
         },
         {
             "symbol": "HOSE:TCB",
@@ -34,52 +34,52 @@
         {
             "symbol": "HOSE:VPB",
             "company": "Vietnam Prosperity Joint Stock Commercial Bank",
-            "market_cap": 217390000000000
+            "market_cap": 222150000000000
         },
         {
             "symbol": "HOSE:HPG",
             "company": "Hoa Phat Group JSC",
-            "market_cap": 213380000000000
+            "market_cap": 209540000000000
         },
         {
             "symbol": "HOSE:MBB",
             "company": "Military Commercial Joint Stock Bank",
-            "market_cap": 212650000000000
+            "market_cap": 209030000000000
         },
         {
             "symbol": "HOSE:GAS",
             "company": "Petrovietnam Gas Joint Stock Corporation",
-            "market_cap": 186760000000000
+            "market_cap": 184590000000000
         },
         {
             "symbol": "HOSE:MCH",
             "company": "Masan Consumer Corporation",
-            "market_cap": 181220000000000
+            "market_cap": 176690000000000
         },
         {
             "symbol": "HOSE:VPL",
             "company": "Vinpearl JSC",
-            "market_cap": 149740000000000
+            "market_cap": 152790000000000
         },
         {
             "symbol": "HOSE:LPB",
             "company": "Fortune Vietnam Joint Stock Commercial Bank",
-            "market_cap": 138910000000000
-        },
-        {
-            "symbol": "HOSE:HDB",
-            "company": "Ho Chi Minh City Development Joint Stock Commercial Bank",
-            "market_cap": 133139999999999
+            "market_cap": 143690000000000
         },
         {
             "symbol": "HOSE:GVR",
             "company": "Vietnam Rubber Group JSC",
-            "market_cap": 130400000000000
+            "market_cap": 140800000000000
+        },
+        {
+            "symbol": "HOSE:HDB",
+            "company": "Ho Chi Minh City Development Joint Stock Commercial Bank",
+            "market_cap": 132139999999999
         },
         {
             "symbol": "HOSE:VNM",
             "company": "Vietnam Dairy Products JSC",
-            "market_cap": 129580000000000
+            "market_cap": 127700000000000
         },
         {
             "symbol": "HOSE:FPT",
@@ -89,42 +89,47 @@
         {
             "symbol": "HOSE:BSR",
             "company": "Binh Son Refining and Petrochemical JSC",
-            "market_cap": 125180000000000
-        },
-        {
-            "symbol": "HOSE:MWG",
-            "company": "Mobile World Investment Corporation",
-            "market_cap": 124080000000000
+            "market_cap": 126430000000000
         },
         {
             "symbol": "HOSE:STB",
             "company": "Saigon Thuong Tin Commercial Joint Stock Bank",
-            "market_cap": 123290000000000
+            "market_cap": 124800000000000
+        },
+        {
+            "symbol": "HOSE:MWG",
+            "company": "Mobile World Investment Corporation",
+            "market_cap": 124520000000000
         },
         {
             "symbol": "HOSE:ACB",
             "company": "Asia Commercial Joint Stock Bank",
-            "market_cap": 120710000000000
+            "market_cap": 116090000000000
         },
         {
             "symbol": "HOSE:TCX",
             "company": "Techcom Securities JSC",
-            "market_cap": 117430000000000
+            "market_cap": 115350000000000
         },
         {
             "symbol": "HOSE:MSN",
             "company": "Masan Group Corporation",
-            "market_cap": 113070000000000
+            "market_cap": 110760000000000
         },
         {
             "symbol": "HOSE:VJC",
             "company": "VietJet Aviation JSC",
-            "market_cap": 103470000000000
+            "market_cap": 107080000000000
         },
         {
             "symbol": "HOSE:VCK",
             "company": "VPS Securities JSC",
-            "market_cap": 82300000000000
+            "market_cap": 82790000000000
+        },
+        {
+            "symbol": "HOSE:VRE",
+            "company": "Vincom Retail JSC",
+            "market_cap": 76580000000000
         },
         {
             "symbol": "HOSE:HVN",
@@ -132,24 +137,19 @@
             "market_cap": 70480000000000
         },
         {
+            "symbol": "HOSE:GEE",
+            "company": "Gelex Electricity JSC",
+            "market_cap": 68410000000000
+        },
+        {
             "symbol": "HOSE:SSI",
             "company": "SSI Securities Corporation",
-            "market_cap": 69629999999999
+            "market_cap": 68010000000000
         },
         {
             "symbol": "HOSE:SHB",
             "company": "Saigon - Hanoi Commercial Joint Stock Bank",
-            "market_cap": 67989999999999
-        },
-        {
-            "symbol": "HOSE:VRE",
-            "company": "Vincom Retail JSC",
-            "market_cap": 66010000000000
-        },
-        {
-            "symbol": "HOSE:GEE",
-            "company": "Gelex Electricity JSC",
-            "market_cap": 65110000000000
+            "market_cap": 67110000000000
         }
     ]
 }

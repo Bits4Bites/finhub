@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Body
 
-from ..schemas import finhub as schemas
+from ..schemas import ai as schemas_ai
 from ..services import ai as ai_service
 
 router = APIRouter(prefix="/ai", tags=["ai"])
@@ -8,7 +8,7 @@ router = APIRouter(prefix="/ai", tags=["ai"])
 
 @router.get(
     "/analyze_dividend_event",
-    response_model=schemas.AnalyzeDividendEventResponse,
+    response_model=schemas_ai.AnalyzeDividendEventResponse,
     response_model_exclude_none=True,
 )
 async def analyse_dividend_event(
@@ -17,11 +17,31 @@ async def analyse_dividend_event(
     ),
     ex_date: str = Query(description="Ex-Dividend date in format YYYY-MM-DD"),
     div_amount: float = Query(description="The dividend amount as float number, without currency symbol (e.g. 1.23)"),
-) -> schemas.AnalyzeDividendEventResponse:
+) -> schemas_ai.AnalyzeDividendEventResponse:
     """
     Analyzes a dividend event.
     """
-    result = await ai_service.ai_analyse_dividend_event(symbol=symbol, ex_date=ex_date, div_amount=div_amount)
+    result = await ai_service.ai_analyze_dividend_event(symbol=symbol, ex_date=ex_date, div_amount=div_amount)
     if result is None:
-        return schemas.AnalyzeDividendEventResponse(status=400, message="Invalid inputs or stock not found")
-    return schemas.AnalyzeDividendEventResponse(status=200, message="ok", data=result)
+        return schemas_ai.AnalyzeDividendEventResponse(status=400, message="Invalid inputs or stock not found")
+    return schemas_ai.AnalyzeDividendEventResponse(status=200, message="ok", data=result)
+
+
+@router.post(
+    "/analyze_portfolio",
+    response_model=schemas_ai.AnalyzePortfolioResponse,
+    response_model_exclude_none=True,
+)
+async def analyze_portfolio(
+    portfolio: schemas_ai.AnalyzePortfolioRequest = Body(
+        description="The portfolio to analyze, including current tickers allocation and investor theme."
+    ),
+) -> schemas_ai.AnalyzePortfolioResponse:
+    result = await ai_service.ai_analyze_portfolio(
+        portfolio=portfolio.current_allocation,
+        country=portfolio.country,
+        investor_theme=portfolio.investor_theme or ai_service.DEFAULT_INVESTOR_THEME,
+    )
+    if result.llm_error:
+        return schemas_ai.AnalyzePortfolioResponse(status=500, message=result.llm_error_msg or "Unknown error")
+    return schemas_ai.AnalyzePortfolioResponse(status=200, message="ok", analysis=result.analysis)

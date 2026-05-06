@@ -19,6 +19,7 @@ ANALYZE_ASX_LISTINGS = "ASX_LISTINGS_ANALYSIS"
 ANALYZE_ASX_DIVIDEND = "ASX_DIVIDEND_ANALYSIS"
 ANALYZE_US_DIVIDEND = "US_DIVIDEND_ANALYSIS"
 ANALYZE_VN_DIVIDEND = "VN_DIVIDEND_ANALYSIS"
+ANALYZE_PORTFOLIO = "PORTFOLIO_ANALYSIS"
 
 
 prompts: dict[str, str] = {}
@@ -314,7 +315,7 @@ dividend_capture_criteria = {
 }
 
 
-async def ai_analyse_dividend_event(
+async def ai_analyze_dividend_event(
     *,
     symbol: str,
     ex_date: str,
@@ -456,5 +457,75 @@ async def ai_analyse_dividend_event(
     result.confidence_level = float(result.confidence_level) if result.confidence_level is not None else None
     result.risk_level = llm_result_obj.get("risk")
     result.risk_level = float(result.risk_level) if result.risk_level is not None else None
+
+    return result
+
+
+# ----------------------------------------------------------------------#
+
+
+def _normalize_portfolio_allocation(portfolio: dict[str, float]) -> dict[str, float]:
+    """
+    Each allocation is expected to be a float in range [0, 1] (hence the sum of all allocations should be 1 - e.g. 100%).
+    However, in the case where the allocation is already in percentage (e.g. 23), normalize the allocation to float (e.g. 0.23).
+    """
+    if sum(allocation for allocation in portfolio.values()) > 1.0:
+        return {ticker: allocation / 100.0 for ticker, allocation in portfolio.items()}
+    else:
+        return portfolio
+
+
+DEFAULT_INVESTOR_THEME = (
+    "- Risk tolerance: moderate\n- Time horizon: 5-10 years\n- Goal: capital growth\n- Rebalance frequency: semi-annual"
+)
+
+
+async def ai_analyze_portfolio(
+    portfolio: dict[str, float],
+    country: str,
+    investor_theme: str = DEFAULT_INVESTOR_THEME,
+) -> models.PortfolioAnalysis:
+    """
+    Analyzes a portfolio using AI assistance.
+
+    Args:
+        portfolio (dict[str, float]): Portfolio data, format {ticker: allocation (0-1)}
+        country (str): Country code
+        investor_theme (str, optional): Investor's theme.
+
+    Returns:
+        models.PortfolioAnalysis: An object containing the analysis of the portfolio
+    """
+    result = models.PortfolioAnalysis()
+    event_type = ANALYZE_PORTFOLIO
+    prompt_template = prompts[event_type] if event_type in prompts else ""
+    if not prompt_template:
+        result.llm_error = True
+        result.llm_error_msg = f"Prompt template for {event_type} is missing or empty."
+        return result
+
+    portfolio = _normalize_portfolio_allocation(portfolio)
+    allocation_csv = "ticker,allocation\n"
+    allocation_csv += "".join(f"{t},{a * 100.0:.1f}%\n" for t, a in portfolio.items())
+
+    investor_theme = investor_theme or DEFAULT_INVESTOR_THEME
+
+    country = finhub_utils.country_to_iso2(country)
+
+    prompt = (
+        prompt_template.replace("{CURRENT_PORTFOLIO}", allocation_csv)
+        .replace("{CURRENT_ALLOCATION}", allocation_csv)
+        .replace("{INVESTOR_PROFILE}", investor_theme)
+        .replace("{INVESTOR_THEME}", investor_theme)
+        .replace("{MARKET}", country)
+        .replace("{COUNTRY}", country)
+    )
+    llm_result = await ai_exec_prompt("ANALYZE_PORTFOLIO_WEB_SEARCH", prompt, country)
+    if llm_result.is_error:
+        result.llm_error = True
+        result.llm_error_msg = f"LLM failed to generate response for analyzing portfolio: {llm_result.completion}"
+        return result
+
+    result.analysis = llm_result.completion
 
     return result
