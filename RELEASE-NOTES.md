@@ -1,5 +1,11 @@
 # FinHub release notes
 
+## 2026-05-06 - v0.7.1
+
+### Fixed/Improvements
+
+- (Fix) API /ai/analyze_portfolio outputs invalid fields.
+
 ## 2026-05-06 - v0.7.0
 
 ### Added/Refactoring/Deprecation
