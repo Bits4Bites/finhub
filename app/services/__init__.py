@@ -1,10 +1,6 @@
 import logging
 
-from azure.identity import get_bearer_token_provider, EnvironmentCredential
-from google import genai
-from google.genai.types import HttpOptions
-from openai import AsyncOpenAI
-
+from .ai_helper import GeminiClientFactory, AzureOpenAIClientFactory, OpenRouterClientFactory, OpenAIClientFactory
 from ..config import settings_llm
 from . import ai, ai_helper
 
@@ -12,22 +8,20 @@ from . import ai, ai_helper
 for vendor_name, api_tiers in list(settings_llm.llm_config.items()):
     for api_tier, llm_config in list(api_tiers.items()):
         if vendor_name.upper() == "GEMINI":
-            ai_helper.geminiClients[api_tier.upper()] = genai.Client(
-                api_key=llm_config.api_key, http_options=HttpOptions(timeout=180000)
-            )
+            ai_helper.geminiClients[api_tier.upper()] = GeminiClientFactory(api_key=llm_config.api_key, timeout_sec=180)
         if vendor_name.upper() == "AZURE_OPENAI" or vendor_name.upper() == "AZUREOPENAI":
-            token_provider = get_bearer_token_provider(EnvironmentCredential(), "https://ai.azure.com/.default")
-            ai_helper.azureOpenAIClients[api_tier.upper()] = AsyncOpenAI(
-                api_key=token_provider(), base_url=llm_config.endpoint, project="FinHub", timeout=180
+            ai_helper.azureOpenAIClients[api_tier.upper()] = AzureOpenAIClientFactory(
+                endpoint=llm_config.endpoint,
+                timeout_sec=180,
             )
         if vendor_name.upper() == "OPENROUTER" or vendor_name.upper() == "OPEN_ROUTER":
-            ai_helper.openRouterClients[api_tier.upper()] = AsyncOpenAI(
-                api_key=llm_config.api_key, base_url=llm_config.endpoint, project="FinHub", timeout=180
+            ai_helper.openRouterClients[api_tier.upper()] = OpenRouterClientFactory(
+                api_key=llm_config.api_key,
+                endpoint=llm_config.endpoint,
+                timeout_sec=180,
             )
         if vendor_name.upper() == "OPENAI":
-            ai_helper.openAIClients[api_tier.upper()] = AsyncOpenAI(
-                api_key=llm_config.api_key, project="FinHub", timeout=180
-            )
+            ai_helper.openAIClients[api_tier.upper()] = OpenAIClientFactory(api_key=llm_config.api_key, timeout_sec=180)
 
 
 # load prompt templates
