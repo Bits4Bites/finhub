@@ -1,5 +1,11 @@
 # FinHub release notes
 
+## 2026-05-07 - v0.7.2
+
+### Fixed/Improvements
+
+- (Patch) Refactor & Fix error 401 with AzureOpenAI client.
+
 ## 2026-05-06 - v0.7.1
 
 ### Fixed/Improvements
