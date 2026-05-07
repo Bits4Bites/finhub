@@ -1,8 +1,11 @@
 import logging
 import os
 import time
+from abc import ABC
 from typing import Optional, Literal
 
+from azure.identity import get_bearer_token_provider, EnvironmentCredential
+from google.genai.types import HttpOptions
 from openai.types.chat import ChatCompletionUserMessageParam
 from openai.types.responses import WebSearchPreviewToolParam
 from openai.types.responses.web_search_preview_tool_param import UserLocation
@@ -15,12 +18,75 @@ from pydantic import BaseModel
 from ..config import LLMTaskConfig
 from ..models.finhub import LLMResponse
 
-geminiClients: dict[str, genai.Client] = {}
-openAIClients: dict[str, AsyncOpenAI] = {}
-openRouterClients: dict[str, AsyncOpenAI] = {}
-azureOpenAIClients: dict[str, AsyncOpenAI] = {}
+geminiClients: dict[str, "LLMClientFactory"] = {}
+openAIClients: dict[str, "LLMClientFactory"] = {}
+openRouterClients: dict[str, "LLMClientFactory"] = {}
+azureOpenAIClients: dict[str, "LLMClientFactory"] = {}
 
 ThinkingLevel = Literal["LOW", "MEDIUM", "HIGH"]
+
+
+class LLMClientFactory(ABC):
+    # @abstractmethod
+    def create_gemini_client(self) -> genai.Client:
+        pass
+
+    # @abstractmethod
+    def create_openai_client(self) -> AsyncOpenAI:
+        pass
+
+    # @abstractmethod
+    def create_azure_openai_client(self) -> AsyncOpenAI:
+        pass
+
+    # @abstractmethod
+    def create_openrouter_client(self) -> AsyncOpenAI:
+        pass
+
+
+class GeminiClientFactory(LLMClientFactory):
+    def __init__(self, *, api_key: str, timeout_sec: float = 180):
+        timeout_sec = timeout_sec if timeout_sec > 0 else 30
+        self.client = genai.Client(api_key=api_key, http_options=HttpOptions(timeout=int(timeout_sec * 1000)))
+
+    def create_gemini_client(self) -> genai.Client:
+        return self.client
+
+
+class OpenRouterClientFactory(LLMClientFactory):
+    def __init__(self, *, endpoint: str, api_key: str, timeout_sec: float = 180):
+        timeout_sec = timeout_sec if timeout_sec > 0 else 30
+        self.client = AsyncOpenAI(api_key=api_key, base_url=endpoint, project="FinHub", timeout=timeout_sec)
+
+    def create_openrouter_client(self) -> AsyncOpenAI:
+        return self.client
+
+
+class OpenAIClientFactory(LLMClientFactory):
+    def __init__(self, *, api_key: str, timeout_sec: float = 180):
+        timeout_sec = timeout_sec if timeout_sec > 0 else 30
+        self.client = AsyncOpenAI(api_key=api_key, project="FinHub", timeout=timeout_sec)
+
+    def create_openai_client(self) -> AsyncOpenAI:
+        return self.client
+
+
+class AzureOpenAIClientFactory(LLMClientFactory):
+    def __init__(self, *, endpoint: str, timeout_sec: float = 180):
+        self.client = None
+        self.timeout_sec = timeout_sec if timeout_sec > 0 else 30
+        self.endpoint = endpoint
+        self.last_client_timestamp = 0
+
+    def create_azure_openai_client(self) -> AsyncOpenAI:
+        now = time.time()
+        if now - self.last_client_timestamp > 1800:  # 30 mins
+            token_provider = get_bearer_token_provider(EnvironmentCredential(), "https://ai.azure.com/.default")
+            self.client = AsyncOpenAI(
+                api_key=token_provider(), base_url=self.endpoint, project="FinHub", timeout=self.timeout_sec
+            )
+            self.last_client_timestamp = time.time()
+        return self.client
 
 
 class PromptConfig(BaseModel):
@@ -106,10 +172,10 @@ async def ai_exec_prompt_azure_openai(
     """
     Execute a prompt using Azure OpenAI and return the response.
     """
-    client = azureOpenAIClients.get(task_cfg.tier.upper())
-    if client is None:
+    client_fac = azureOpenAIClients.get(task_cfg.tier.upper())
+    if client_fac is None:
         raise EnvironmentError(f"Azure OpenAI client for tier '{task_cfg.tier}' is not configured.")
-    return await ai_exec_prompt_openai_client(client, task_cfg, prompt, prompt_cfg)
+    return await ai_exec_prompt_openai_client(client_fac.create_azure_openai_client(), task_cfg, prompt, prompt_cfg)
 
 
 async def ai_exec_prompt_openrouter(
@@ -118,20 +184,20 @@ async def ai_exec_prompt_openrouter(
     """
     Execute a prompt using OpenRouter and return the response.
     """
-    client = openRouterClients.get(task_cfg.tier.upper())
-    if client is None:
+    client_fac = openRouterClients.get(task_cfg.tier.upper())
+    if client_fac is None:
         raise EnvironmentError(f"OpenRouter client for tier '{task_cfg.tier}' is not configured.")
-    return await ai_exec_prompt_openai_client(client, task_cfg, prompt, prompt_cfg)
+    return await ai_exec_prompt_openai_client(client_fac.create_openrouter_client(), task_cfg, prompt, prompt_cfg)
 
 
 async def ai_exec_prompt_openai(task_cfg: LLMTaskConfig, prompt: str, prompt_cfg: PromptConfig = None) -> LLMResponse:
     """
     Execute a prompt using OpenAI and return the response.
     """
-    client = openAIClients.get(task_cfg.tier.upper())
-    if client is None:
+    client_fac = openAIClients.get(task_cfg.tier.upper())
+    if client_fac is None:
         raise EnvironmentError(f"OpenAI client for tier '{task_cfg.tier}' is not configured.")
-    return await ai_exec_prompt_openai_client(client, task_cfg, prompt, prompt_cfg)
+    return await ai_exec_prompt_openai_client(client_fac.create_openai_client(), task_cfg, prompt, prompt_cfg)
 
 
 async def ai_exec_prompt_gemini(task_cfg: LLMTaskConfig, prompt: str, prompt_cfg: PromptConfig = None) -> LLMResponse:
@@ -139,8 +205,8 @@ async def ai_exec_prompt_gemini(task_cfg: LLMTaskConfig, prompt: str, prompt_cfg
     Execute a prompt using Google Gemini and return the response.
     """
     start = time.perf_counter()
-    client = geminiClients.get(task_cfg.tier.upper())
-    if client is None:
+    client_fac = geminiClients.get(task_cfg.tier.upper())
+    if client_fac is None:
         raise EnvironmentError(f"Gemini client for tier '{task_cfg.tier}' is not configured.")
     logging.info(
         "ai_exec_prompt_gemini('%s') - Using vendor/tier/model: %s/%s/%s - Prompt:",
@@ -152,6 +218,7 @@ async def ai_exec_prompt_gemini(task_cfg: LLMTaskConfig, prompt: str, prompt_cfg
     if os.environ.get("LLM_DEBUG_MODE", "FALSE").upper() == "TRUE":
         print(prompt)
 
+    client = client_fac.create_gemini_client()
     thinking_config = None
     if prompt_cfg and prompt_cfg.thinking_level and task_cfg.model.startswith("gemini-3"):
         thinking_config = types.ThinkingConfig(thinking_level=types.ThinkingLevel(prompt_cfg.thinking_level))
