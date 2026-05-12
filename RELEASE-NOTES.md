@@ -1,5 +1,11 @@
 # FinHub release notes
 
+## 2026-05-12 - v0.8.0
+
+### Added/Refactoring/Deprecation
+
+- (Feat) API /ai/analyze_portfolio can be used to build new portfolio.
+
 ## 2026-05-07 - v0.7.2
 
 ### Fixed/Improvements
