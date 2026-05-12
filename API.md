@@ -189,21 +189,39 @@ curl 'http://localhost:8000/ai/analyze_dividend_event?symbol=AAPL&ex_date=2026-0
 
 Analyze a stock portfolio using AI.
 
+| Parameter | Type  | Required | Default  | Description                                                                                           |
+|-----------|-------|----------|----------|-------------------------------------------------------------------------------------------------------|
+| `flavor`  | query | No       | `hybrid` | Prompt template to use: `allocation` (long-term growth), `swing` (swing trading), or `hybrid` (both). |
+
 **Request Body (JSON):**
 
-| Field                | Type               | Required | Description                                                                     |
-|----------------------|--------------------|----------|---------------------------------------------------------------------------------|
-| `current_allocation` | `{symbol: weight}` | Yes      | Map of stock symbols to their portfolio weight (as float, e.g. `0.25` for 25%). |
-| `country`            | `string`           | No       | Country context for the analysis.                                               |
-| `investor_theme`     | `string`           | No       | Investor theme/preference for the analysis. Defaults to a built-in theme.       |
+| Field                | Type                 | Required | Description                                                               |
+|----------------------|----------------------|----------|---------------------------------------------------------------------------|
+| `current_allocation` | `HoldingTicker[]`    | Yes      | List of holdings (see fields below).                                      |
+| `country`            | `string`             | No       | Country context for the analysis.                                         |
+| `investor_theme`     | `string`             | No       | Investor theme/preference for the analysis. Defaults to a built-in theme. |
+
+Each `HoldingTicker` object:
+
+| Field               | Type   | Description                                     |
+|---------------------|--------|-------------------------------------------------|
+| `ticker`            | string | Stock symbol.                                   |
+| `num_shares`        | float  | Number of shares held.                          |
+| `avg_price`         | float  | Average purchase price per share.               |
+| `market_price`      | float  | Current market price per share.                 |
+| `target_allocation` | float  | Target allocation weight (e.g. `0.25` for 25%). |
 
 **Example:**
 
 ```bash
-curl -X POST 'http://localhost:8000/ai/analyze_portfolio' \
+curl -X POST 'http://localhost:8000/ai/analyze_portfolio?flavor=allocation' \
   -H 'Content-Type: application/json' \
   -d '{
-    "current_allocation": {"AAPL": 0.3, "MSFT": 0.3, "GOOGL": 0.4},
+    "current_allocation": [
+      {"ticker": "AAPL", "num_shares": 50, "avg_price": 150.0, "market_price": 195.0, "target_allocation": 0.3},
+      {"ticker": "MSFT", "num_shares": 30, "avg_price": 280.0, "market_price": 420.0, "target_allocation": 0.3},
+      {"ticker": "GOOGL", "num_shares": 20, "avg_price": 120.0, "market_price": 175.0, "target_allocation": 0.4}
+    ],
     "country": "US",
     "investor_theme": "growth with moderate risk"
   }'

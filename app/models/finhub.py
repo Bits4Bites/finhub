@@ -623,5 +623,13 @@ class DividendEventAnalysis(BaseModel):
     risk_level: Optional[float] = None
 
 
+class HoldingTicker(BaseModel):
+    ticker: str = ""
+    num_shares: float = 0.0
+    avg_price: float = 0.0
+    market_price: float = 0.0
+    target_allocation: float = 0.0
+
+
 class PortfolioAnalysis(BaseAIResult):
     analysis: str = ""

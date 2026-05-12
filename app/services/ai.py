@@ -1,4 +1,5 @@
 import json
+from typing import Literal
 
 import yfinance as yf
 from datetime import datetime, timezone
@@ -19,7 +20,12 @@ ANALYZE_ASX_LISTINGS = "ASX_LISTINGS_ANALYSIS"
 ANALYZE_ASX_DIVIDEND = "ASX_DIVIDEND_ANALYSIS"
 ANALYZE_US_DIVIDEND = "US_DIVIDEND_ANALYSIS"
 ANALYZE_VN_DIVIDEND = "VN_DIVIDEND_ANALYSIS"
-ANALYZE_PORTFOLIO = "PORTFOLIO_ANALYSIS"
+ANALYZE_PORTFOLIO_ALLOCATION = "ALLOCATION_PORTFOLIO_ANALYSIS"
+ANALYZE_PORTFOLIO_SWING = "SWING_PORTFOLIO_ANALYSIS"
+ANALYZE_PORTFOLIO_HYBRID = "HYBRID_PORTFOLIO_ANALYSIS"
+BUILD_PORTFOLIO_ALLOCATION = "ALLOCATION_PORTFOLIO_BUILDING"
+BUILD_PORTFOLIO_SWING = "SWING_PORTFOLIO_BUILDING"
+BUILD_PORTFOLIO_HYBRID = "HYBRID_PORTFOLIO_BUILDING"
 
 
 prompts: dict[str, str] = {}
@@ -464,13 +470,23 @@ async def ai_analyze_dividend_event(
 # ----------------------------------------------------------------------#
 
 
-def _normalize_portfolio_allocation(portfolio: dict[str, float]) -> dict[str, float]:
+def _normalize_portfolio_allocation(portfolio: list[models.HoldingTicker]) -> list[models.HoldingTicker]:
     """
     Each allocation is expected to be a float in range [0, 1] (hence the sum of all allocations should be 1 - e.g. 100%).
     However, in the case where the allocation is already in percentage (e.g. 23), normalize the allocation to float (e.g. 0.23).
     """
-    if sum(allocation for allocation in portfolio.values()) > 1.0:
-        return {ticker: allocation / 100.0 for ticker, allocation in portfolio.items()}
+
+    def build_holding_ticker(ht: models.HoldingTicker) -> models.HoldingTicker:
+        return models.HoldingTicker(
+            ticker=ht.ticker,
+            num_shares=ht.num_shares,
+            avg_price=ht.avg_price,
+            market_price=ht.market_price,
+            target_allocation=ht.target_allocation / 100,
+        )
+
+    if sum(ht.target_allocation for ht in portfolio) > 1.25:
+        return [build_holding_ticker(ht) for ht in portfolio]
     else:
         return portfolio
 
@@ -481,9 +497,10 @@ DEFAULT_INVESTOR_THEME = (
 
 
 async def ai_analyze_portfolio(
-    portfolio: dict[str, float],
+    portfolio: list[models.HoldingTicker],
     country: str,
     investor_theme: str = DEFAULT_INVESTOR_THEME,
+    flavor: Literal["allocation", "swing", "hybrid"] = "hybrid",
 ) -> models.PortfolioAnalysis:
     """
     Analyzes a portfolio using AI assistance.
@@ -492,21 +509,40 @@ async def ai_analyze_portfolio(
         portfolio (dict[str, float]): Portfolio data, format {ticker: allocation (0-1)}
         country (str): Country code
         investor_theme (str, optional): Investor's theme.
+        flavor (str, optional): Define which prompt template to use
 
     Returns:
         models.PortfolioAnalysis: An object containing the analysis of the portfolio
     """
     result = models.PortfolioAnalysis()
-    event_type = ANALYZE_PORTFOLIO
+    if len(portfolio) > 0:
+        # analyze an existing portfolio
+        event_type = (
+            ANALYZE_PORTFOLIO_ALLOCATION
+            if flavor == "allocation"
+            else ANALYZE_PORTFOLIO_SWING if flavor == "swing" else ANALYZE_PORTFOLIO_HYBRID
+        )
+    else:
+        # build new portfolio
+        event_type = (
+            BUILD_PORTFOLIO_ALLOCATION
+            if flavor == "allocation"
+            else BUILD_PORTFOLIO_SWING if flavor == "swing" else BUILD_PORTFOLIO_HYBRID
+        )
     prompt_template = prompts[event_type] if event_type in prompts else ""
     if not prompt_template:
         result.llm_error = True
         result.llm_error_msg = f"Prompt template for {event_type} is missing or empty."
         return result
 
-    portfolio = _normalize_portfolio_allocation(portfolio)
-    allocation_csv = "ticker,allocation\n"
-    allocation_csv += "".join(f"{t},{a * 100.0:.1f}%\n" for t, a in portfolio.items())
+    allocation_csv = ""
+    if event_type in [ANALYZE_PORTFOLIO_ALLOCATION, ANALYZE_PORTFOLIO_SWING, ANALYZE_PORTFOLIO_HYBRID]:
+        portfolio = _normalize_portfolio_allocation(portfolio)
+        allocation_csv = "ticker,num_shares,avg_price,market_price,target_allocation\n"
+        allocation_csv += "".join(
+            f"{ht.ticker},{ht.num_shares},{ht.avg_price:.2f},{ht.market_price:.2f},{ht.target_allocation * 100.0:.1f}%\n"
+            for ht in portfolio
+        )
 
     investor_theme = investor_theme or DEFAULT_INVESTOR_THEME
 
