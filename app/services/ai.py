@@ -1,5 +1,5 @@
 import json
-from typing import Literal, List
+from typing import Literal
 
 import yfinance as yf
 from datetime import datetime, timezone
@@ -470,7 +470,7 @@ async def ai_analyze_dividend_event(
 # ----------------------------------------------------------------------#
 
 
-def _normalize_portfolio_allocation(portfolio: List[models.HoldingTicker]) -> List[models.HoldingTicker]:
+def _normalize_portfolio_allocation(portfolio: list[models.HoldingTicker]) -> list[models.HoldingTicker]:
     """
     Each allocation is expected to be a float in range [0, 1] (hence the sum of all allocations should be 1 - e.g. 100%).
     However, in the case where the allocation is already in percentage (e.g. 23), normalize the allocation to float (e.g. 0.23).
@@ -497,7 +497,7 @@ DEFAULT_INVESTOR_THEME = (
 
 
 async def ai_analyze_portfolio(
-    portfolio: List[models.HoldingTicker],
+    portfolio: list[models.HoldingTicker],
     country: str,
     investor_theme: str = DEFAULT_INVESTOR_THEME,
     flavor: Literal["allocation", "swing", "hybrid"] = "hybrid",
