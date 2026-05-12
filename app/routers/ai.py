@@ -1,3 +1,5 @@
+from typing import Literal
+
 from fastapi import APIRouter, Query, Body
 
 from ..schemas import ai as schemas_ai
@@ -36,11 +38,16 @@ async def analyze_portfolio(
     portfolio: schemas_ai.AnalyzePortfolioRequest = Body(
         description="The portfolio to analyze, including current tickers allocation and investor theme."
     ),
+    flavor: Literal["allocation", "swing", "hybrid"] = Query(
+        default="hybrid",
+        description="Define which prompt template to use: 'allocation' for long-term growth, 'swing' for swing trading and 'hybrid' for both",
+    ),
 ) -> schemas_ai.AnalyzePortfolioResponse:
     result = await ai_service.ai_analyze_portfolio(
         portfolio=portfolio.current_allocation,
         country=portfolio.country,
         investor_theme=portfolio.investor_theme or ai_service.DEFAULT_INVESTOR_THEME,
+        flavor=flavor,
     )
     if result.llm_error:
         return schemas_ai.AnalyzePortfolioResponse(status=500, message=result.llm_error_msg or "Unknown error")

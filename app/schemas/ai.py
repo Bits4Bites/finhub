@@ -10,7 +10,7 @@ class AnalyzeDividendEventResponse(BaseResponse):
 
 
 class AnalyzePortfolioRequest(BaseRequest):
-    current_allocation: dict[str, float] = {}
+    current_allocation: list[models.HoldingTicker] = []
     country: str = ""
     investor_theme: Optional[str] = ai_services.DEFAULT_INVESTOR_THEME
 
