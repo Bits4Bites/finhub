@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 
 from .finhub import BaseResponse, BaseRequest
 from ..models import finhub as models
@@ -10,7 +10,7 @@ class AnalyzeDividendEventResponse(BaseResponse):
 
 
 class AnalyzePortfolioRequest(BaseRequest):
-    current_allocation: dict[str, float] = {}
+    current_allocation: List[models.HoldingTicker] = []
     country: str = ""
     investor_theme: Optional[str] = ai_services.DEFAULT_INVESTOR_THEME
 
