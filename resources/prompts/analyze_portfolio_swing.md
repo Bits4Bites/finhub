@@ -21,7 +21,7 @@ For **each ticker**, search:
 - For **penny / nano caps**: float size, recent dilution history, SEC filings, any promotional activity or trading halts in the past 12 months
 - Nearest resistance levels and analyst price targets (for exit planning)
 
-**Market-level checks:**
+**Market-level checks** (relevant to `{COUNTRY}`):
 - VIX level and trend (risk-on or risk-off)
 - Sector ETF momentum for each position's primary sector
 - Broad market trend (S&P / relevant index above or below key moving averages)

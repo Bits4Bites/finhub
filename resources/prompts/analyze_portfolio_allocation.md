@@ -43,7 +43,7 @@ Flag any of:
 # Step 4 - Action Plan
 If analysis reveals a portfolio gap (missing asset class, sector underweight, or poor fit with Investor Portfolio), you
 may recommend initiating a new position. Any new position must be funded by a corresponding Reduce or Exit action - the
-total allocation must always sum to 100%. New tickers should be investable in [COUNTRY].
+total allocation must always sum to 100%. New tickers should be investable in {COUNTRY}.
 
 Each action must use exactly one of these forms - no exceptions:
 

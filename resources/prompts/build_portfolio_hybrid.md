@@ -12,7 +12,7 @@ Do not apply generic long-term framing unless the investor profile explicitly st
 Search the web before selecting any ticker.
 
 **Always search:**
-1. Current market regime: trending, ranging, or high-volatility?
+1. Current market regime for `{COUNTRY}`: trending, ranging, or high-volatility? Bull or late-cycle?
 2. Sector rotation: which sectors are in favor or under pressure right now?
 3. Macro event calendar for the next 4–8 weeks (central bank decisions, CPI releases, earnings seasons, elections)
 
@@ -33,7 +33,7 @@ Search the web before selecting any ticker.
 13. Average daily $ volume - disqualify if insufficient to exit the intended position size within 1 day
 
 **If markets include non-US - also search:**
-14. Relevant central bank policy, commodity exposure, and currency risk for `{COUNTRY}`
+14. Relevant local central bank policy, commodity exposure, currency trend vs. USD, and any capital controls or repatriation risks for `{COUNTRY}`
 
 ---
 # Step 2 - Candidate Selection

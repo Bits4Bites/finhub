@@ -20,10 +20,22 @@ class LLMConfig(BaseSettings):
 
 
 class LLMTaskConfig(BaseSettings):
+    """
+    LLM configurations for a task. Supply an instance of LLMTaskConfigOverride to override the default LLM configurations for a task.
+    """
+
     task_name: str = ""
     vendor: str = ""
     tier: str = ""
     model: str = ""
+
+
+class LLMTaskConfigOverride(LLMTaskConfig):
+    """
+    Supply an instance of LLMTaskConfigOverride to override the default LLM configurations for a task.
+    """
+
+    pass
 
 
 class LLMSettings(BaseSettings):
