@@ -1,5 +1,5 @@
 {
-    "date": "2026-05-05",
+    "date": "2026-05-15",
     "data": [
         {
             "symbol": "NYSE:AA",
@@ -348,7 +348,7 @@
         },
         {
             "symbol": "NASDAQ:CG",
-            "company": "Carlyle Group",
+            "company": "Carlyle Group (The)",
             "sector": "Financials"
         },
         {

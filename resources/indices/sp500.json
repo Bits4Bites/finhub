@@ -1,5 +1,5 @@
 {
-    "date": "2026-05-05",
+    "date": "2026-05-15",
     "data": [
         {
             "symbol": "NYSE:MMM",
@@ -433,7 +433,7 @@
         },
         {
             "symbol": "NYSE:CCL",
-            "company": "Carnival",
+            "company": "Carnival Corporation",
             "sector": "Consumer Discretionary"
         },
         {
@@ -670,11 +670,6 @@
             "symbol": "NASDAQ:COST",
             "company": "Costco",
             "sector": "Consumer Staples"
-        },
-        {
-            "symbol": "NYSE:CTRA",
-            "company": "Coterra",
-            "sector": "Energy"
         },
         {
             "symbol": "NYSE:CRH",
@@ -2330,6 +2325,11 @@
             "symbol": "NYSE:VLO",
             "company": "Valero Energy",
             "sector": "Energy"
+        },
+        {
+            "symbol": "NYSE:VEEV",
+            "company": "Veeva Systems",
+            "sector": "Health Care"
         },
         {
             "symbol": "NYSE:VTR",
