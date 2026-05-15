@@ -1,10 +1,3 @@
-# This file has been cleaned up post-releasing version 0.8.0.
+# This file has been cleaned up post-releasing version 0.9.0.
 # Generate its content quickly using the following command:
 #   git log origin..HEAD | grep "^\s" > .semrelease/this_release
-#!VERSION=0.9.0
-- (Impr) Update AI client configurations with updated list of models and providers.
-- (Feat) Client can now specify a custom provider/model when making requests, overriding the default settings.
-- (Fix) Correctly redirect to next instance in proxy mode.
-- (Feat) New API /ai/vendors to list available AI vendors and supported API tiers and models.
-- (Fix) Fix API response for /ai/analyze_portfolio/
-- (Impr) Review and Improve/Optimize prompt templates.
