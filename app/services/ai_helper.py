@@ -15,7 +15,7 @@ from google import genai
 from google.genai import types
 from pydantic import BaseModel
 
-from ..config import LLMTaskConfig
+from ..config import LLMTaskConfig, LLMTaskConfigOverride
 from ..models.finhub import LLMResponse
 
 geminiClients: dict[str, "LLMClientFactory"] = {}
@@ -24,6 +24,8 @@ openRouterClients: dict[str, "LLMClientFactory"] = {}
 azureOpenAIClients: dict[str, "LLMClientFactory"] = {}
 
 ThinkingLevel = Literal["LOW", "MEDIUM", "HIGH"]
+
+# ----------------------------------------------------------------------#
 
 
 class LLMClientFactory(ABC):
@@ -89,6 +91,9 @@ class AzureOpenAIClientFactory(LLMClientFactory):
         return self.client
 
 
+# ----------------------------------------------------------------------#
+
+
 class PromptConfig(BaseModel):
     use_web_search: bool = False
     country: Optional[str] = None  # for web search location context
@@ -96,7 +101,12 @@ class PromptConfig(BaseModel):
 
 
 async def ai_exec_prompt_openai_client(
-    client: AsyncOpenAI, task_cfg: LLMTaskConfig, prompt: str, prompt_cfg: PromptConfig = None
+    client: AsyncOpenAI,
+    task_cfg: LLMTaskConfig,
+    prompt: str,
+    prompt_cfg: PromptConfig = None,
+    *,
+    llm_config_override: LLMTaskConfigOverride = None,
 ) -> LLMResponse:
     """
     Execute a prompt using OpenAI client and return the response.
@@ -105,17 +115,19 @@ async def ai_exec_prompt_openai_client(
     logging.info(
         "ai_exec_prompt_openai_client('%s') - Using vendor/tier/model: %s/%s/%s - Prompt:",
         task_cfg.task_name,
-        task_cfg.vendor,
-        task_cfg.tier,
-        task_cfg.model,
+        llm_config_override.vendor if llm_config_override else task_cfg.vendor,
+        llm_config_override.tier if llm_config_override else task_cfg.tier,
+        llm_config_override.model if llm_config_override else task_cfg.model,
     )
     if os.environ.get("LLM_DEBUG_MODE", "FALSE").upper() == "TRUE":
         print(prompt)
+    else:
+        print("<prompt omitted>")
 
     if prompt_cfg and prompt_cfg.use_web_search:
         # use response API with web search tool
         ai_response = await client.responses.create(
-            model=task_cfg.model,
+            model=llm_config_override.model if llm_config_override else task_cfg.model,
             tools=[
                 WebSearchPreviewToolParam(
                     type="web_search_preview",
@@ -137,7 +149,7 @@ async def ai_exec_prompt_openai_client(
         # use standard chat completion API for non web search tasks
         completion = await client.chat.completions.create(
             # extra_headers={"X-OpenRouter-Title": "FinHub"},
-            model=task_cfg.model,
+            model=llm_config_override.model if llm_config_override else task_cfg.model,
             temperature=0.0,
             messages=[ChatCompletionUserMessageParam(content=prompt, role="user")],
         )
@@ -162,12 +174,18 @@ async def ai_exec_prompt_openai_client(
     )
     if os.environ.get("LLM_DEBUG_MODE", "FALSE").upper() == "TRUE":
         print(result.completion)
+    else:
+        print("<response omitted>")
 
     return result
 
 
 async def ai_exec_prompt_azure_openai(
-    task_cfg: LLMTaskConfig, prompt: str, prompt_cfg: PromptConfig = None
+    task_cfg: LLMTaskConfig,
+    prompt: str,
+    prompt_cfg: PromptConfig = None,
+    *,
+    llm_config_override: LLMTaskConfigOverride = None,
 ) -> LLMResponse:
     """
     Execute a prompt using Azure OpenAI and return the response.
@@ -175,11 +193,21 @@ async def ai_exec_prompt_azure_openai(
     client_fac = azureOpenAIClients.get(task_cfg.tier.upper())
     if client_fac is None:
         raise EnvironmentError(f"Azure OpenAI client for tier '{task_cfg.tier}' is not configured.")
-    return await ai_exec_prompt_openai_client(client_fac.create_azure_openai_client(), task_cfg, prompt, prompt_cfg)
+    return await ai_exec_prompt_openai_client(
+        client_fac.create_azure_openai_client(),
+        task_cfg,
+        prompt,
+        prompt_cfg,
+        llm_config_override=llm_config_override,
+    )
 
 
 async def ai_exec_prompt_openrouter(
-    task_cfg: LLMTaskConfig, prompt: str, prompt_cfg: PromptConfig = None
+    task_cfg: LLMTaskConfig,
+    prompt: str,
+    prompt_cfg: PromptConfig = None,
+    *,
+    llm_config_override: LLMTaskConfigOverride = None,
 ) -> LLMResponse:
     """
     Execute a prompt using OpenRouter and return the response.
@@ -187,20 +215,44 @@ async def ai_exec_prompt_openrouter(
     client_fac = openRouterClients.get(task_cfg.tier.upper())
     if client_fac is None:
         raise EnvironmentError(f"OpenRouter client for tier '{task_cfg.tier}' is not configured.")
-    return await ai_exec_prompt_openai_client(client_fac.create_openrouter_client(), task_cfg, prompt, prompt_cfg)
+    return await ai_exec_prompt_openai_client(
+        client_fac.create_openrouter_client(),
+        task_cfg,
+        prompt,
+        prompt_cfg,
+        llm_config_override=llm_config_override,
+    )
 
 
-async def ai_exec_prompt_openai(task_cfg: LLMTaskConfig, prompt: str, prompt_cfg: PromptConfig = None) -> LLMResponse:
+async def ai_exec_prompt_openai(
+    task_cfg: LLMTaskConfig,
+    prompt: str,
+    prompt_cfg: PromptConfig = None,
+    *,
+    llm_config_override: LLMTaskConfigOverride = None,
+) -> LLMResponse:
     """
     Execute a prompt using OpenAI and return the response.
     """
     client_fac = openAIClients.get(task_cfg.tier.upper())
     if client_fac is None:
         raise EnvironmentError(f"OpenAI client for tier '{task_cfg.tier}' is not configured.")
-    return await ai_exec_prompt_openai_client(client_fac.create_openai_client(), task_cfg, prompt, prompt_cfg)
+    return await ai_exec_prompt_openai_client(
+        client_fac.create_openai_client(),
+        task_cfg,
+        prompt,
+        prompt_cfg,
+        llm_config_override=llm_config_override,
+    )
 
 
-async def ai_exec_prompt_gemini(task_cfg: LLMTaskConfig, prompt: str, prompt_cfg: PromptConfig = None) -> LLMResponse:
+async def ai_exec_prompt_gemini(
+    task_cfg: LLMTaskConfig,
+    prompt: str,
+    prompt_cfg: PromptConfig = None,
+    *,
+    llm_config_override: LLMTaskConfigOverride = None,
+) -> LLMResponse:
     """
     Execute a prompt using Google Gemini and return the response.
     """
@@ -211,19 +263,22 @@ async def ai_exec_prompt_gemini(task_cfg: LLMTaskConfig, prompt: str, prompt_cfg
     logging.info(
         "ai_exec_prompt_gemini('%s') - Using vendor/tier/model: %s/%s/%s - Prompt:",
         task_cfg.task_name,
-        task_cfg.vendor,
-        task_cfg.tier,
-        task_cfg.model,
+        llm_config_override.vendor if llm_config_override else task_cfg.vendor,
+        llm_config_override.tier if llm_config_override else task_cfg.tier,
+        llm_config_override.model if llm_config_override else task_cfg.model,
     )
     if os.environ.get("LLM_DEBUG_MODE", "FALSE").upper() == "TRUE":
         print(prompt)
+    else:
+        print("<prompt omitted>")
 
+    used_model = llm_config_override.model if llm_config_override else task_cfg.model
     client = client_fac.create_gemini_client()
     thinking_config = None
-    if prompt_cfg and prompt_cfg.thinking_level and task_cfg.model.startswith("gemini-3"):
+    if prompt_cfg and prompt_cfg.thinking_level and used_model.startswith("gemini-3"):
         thinking_config = types.ThinkingConfig(thinking_level=types.ThinkingLevel(prompt_cfg.thinking_level))
     ai_response = client.models.generate_content(
-        model=task_cfg.model,
+        model=llm_config_override.model if llm_config_override else task_cfg.model,
         contents=prompt,
         config=types.GenerateContentConfig(temperature=0.0, thinking_config=thinking_config),
     )
@@ -251,22 +306,41 @@ async def ai_exec_prompt_gemini(task_cfg: LLMTaskConfig, prompt: str, prompt_cfg
     )
     if os.environ.get("LLM_DEBUG_MODE", "FALSE").upper() == "TRUE":
         print(result.completion)
+    else:
+        print("<response omitted>")
 
     return result
 
 
-async def ai_exec_prompt(task_cfg: LLMTaskConfig, prompt: str, prompt_cfg: PromptConfig = None) -> LLMResponse:
+async def ai_exec_prompt(
+    task_cfg: LLMTaskConfig,
+    prompt: str,
+    prompt_cfg: PromptConfig = None,
+    *,
+    llm_config_override: LLMTaskConfigOverride = None,
+) -> LLMResponse:
     """
     Executes a prompt using the specified LLM task configuration.
     """
-    match task_cfg.vendor.upper():
+    used_vendor = (llm_config_override.vendor if llm_config_override else task_cfg.vendor).upper()
+    match used_vendor:
         case "AZUREOPENAI" | "AZURE OPENAI" | "AZURE_OPENAI":
-            return await ai_exec_prompt_azure_openai(task_cfg, prompt, prompt_cfg)
+            return await ai_exec_prompt_azure_openai(
+                task_cfg,
+                prompt,
+                prompt_cfg,
+                llm_config_override=llm_config_override,
+            )
         case "OPENAI":
-            return await ai_exec_prompt_openai(task_cfg, prompt, prompt_cfg)
+            return await ai_exec_prompt_openai(task_cfg, prompt, prompt_cfg, llm_config_override=llm_config_override)
         case "OPENROUTER" | "OPEN ROUTER" | "OPEN_ROUTER":
-            return await ai_exec_prompt_openrouter(task_cfg, prompt, prompt_cfg)
+            return await ai_exec_prompt_openrouter(
+                task_cfg,
+                prompt,
+                prompt_cfg,
+                llm_config_override=llm_config_override,
+            )
         case "GEMINI":
-            return await ai_exec_prompt_gemini(task_cfg, prompt, prompt_cfg)
+            return await ai_exec_prompt_gemini(task_cfg, prompt, prompt_cfg, llm_config_override=llm_config_override)
         case _:
             raise ValueError(f"Unsupported LLM vendor: {task_cfg.vendor}")

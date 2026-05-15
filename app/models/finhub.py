@@ -24,6 +24,14 @@ from .types import (
 from ..utils import finhub as finhub_utils
 
 
+class AIVendorInfo(BaseModel):
+    name: str = ""
+    tier_models: dict[str, list[str]] = {}  # map {tier -> list of models}
+
+
+# ----------------------------------------------------------------------#
+
+
 class SymbolBase(BaseModel):
     symbol: str
     currency: str
@@ -400,6 +408,10 @@ class LLMResponse(BaseModel):
     tokens_completion: int = 0
     tokens_thought: int = 0
     is_error: bool = False
+    error_msg: Optional[str] = None
+
+
+# ----------------------------------------------------------------------#
 
 
 class EventBase(BaseModel):
@@ -573,13 +585,16 @@ def parse_new_listing_events_from_json(json_str: str, default_vals: dict[str, An
     return result
 
 
+# ----------------------------------------------------------------------#
+
+
 class BaseAIResult(BaseModel):
     llm_error: bool = False
     llm_error_msg: Optional[str] = None
     llm_response: Optional[str] = None
 
 
-class DividendEventAnalysis(BaseModel):
+class DividendEventAnalysis(BaseAIResult):
     # ===== base info
     overview: SymbolOverview = None
     price: Optional[float] = None  # current stock price
@@ -608,8 +623,6 @@ class DividendEventAnalysis(BaseModel):
     market_trend_60d: Optional[float] = None
     peer_trend_60d: Optional[float] = None
     # ====== analysis result from AI
-    llm_error: bool = False
-    llm_error_msg: Optional[str] = None
     search_summary: Optional[str] = None
     strategy: Optional[str] = None
     reasoning: Optional[str] = None
