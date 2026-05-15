@@ -1,5 +1,19 @@
 # FinHub release notes
 
+## 2026-05-15 - v0.9.0
+
+### Added/Refactoring/Deprecation
+
+- (Feat) Client can now specify a custom provider/model when making requests, overriding the default settings.
+- (Feat) New API /ai/vendors to list available AI vendors and supported API tiers and models.
+
+### Fixed/Improvements
+
+- (Impr) Update AI client configurations with updated list of models and providers.
+- (Fix) Correctly redirect to next instance in proxy mode.
+- (Fix) Fix API response for /ai/analyze_portfolio/
+- (Impr) Review and Improve/Optimize prompt templates.
+
 ## 2026-05-12 - v0.8.0
 
 ### Added/Refactoring/Deprecation
