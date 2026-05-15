@@ -8,20 +8,20 @@ from . import ai, ai_helper
 for vendor_name, api_tiers in list(settings_llm.llm_config.items()):
     for api_tier, llm_config in list(api_tiers.items()):
         if vendor_name.upper() == "GEMINI":
-            ai_helper.geminiClients[api_tier.upper()] = GeminiClientFactory(api_key=llm_config.api_key, timeout_sec=180)
+            ai_helper.geminiClients[api_tier.upper()] = GeminiClientFactory(api_key=llm_config.api_key, timeout_sec=300)
         if vendor_name.upper() == "AZURE_OPENAI" or vendor_name.upper() == "AZUREOPENAI":
             ai_helper.azureOpenAIClients[api_tier.upper()] = AzureOpenAIClientFactory(
                 endpoint=llm_config.endpoint,
-                timeout_sec=180,
+                timeout_sec=300,
             )
         if vendor_name.upper() == "OPENROUTER" or vendor_name.upper() == "OPEN_ROUTER":
             ai_helper.openRouterClients[api_tier.upper()] = OpenRouterClientFactory(
                 api_key=llm_config.api_key,
                 endpoint=llm_config.endpoint,
-                timeout_sec=180,
+                timeout_sec=300,
             )
         if vendor_name.upper() == "OPENAI":
-            ai_helper.openAIClients[api_tier.upper()] = OpenAIClientFactory(api_key=llm_config.api_key, timeout_sec=180)
+            ai_helper.openAIClients[api_tier.upper()] = OpenAIClientFactory(api_key=llm_config.api_key, timeout_sec=300)
 
 
 # load prompt templates

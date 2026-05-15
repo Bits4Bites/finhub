@@ -1,5 +1,5 @@
 import json
-from typing import Literal
+from typing import Literal, Optional
 
 import yfinance as yf
 from datetime import datetime, timezone
@@ -9,9 +9,8 @@ from zoneinfo import ZoneInfo
 from bs4 import BeautifulSoup
 
 from . import ai_helper
-from .ai_helper import ThinkingLevel
 from ..models import finhub as models, types
-from ..config import settings_llm
+from ..config import settings_llm, LLMTaskConfigOverride
 from ..services import crawler as crawler_service, stock as stock_service
 from ..utils import finhub as finhub_utils
 
@@ -32,7 +31,12 @@ prompts: dict[str, str] = {}
 
 
 async def ai_exec_prompt(
-    task_id: str, prompt: str, country: str = None, thinking_level: ThinkingLevel = None
+    task_id: str,
+    prompt: str,
+    country: str = None,
+    thinking_level: ai_helper.ThinkingLevel = None,
+    *,
+    llm_config_override: LLMTaskConfigOverride = None,
 ) -> models.LLMResponse:
     """
     Executes a prompt using the appropriate LLM based on the task configuration.
@@ -45,7 +49,7 @@ async def ai_exec_prompt(
         country=country,
         thinking_level=thinking_level,
     )
-    return await ai_helper.ai_exec_prompt(task_cfg, prompt, prompt_cfg)
+    return await ai_helper.ai_exec_prompt(task_cfg, prompt, prompt_cfg, llm_config_override=llm_config_override)
 
 
 # ----------------------------------------------------------------------#
@@ -326,6 +330,7 @@ async def ai_analyze_dividend_event(
     symbol: str,
     ex_date: str,
     div_amount: float,
+    llm_config_override: Optional[LLMTaskConfigOverride] = None,
 ) -> models.DividendEventAnalysis | None:
     """
     Analyzes a dividend event using AI assistance.
@@ -334,6 +339,7 @@ async def ai_analyze_dividend_event(
         symbol (str): Stock ticker symbol (e.g., 'AAPL', 'BHP.AX', 'HOSE:BID' etc.).
         ex_date (str): Ex-dividend date in ISO format (YYYY-MM-DD).
         div_amount (float): Dividend amount per share.
+        llm_config_override (LLMTaskConfigOverride): (optional) Supply to override the default LLM task config.
 
     Returns:
         models.DividendEventAnalysis: An object containing the analysis of the dividend event
@@ -346,7 +352,6 @@ async def ai_analyze_dividend_event(
     if not result:
         return None
 
-    # country = finhub_utils.country_code_from_yf_ticker(yf_ticker)
     country = result.overview.country
     event_type = (
         ANALYZE_ASX_DIVIDEND if country == "AU" else ANALYZE_VN_DIVIDEND if country == "VN" else ANALYZE_US_DIVIDEND
@@ -438,7 +443,12 @@ async def ai_analyze_dividend_event(
             div_capture_rules = div_capture_rules.rstrip("\n")
     prompt = prompt.replace("{DIV_CAPTURE_RULES}", div_capture_rules)
 
-    llm_result = await ai_exec_prompt("ANALYZE_DIVIDEND_EVENT_WEB_SEARCH", prompt, country)
+    llm_result = await ai_exec_prompt(
+        "ANALYZE_DIVIDEND_EVENT_WEB_SEARCH",
+        prompt,
+        country,
+        llm_config_override=llm_config_override,
+    )
     if llm_result.is_error:
         result.llm_error = True
         result.llm_error_msg = f"LLM failed to generate response for analyzing dividend event: {llm_result.completion}"
@@ -497,10 +507,12 @@ DEFAULT_INVESTOR_THEME = (
 
 
 async def ai_analyze_portfolio(
+    *,
     portfolio: list[models.HoldingTicker],
     country: str,
     investor_theme: str = DEFAULT_INVESTOR_THEME,
-    flavor: Literal["allocation", "swing", "hybrid"] = "hybrid",
+    template: Literal["allocation", "swing", "hybrid"] = "hybrid",
+    llm_config_override: Optional[LLMTaskConfigOverride] = None,
 ) -> models.PortfolioAnalysis:
     """
     Analyzes a portfolio using AI assistance.
@@ -509,7 +521,8 @@ async def ai_analyze_portfolio(
         portfolio (dict[str, float]): Portfolio data, format {ticker: allocation (0-1)}
         country (str): Country code
         investor_theme (str, optional): Investor's theme.
-        flavor (str, optional): Define which prompt template to use
+        template (str, optional): Define which prompt template to use
+        llm_config_override (LLMTaskConfigOverride): (optional) Supply to override the default LLM task config.
 
     Returns:
         models.PortfolioAnalysis: An object containing the analysis of the portfolio
@@ -519,15 +532,15 @@ async def ai_analyze_portfolio(
         # analyze an existing portfolio
         event_type = (
             ANALYZE_PORTFOLIO_ALLOCATION
-            if flavor == "allocation"
-            else ANALYZE_PORTFOLIO_SWING if flavor == "swing" else ANALYZE_PORTFOLIO_HYBRID
+            if template == "allocation"
+            else ANALYZE_PORTFOLIO_SWING if template == "swing" else ANALYZE_PORTFOLIO_HYBRID
         )
     else:
         # build new portfolio
         event_type = (
             BUILD_PORTFOLIO_ALLOCATION
-            if flavor == "allocation"
-            else BUILD_PORTFOLIO_SWING if flavor == "swing" else BUILD_PORTFOLIO_HYBRID
+            if template == "allocation"
+            else BUILD_PORTFOLIO_SWING if template == "swing" else BUILD_PORTFOLIO_HYBRID
         )
     prompt_template = prompts[event_type] if event_type in prompts else ""
     if not prompt_template:
@@ -556,7 +569,13 @@ async def ai_analyze_portfolio(
         .replace("{MARKET}", country)
         .replace("{COUNTRY}", country)
     )
-    llm_result = await ai_exec_prompt("ANALYZE_PORTFOLIO_WEB_SEARCH", prompt, country)
+    task_id = "ANALYZE_PORTFOLIO_WEB_SEARCH" if len(portfolio) > 0 else "BUILD_NEW_PORTFOLIO_WEB_SEARCH"
+    llm_result = await ai_exec_prompt(
+        task_id,
+        prompt,
+        country,
+        llm_config_override=llm_config_override,
+    )
     if llm_result.is_error:
         result.llm_error = True
         result.llm_error_msg = f"LLM failed to generate response for analyzing portfolio: {llm_result.completion}"
