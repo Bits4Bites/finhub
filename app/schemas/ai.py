@@ -1,5 +1,3 @@
-from typing import Optional
-
 from ..models import finhub as models
 from ..services import ai as ai_services
 from .finhub import BaseRequest, BaseResponse
@@ -27,7 +25,7 @@ class AnalyzeDividendEventResponse(BaseResponse):
         data (models.DividendEventAnalysis): An object containing the analysis result of the dividend event.
     """
 
-    data: Optional[models.DividendEventAnalysis] = None
+    data: models.DividendEventAnalysis | None = None
 
 
 # ----------------------------------------------------------------------#
@@ -45,7 +43,7 @@ class AnalyzePortfolioRequest(BaseRequest):
 
     current_allocation: list[models.HoldingTicker] = []
     country: str = ""
-    investor_theme: Optional[str] = ai_services.DEFAULT_INVESTOR_THEME
+    investor_theme: str = ai_services.DEFAULT_INVESTOR_THEME
 
 
 class AnalyzePortfolioResponse(BaseResponse):
@@ -56,4 +54,4 @@ class AnalyzePortfolioResponse(BaseResponse):
         data (models.PortfolioAnalysis): The analysis result of the portfolio request.
     """
 
-    data: Optional[models.PortfolioAnalysis] = None
+    data: models.PortfolioAnalysis | None = None

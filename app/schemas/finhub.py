@@ -1,4 +1,4 @@
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -14,46 +14,46 @@ class BaseRequest(BaseModel):
 class BaseResponse(BaseModel):
     status: int
     message: str
-    data: Optional[Any] = None
-    extra: Optional[Any] = None
+    data: Any | None = None
+    extra: Any | None = None
     model_config = {"arbitrary_types_allowed": True}
 
 
 class StockQuotesResponse(BaseResponse):
-    data: Optional[dict[str, models.StockQuote]] = None
+    data: dict[str, models.StockQuote] | None = None
 
 
 class StockQuoteResponse(BaseResponse):
-    data: Optional[models.StockQuote] = None
+    data: models.StockQuote | None = None
 
 
 class StockHistoryResponse(BaseResponse):
-    data: Optional[list[HistoryPoint]] = None
+    data: list[HistoryPoint] | None = None
 
 
 class SymbolOverviewResponse(BaseResponse):
-    data: Optional[models.SymbolOverview] = None
+    data: models.SymbolOverview | None = None
 
 
 class SymbolInfoResponse(BaseResponse):
-    data: Optional[models.SymbolInfo] = None
+    data: models.SymbolInfo | None = None
 
 
 class StockQuoteAtDateResponse(BaseResponse):
-    data: Optional[HistoryPoint] = None
+    data: HistoryPoint | None = None
 
 
 class UpcomingEarningsResponse(BaseResponse):
-    data: Optional[list[models.UpcomingEarningsEvent]] = None
+    data: list[models.UpcomingEarningsEvent] | None = None
 
 
 class UpcomingDividendsResponse(BaseResponse):
-    data: Optional[list[models.UpcomingDividendEvent]] = None
+    data: list[models.UpcomingDividendEvent] | None = None
 
 
 class ListingsResponse(BaseResponse):
-    data: Optional[list[models.ListingEvent]] = None
+    data: list[models.ListingEvent] | None = None
 
 
 class IndexCompaniesResponse(BaseResponse):
-    data: Optional[list[config.CompanyBriefInfo]] = None
+    data: list[config.CompanyBriefInfo] | None = None
