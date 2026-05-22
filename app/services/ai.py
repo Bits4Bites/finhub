@@ -1,6 +1,6 @@
 import json
-from datetime import datetime, timezone
-from typing import Literal, Optional
+from datetime import UTC, datetime
+from typing import Literal
 from zoneinfo import ZoneInfo
 
 import yfinance as yf
@@ -33,7 +33,7 @@ prompts: dict[str, str] = {}
 async def ai_exec_prompt(
     task_id: str,
     prompt: str,
-    country: str = None,
+    country: str = "",
     thinking_level: ai_helper.ThinkingLevel = None,
     *,
     llm_config_override: LLMTaskConfigOverride = None,
@@ -330,7 +330,7 @@ async def ai_analyze_dividend_event(
     symbol: str,
     ex_date: str,
     div_amount: float,
-    llm_config_override: Optional[LLMTaskConfigOverride] = None,
+    llm_config_override: LLMTaskConfigOverride | None = None,
 ) -> models.DividendEventAnalysis | None:
     """
     Analyzes a dividend event using AI assistance.
@@ -363,7 +363,7 @@ async def ai_analyze_dividend_event(
         return result
 
     # CONTEXT
-    today_utc = datetime.now(timezone.utc).date()
+    today_utc = datetime.now(UTC).date()
     prompt = (
         prompt_template.replace(
             "{TICKER}",
@@ -382,7 +382,9 @@ async def ai_analyze_dividend_event(
     industry_trend_str = (
         f"{result.peer_trend_60d:.2%}"
         if result.peer_trend_60d is not None
-        else f"{result.market_trend_60d}" if result.market_trend_60d is not None else "N/A"
+        else f"{result.market_trend_60d}"
+        if result.market_trend_60d is not None
+        else "N/A"
     )
     cap_size, market_index = finhub_utils.classify_market_cap(ticker)
     cap_size_str = ""
@@ -459,20 +461,20 @@ async def ai_analyze_dividend_event(
     result.strategy = llm_result_obj.get("strategy")
     result.reasoning = llm_result_obj.get("reasoning")
     result.sentiment_score = llm_result_obj.get("sent_score")
-    result.sentiment_score = float(result.sentiment_score) if result.sentiment_score is not None else None
+    # result.sentiment_score = float(result.sentiment_score) if result.sentiment_score is not None else None
     result.recovery_probability_adj = llm_result_obj.get("recov_prob_adj")
-    result.recovery_probability_adj = (
-        float(result.recovery_probability_adj) if result.recovery_probability_adj is not None else None
-    )
+    # result.recovery_probability_adj = (
+    #     float(result.recovery_probability_adj) if result.recovery_probability_adj is not None else None
+    # )
     result.recovery_days_adj = llm_result_obj.get("recovery_days")
     result.drop_price_adj = llm_result_obj.get("est_drop_price")
     result.recovery_price_adj = llm_result_obj.get("est_recovery_price")
     result.expected_pl = llm_result_obj.get("expected_pl")
-    result.expected_pl = float(result.expected_pl) if result.expected_pl is not None else None
+    # result.expected_pl = float(result.expected_pl) if result.expected_pl is not None else None
     result.confidence_level = llm_result_obj.get("confidence")
-    result.confidence_level = float(result.confidence_level) if result.confidence_level is not None else None
+    # result.confidence_level = float(result.confidence_level) if result.confidence_level is not None else None
     result.risk_level = llm_result_obj.get("risk")
-    result.risk_level = float(result.risk_level) if result.risk_level is not None else None
+    # result.risk_level = float(result.risk_level) if result.risk_level is not None else None
 
     return result
 
@@ -512,7 +514,7 @@ async def ai_analyze_portfolio(
     country: str,
     investor_theme: str = DEFAULT_INVESTOR_THEME,
     template: Literal["allocation", "swing", "hybrid"] = "hybrid",
-    llm_config_override: Optional[LLMTaskConfigOverride] = None,
+    llm_config_override: LLMTaskConfigOverride | None = None,
 ) -> models.PortfolioAnalysis:
     """
     Analyzes a portfolio using AI assistance.
@@ -533,14 +535,18 @@ async def ai_analyze_portfolio(
         event_type = (
             ANALYZE_PORTFOLIO_ALLOCATION
             if template == "allocation"
-            else ANALYZE_PORTFOLIO_SWING if template == "swing" else ANALYZE_PORTFOLIO_HYBRID
+            else ANALYZE_PORTFOLIO_SWING
+            if template == "swing"
+            else ANALYZE_PORTFOLIO_HYBRID
         )
     else:
         # build new portfolio
         event_type = (
             BUILD_PORTFOLIO_ALLOCATION
             if template == "allocation"
-            else BUILD_PORTFOLIO_SWING if template == "swing" else BUILD_PORTFOLIO_HYBRID
+            else BUILD_PORTFOLIO_SWING
+            if template == "swing"
+            else BUILD_PORTFOLIO_HYBRID
         )
     prompt_template = prompts[event_type] if event_type in prompts else ""
     if not prompt_template:

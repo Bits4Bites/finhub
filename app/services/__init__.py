@@ -27,7 +27,7 @@ for vendor_name, api_tiers in list(settings_llm.llm_config.items()):
 # load prompt templates
 def read_file_as_single_string(file_path) -> str:
     try:
-        with open(file_path, "r", encoding="utf-8") as file:
+        with open(file_path, encoding="utf-8") as file:
             lines = [line.rstrip() for line in file]
             combined_text = "\n".join(lines)
         return combined_text

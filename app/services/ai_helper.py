@@ -2,7 +2,7 @@ import logging
 import os
 import time
 from abc import ABC
-from typing import Literal, Optional
+from typing import Literal
 
 from azure.identity import EnvironmentCredential, get_bearer_token_provider
 from google import genai
@@ -95,8 +95,8 @@ class AzureOpenAIClientFactory(LLMClientFactory):
 
 class PromptConfig(BaseModel):
     use_web_search: bool = False
-    country: Optional[str] = None  # for web search location context
-    thinking_level: Optional[ThinkingLevel] = None
+    country: str = ""  # for web search location context
+    thinking_level: ThinkingLevel | None = None
 
 
 async def ai_exec_prompt_openai_client(
