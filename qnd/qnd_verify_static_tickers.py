@@ -60,9 +60,9 @@ async def main():
     verify1layer("asx_index_yf_static_tickers", finhub_utils.asx_index_yf_static_tickers)
     verify1layer("asx_sector_yf_static_tickers", finhub_utils.asx_sector_yf_static_tickers)
 
-    verify1layer('us_index_yf_static_tickers', finhub_utils.us_index_yf_static_tickers)
+    verify1layer("us_index_yf_static_tickers", finhub_utils.us_index_yf_static_tickers)
 
-    verify1layer('us_sector_yf_static_tickers', finhub_utils.us_sector_yf_static_tickers)
+    verify1layer("us_sector_yf_static_tickers", finhub_utils.us_sector_yf_static_tickers)
     verify2layers("us_industry_yf_static_tickers", finhub_utils.us_industry_yf_static_tickers)
 
     # verify1layer('us_sector_yf_static_tickers_sp400', finhub_utils.us_sector_yf_static_tickers_sp400)

@@ -4,15 +4,16 @@
 import asyncio
 import json
 import logging
+
 import yfinance as yf
 
-from app.services import stock as stock_service
 from app.models import finhub as models
+from app.services import stock as stock_service
 
 
 def read_file_as_single_string(file_path) -> str:
     try:
-        with open(file_path, "r", encoding="utf-8") as file:
+        with open(file_path, encoding="utf-8") as file:
             lines = [line.rstrip() for line in file]
             combined_text = "\n".join(lines)
         return combined_text
@@ -44,7 +45,7 @@ async def main():
 
     for row in data:
         symbol = row["symbol"].strip()
-        ticker = yf.Ticker(f"{symbol.split(":")[-1]}")
+        ticker = yf.Ticker(f"{symbol.split(':')[-1]}")
         quote_type = ticker.info["quoteType"] if "quoteType" in ticker.info else "NONE"
         if quote_type == "NONE":
             print(f"Symbol: {symbol} / No quoteType found")

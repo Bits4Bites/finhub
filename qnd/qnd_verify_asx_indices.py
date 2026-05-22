@@ -12,7 +12,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(level
 
 def read_file_as_single_string(file_path) -> str:
     try:
-        with open(file_path, "r", encoding="utf-8") as file:
+        with open(file_path, encoding="utf-8") as file:
             lines = [line.rstrip() for line in file]
             combined_text = "\n".join(lines)
         return combined_text
@@ -66,7 +66,7 @@ async def main():
         # if found_industry:
         #     industries[industry] = True
         # print(f"Symbol: {symbol} / Sector: {sector} {"✅" if found_sector else "❌"} / Industry: {industry} {"✅" if found_industry else "❌"}")
-        print(f"Symbol: {symbol} / Sector: {sector} {"✅" if found_sector else "❌"}")
+        print(f"Symbol: {symbol} / Sector: {sector} {'✅' if found_sector else '❌'}")
 
     print(f"Number of found/total: {num_found_sector}-{num_found_industry} / {num_total}")
     print(f"Unique sectors found: {sectors.keys()}")
