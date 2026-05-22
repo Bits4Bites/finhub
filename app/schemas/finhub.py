@@ -1,22 +1,7 @@
-from typing import Any
-
-from pydantic import BaseModel
-
 from .. import config
 from ..models import finhub as models
 from ..models.finhub import HistoryPoint
-
-
-class BaseRequest(BaseModel):
-    model_config = {"arbitrary_types_allowed": True}
-
-
-class BaseResponse(BaseModel):
-    status: int
-    message: str
-    data: Any | None = None
-    extra: Any | None = None
-    model_config = {"arbitrary_types_allowed": True}
+from .base_req_resp import BaseResponse
 
 
 class StockQuotesResponse(BaseResponse):
