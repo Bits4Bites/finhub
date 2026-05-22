@@ -1,4 +1,4 @@
-from typing import Literal, Optional
+from typing import Literal
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -7,9 +7,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class LLMConfig(BaseSettings):
     vendor_name: str = ""
     api_tier: str = ""
-    api_key: Optional[str] = Field(default=None)
-    endpoint: Optional[str] = Field(default=None)
-    models: Optional[set[str]] = Field(default=None)
+    api_key: str = Field(default="")
+    endpoint: str = Field(default="")
+    models: set[str] = Field(default=[])
 
     @field_validator("models", mode="before")
     @classmethod
@@ -65,10 +65,10 @@ settings_finhub_proxy = FinHubProxySettings()
 
 
 class CompanyBriefInfo(BaseSettings):
-    symbol: Optional[str] = Field(default=None)
-    name: Optional[str] = Field(default=None)
-    sector: Optional[str] = Field(default=None)
-    market_cap: Optional[int] = Field(default=None)
+    symbol: str = Field(default="")
+    name: str = Field(default="")
+    sector: str = Field(default="")
+    market_cap: int = Field(default=0)
 
     model_config = SettingsConfigDict(
         nested_model_default_partial_update=True,
