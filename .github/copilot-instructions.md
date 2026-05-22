@@ -11,11 +11,11 @@ python server.py
 # Or with reload: RELOAD=true python server.py
 
 # Lint
-flake8 ./app
-black --check --diff ./app
+ruff check ./app
+ruff format --check --diff ./app
 
 # Format
-black ./app
+ruff format ./app
 
 # Run all tests
 pytest
@@ -70,5 +70,5 @@ Routers parse/validate input → call service functions → services fetch data 
 - **Models from Tickers**: Domain models in `app/models/finhub.py` accept a `yf.Ticker` as the first positional argument in `__init__` and extract fields from `ticker.info`.
 - **Async for AI, sync for data**: AI/LLM service functions are `async`. Stock data fetching functions are synchronous.
 - **Config via env files**: Use `pydantic-settings` with `.env` files rather than raw `os.environ`. Proxy config is in `finhub_proxy_config.env`.
-- **Linting rules**: Flake8 ignores E501 (line length), E203, W503, W504. Black uses 120 char line length (configured in `pyproject.toml`).
+- **Linting rules**: Ruff ignores E501 (line length), E203, W503, W504. Line length is 120 chars (configured in `pyproject.toml`).
 - **Semantic release**: The project uses `action-semrelease` for versioning. Commit messages should follow conventional commits format (e.g., `Add:`, `Fix:`).

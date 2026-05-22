@@ -1,6 +1,15 @@
-[tool.flake8]
-#max-line-length = 120
-ignore = ["E501", "E203", "W503", "W504"]
+[project]
+name = "finhub"
+requires-python = ">=3.12"
 
-[tool.black]
+[tool.ruff]
 line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+#ignore = ["E501", "E203", "W503", "W504"]
+ignore = ["E501"]
+select = ["E", "F", "I", "W", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
