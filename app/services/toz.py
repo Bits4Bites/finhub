@@ -1,5 +1,6 @@
 import yfinance as yf
-from app.models.finhub import StockQuote, HistoryPoint
+
+from app.models.finhub import HistoryPoint, StockQuote
 
 
 def get_gold_quote(currency: str = "USD") -> StockQuote | None:

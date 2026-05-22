@@ -5,10 +5,9 @@ import time
 from zoneinfo import ZoneInfo
 
 import cloudscraper
-from bs4 import BeautifulSoup
 import pandas as pd
-
-from playwright.async_api import async_playwright, Page, ViewportSize
+from bs4 import BeautifulSoup
+from playwright.async_api import Page, ViewportSize, async_playwright
 
 
 def extract_data_table_from_html(html_content: str, *, raw_cell_content=False, table_attr_filter=None) -> pd.DataFrame:

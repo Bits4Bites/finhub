@@ -1,8 +1,10 @@
+from typing import Any, Optional
+
 from pydantic import BaseModel
-from typing import Optional, Any
+
+from .. import config
 from ..models import finhub as models
 from ..models.finhub import HistoryPoint
-from .. import config
 
 
 class BaseRequest(BaseModel):

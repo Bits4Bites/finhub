@@ -6,15 +6,15 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 
+from .. import config
+from ..models import types
 from .data import (
     asx_index_yf_static_tickers,
     asx_sector_yf_static_tickers,
     us_index_yf_static_tickers,
-    us_sector_yf_static_tickers,
     us_industry_yf_static_tickers,
+    us_sector_yf_static_tickers,
 )
-from .. import config
-from ..models import types
 
 
 def country_to_iso2(country: str) -> str:

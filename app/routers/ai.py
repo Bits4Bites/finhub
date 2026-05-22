@@ -1,8 +1,8 @@
 from typing import Literal
 
-from fastapi import APIRouter, Query, Body, Header
+from fastapi import APIRouter, Body, Header, Query
 
-from ..config import settings_llm, LLMTaskConfigOverride
+from ..config import LLMTaskConfigOverride, settings_llm
 from ..models import finhub as models
 from ..schemas import ai as schemas_ai
 from ..services import ai as ai_service

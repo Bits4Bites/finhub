@@ -2,17 +2,16 @@ import logging
 import os
 import time
 from abc import ABC
-from typing import Optional, Literal
+from typing import Literal, Optional
 
-from azure.identity import get_bearer_token_provider, EnvironmentCredential
+from azure.identity import EnvironmentCredential, get_bearer_token_provider
+from google import genai
+from google.genai import types
 from google.genai.types import HttpOptions
+from openai import AsyncOpenAI
 from openai.types.chat import ChatCompletionUserMessageParam
 from openai.types.responses import WebSearchPreviewToolParam
 from openai.types.responses.web_search_preview_tool_param import UserLocation
-from openai import AsyncOpenAI
-
-from google import genai
-from google.genai import types
 from pydantic import BaseModel
 
 from ..config import LLMTaskConfig, LLMTaskConfigOverride
@@ -192,7 +191,7 @@ async def ai_exec_prompt_azure_openai(
     """
     client_fac = azureOpenAIClients.get(task_cfg.tier.upper())
     if client_fac is None:
-        raise EnvironmentError(f"Azure OpenAI client for tier '{task_cfg.tier}' is not configured.")
+        raise OSError(f"Azure OpenAI client for tier '{task_cfg.tier}' is not configured.")
     return await ai_exec_prompt_openai_client(
         client_fac.create_azure_openai_client(),
         task_cfg,
@@ -214,7 +213,7 @@ async def ai_exec_prompt_openrouter(
     """
     client_fac = openRouterClients.get(task_cfg.tier.upper())
     if client_fac is None:
-        raise EnvironmentError(f"OpenRouter client for tier '{task_cfg.tier}' is not configured.")
+        raise OSError(f"OpenRouter client for tier '{task_cfg.tier}' is not configured.")
     return await ai_exec_prompt_openai_client(
         client_fac.create_openrouter_client(),
         task_cfg,
@@ -236,7 +235,7 @@ async def ai_exec_prompt_openai(
     """
     client_fac = openAIClients.get(task_cfg.tier.upper())
     if client_fac is None:
-        raise EnvironmentError(f"OpenAI client for tier '{task_cfg.tier}' is not configured.")
+        raise OSError(f"OpenAI client for tier '{task_cfg.tier}' is not configured.")
     return await ai_exec_prompt_openai_client(
         client_fac.create_openai_client(),
         task_cfg,
@@ -259,7 +258,7 @@ async def ai_exec_prompt_gemini(
     start = time.perf_counter()
     client_fac = geminiClients.get(task_cfg.tier.upper())
     if client_fac is None:
-        raise EnvironmentError(f"Gemini client for tier '{task_cfg.tier}' is not configured.")
+        raise OSError(f"Gemini client for tier '{task_cfg.tier}' is not configured.")
     logging.info(
         "ai_exec_prompt_gemini('%s') - Using vendor/tier/model: %s/%s/%s - Prompt:",
         task_cfg.task_name,

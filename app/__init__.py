@@ -1,7 +1,7 @@
 import json
+import logging
 
 from . import config
-import logging
 
 
 class CustomLoggerConfig(logging.Logger):

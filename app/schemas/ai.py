@@ -1,8 +1,8 @@
 from typing import Optional
 
-from .finhub import BaseResponse, BaseRequest
 from ..models import finhub as models
 from ..services import ai as ai_services
+from .finhub import BaseRequest, BaseResponse
 
 
 class AIVendorsResponse(BaseResponse):

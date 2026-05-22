@@ -3,25 +3,25 @@ from __future__ import annotations
 import json
 import statistics
 from datetime import datetime, timezone
+from typing import Any, Optional
 
 import pandas as pd
-from pydantic import BaseModel
-from typing import Optional, Any
 import yfinance as yf
+from pydantic import BaseModel
 
-from .types import (
-    MarketCapType,
-    AssetType,
-    ETF_ASSET,
-    MUTUAL_FUND_ASSET,
-    CRYPTO_ASSET,
-    STANDARD_ASSET,
-    REIT_ASSET,
-    LIC_ASSET,
-    HYBRID_ASSET,
-    OTHER_ASSET,
-)
 from ..utils import finhub as finhub_utils
+from .types import (
+    CRYPTO_ASSET,
+    ETF_ASSET,
+    HYBRID_ASSET,
+    LIC_ASSET,
+    MUTUAL_FUND_ASSET,
+    OTHER_ASSET,
+    REIT_ASSET,
+    STANDARD_ASSET,
+    AssetType,
+    MarketCapType,
+)
 
 
 class AIVendorInfo(BaseModel):

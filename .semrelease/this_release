@@ -1,3 +1,6 @@
 # This file has been cleaned up post-releasing version 0.9.0.
 # Generate its content quickly using the following command:
 #   git log origin..HEAD | grep "^\s" > .semrelease/this_release
+#!VERSION=0.10.0
+- impr(lint): Migrate lint tool to ruff.
+- chore(deps): Update dependencies & bump Python version to >=3.12.

@@ -5,12 +5,13 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 import yfinance as yf
+
 from ..models import finhub as models
 from ..models.finhub import (
-    SymbolInfo,
-    StockQuote,
-    SymbolOverview,
     HistoryPoint,
+    StockQuote,
+    SymbolInfo,
+    SymbolOverview,
     UpcomingDividendEvent,
     UpcomingEarningsEvent,
 )

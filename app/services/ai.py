@@ -1,18 +1,18 @@
 import json
-from typing import Literal, Optional
-
-import yfinance as yf
 from datetime import datetime, timezone
-
+from typing import Literal, Optional
 from zoneinfo import ZoneInfo
 
+import yfinance as yf
 from bs4 import BeautifulSoup
 
-from . import ai_helper
-from ..models import finhub as models, types
-from ..config import settings_llm, LLMTaskConfigOverride
-from ..services import crawler as crawler_service, stock as stock_service
+from ..config import LLMTaskConfigOverride, settings_llm
+from ..models import finhub as models
+from ..models import types
+from ..services import crawler as crawler_service
+from ..services import stock as stock_service
 from ..utils import finhub as finhub_utils
+from . import ai_helper
 
 EVENT_ASX_NEW_LISTINGS = "ASX_NEW_LISTING_EVENTS"
 ANALYZE_ASX_LISTINGS = "ASX_LISTINGS_ANALYSIS"
@@ -59,7 +59,7 @@ async def _get_asx_new_listings() -> list[models.ListingEvent]:
     event_type = EVENT_ASX_NEW_LISTINGS
     prompt_template = prompts[event_type] if event_type in prompts else ""
     if not prompt_template:
-        raise EnvironmentError(f"Prompt template for {event_type} is missing or empty.")
+        raise OSError(f"Prompt template for {event_type} is missing or empty.")
 
     url = "https://www.asx.com.au/listings/upcoming-floats-and-listings"
     html_content = await crawler_service.fetch_webpage_content(url)
