@@ -4,10 +4,10 @@ import urllib.parse
 from fastapi import APIRouter, Query
 from fastapi.responses import RedirectResponse
 
-from app.schemas.finhub import ListingsResponse, UpcomingDividendsResponse, UpcomingEarningsResponse
+from app.schemas.events import ListingsResponse, UpcomingDividendsResponse, UpcomingEarningsResponse
 
 from ..config import settings_finhub_proxy
-from ..schemas import finhub as schemas
+from ..schemas import events as schemas
 from ..services import ai as ai_service
 from ..services import stock as stock_service
 from ..utils import finhub as finhub_utils
