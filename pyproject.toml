@@ -13,3 +13,10 @@ select = ["E", "F", "I", "W", "UP"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["app"]
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
