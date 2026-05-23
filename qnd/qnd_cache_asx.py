@@ -9,7 +9,7 @@ import yfinance as yf
 
 from app.models import finhub as models
 from app.services import crawler as crawler_service
-from app.services import stock as stock_service
+from app.services import stocks as stock_service
 
 
 def load_csv_with_pandas(file_path):

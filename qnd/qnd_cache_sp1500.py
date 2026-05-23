@@ -8,7 +8,7 @@ import logging
 import yfinance as yf
 
 from app.models import finhub as models
-from app.services import stock as stock_service
+from app.services import stocks as stock_service
 
 
 def read_file_as_single_string(file_path) -> str:

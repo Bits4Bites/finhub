@@ -11,7 +11,7 @@ from ..models import ai as ai_models
 from ..models import finhub as models
 from ..models import types
 from ..services import crawler as crawler_service
-from ..services import stock as stock_service
+from ..services import stocks as stock_service
 from ..utils import finhub as finhub_utils
 from . import ai_helper
 

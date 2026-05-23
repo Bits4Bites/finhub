@@ -2,7 +2,7 @@ from fastapi import APIRouter, Path, Query
 
 from .. import config
 from ..schemas import stocks as schemas
-from ..services import stock as stock_service
+from ..services import stocks as stock_service
 
 router = APIRouter(prefix="/stocks", tags=["stocks"])
 

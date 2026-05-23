@@ -9,7 +9,7 @@ from app.schemas.events import ListingsResponse, UpcomingDividendsResponse, Upco
 from ..config import settings_finhub_proxy
 from ..schemas import events as schemas
 from ..services import ai as ai_service
-from ..services import stock as stock_service
+from ..services import stocks as stock_service
 from ..utils import finhub as finhub_utils
 
 router = APIRouter(prefix="/events", tags=["events"])

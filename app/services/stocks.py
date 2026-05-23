@@ -519,7 +519,7 @@ async def analyse_dividend_event(
         overview=models.SymbolOverview(ticker),
         price=current_price,
         div_amount=div_amount,
-        div_yield=(div_amount / current_price) if current_price else None,
+        div_yield=(div_amount / current_price) if current_price else 0.0,
         ex_div_date=finhub_utils.yyyy_mm_dd_to_iso(ex_date, tz=tz),
     )
     result.ex_div_date_timestamp = int(datetime.fromisoformat(result.ex_div_date or "").timestamp())
@@ -584,7 +584,7 @@ async def analyse_dividend_event(
     result.rsi14 = int(finhub_utils.calc_rsi(history30d, 14).iloc[-1])
     result.avg_volume_30d = int(history30d["Volume"].mean())
     result.std_volume_30d = int(history30d["Volume"].std())
-    result.bid_ask_spread = finhub_utils.calc_bid_ask_spread_roll(history[-30:])
+    result.bid_ask_spread = finhub_utils.calc_bid_ask_spread_roll(history[-30:]) or 0.0
 
     result.trend_60d = finhub_utils.calc_trend_ema(history5y[-60:])
     market_ticker = finhub_utils.lookup_market_yf_static_ticker(ticker=ticker)

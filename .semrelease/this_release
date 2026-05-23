@@ -6,3 +6,4 @@
 - chore(deps): Update dependencies & bump Python version to >=3.12.
 - refactor: Reorganize models, routers, schemas and services.
 - add(test): Unit tests for toz service & router
+- add(test): Unit tests for stocks service & router
