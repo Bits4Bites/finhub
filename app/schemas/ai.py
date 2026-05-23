@@ -1,6 +1,6 @@
 from ..models import finhub as models
 from ..services import ai as ai_services
-from .finhub import BaseRequest, BaseResponse
+from .base_req_resp import BaseRequest, BaseResponse
 
 
 class AIVendorsResponse(BaseResponse):

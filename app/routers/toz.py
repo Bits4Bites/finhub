@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Query
 
-from ..schemas import finhub as schemas
+from ..schemas import stocks as schemas
 from ..services import toz as toz_service
 
 router = APIRouter(prefix="/toz", tags=["toz"])
