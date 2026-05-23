@@ -10,6 +10,8 @@ import yfinance as yf
 from pydantic import BaseModel
 
 from ..utils import finhub as finhub_utils
+from ..utils.json import normalize_json_str
+from .ai import BaseAIResult
 from .types import (
     CRYPTO_ASSET,
     ETF_ASSET,
@@ -22,14 +24,6 @@ from .types import (
     AssetType,
     MarketCapType,
 )
-
-
-class AIVendorInfo(BaseModel):
-    name: str = ""
-    tier_models: dict[str, list[str]] = {}  # map {tier -> list of models}
-
-
-# ----------------------------------------------------------------------#
 
 
 class SymbolBase(BaseModel):
@@ -393,30 +387,6 @@ class SymbolInfo(SymbolOverview):
 # ----------------------------------------------------------------------#
 
 
-def normalize_json_str(json_str: str) -> str:
-    if json_str.startswith("```json"):
-        json_str = json_str[len("```json") :].strip()
-    if json_str.endswith("```"):
-        json_str = json_str[: -len("```")].strip()
-    return json_str
-
-
-# ----------------------------------------------------------------------#
-
-
-class LLMResponse(BaseModel):
-    completion: str = ""
-    time_taken_ms: int = 0
-    tokens_prompt: int = 0
-    tokens_completion: int = 0
-    tokens_thought: int = 0
-    is_error: bool = False
-    error_msg: str | None = None
-
-
-# ----------------------------------------------------------------------#
-
-
 class EventBase(BaseModel):
     symbol: str
     exchange: str | None = None
@@ -589,12 +559,6 @@ def parse_new_listing_events_from_json(json_str: str, default_vals: dict[str, An
 
 
 # ----------------------------------------------------------------------#
-
-
-class BaseAIResult(BaseModel):
-    llm_error: bool = False
-    llm_error_msg: str | None = None
-    llm_response: str | None = None
 
 
 class DividendEventAnalysis(BaseAIResult):

@@ -1,3 +1,4 @@
+from ..models import ai as ai_models
 from ..models import finhub as models
 from ..services import ai as ai_services
 from .base_req_resp import BaseRequest, BaseResponse
@@ -8,10 +9,10 @@ class AIVendorsResponse(BaseResponse):
     Response schema, containing the list of available AI vendors and enabled API tiers and models.
 
     Attributes:
-        data (dict[str, models.AIVendorInfo]): A dictionary where the key is the vendor name, and the value is an object containing the vendor information, including supported API tiers and models.
+        data (dict[str, ai_models.AIVendorInfo]): A dictionary where the key is the vendor name, and the value is an object containing the vendor information, including supported API tiers and models.
     """
 
-    data: dict[str, models.AIVendorInfo] = {}
+    data: dict[str, ai_models.AIVendorInfo] = {}
 
 
 # ----------------------------------------------------------------------#

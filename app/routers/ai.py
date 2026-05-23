@@ -3,7 +3,7 @@ from typing import Literal
 from fastapi import APIRouter, Body, Header, Query
 
 from ..config import LLMTaskConfigOverride, settings_llm
-from ..models import finhub as models
+from ..models import ai as ai_models
 from ..schemas import ai as schemas_ai
 from ..services import ai as ai_service
 
@@ -19,10 +19,10 @@ async def get_vendors() -> schemas_ai.AIVendorsResponse:
     """
     Get the list of available AI vendors and supported API tiers and models.
     """
-    result: dict[str, models.AIVendorInfo] = {}
+    result: dict[str, ai_models.AIVendorInfo] = {}
     for v in settings_llm.llm_config.keys():
         v_name = v.upper()
-        result[v_name] = models.AIVendorInfo(name=v_name, tier_models={})
+        result[v_name] = ai_models.AIVendorInfo(name=v_name, tier_models={})
         for t in settings_llm.llm_config[v].keys():
             t_name = t.upper()
             result[v_name].tier_models[t_name] = list(settings_llm.llm_config[v][t].models or [])

@@ -15,7 +15,7 @@ from openai.types.responses.web_search_preview_tool_param import UserLocation
 from pydantic import BaseModel
 
 from ..config import LLMTaskConfig, LLMTaskConfigOverride
-from ..models.finhub import LLMResponse
+from ..models.ai import LLMResponse
 
 geminiClients: dict[str, "LLMClientFactory"] = {}
 openAIClients: dict[str, "LLMClientFactory"] = {}

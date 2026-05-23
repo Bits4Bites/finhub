@@ -7,6 +7,7 @@ import yfinance as yf
 from bs4 import BeautifulSoup
 
 from ..config import LLMTaskConfigOverride, settings_llm
+from ..models import ai as ai_models
 from ..models import finhub as models
 from ..models import types
 from ..services import crawler as crawler_service
@@ -37,7 +38,7 @@ async def ai_exec_prompt(
     thinking_level: ai_helper.ThinkingLevel = None,
     *,
     llm_config_override: LLMTaskConfigOverride = None,
-) -> models.LLMResponse:
+) -> ai_models.LLMResponse:
     """
     Executes a prompt using the appropriate LLM based on the task configuration.
     """
