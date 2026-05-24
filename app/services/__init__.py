@@ -1,27 +1,48 @@
 import logging
 
-from ..config import settings_llm_vendor
-from . import ai, ai_helper
-from .ai_helper import AzureOpenAIClientFactory, GeminiClientFactory, OpenAIClientFactory, OpenRouterClientFactory
+from ..config import (
+    AzureOpenAIClientFactory,
+    GeminiClientFactory,
+    OpenAIClientFactory,
+    OpenRouterClientFactory,
+    settings_llm_vendor,
+)
+from . import ai
 
 # initialize LLM clients based on configurations
 for vendor_name, api_tiers in list(settings_llm_vendor.vendors.items()):
+    v_name = vendor_name.upper()
     for api_tier, llm_config in list(api_tiers.items()):
-        if vendor_name.upper() == "GEMINI":
-            ai_helper.geminiClients[api_tier.upper()] = GeminiClientFactory(api_key=llm_config.api_key, timeout_sec=300)
-        if vendor_name.upper() == "AZURE_OPENAI" or vendor_name.upper() == "AZUREOPENAI":
-            ai_helper.azureOpenAIClients[api_tier.upper()] = AzureOpenAIClientFactory(
+        a_tier = api_tier.upper()
+        if v_name == "GEMINI":
+            if "GEMINI" not in settings_llm_vendor.client_factories:
+                settings_llm_vendor.client_factories["GEMINI"] = {}
+            settings_llm_vendor.client_factories["GEMINI"][a_tier] = GeminiClientFactory(
+                api_key=llm_config.api_key,
+                timeout_sec=300,
+            )
+        if v_name == "AZURE_OPENAI" or v_name == "AZUREOPENAI" or v_name == "AZURE OPENAI":
+            if "AZURE_OPENAI" not in settings_llm_vendor.client_factories:
+                settings_llm_vendor.client_factories["AZURE_OPENAI"] = {}
+            settings_llm_vendor.client_factories["AZURE_OPENAI"][a_tier] = AzureOpenAIClientFactory(
                 endpoint=llm_config.endpoint,
                 timeout_sec=300,
             )
-        if vendor_name.upper() == "OPENROUTER" or vendor_name.upper() == "OPEN_ROUTER":
-            ai_helper.openRouterClients[api_tier.upper()] = OpenRouterClientFactory(
+        if v_name == "OPENROUTER" or v_name == "OPEN_ROUTER" or v_name == "OPEN ROUTER":
+            if "OPEN_ROUTER" not in settings_llm_vendor.client_factories:
+                settings_llm_vendor.client_factories["OPEN_ROUTER"] = {}
+            settings_llm_vendor.client_factories["OPEN_ROUTER"][a_tier] = OpenRouterClientFactory(
                 api_key=llm_config.api_key,
                 endpoint=llm_config.endpoint,
                 timeout_sec=300,
             )
-        if vendor_name.upper() == "OPENAI":
-            ai_helper.openAIClients[api_tier.upper()] = OpenAIClientFactory(api_key=llm_config.api_key, timeout_sec=300)
+        if v_name == "OPENAI":
+            if "OPENAI" not in settings_llm_vendor.client_factories:
+                settings_llm_vendor.client_factories["OPENAI"] = {}
+            settings_llm_vendor.client_factories["OPENAI"][a_tier] = OpenAIClientFactory(
+                api_key=llm_config.api_key,
+                timeout_sec=300,
+            )
 
 
 # load prompt templates

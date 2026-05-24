@@ -1,7 +1,79 @@
+import time
+from abc import ABC
 from typing import Literal
 
+import openai
+from azure.identity import EnvironmentCredential, get_bearer_token_provider
+from google import genai
+from google.genai.types import HttpOptions
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class LLMClientFactory(ABC):
+    # @abstractmethod
+    def create_gemini_client(self) -> genai.Client:
+        pass
+
+    # @abstractmethod
+    def create_openai_client(self) -> openai.AsyncOpenAI:
+        pass
+
+    # @abstractmethod
+    def create_azure_openai_client(self) -> openai.AsyncOpenAI:
+        pass
+
+    # @abstractmethod
+    def create_openrouter_client(self) -> openai.AsyncOpenAI:
+        pass
+
+
+class GeminiClientFactory(LLMClientFactory):
+    def __init__(self, *, api_key: str, timeout_sec: float = 180):
+        timeout_sec = timeout_sec if timeout_sec > 0 else 30
+        self.client = genai.Client(api_key=api_key, http_options=HttpOptions(timeout=int(timeout_sec * 1000)))
+
+    def create_gemini_client(self) -> genai.Client:
+        return self.client
+
+
+class OpenRouterClientFactory(LLMClientFactory):
+    def __init__(self, *, endpoint: str, api_key: str, timeout_sec: float = 180):
+        timeout_sec = timeout_sec if timeout_sec > 0 else 30
+        self.client = openai.AsyncOpenAI(api_key=api_key, base_url=endpoint, project="FinHub", timeout=timeout_sec)
+
+    def create_openrouter_client(self) -> openai.AsyncOpenAI:
+        return self.client
+
+
+class OpenAIClientFactory(LLMClientFactory):
+    def __init__(self, *, api_key: str, timeout_sec: float = 180):
+        timeout_sec = timeout_sec if timeout_sec > 0 else 30
+        self.client = openai.AsyncOpenAI(api_key=api_key, project="FinHub", timeout=timeout_sec)
+
+    def create_openai_client(self) -> openai.AsyncOpenAI:
+        return self.client
+
+
+class AzureOpenAIClientFactory(LLMClientFactory):
+    def __init__(self, *, endpoint: str, timeout_sec: float = 180):
+        self.client = None
+        self.timeout_sec = timeout_sec if timeout_sec > 0 else 30
+        self.endpoint = endpoint
+        self.last_client_timestamp = 0
+
+    def create_azure_openai_client(self) -> openai.AsyncOpenAI:
+        now = time.time()
+        if now - self.last_client_timestamp > 1800:  # 30 mins
+            token_provider = get_bearer_token_provider(EnvironmentCredential(), "https://ai.azure.com/.default")
+            self.client = openai.AsyncOpenAI(
+                api_key=token_provider(), base_url=self.endpoint, project="FinHub", timeout=self.timeout_sec
+            )
+            self.last_client_timestamp = time.time()
+        return self.client
+
+
+# ----------------------------------------------------------------------#
 
 
 class LLMConfig(BaseSettings):
@@ -40,6 +112,7 @@ class LLMTaskConfigOverride(LLMTaskConfig):
 
 class LLMVendorSettings(BaseSettings):
     vendors: dict[str, dict[str, LLMConfig]] = Field(alias="FINHUB_LLM", default={})
+    client_factories: dict[str, dict[str, LLMClientFactory]] = {}
     model_config = SettingsConfigDict(
         env_file="ai_vendors.env",
         env_file_encoding="utf-8",
@@ -47,6 +120,39 @@ class LLMVendorSettings(BaseSettings):
         nested_model_default_partial_update=True,
         extra="ignore",
     )
+
+    def get_llm_client(
+        self, vendor: str, tier: str, timeout_sec: float = 180
+    ) -> genai.Client | openai.AsyncOpenAI | None:
+        v_name = vendor.upper()
+        a_tier = tier.upper()
+        match v_name:
+            case "AZUREOPENAI" | "AZURE OPENAI" | "AZURE_OPENAI":
+                return (
+                    self.client_factories["AZURE_OPENAI"][a_tier].create_azure_openai_client()
+                    if "AZURE_OPENAI" in self.client_factories and a_tier in self.client_factories["AZURE_OPENAI"]
+                    else None
+                )
+            case "OPENAI":
+                return (
+                    self.client_factories["OPENAI"][a_tier].create_openai_client()
+                    if "OPENAI" in self.client_factories and a_tier in self.client_factories["OPENAI"]
+                    else None
+                )
+            case "OPENROUTER" | "OPEN ROUTER" | "OPEN_ROUTER":
+                return (
+                    self.client_factories["OPEN_ROUTER"][a_tier].create_openrouter_client()
+                    if "OPEN_ROUTER" in self.client_factories and a_tier in self.client_factories["OPEN_ROUTER"]
+                    else None
+                )
+            case "GEMINI":
+                return (
+                    self.client_factories["GEMINI"][a_tier].create_gemini_client()
+                    if "GEMINI" in self.client_factories and a_tier in self.client_factories["GEMINI"]
+                    else None
+                )
+            case _:
+                return None
 
 
 class LLMTaskSettings(BaseSettings):
@@ -58,6 +164,13 @@ class LLMTaskSettings(BaseSettings):
         nested_model_default_partial_update=True,
         extra="ignore",
     )
+
+    # def get_llm_client(self, task_id, timeout_sec: float = 180) -> genai.Client | openai.AsyncOpenAI | None:
+    #     t_id = task_id.upper()
+    #     task_config = self.tasks.get(t_id)
+    #     return settings_llm_vendor.get_llm_client(task_config.vendor, task_config.tier, timeout_sec) \
+    #     if task_config
+    #     else None
 
 
 settings_llm_vendor = LLMVendorSettings()

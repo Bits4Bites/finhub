@@ -12,6 +12,7 @@ class LLMResponse(BaseModel):
     tokens_prompt: int = 0
     tokens_completion: int = 0
     tokens_thought: int = 0
+    tokens_total: int = 0
     is_error: bool = False
     error_msg: str | None = None
 
