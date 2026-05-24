@@ -38,18 +38,30 @@ class LLMTaskConfigOverride(LLMTaskConfig):
     pass
 
 
-class LLMSettings(BaseSettings):
-    llm_config: dict[str, dict[str, LLMConfig]] = Field(alias="FINHUB_LLM", default={})
-    llm_task_config: dict[str, LLMTaskConfig] = Field(alias="FINHUB_LLM_TASK", default={})
+class LLMVendorSettings(BaseSettings):
+    vendors: dict[str, dict[str, LLMConfig]] = Field(alias="FINHUB_LLM", default={})
     model_config = SettingsConfigDict(
-        env_file="ai_clients_config.env",
+        env_file="ai_vendors.env",
         env_file_encoding="utf-8",
         env_nested_delimiter="__",
         nested_model_default_partial_update=True,
+        extra="ignore",
     )
 
 
-settings_llm = LLMSettings()
+class LLMTaskSettings(BaseSettings):
+    tasks: dict[str, LLMTaskConfig] = Field(alias="FINHUB_LLM_TASK", default={})
+    model_config = SettingsConfigDict(
+        env_file="ai_tasks.env",
+        env_file_encoding="utf-8",
+        env_nested_delimiter="__",
+        nested_model_default_partial_update=True,
+        extra="ignore",
+    )
+
+
+settings_llm_vendor = LLMVendorSettings()
+settings_llm_task = LLMTaskSettings()
 
 
 class FinHubProxySettings(BaseSettings):
@@ -58,6 +70,7 @@ class FinHubProxySettings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file="finhub_proxy_config.env",
         env_file_encoding="utf-8",
+        extra="ignore",
     )
 
 

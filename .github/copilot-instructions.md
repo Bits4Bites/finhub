@@ -39,7 +39,7 @@ app/
 ├── models/         # Pydantic domain models (constructed from raw data like yfinance Tickers)
 ├── schemas/        # Pydantic request/response schemas for the API layer
 ├── utils/          # Shared utilities and helpers
-├── config.py       # Settings via pydantic-settings (env files: ai_clients_config.env, finhub_proxy_config.env)
+├── config.py       # Settings via pydantic-settings (env files: ai_vendors.env, finhub_proxy_config.env)
 resources/
 ├── indices/        # Static data files for market index constituents
 ├── prompts/        # LLM prompt templates
@@ -55,7 +55,7 @@ resources/
 ### AI/LLM integration
 
 - Multiple LLM vendors supported: Google Gemini, OpenAI, Azure OpenAI, OpenRouter
-- Configuration is nested env-based via `pydantic-settings` with `ai_clients_config.env`
+- Configuration is nested env-based via `pydantic-settings` with `ai_vendors.env`
 - Task-to-model mapping is configured via `FINHUB_LLM_TASK` settings
 - Prompt templates live in `resources/prompts/`
 

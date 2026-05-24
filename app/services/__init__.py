@@ -1,11 +1,11 @@
 import logging
 
-from ..config import settings_llm
+from ..config import settings_llm_vendor
 from . import ai, ai_helper
 from .ai_helper import AzureOpenAIClientFactory, GeminiClientFactory, OpenAIClientFactory, OpenRouterClientFactory
 
 # initialize LLM clients based on configurations
-for vendor_name, api_tiers in list(settings_llm.llm_config.items()):
+for vendor_name, api_tiers in list(settings_llm_vendor.vendors.items()):
     for api_tier, llm_config in list(api_tiers.items()):
         if vendor_name.upper() == "GEMINI":
             ai_helper.geminiClients[api_tier.upper()] = GeminiClientFactory(api_key=llm_config.api_key, timeout_sec=300)
