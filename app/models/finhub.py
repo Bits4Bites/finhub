@@ -9,18 +9,11 @@ import pandas as pd
 import yfinance as yf
 from pydantic import BaseModel
 
+from ..utils import asset as asset_utils
 from ..utils import finhub as finhub_utils
 from ..utils.json import normalize_json_str
 from .ai import BaseAIResult
 from .types import (
-    CRYPTO_ASSET,
-    ETF_ASSET,
-    HYBRID_ASSET,
-    LIC_ASSET,
-    MUTUAL_FUND_ASSET,
-    OTHER_ASSET,
-    REIT_ASSET,
-    STANDARD_ASSET,
     AssetType,
     MarketCapType,
 )
@@ -143,26 +136,12 @@ class SymbolOverview(SymbolBase):
         self.cap_size, self.market_index = finhub_utils.classify_market_cap(ticker)
 
         # detect asset type
-        match self.quote_type:
-            case "ETF":
-                self.asset_type = ETF_ASSET
-            case "MUTUALFUND":
-                self.asset_type = MUTUAL_FUND_ASSET
-            case "CRYPTOCURRENCY":
-                self.asset_type = CRYPTO_ASSET
-            case "EQUITY":
-                self.asset_type = STANDARD_ASSET
-                sector = self.sector.upper() if self.sector else ""
-                industry = self.industry.upper() if self.industry else ""
-                name = self.long_name or self.short_name or ""
-                if sector == "REAL ESTATE" and "REIT" in industry:
-                    self.asset_type = REIT_ASSET
-                elif "ASSET MANAGEMENT" in industry or "Investment" in name:
-                    self.asset_type = LIC_ASSET
-                elif "Note" in name or "Hybrid" in name:
-                    self.asset_type = HYBRID_ASSET
-            case "_":
-                self.asset_type = OTHER_ASSET
+        self.asset_type = asset_utils.detect_asset_type(
+            quote_type=self.quote_type,
+            sector=self.sector,
+            industry=self.industry,
+            corp_name=self.long_name or self.short_name,
+        )
 
 
 class SymbolDividend(BaseModel):

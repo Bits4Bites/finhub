@@ -9,6 +9,10 @@ from google.genai.types import HttpOptions
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+ALLOWED_QUOTE_TYPES = {"EQUITY", "ETF"}
+
+# ----------------------------------------------------------------------#
+
 
 class LLMClientFactory(ABC):
     # @abstractmethod
@@ -176,6 +180,8 @@ class LLMTaskSettings(BaseSettings):
 settings_llm_vendor = LLMVendorSettings()
 settings_llm_task = LLMTaskSettings()
 
+# ----------------------------------------------------------------------#
+
 
 class FinHubProxySettings(BaseSettings):
     proxy_mode: Literal["None", "Redirect", "Forward"] = Field(default="None", alias="FINHUB_PROXY_MODE")
@@ -188,6 +194,8 @@ class FinHubProxySettings(BaseSettings):
 
 
 settings_finhub_proxy = FinHubProxySettings()
+
+# ----------------------------------------------------------------------#
 
 
 class CompanyBriefInfo(BaseSettings):

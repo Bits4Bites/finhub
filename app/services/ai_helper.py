@@ -10,7 +10,7 @@ from openai.types.responses import WebSearchPreviewToolParam
 from openai.types.responses.web_search_preview_tool_param import UserLocation
 from pydantic import BaseModel
 
-from ..config import LLMTaskConfig, LLMTaskConfigOverride, settings_llm_vendor
+from ..config import LLMTaskConfig, LLMTaskConfigOverride, settings_llm_task, settings_llm_vendor
 from ..models.ai import LLMResponse
 
 ThinkingLevel = Literal["LOW", "MEDIUM", "HIGH"]
@@ -50,6 +50,7 @@ async def _exec_prompt_openai_client(
         # use response API with web search tool
         ai_response = await client.responses.create(
             model=task_cfg.model,
+            temperature=0.10,
             tools=[
                 WebSearchPreviewToolParam(
                     type="web_search_preview",
@@ -74,7 +75,7 @@ async def _exec_prompt_openai_client(
         completion = await client.chat.completions.create(
             # extra_headers={"X-OpenRouter-Title": "FinHub"},
             model=task_cfg.model,
-            temperature=0.0,
+            temperature=0.10,
             messages=[ChatCompletionUserMessageParam(content=prompt, role="user")],
         )
         end = time.perf_counter()
@@ -262,3 +263,25 @@ async def ai_exec_prompt(
             )
         case _:
             raise ValueError(f"Unsupported LLM vendor: {task_cfg.vendor}")
+
+
+async def ai_exec_task(
+    task_id: str,
+    prompt: str,
+    country: str = "",
+    *,
+    thinking_level: ThinkingLevel = None,
+    llm_config_override: LLMTaskConfigOverride = None,
+) -> LLMResponse:
+    """
+    Executes a task using the appropriate LLM based on the task configuration.
+    """
+    task_cfg = settings_llm_task.tasks.get(task_id)
+    if not task_cfg:
+        raise ValueError(f"LLM task configuration for task_id '{task_id}' not found.")
+    prompt_cfg = PromptConfig(
+        use_web_search=task_cfg.model.startswith("gpt-5"),
+        country=country,
+        thinking_level=thinking_level,
+    )
+    return await ai_exec_prompt(task_cfg, prompt, prompt_cfg, llm_config_override=llm_config_override)

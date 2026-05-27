@@ -17,6 +17,8 @@ from ..models.finhub import (
 )
 from ..services import crawler as crawler_service
 from ..utils import finhub as finhub_utils
+from ..utils.conv import to_yf_symbol_format
+from ..utils.yfutils import lookup_index_yf_static_symbol, lookup_peer_yf_static_symbol
 
 allowed_quote_types = {"EQUITY", "ETF"}
 
@@ -52,7 +54,7 @@ def get_symbol_info(symbol: str) -> SymbolInfo | None:
     Returns:
         SymbolInfo | None: A SymbolInfo object containing the information about the symbol, or None.
     """
-    yf_symbol = finhub_utils.to_yf_ticker(symbol)
+    yf_symbol = to_yf_symbol_format(symbol)
     ticker = yf.Ticker(yf_symbol)
     quote_type = ticker.info.get("quoteType")
     if quote_type in allowed_quote_types:
@@ -70,7 +72,7 @@ def get_symbol_overview(symbol: str) -> SymbolOverview | None:
     Returns:
         SymbolOverview | None: A SymbolOverview object containing the overview information about the symbol, or None.
     """
-    yf_symbol = finhub_utils.to_yf_ticker(symbol)
+    yf_symbol = to_yf_symbol_format(symbol)
     ticker = yf.Ticker(yf_symbol)
     quote_type = ticker.info.get("quoteType")
     if quote_type in allowed_quote_types:
@@ -88,7 +90,7 @@ def get_stock_quotes(symbols: list[str]) -> dict[str, StockQuote]:
     Returns:
         dict[str, StockQuote]: A dictionary mapping each symbol to its corresponding StockQuote object.
     """
-    yf_symbols = [finhub_utils.to_yf_ticker(s) for s in symbols]
+    yf_symbols = [to_yf_symbol_format(s) for s in symbols]
     tickers = yf.Tickers(" ".join(yf_symbols))
     quotes = {}
     for i in range(0, len(symbols)):
@@ -113,7 +115,7 @@ def get_stock_quote_at_date(symbol: str, date_str: str) -> HistoryPoint | None:
     Returns:
         HistoryPoint | None: A HistoryPoint object containing the quote information for the symbol at the specified date, or None.
     """
-    yf_symbol = finhub_utils.to_yf_ticker(symbol)
+    yf_symbol = to_yf_symbol_format(symbol)
     ticker = yf.Ticker(yf_symbol)
     quote_type = ticker.info.get("quoteType")
     if quote_type in allowed_quote_types:
@@ -504,7 +506,7 @@ async def analyse_dividend_event(
     Returns:
         models.DividendEventAnalysis: An object containing the analysis of the dividend event
     """
-    yf_ticker = finhub_utils.to_yf_ticker(symbol)
+    yf_ticker = to_yf_symbol_format(symbol)
     tz = finhub_utils.tz_from_yf_ticker(yf_ticker)
 
     ticker = yf.Ticker(yf_ticker) if ticker is None else ticker
@@ -587,14 +589,14 @@ async def analyse_dividend_event(
     result.bid_ask_spread = finhub_utils.calc_bid_ask_spread_roll(history[-30:]) or 0.0
 
     result.trend_60d = finhub_utils.calc_trend_ema(history5y[-60:])
-    market_ticker = finhub_utils.lookup_market_yf_static_ticker(ticker=ticker)
+    market_ticker = lookup_index_yf_static_symbol(ticker=ticker)
     if market_ticker is not None:
         mt = yf.Ticker(market_ticker)
         if "symbol" in mt.info:
             market_history60d = mt.history(period="61d", interval="1d", auto_adjust=False)[:-1]
             market_history60d = market_history60d.tz_convert(tz)
             result.market_trend_60d = finhub_utils.calc_trend_ema(market_history60d)
-    peer_ticker = finhub_utils.lookup_peer_yf_static_ticker(ticker=ticker)
+    peer_ticker = lookup_peer_yf_static_symbol(ticker=ticker)
     if peer_ticker is not None:
         pt = yf.Ticker(peer_ticker)
         if "symbol" in pt.info:

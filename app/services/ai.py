@@ -345,7 +345,7 @@ async def ai_analyze_dividend_event(
     Returns:
         models.DividendEventAnalysis: An object containing the analysis of the dividend event
     """
-    yf_ticker = finhub_utils.to_yf_ticker(symbol)
+    yf_ticker = finhub_utils.to_yf_symbol_format(symbol)
     ticker = yf.Ticker(yf_ticker)
     result = await stock_service.analyse_dividend_event(
         ticker=ticker, symbol=symbol, ex_date=ex_date, div_amount=div_amount
@@ -368,7 +368,7 @@ async def ai_analyze_dividend_event(
     prompt = (
         prompt_template.replace(
             "{TICKER}",
-            finhub_utils.to_yf_ticker(result.overview.symbol),
+            finhub_utils.to_yf_symbol_format(result.overview.symbol),
         )
         .replace("{INDUSTRY}", f"{result.overview.industry}")
         .replace("{TODAY}", today_utc.isoformat())

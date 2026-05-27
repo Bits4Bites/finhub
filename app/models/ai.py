@@ -21,3 +21,7 @@ class BaseAIResult(BaseModel):
     llm_error: bool = False
     llm_error_msg: str | None = None
     llm_response: str | None = None
+
+
+class AnalysisResult(BaseAIResult):
+    analysis: str = ""
