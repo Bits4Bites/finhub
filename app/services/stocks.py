@@ -17,8 +17,8 @@ from ..models.finhub import (
 )
 from ..services import crawler as crawler_service
 from ..utils import finhub as finhub_utils
-from ..utils.conv import to_yf_symbol_format
-from ..utils.yfutils import lookup_index_yf_static_symbol, lookup_peer_yf_static_symbol
+from ..utils.conv import to_yf_symbol_format, yyyymmdd_to_iso
+from ..utils.yfutils import lookup_index_yf_static_symbol, lookup_peer_yf_static_symbol, tz_from_yf_ticker
 
 allowed_quote_types = {"EQUITY", "ETF"}
 
@@ -259,10 +259,10 @@ async def get_upcoming_dividends_events(
     events = models.parse_upcoming_dividend_events_from_json(raw_data_json, default_vals)
     for event in events:
         event.symbol = f"{event.exchange}:{event.symbol}"
-        event.date = finhub_utils.yyyy_mm_dd_to_iso(event.date or "", tz=tz)
+        event.date = yyyymmdd_to_iso(event.date or "", tz=tz)
         event.timestamp = int(datetime.fromisoformat(event.date or "").timestamp())
         if event.payment_date:
-            event.payment_date = finhub_utils.yyyy_mm_dd_to_iso(event.payment_date, tz=tz)
+            event.payment_date = yyyymmdd_to_iso(event.payment_date, tz=tz)
     return events
 
 
@@ -416,7 +416,7 @@ async def get_upcoming_earnings_events(
     events = models.parse_upcoming_earnings_events_from_json(raw_data_json, default_vals)
     for event in events:
         event.symbol = f"{event.exchange}:{event.symbol}"
-        event.date = finhub_utils.yyyy_mm_dd_to_iso(event.date or "", tz)
+        event.date = yyyymmdd_to_iso(event.date or "", tz)
         event.timestamp = int(datetime.fromisoformat(event.date or "").timestamp())
     return events
 
@@ -507,9 +507,9 @@ async def analyse_dividend_event(
         models.DividendEventAnalysis: An object containing the analysis of the dividend event
     """
     yf_ticker = to_yf_symbol_format(symbol)
-    tz = finhub_utils.tz_from_yf_ticker(yf_ticker)
-
     ticker = yf.Ticker(yf_ticker) if ticker is None else ticker
+    tz = tz_from_yf_ticker(ticker)
+
     quote_type = ticker.info.get("quoteType")
     if quote_type == "NONE":
         return None  # no data available
@@ -522,7 +522,7 @@ async def analyse_dividend_event(
         price=current_price,
         div_amount=div_amount,
         div_yield=(div_amount / current_price) if current_price else 0.0,
-        ex_div_date=finhub_utils.yyyy_mm_dd_to_iso(ex_date, tz=tz),
+        ex_div_date=yyyymmdd_to_iso(ex_date, tz=tz),
     )
     result.ex_div_date_timestamp = int(datetime.fromisoformat(result.ex_div_date or "").timestamp())
 

@@ -1,3 +1,6 @@
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 import country_converter as coco
 import yfinance as yf
 
@@ -96,6 +99,9 @@ def to_yf_symbol_format(symbol: str) -> str:
 
     Returns:
         str: The stock symbol as a Yahoo Finance ticker.
+
+    Remarks:
+        Currently support only AU/US/VN markets.
     """
     symbol = symbol.upper()
     if ":" in symbol:
@@ -132,3 +138,25 @@ def number_to_human_format(num: int | float, precision: int = 2):
 
     formatted = f"{num:.{precision}f}".rstrip("0").rstrip(".")
     return f"{sign}{formatted}{suffixes[idx]}"
+
+
+def yyyymmdd_to_iso(yyyy_mm_dd: str, tz: ZoneInfo = None, tz_name: str = None) -> str | None:
+    """
+    Converts a date string in the format 'YYYY-MM-DD' to ISO format 'YYYY-MM-DD 00:00:00+hh:mm'.
+
+    Args:
+        yyyy_mm_dd (str): The date in the format YYYY-MM-DD
+        tz (ZoneInfo, optional): The timezone to use. Defaults to None.
+        tz_name (str, optional): The timezone name to use. Defaults to None.
+
+    Returns:
+        str: The date in ISO format, or None if the input date string is invalid.
+
+    Remarks:
+        If both tz and tz_name are provided, tz will be used.
+    """
+    tz = tz or (ZoneInfo(tz_name) if tz_name else ZoneInfo("UTC"))
+    try:
+        return datetime.strptime(yyyy_mm_dd, "%Y-%m-%d").replace(tzinfo=tz).isoformat(sep=" ", timespec="seconds")
+    except ValueError:
+        return None

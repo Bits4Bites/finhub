@@ -13,6 +13,8 @@ from ..models import types
 from ..services import crawler as crawler_service
 from ..services import stocks as stock_service
 from ..utils import finhub as finhub_utils
+from ..utils.conv import yyyymmdd_to_iso
+from ..utils.yfutils import classify_market_cap
 from . import ai_helper
 
 EVENT_ASX_NEW_LISTINGS = "ASX_NEW_LISTING_EVENTS"
@@ -139,7 +141,7 @@ async def ai_get_asx_new_listings() -> list[models.ListingEvent]:
     events = await _analyze_asx_listings(events)
     tz = ZoneInfo("Australia/Sydney")
     for event in events:
-        event.date = finhub_utils.yyyy_mm_dd_to_iso(event.date or "", tz)
+        event.date = yyyymmdd_to_iso(event.date or "", tz)
         event.timestamp = int(datetime.fromisoformat(event.date or "").timestamp())
     return events
 
@@ -387,7 +389,7 @@ async def ai_analyze_dividend_event(
         if result.market_trend_60d is not None
         else "N/A"
     )
-    cap_size, market_index = finhub_utils.classify_market_cap(ticker)
+    cap_size, market_index = classify_market_cap(ticker)
     cap_size_str = ""
     if cap_size is not None:
         cap_size_str = f"({cap_size}"

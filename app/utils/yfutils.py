@@ -1,7 +1,10 @@
+from zoneinfo import ZoneInfo
+
 import yfinance as yf
 
 from ..models.types import (
     AssetType,
+    MarketCapType,
 )
 from . import asset as asset_utils
 from .data import (
@@ -31,6 +34,30 @@ def detect_asset_type(ticker: yf.Ticker) -> AssetType:
     industry = info.get("industry", "")
     corp_name = info.get("longName", info.get("shortName", ""))
     return asset_utils.detect_asset_type(quote_type=quote_type, sector=sector, industry=industry, corp_name=corp_name)
+
+
+def tz_from_yf_ticker(ticker: yf.Ticker) -> ZoneInfo:
+    """
+    Gets the timezone for a Yahoo Finance ticker based on its exchange.
+
+    Args:
+        ticker (yf.Ticker): The Yahoo Finance ticker object.
+
+    Returns:
+        ZoneInfo: The timezone for the ticker's exchange. Defaults to America/New_York.
+    """
+    from .conv import normalize_exchange_code
+
+    exchange = ""
+    if ticker and ticker.info:
+        exchange = normalize_exchange_code(ticker.info.get("fullExchangeName", ticker.info.get("exchange", "")))
+
+    tz_map = {
+        "ASX": "Australia/Sydney",
+        "HOSE": "Asia/Ho_Chi_Minh",
+        "HNX": "Asia/Ho_Chi_Minh",
+    }
+    return ZoneInfo(tz_map.get(exchange, "America/New_York"))
 
 
 def is_in_index(*, index: str, ticker: yf.Ticker) -> bool:
@@ -138,3 +165,29 @@ def lookup_peer_yf_static_symbol(*, ticker: yf.Ticker) -> str | None:
             return us_sector_yf_static_tickers[sector]
 
     return None
+
+
+def classify_market_cap(ticker: yf.Ticker) -> tuple[MarketCapType | None, str | None]:
+    """
+    Classifies a stock's market capitalization size and identifies its market index.
+
+    Args:
+        ticker (yf.Ticker): The stock ticker to classify.
+
+    Returns:
+        tuple[MarketCapType | None, str | None]: The classified market cap size
+            and the market index the stock belongs to (if any).
+    """
+    from .conv import country_to_iso2, normalize_exchange_code
+
+    info = ticker.info if ticker else {}
+    country = country_to_iso2(info.get("country", info.get("region", "US")))
+    exchange = info.get("fullExchangeName", info.get("exchange", "")) or ""
+    exchange = normalize_exchange_code(exchange)
+    symbol = info.get("symbol", "")
+    if country != "US":
+        symbol = symbol.split(".")[0]
+    exchange_symbol = f"{exchange}:{symbol}"
+    market_cap = int(info.get("marketCap", 0))
+
+    return asset_utils.classify_market_cap(country=country, exchange_symbol=exchange_symbol, market_cap=market_cap)

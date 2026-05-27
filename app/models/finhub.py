@@ -10,8 +10,9 @@ import yfinance as yf
 from pydantic import BaseModel
 
 from ..utils import asset as asset_utils
-from ..utils import finhub as finhub_utils
+from ..utils.conv import country_to_iso2, normalize_exchange_code
 from ..utils.json import normalize_json_str
+from ..utils.yfutils import classify_market_cap, tz_from_yf_ticker
 from .ai import BaseAIResult
 from .types import (
     AssetType,
@@ -33,8 +34,8 @@ class SymbolBase(BaseModel):
             country=ticker.info.get("country", ticker.info.get("region", "US")),
             **data,
         )
-        self.country = finhub_utils.country_to_iso2(self.country)
-        self.exchange = finhub_utils.normalize_exchange_code(self.exchange)
+        self.country = country_to_iso2(self.country)
+        self.exchange = normalize_exchange_code(self.exchange)
 
 
 class HistoryPoint(BaseModel):
@@ -133,7 +134,7 @@ class SymbolOverview(SymbolBase):
         # self.operating_margins = float(self.operating_margins) if self.operating_margins is not None else None
         # self.profit_margins = float(self.profit_margins) if self.profit_margins is not None else None
         # self.market_cap = int(self.market_cap) if self.market_cap is not None else None
-        self.cap_size, self.market_index = finhub_utils.classify_market_cap(ticker)
+        self.cap_size, self.market_index = classify_market_cap(ticker)
 
         # detect asset type
         self.asset_type = asset_utils.detect_asset_type(
@@ -168,8 +169,7 @@ class SymbolDividend(BaseModel):
             last_dividend_value=ticker.info.get("lastDividendValue", 0),
             last_dividend_date=ticker.info.get("lastDividendDate", 0.0),
         )
-        symbol = ticker.info.get("symbol", "")
-        tz = finhub_utils.tz_from_yf_ticker(symbol)
+        tz = tz_from_yf_ticker(ticker)
         if self.ex_dividend_date:
             self.ex_dividend_date_str = (
                 datetime.fromtimestamp(self.ex_dividend_date, tz=UTC)

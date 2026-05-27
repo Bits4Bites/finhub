@@ -1,197 +1,23 @@
-from datetime import datetime
-from zoneinfo import ZoneInfo
-
 import numpy as np
 import pandas as pd
-import yfinance as yf
 
-from ..models import types
-from .asset import is_in_index
-from .conv import (
-    country_to_iso2,
-    normalize_exchange_code,
-)
-
-
-def tz_from_yf_ticker(yf_ticker: str) -> ZoneInfo:
-    """
-    Gets the timezone for a Yahoo Finance ticker.
-
-    Args:
-        yf_ticker (str): The ticker for the Yahoo Finance ticker (e.g. CBA.AX or APPL).
-
-    Returns:
-        ZoneInfo: The timezone for the Yahoo Finance ticker, default is America/New_York
-    """
-    yf_ticker = yf_ticker.upper()
-    if yf_ticker.endswith(".AX"):
-        return ZoneInfo("Australia/Sydney")
-    elif yf_ticker.endswith(".VN"):
-        return ZoneInfo("Asia/Ho_Chi_Minh")
-    else:
-        return ZoneInfo("America/New_York")
-
-
-def country_code_from_yf_ticker(yf_ticker: str) -> str:
-    """
-    Gets the country code for a Yahoo Finance ticker.
-
-    Args:
-        yf_ticker (str): The ticker for the Yahoo Finance ticker (e.g. CBA.AX or APPL).
-
-    Returns:
-        str: The country code for the Yahoo Finance ticker, default is US
-    """
-    yf_ticker = yf_ticker.upper()
-    if yf_ticker.endswith(".AX"):
-        return "AU"
-    elif yf_ticker.endswith(".VN"):
-        return "VN"
-    else:
-        return "US"
-
-
-def yyyy_mm_dd_to_iso(yyyy_mm_dd: str, tz: ZoneInfo = None, tz_name: str = None) -> str | None:
-    """
-    Converts a date string in the format 'YYYY-MM-DD' to ISO format 'YYYY-MM-DD 00:00:00+hh:mm'.
-
-    Args:
-        yyyy_mm_dd (str): The date in the format YYYY-MM-DD
-        tz (ZoneInfo, optional): The timezone to use. Defaults to None.
-        tz_name (str, optional): The timezone to use. Defaults to None.
-
-    Returns:
-        str: The date in ISO format, or None if the input date string is invalid.
-
-    Remarks:
-        If both tz and tz_name are provided, tz will be used.
-    """
-    tz = tz or (ZoneInfo(tz_name) if tz_name else ZoneInfo("UTC"))
-    try:
-        return datetime.strptime(yyyy_mm_dd, "%Y-%m-%d").replace(tzinfo=tz).isoformat(sep=" ", timespec="seconds")
-    except ValueError:
-        return None
-
-
-def classify_market_cap(
-    ticker: yf.Ticker = None, /, country: str = None, exchange_symbol: str = None, market_cap: int = None
-) -> tuple[types.MarketCapType | None, str | None]:
-    """
-    Classifies a stock market cap.
-
-    Args:
-        ticker (yf.Ticker): The stock ticker to classify.
-        country (str): The country to classify (ISO2 country code).
-        exchange_symbol (str): The exchange ticker to classify (format EXCHANGE:CODE).
-        market_cap (int): The market cap to classify.
-
-    Returns:
-        tuple[models.MarketCapType|None, str|None]: classified market cap and optional index
-
-    Remarks:
-        Supply either ticker or tuple[country, exchange_ticker, market_cap]. If both are supplied, ticker will be used.
-    """
-    cap_size: types.MarketCapType = None
-    market_index = None
-    if ticker is not None:
-        country = country_to_iso2(ticker.info.get("country", ticker.info.get("region", "US")))
-        exchange = normalize_exchange_code(ticker.info.get("fullExchangeName", ticker.info.get("exchange", "")))
-        symbol = ticker.info.get("symbol", "").upper()
-        if country != "US":
-            # e.g. AU or VN
-            symbol = symbol.split(".")[0]
-        exchange_symbol = f"{exchange}:{symbol}"
-        market_cap = int(ticker.info.get("marketCap", 0))
-
-    exchange_symbol = exchange_symbol or ""
-    market_cap = market_cap or 0
-    if country == "AU" or country == "US":
-        if market_cap >= 10_000_000_000:
-            cap_size = types.LARGE_CAP
-        elif market_cap >= 2_000_000_000:
-            cap_size = types.MID_CAP
-        elif market_cap >= 300_000_000:
-            cap_size = types.SMALL_CAP
-        elif market_cap >= 50_000_000:
-            cap_size = types.MICRO_CAP
-        else:
-            cap_size = types.NANO_CAP
-
-        for index in ["ASX50", "NASDAQ100", "SP500"]:
-            # if listed in any of these indexes, definitely Large
-            if is_in_index(index=index, symbol=exchange_symbol):
-                market_index = index
-                cap_size = types.LARGE_CAP
-                break
-        if is_in_index(index="SP400", symbol=exchange_symbol):
-            market_index = "SP400"
-            cap_size = types.MID_CAP
-        if is_in_index(index="SP600", symbol=exchange_symbol):
-            market_index = "SP600"
-            cap_size = types.SMALL_CAP
-
-        if market_index is None:
-            if is_in_index(index="ASX100", symbol=exchange_symbol):
-                # if in ASX100, move up 1 tier (mid -> large, small -> mid)
-                market_index = "ASX100"
-                if cap_size == types.MID_CAP:
-                    cap_size = types.LARGE_CAP
-                elif cap_size == types.SMALL_CAP:
-                    cap_size = types.MID_CAP
-            elif not is_in_index(index="ASX300", symbol=exchange_symbol):
-                # if outside ASX300, move down 1 tier (mid -> small, small -> micro)
-                if cap_size == types.SMALL_CAP:
-                    cap_size = types.MICRO_CAP
-                elif cap_size == types.MID_CAP:
-                    cap_size = types.SMALL_CAP
-
-        if market_index is None:
-            for index in ["ASX50", "ASX100", "ASX200", "ASX300"]:
-                if is_in_index(index=index, symbol=exchange_symbol):
-                    market_index = index
-                    break
-
-    if country == "VN":
-        if market_cap >= 10_000_000_000_000:
-            cap_size = types.LARGE_CAP
-        elif market_cap >= 1_000_000_000_000:
-            cap_size = types.MID_CAP
-        elif market_cap >= 100_000_000_000:
-            cap_size = types.SMALL_CAP
-        elif market_cap >= 10_000_000_000:
-            cap_size = types.MICRO_CAP
-        else:
-            cap_size = types.NANO_CAP
-
-        if exchange_symbol.startswith("HOSE:"):
-            if is_in_index(index="VN30", symbol=exchange_symbol):
-                # in VN30 --> Large
-                market_index = "VN30"
-                cap_size = types.LARGE_CAP
-            elif is_in_index(index="VN100", symbol=exchange_symbol):
-                # in VN100 --> Mid
-                market_index = "VN100"
-                cap_size = types.MID_CAP
-            else:
-                # down 1 level
-                if cap_size == types.MID_CAP:
-                    cap_size = types.SMALL_CAP
-                elif cap_size == types.LARGE_CAP:
-                    cap_size = types.MID_CAP
-
-        if exchange_symbol.startswith("HNX:"):
-            if is_in_index(index="HNX30", symbol=exchange_symbol):
-                market_index = "HN30"
-                if cap_size == types.SMALL_CAP:
-                    cap_size = types.MID_CAP
-            else:
-                # down 1 level
-                if cap_size == types.MID_CAP:
-                    cap_size = types.SMALL_CAP
-                elif cap_size == types.LARGE_CAP:
-                    cap_size = types.MID_CAP
-
-    return cap_size, market_index
+# def country_code_from_yf_ticker(yf_ticker: str) -> str:
+#     """
+#     Gets the country code for a Yahoo Finance ticker.
+#
+#     Args:
+#         yf_ticker (str): The ticker for the Yahoo Finance ticker (e.g. CBA.AX or APPL).
+#
+#     Returns:
+#         str: The country code for the Yahoo Finance ticker, default is US
+#     """
+#     yf_ticker = yf_ticker.upper()
+#     if yf_ticker.endswith(".AX"):
+#         return "AU"
+#     elif yf_ticker.endswith(".VN"):
+#         return "VN"
+#     else:
+#         return "US"
 
 
 def calc_rsi(data: pd.DataFrame, period: int = 14) -> pd.DataFrame:
