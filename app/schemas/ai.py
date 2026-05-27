@@ -1,7 +1,38 @@
-from ..models import ai as ai_models
+from ..models import ai as models_ai
 from ..models import finhub as models
-from ..services import ai as ai_services
+from ..services import ai as services_ai
+from ..services import msai_analyze_ticker as service_analyze_ticker
 from .base_req_resp import BaseRequest, BaseResponse
+
+
+class AnalysisResponse(BaseResponse):
+    """
+    Response schema, containing the analysis result from an AI model.
+
+    Attributes:
+        data (models.AnalysisResponse): An object containing the analysis response of the AI model.
+    """
+
+    data: models_ai.AnalysisResult | None = None
+
+
+# ----------------------------------------------------------------------#
+
+
+class AnalyzeTickerRequest(BaseRequest):
+    """
+    Request to analyze a stock ticker.
+
+    Attributes:
+        symbol (str): The stock symbol to analyze, accepting YF format (e.g. ABC.AX) or EXCHANGE:CODE (e.g. NASDAQ:XYZ).
+        intent (str): An optional intent to use for this analysis, which defines the angle of the analysis and the type of insights to return.
+    """
+
+    symbol: str = ""
+    intent: str = service_analyze_ticker.DEFAULT_INTENT
+
+
+# ----------------------------------------------------------------------#
 
 
 class AIVendorsResponse(BaseResponse):
@@ -12,7 +43,7 @@ class AIVendorsResponse(BaseResponse):
         data (dict[str, ai_models.AIVendorInfo]): A dictionary where the key is the vendor name, and the value is an object containing the vendor information, including supported API tiers and models.
     """
 
-    data: dict[str, ai_models.AIVendorInfo] = {}
+    data: dict[str, models_ai.AIVendorInfo] = {}
 
 
 # ----------------------------------------------------------------------#
@@ -44,7 +75,7 @@ class AnalyzePortfolioRequest(BaseRequest):
 
     current_allocation: list[models.HoldingTicker] = []
     country: str = ""
-    investor_theme: str = ai_services.DEFAULT_INVESTOR_THEME
+    investor_theme: str = services_ai.DEFAULT_INVESTOR_THEME
 
 
 class AnalyzePortfolioResponse(BaseResponse):

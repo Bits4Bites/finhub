@@ -1,14 +1,15 @@
 import yfinance as yf
-from models.types import LIC_ASSET, REIT_ASSET, STANDARD_ASSET
-from utils import yfutils
 
 from .. import config
 from ..models.ai import AnalysisResult
+from ..models.types import LIC_ASSET, REIT_ASSET, STANDARD_ASSET
 from ..services import ai_helper
-from ..utils import finhub as finhub_utils
+from ..utils import yfutils
+from ..utils.conv import country_to_iso2, normalize_exchange_code, to_yf_symbol_format
+from ..utils.yfutils import classify_market_cap
 
-DEFAULT_INTENT_ANALYZE_TICKER = (
-    "One-page analysis and Stock outlook with trend prediction for the next 2 weeks, 1 month, and 3 months. "
+DEFAULT_INTENT = (
+    "One-page analysis and Stock outlook with trend and price range prediction for the next 2 weeks, 1 month, and 3 months. "
     "Include confidence level (low/medium/high) for each outlook period."
 )
 
@@ -60,11 +61,13 @@ BUILD_PROMPT_TEMPLATE = (
 )
 
 
-def _build_analysis_prompt(*, ticker: yf.Ticker, intent: str = DEFAULT_INTENT_ANALYZE_TICKER) -> str:
+def _build_analysis_prompt(*, ticker: yf.Ticker, intent: str = DEFAULT_INTENT) -> str:
     """Build the meta-prompt that instructs the AI to produce a stock analysis prompt."""
-    asset_type = yfutils.detect_asset_type(ticker=ticker)
-
     info = ticker.info
+    asset_type = yfutils.detect_asset_type(ticker=ticker)
+    exchange = normalize_exchange_code(info.get("fullExchangeName") or info.get("exchange") or "")
+    cap_size, market_index = classify_market_cap(ticker)
+
     # Sector/Industry only relevant for EQUITY and REIT
     if asset_type in (STANDARD_ASSET, REIT_ASSET, LIC_ASSET):
         sector_industry = (
@@ -74,32 +77,31 @@ def _build_analysis_prompt(*, ticker: yf.Ticker, intent: str = DEFAULT_INTENT_AN
         sector_industry = ""
 
     return BUILD_PROMPT_TEMPLATE.format(
-        intent=intent if intent else DEFAULT_INTENT_ANALYZE_TICKER,
+        intent=intent if intent else DEFAULT_INTENT,
         ticker=info.get("symbol") or "(n/a)",
         name=info.get("longName") or info.get("shortName") or "(n/a)",
         asset_type=asset_type,
         sector_industry=sector_industry,
-        exchange=info.get("fullExchangeName") or info.get("exchange") or "(n/a)",
-        market_cap_tier='_market_cap_tier(info.get("marketCap"), country)',
+        exchange=exchange,
+        market_cap_tier=(
+            f"{cap_size} ({market_index})" if cap_size and market_index else f"{cap_size}" if cap_size else "(n/a)"
+        ),
     )
 
 
-async def ai_analyze_ticker(
-    symbol: str, *, country: str = "", intent: str = DEFAULT_INTENT_ANALYZE_TICKER
-) -> AnalysisResult | None:
+async def ai_analyze_ticker(symbol: str, *, intent: str = DEFAULT_INTENT) -> AnalysisResult | None:
     """
     Analyze a ticker using AI.
 
     Args:
         symbol (str): The stock symbol to analyze, accepting YF format (e.g. ABC.AX) or EXCHANGE:CODE (e.g. NASDAQ:XYZ).
-        country (str, optional): The country code, used for web search.
-        intent (str, optional): The intent to use for this analysis. Defaults to DEFAULT_INTENT_ANALYZE_TICKER.
+        intent (str, optional): The intent to use for this analysis. Defaults to DEFAULT_INTENT.
 
     Returns:
         AnalysisResult | None: A AnalysisResult object containing the analysis, or None.
     """
     # Step 1: check if the ticker is valid
-    yf_ticker = finhub_utils.to_yf_symbol_format(symbol)
+    yf_ticker = to_yf_symbol_format(symbol)
     ticker = yf.Ticker(yf_ticker)
     quote_type = ticker.info.get("quoteType")
     if quote_type not in config.ALLOWED_QUOTE_TYPES:
@@ -108,6 +110,7 @@ async def ai_analyze_ticker(
     # Step 2: use AI to build the ready-to-use prompt to analyze the ticker with the intent
     build_prompt_input = _build_analysis_prompt(ticker=ticker, intent=intent)
 
+    country = country_to_iso2(ticker.info.get("country", ""))
     llm_result = await ai_helper.ai_exec_task("ANALYZE_TICKER_BUILD_PROMPT", build_prompt_input, country)
     if llm_result.is_error:
         return AnalysisResult(llm_error=True, llm_error_msg=llm_result.error_msg)

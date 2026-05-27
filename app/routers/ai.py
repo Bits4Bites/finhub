@@ -3,9 +3,10 @@ from typing import Literal
 from fastapi import APIRouter, Body, Header, Query
 
 from ..config import LLMTaskConfigOverride, settings_llm_vendor
-from ..models import ai as ai_models
+from ..models import ai as models_ai
 from ..schemas import ai as schemas_ai
-from ..services import ai as ai_service
+from ..services import ai as services_ai
+from ..services import msai_analyze_ticker as service_analyze_ticker
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 
@@ -19,10 +20,10 @@ async def get_vendors() -> schemas_ai.AIVendorsResponse:
     """
     Get the list of available AI vendors and supported API tiers and models.
     """
-    result: dict[str, ai_models.AIVendorInfo] = {}
+    result: dict[str, models_ai.AIVendorInfo] = {}
     for v in settings_llm_vendor.vendors.keys():
         v_name = v.upper()
-        result[v_name] = ai_models.AIVendorInfo(name=v_name, tier_models={})
+        result[v_name] = models_ai.AIVendorInfo(name=v_name, tier_models={})
         for t in settings_llm_vendor.vendors[v].keys():
             t_name = t.upper()
             result[v_name].tier_models[t_name] = list(settings_llm_vendor.vendors[v][t].models or [])
@@ -67,7 +68,7 @@ async def analyse_dividend_event(
             tier=use_ai_tier.upper(),
             model=use_ai_model,
         )
-    result = await ai_service.ai_analyze_dividend_event(
+    result = await services_ai.ai_analyze_dividend_event(
         symbol=symbol,
         ex_date=ex_date,
         div_amount=div_amount,
@@ -117,11 +118,25 @@ async def analyze_portfolio(
             tier=use_ai_tier.upper(),
             model=use_ai_model,
         )
-    result = await ai_service.ai_analyze_portfolio(
+    result = await services_ai.ai_analyze_portfolio(
         portfolio=portfolio.current_allocation,
         country=portfolio.country,
-        investor_theme=portfolio.investor_theme or ai_service.DEFAULT_INVESTOR_THEME,
+        investor_theme=portfolio.investor_theme or services_ai.DEFAULT_INVESTOR_THEME,
         template=template,
         llm_config_override=llm_config_override,
     )
     return schemas_ai.AnalyzePortfolioResponse(status=200, message="ok", data=result)
+
+
+@router.post(
+    "/analyze_ticker",
+    response_model=schemas_ai.AnalysisResponse,
+    response_model_exclude_none=True,
+)
+async def analyze_ticker(
+    req: schemas_ai.AnalyzeTickerRequest = Body(description="The analyze request."),
+) -> schemas_ai.AnalysisResponse:
+    result = await service_analyze_ticker.ai_analyze_ticker(symbol=req.symbol, intent=req.intent)
+    if not result:
+        return schemas_ai.AnalysisResponse(status=400, message="Invalid stock symbol or analysis failed")
+    return schemas_ai.AnalysisResponse(status=200, message="ok", data=result)

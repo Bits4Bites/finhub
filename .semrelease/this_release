@@ -7,3 +7,4 @@
 - refactor: Reorganize models, routers, schemas and services.
 - add(test): Unit tests for toz service & router
 - add(test): Unit tests for stocks service & router
+- feat(api): Add API to analyze a given stock.
