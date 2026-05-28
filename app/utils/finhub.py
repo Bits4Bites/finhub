@@ -1,24 +1,6 @@
 import numpy as np
 import pandas as pd
 
-# def country_code_from_yf_ticker(yf_ticker: str) -> str:
-#     """
-#     Gets the country code for a Yahoo Finance ticker.
-#
-#     Args:
-#         yf_ticker (str): The ticker for the Yahoo Finance ticker (e.g. CBA.AX or APPL).
-#
-#     Returns:
-#         str: The country code for the Yahoo Finance ticker, default is US
-#     """
-#     yf_ticker = yf_ticker.upper()
-#     if yf_ticker.endswith(".AX"):
-#         return "AU"
-#     elif yf_ticker.endswith(".VN"):
-#         return "VN"
-#     else:
-#         return "US"
-
 
 def calc_rsi(data: pd.DataFrame, period: int = 14) -> pd.DataFrame:
     """
