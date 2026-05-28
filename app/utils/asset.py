@@ -1,22 +1,11 @@
 from .. import config
 from ..models import types
-from ..models.types import (
-    CRYPTO_ASSET,
-    ETF_ASSET,
-    HYBRID_ASSET,
-    LIC_ASSET,
-    MUTUAL_FUND_ASSET,
-    OTHER_ASSET,
-    REIT_ASSET,
-    STANDARD_ASSET,
-    AssetType,
-)
-from .conv import country_to_iso2, to_exch_symb_format
+from . import conv
 
 
 def detect_asset_type(
     *, quote_type: str = None, sector: str = None, industry: str = None, corp_name: str = None
-) -> AssetType:
+) -> types.AssetType:
     """
     Detects the asset type based on ticker info (quote_type, sector, industry, and corporate name).
 
@@ -36,22 +25,22 @@ def detect_asset_type(
 
     match quote_type:
         case "ETF":
-            return ETF_ASSET
+            return types.ETF_ASSET
         case "MUTUALFUND":
-            return MUTUAL_FUND_ASSET
+            return types.MUTUAL_FUND_ASSET
         case "CRYPTOCURRENCY":
-            return CRYPTO_ASSET
+            return types.CRYPTO_ASSET
         case "EQUITY":
-            asset_type = STANDARD_ASSET
+            asset_type = types.STANDARD_ASSET
             if sector == "REAL ESTATE" and "REIT" in industry:
-                asset_type = REIT_ASSET
+                asset_type = types.REIT_ASSET
             elif "ASSET MANAGEMENT" in industry or "INVESTMENT" in corp_name:
-                asset_type = LIC_ASSET
+                asset_type = types.LIC_ASSET
             elif "NOTE" in corp_name or "HYBRID" in corp_name:
-                asset_type = HYBRID_ASSET
+                asset_type = types.HYBRID_ASSET
             return asset_type
 
-    return OTHER_ASSET
+    return types.OTHER_ASSET
 
 
 def is_in_index(*, index: str, symbol: str) -> bool:
@@ -85,8 +74,8 @@ def classify_market_cap(
     cap_size: types.MarketCapType = None
     market_index = None
 
-    country = country_to_iso2(country)
-    exchange_symbol = to_exch_symb_format(symbol=exchange_symbol)
+    country = conv.country_to_iso2(country)
+    exchange_symbol = conv.to_exch_symb_format(symbol=exchange_symbol)
 
     if country == "AU" or country == "US":
         if market_cap >= 10_000_000_000:

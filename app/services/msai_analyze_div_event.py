@@ -1,12 +1,12 @@
 import yfinance as yf
 
 from .. import config
-from ..models.ai import AnalysisResult
-from ..models.types import LIC_ASSET, REIT_ASSET, STANDARD_ASSET
+from ..models import ai as models_ai
+from ..models import event as models_event
+from ..models import types
 from ..services import ai_helper
-from ..utils import yfutils
-from ..utils.conv import country_to_iso2, normalize_exchange_code, to_yf_symbol_format
-from ..utils.yfutils import classify_market_cap
+from ..services import stock as services_stock
+from ..utils import conv, yfutils
 
 DEFAULT_INTENT = (
     "One-page analysis and Stock outlook with trend and price range prediction for the next 2 weeks, 1 month, and 3 months. "
@@ -14,50 +14,128 @@ DEFAULT_INTENT = (
 )
 
 BUILD_PROMPT_TEMPLATE = (
-    "You are an expert financial analyst and prompt engineer.\n"
+    "You are an expert financial analyst and prompt engineer specialising in dividend strategies.\n"
     "\n"
-    "Your task is to write a ready-to-execute prompt that instructs a premium AI model to perform a stock analysis,\n"
-    "adapt to the following intent: {intent}\n"
+    "Your task is to write a detailed, ready-to-execute prompt that instructs a premium AI model\n"
+    "to analyze a dividend event and recommend one of three strategies:\n"
+    '- "Dividend Capture": buy before ex-div date to capture the dividend, then exit\n'
+    '- "Post-Ex-Div Discount": buy after ex-div date at a depressed price, hold for price recovery\n'
+    '- "N/A": insufficient data or conditions do not favour either strategy\n'
     "\n"
-    "## Stock to analyze\n"
-    "- Ticker:     {ticker}\n"
-    "- Name:       {name}\n"
-    "- Asset type: {asset_type}\n"
-    "{sector_industry}"
-    "- Exchange:   {exchange}\n"
-    "- Market cap: {market_cap_tier}\n"
+    "## Dividend event details\n"
+    "- Ticker:              {{TICKER}}\n"
+    "- Company name:        {{NAME}}\n"
+    "- Dividend amount:     {{DIV_AMOUNT}}\n"
+    "- Dividend type:       {{DIV_TYPE}}\n"
+    "- Declared date:       {{DECLARED_DATE}}\n"
+    "- Ex-dividend date:    {{EX_DIV_DATE}}\n"
+    "- Record date:         {{RECORD_DATE}}\n"
+    "- Payment date:        {{PAYMENT_DATE}}\n"
+    "- Current price:       {{CURRENT_PRICE}}\n"
+    "- Dividend yield:      {{DIV_YIELD}}\n"
+    "- Quote type:          {{QUOTE_TYPE}}\n"
+    "- Sector / industry:   {{SECTOR}}\n"
+    "- Market cap tier:     {{MARKET_CAP_TIER}}\n"
+    "\n"
+    "## User context\n"
+    "- Target market:       {{MARKET}}\n"
+    "- Tax residency:       {{TAX_RESIDENCY}}\n"
+    "- User intent:         {{USER_INTENT}}\n"
     "\n"
     "## Your instructions\n"
-    "Adapt the analysis prompt to the intent, and the nature of this specific asset:\n"
-    "- For ETFs/funds: focus on holdings, expense ratio, tracking error, liquidity\n"
-    "- For REITs: focus on FFO, AFFO, occupancy, dividend sustainability, debt structure\n"
-    "- For foreign equities: include currency risk, local regulations, geopolitical factors\n"
-    "- For small/micro-cap: flag liquidity risk, limited analyst coverage, higher volatility\n"
-    "- For sector-specific equities: include the key metrics that matter most for that sector\n"
+    "Write a prompt that instructs the premium model to:\n"
     "\n"
-    "Write a ready-to-execute prompt that tells the premium model to:\n"
-    "1. Use its web search capability to gather current, real data on the stock\n"
-    "2. Structure the analysis clearly with defined sections\n"
-    "3. Support every claim with data (numbers, dates, sources)\n"
-    "4. Conclude with a balanced, evidence-based investment view\n"
+    "1. Use web search to gather all data required for a rigorous dividend strategy analysis:\n"
+    "   - Historical ex-div price drop behaviour for this ticker (last 4–8 dividend cycles)\n"
+    "   - Typical price recovery pattern and timeframe post ex-div\n"
+    "   - Current short interest % and any recent changes\n"
+    "   - News sentiment in the last 30 days (earnings, guidance, macro headwinds, analyst changes)\n"
+    "   - Any upcoming events that could disrupt recovery (earnings, FDA decisions, index rebalancing)\n"
+    "   - Tax treatment of this dividend for {{TAX_RESIDENCY}} (e.g. franking credits on ASX,\n"
+    "     qualified vs ordinary on US markets, withholding tax for foreign investors)\n"
     "\n"
-    "## The prompt must instruct the premium model to cover (adapted to intent and asset type):\n"
-    "- Detailed/Brief asset overview (business model or fund objective, sector, market cap tier)\n"
-    "- Recent financial performance (metrics relevant to this asset type)\n"
-    "- Valuation (multiples relevant to this asset type vs. appropriate peers)\n"
-    "- Growth catalysts and risks (including country/currency risk if applicable)\n"
-    "- Recent news and sentiment (last 30 days)\n"
-    "- Analyst or fund consensus and price/NAV targets where available\n"
-    "- Stock outlook with trend prediction for the next 2 weeks, 1 month, and 3 months\n"
-    "- Confidence level (low/medium/high) for each outlook period\n"
-    "- A final investment summary (bullish / neutral / bearish case)"
+    "2. Compute or estimate the following fields with full working shown before the JSON output:\n"
+    "   - sent_score: sentiment score from -1.0 (very negative) to +1.0 (very positive),\n"
+    "     derived from news tone, analyst moves, and short interest direction\n"
+    "   - recov_prob_adj: probability (0.00–1.00) that price recovers to pre-ex-div level\n"
+    "     within a reasonable timeframe, adjusted for current sentiment and market conditions\n"
+    "   - eff_div: effective dividend yield net of tax for {{TAX_RESIDENCY}},\n"
+    "     e.g. if franking credits apply, gross up accordingly; if withholding tax applies, net down\n"
+    "   - recovery_days: estimated min–max calendar days for price to recover post ex-div,\n"
+    '     based on historical patterns; use "N/A" if data is insufficient\n'
+    "   - est_drop_price: estimated price range immediately after ex-div date (min–max);\n"
+    '     use "N/A" if insufficient data\n'
+    "   - est_recovery_price: estimated price range once recovery is complete (min–max);\n"
+    '     use "N/A" if insufficient data\n'
+    "   - expected_pl: expected P&L per share for the recommended strategy, net of dividend received\n"
+    "     or discount captured, expressed as a dollar amount (can be negative)\n"
+    "   - confidence: integer 0–100 reflecting overall confidence in the recommendation,\n"
+    "     penalised for data gaps, high short interest, upcoming risk events, or low liquidity\n"
+    "   - risk: integer 0–100 reflecting overall risk level of the recommended strategy\n"
+    "     (0 = minimal risk, 100 = extreme risk)\n"
+    "\n"
+    "3. Apply the following decision logic to select strategy:\n"
+    '   - "Dividend Capture" if ALL of these hold:\n'
+    "       * eff_div is meaningful after tax and transaction costs\n"
+    "       * sent_score >= 0.1 (neutral to positive sentiment)\n"
+    "       * recov_prob_adj is not a concern for this strategy (capture is pre-ex-div)\n"
+    "       * No major adverse events between now and ex-div date\n"
+    "       * Liquidity is sufficient to enter and exit cleanly\n"
+    '   - "Post-Ex-Div Discount" if ALL of these hold:\n'
+    "       * Historical drop is typically larger than dividend amount (market overreacts)\n"
+    "       * recov_prob_adj >= 0.60\n"
+    "       * sent_score >= 0.0 (at minimum neutral)\n"
+    "       * recovery_days is within a timeframe acceptable for a short-term trade\n"
+    "       * No major adverse events likely to suppress recovery\n"
+    '   - "N/A" if:\n'
+    "       * Insufficient historical data to estimate drop or recovery\n"
+    "       * sent_score < 0.0 (negative sentiment outweighs dividend opportunity)\n"
+    "       * recov_prob_adj < 0.60 and strategy would be Post-Ex-Div\n"
+    "       * A material risk event falls within the capture or recovery window\n"
+    "       * confidence < 40 after penalisation\n"
+    "\n"
+    "4. Adapt analysis to asset type and market:\n"
+    "   - For REITs: note that distributions may be treated as income not capital gains\n"
+    "   - For ETFs: note that ex-div drop is mechanical and recovery may be slower\n"
+    "   - For ASX stocks: factor in franking credits for Australian tax residents\n"
+    "   - For small/micro-cap: heavily penalise confidence due to liquidity and volatility risk\n"
+    "   - For special/one-off dividends: note that price behaviour may differ from regular dividends\n"
+    "\n"
+    "5. Bias the analysis toward {{USER_INTENT}} - if the user has a stated lean,\n"
+    "   the premium model should validate or refute it with evidence rather than ignoring it.\n"
+    "\n"
+    "## Output format rules for the premium model\n"
+    "Instruct the premium model to:\n"
+    "- First show all working, calculations, and web search findings as narrative analysis\n"
+    "- Then output ONLY the following JSON block as the final section, with no text after it:\n"
+    "\n"
+    "```json\n"
+    "{\n"
+    '  "search_summary": "2–3 sentences covering news tone, short interest %, key events, and any data gaps",\n'
+    '  "strategy": "Dividend Capture|Post-Ex-Div Discount|N/A",\n'
+    '  "reasoning": "Key drivers and any failed criteria (max 3 sentences)",\n'
+    '  "sent_score": 0.00,\n'
+    '  "recov_prob_adj": 0.00,\n'
+    '  "eff_div": 0.0000,\n'
+    '  "recovery_days": "min-max round up, or N/A",\n'
+    '  "est_drop_price": "min-max or N/A",\n'
+    '  "est_recovery_price": "min-max or N/A",\n'
+    '  "expected_pl": 0.000,\n'
+    '  "confidence": 0,\n'
+    '  "risk": 0,\n'
+    '  "risk_factors": ["list only factors that apply"]\n'
+    "}\n"
+    "```\n"
+    "- All numeric fields must be numbers, not strings (except fields explicitly noted as strings)\n"
+    '- "recovery_days", "est_drop_price", and "est_recovery_price" must be quoted strings\n'
+    '  (e.g. "3-7", "N/A") since they represent ranges, not single values\n'
+    '- "risk_factors" must only list factors that materially apply - do not pad with generic risks\n'
+    "- Do not wrap the JSON in any explanation after the closing brace\n"
     "\n"
     "## Output format\n"
-    "Return ONLY the ready-to-execute prompt. No preamble, no explanation, no commentary.\n"
-    "The prompt must be self-contained, the premium model will receive it with no other context.\n"
-    "The prompt must instruct the premium model to format the response in Markdown, "
-    "and use the hyphen character (-) instead of em-dash (\u2014) throughout.\n"
-    "The premium model is NOT to include any suggested follow-up questions."
+    "Return ONLY the ready-to-use prompt. No preamble, no explanation, no commentary.\n"
+    "The prompt must be self-contained - the premium model will receive it with no other context.\n"
+    "The prompt must instruct the premium model to use the hyphen (-) instead of em-dash (\u2014) throughout."
 )
 
 
@@ -65,11 +143,11 @@ def _build_analysis_prompt(*, ticker: yf.Ticker, intent: str = DEFAULT_INTENT) -
     """Build the meta-prompt that instructs the AI to produce a stock analysis prompt."""
     info = ticker.info
     asset_type = yfutils.detect_asset_type(ticker=ticker)
-    exchange = normalize_exchange_code(info.get("fullExchangeName") or info.get("exchange") or "")
-    cap_size, market_index = classify_market_cap(ticker)
+    exchange = conv.normalize_exchange_code(info.get("fullExchangeName") or info.get("exchange") or "")
+    cap_size, market_index = yfutils.classify_market_cap(ticker)
 
     # Sector/Industry only relevant for EQUITY and REIT
-    if asset_type in (STANDARD_ASSET, REIT_ASSET, LIC_ASSET):
+    if asset_type in (types.STANDARD_ASSET, types.REIT_ASSET, types.LIC_ASSET):
         sector_industry = (
             f"- Sector:     {info.get('sector') or '(n/a)'}\n- Industry:   {info.get('industry') or '(n/a)'}\n"
         )
@@ -89,19 +167,36 @@ def _build_analysis_prompt(*, ticker: yf.Ticker, intent: str = DEFAULT_INTENT) -
     )
 
 
-async def ai_analyze_ticker(symbol: str, *, intent: str = DEFAULT_INTENT) -> AnalysisResult | None:
+async def ai_analyze_div_event(
+    *,
+    symbol: str,
+    ex_date: str,
+    div_amount: float,
+    intent: str = DEFAULT_INTENT,
+) -> models_event.DividendEventAnalysis | None:
     """
-    Analyze a ticker using AI.
+    Analyze a dividend event using AI assistance.
 
     Args:
         symbol (str): The stock symbol to analyze, accepting YF format (e.g. ABC.AX) or EXCHANGE:CODE (e.g. NASDAQ:XYZ).
+        ex_date (str): Ex-dividend date in ISO format (YYYY-MM-DD).
+        div_amount (float): Dividend amount per share.
         intent (str, optional): The intent to use for this analysis. Defaults to DEFAULT_INTENT.
 
     Returns:
-        AnalysisResult | None: A AnalysisResult object containing the analysis, or None.
+        models_ai.AnalysisResult | None: A models_ai.AnalysisResult object containing the analysis, or None.
     """
+    # Step 1: ticker validation & analysis based on historical data
+    yf_ticker = conv.to_yf_symbol_format(symbol)
+    ticker = yf.Ticker(yf_ticker)
+    result = await services_stock.analyse_dividend_event(
+        ticker=ticker, symbol=symbol, ex_date=ex_date, div_amount=div_amount
+    )
+    if not result:
+        return None
+
     # Step 1: check if the ticker is valid
-    yf_ticker = to_yf_symbol_format(symbol)
+    yf_ticker = conv.to_yf_symbol_format(symbol)
     ticker = yf.Ticker(yf_ticker)
     quote_type = ticker.info.get("quoteType")
     if quote_type not in config.ALLOWED_QUOTE_TYPES:
@@ -110,16 +205,16 @@ async def ai_analyze_ticker(symbol: str, *, intent: str = DEFAULT_INTENT) -> Ana
     # Step 2: use AI to build the ready-to-use prompt to analyze the ticker with the intent
     build_prompt_input = _build_analysis_prompt(ticker=ticker, intent=intent)
 
-    country = country_to_iso2(ticker.info.get("country", ""))
+    country = conv.country_to_iso2(ticker.info.get("country", ""))
     llm_result = await ai_helper.ai_exec_task("ANALYZE_TICKER_BUILD_PROMPT", build_prompt_input, country)
     if llm_result.is_error:
-        return AnalysisResult(llm_error=True, llm_error_msg=llm_result.error_msg)
+        return models_ai.AnalysisResult(llm_error=True, llm_error_msg=llm_result.error_msg)
 
     analysis_prompt = llm_result.completion
 
     # Step 3: execute the prompt built from previous step
     exec_result = await ai_helper.ai_exec_task("ANALYZE_TICKER_EXEC", analysis_prompt, country)
     if exec_result.is_error:
-        return AnalysisResult(llm_error=True, llm_error_msg=exec_result.error_msg)
+        return models_ai.AnalysisResult(llm_error=True, llm_error_msg=exec_result.error_msg)
 
-    return AnalysisResult(analysis=exec_result.completion)
+    return models_ai.AnalysisResult(analysis=exec_result.completion)

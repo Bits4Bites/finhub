@@ -4,12 +4,10 @@ import urllib.parse
 from fastapi import APIRouter, Query
 from fastapi.responses import RedirectResponse
 
-from app.schemas.events import ListingsResponse, UpcomingDividendsResponse, UpcomingEarningsResponse
-
-from ..config import settings_finhub_proxy
+from .. import config
 from ..schemas import events as schemas
 from ..services import ai as ai_service
-from ..services import stocks as stock_service
+from ..services import stock as stock_service
 from ..utils import finhub as finhub_utils
 
 router = APIRouter(prefix="/events", tags=["events"])
@@ -22,12 +20,12 @@ async def get_upcoming_dividends_event(
         "",
         description="Optional stock index to filter events by (support 'ASX20', 'ASX50', 'ASX100', 'ASX200', 'ASX300', 'NASDAQ100', 'SP500', 'SP400', 'SP600', 'VN30' and 'VN100').",
     ),
-) -> UpcomingDividendsResponse | RedirectResponse:
+) -> schemas.UpcomingDividendsResponse | RedirectResponse:
     """
     Check for upcoming dividend/distribution events for a market.
     """
-    if settings_finhub_proxy.proxy_mode.upper() == "REDIRECT":
-        proxy_url = settings_finhub_proxy.url_web_crawl_node.rstrip("/")
+    if config.settings_finhub_proxy.proxy_mode.upper() == "REDIRECT":
+        proxy_url = config.settings_finhub_proxy.url_web_crawl_node.rstrip("/")
         prefix = str(router.prefix)
         next_url = f"{proxy_url}{prefix}/upcoming_dividends?country={country}&index={index}"
         next_url_for_log = urllib.parse.quote(next_url, safe="")
@@ -67,12 +65,12 @@ async def get_upcoming_earnings_event(
         "",
         description="Optional stock index to filter events by (support 'ASX20', 'ASX50', 'ASX100', 'ASX200', 'ASX300', 'NASDAQ100', 'SP500', 'SP400', 'SP600', 'VN30' and 'VN100').",
     ),
-) -> UpcomingEarningsResponse | RedirectResponse:
+) -> schemas.UpcomingEarningsResponse | RedirectResponse:
     """
     Check for upcoming earnings events for a market.
     """
-    if settings_finhub_proxy.proxy_mode.upper() == "REDIRECT":
-        proxy_url = settings_finhub_proxy.url_web_crawl_node.rstrip("/")
+    if config.settings_finhub_proxy.proxy_mode.upper() == "REDIRECT":
+        proxy_url = config.settings_finhub_proxy.url_web_crawl_node.rstrip("/")
         prefix = str(router.prefix)
         next_url = f"{proxy_url}{prefix}/upcoming_earnings?country={country}&index={index}"
         next_url_for_log = urllib.parse.quote(next_url, safe="")
@@ -94,13 +92,13 @@ async def get_upcoming_earnings_event(
 @router.get("/new_listings", response_model=schemas.ListingsResponse, response_model_exclude_none=True)
 async def get_new_listings(
     country: str = Query("", description="Country code to filter events by (only 'AU' is supported)."),
-) -> ListingsResponse | RedirectResponse:
+) -> schemas.ListingsResponse | RedirectResponse:
     """
     Check for new listing events for a market, using AI assistance.
     Note: currently only AU is supported.
     """
-    if settings_finhub_proxy.proxy_mode.upper() == "REDIRECT":
-        proxy_url = settings_finhub_proxy.url_web_crawl_node.rstrip("/")
+    if config.settings_finhub_proxy.proxy_mode.upper() == "REDIRECT":
+        proxy_url = config.settings_finhub_proxy.url_web_crawl_node.rstrip("/")
         prefix = str(router.prefix)
         next_url = f"{proxy_url}{prefix}/new_listings?country={country}"
         next_url_for_log = urllib.parse.quote(next_url, safe="")

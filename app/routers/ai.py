@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Body, Header, Query
 
-from ..config import LLMTaskConfigOverride, settings_llm_vendor
+from .. import config
 from ..models import ai as models_ai
 from ..schemas import ai as schemas_ai
 from ..services import ai as services_ai
@@ -21,12 +21,12 @@ async def get_vendors() -> schemas_ai.AIVendorsResponse:
     Get the list of available AI vendors and supported API tiers and models.
     """
     result: dict[str, models_ai.AIVendorInfo] = {}
-    for v in settings_llm_vendor.vendors.keys():
+    for v in config.settings_llm_vendor.vendors.keys():
         v_name = v.upper()
         result[v_name] = models_ai.AIVendorInfo(name=v_name, tier_models={})
-        for t in settings_llm_vendor.vendors[v].keys():
+        for t in config.settings_llm_vendor.vendors[v].keys():
             t_name = t.upper()
-            result[v_name].tier_models[t_name] = list(settings_llm_vendor.vendors[v][t].models or [])
+            result[v_name].tier_models[t_name] = list(config.settings_llm_vendor.vendors[v][t].models or [])
 
     return schemas_ai.AIVendorsResponse(status=200, message="ok", data=result)
 
@@ -63,7 +63,7 @@ async def analyse_dividend_event(
     """
     llm_config_override = None
     if use_ai_vendor and use_ai_tier and use_ai_model:
-        llm_config_override = LLMTaskConfigOverride(
+        llm_config_override = config.LLMTaskConfigOverride(
             vendor=use_ai_vendor.upper(),
             tier=use_ai_tier.upper(),
             model=use_ai_model,

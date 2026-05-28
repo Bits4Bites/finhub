@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import statistics
 from datetime import UTC, datetime
 from typing import Any
@@ -10,14 +9,9 @@ import yfinance as yf
 from pydantic import BaseModel
 
 from ..utils import asset as asset_utils
-from ..utils.conv import country_to_iso2, normalize_exchange_code
-from ..utils.json import normalize_json_str
-from ..utils.yfutils import classify_market_cap, tz_from_yf_ticker
-from .ai import BaseAIResult
-from .types import (
-    AssetType,
-    MarketCapType,
-)
+from ..utils import conv, yfutils
+from . import ai as models_ai
+from . import types
 
 
 class SymbolBase(BaseModel):
@@ -34,8 +28,8 @@ class SymbolBase(BaseModel):
             country=ticker.info.get("country", ticker.info.get("region", "US")),
             **data,
         )
-        self.country = country_to_iso2(self.country)
-        self.exchange = normalize_exchange_code(self.exchange)
+        self.country = conv.country_to_iso2(self.country)
+        self.exchange = conv.normalize_exchange_code(self.exchange)
 
 
 class HistoryPoint(BaseModel):
@@ -74,7 +68,7 @@ class SymbolOverview(SymbolBase):
     website: str = ""
     description: str = ""
     quote_type: str = ""
-    asset_type: AssetType | None = None
+    asset_type: types.AssetType | None = None
     total_cash: int = 0
     total_cash_per_share: float = 0.0
     total_debt: int = 0
@@ -89,7 +83,7 @@ class SymbolOverview(SymbolBase):
     operating_margins: float = 0.0
     profit_margins: float = 0.0
     market_cap: int = 0
-    cap_size: MarketCapType | None = None
+    cap_size: types.MarketCapType | None = None
     market_index: str | None = None
 
     def __init__(self, ticker: yf.Ticker, /, **data: Any):
@@ -134,7 +128,7 @@ class SymbolOverview(SymbolBase):
         # self.operating_margins = float(self.operating_margins) if self.operating_margins is not None else None
         # self.profit_margins = float(self.profit_margins) if self.profit_margins is not None else None
         # self.market_cap = int(self.market_cap) if self.market_cap is not None else None
-        self.cap_size, self.market_index = classify_market_cap(ticker)
+        self.cap_size, self.market_index = yfutils.classify_market_cap(ticker)
 
         # detect asset type
         self.asset_type = asset_utils.detect_asset_type(
@@ -169,7 +163,7 @@ class SymbolDividend(BaseModel):
             last_dividend_value=ticker.info.get("lastDividendValue", 0),
             last_dividend_date=ticker.info.get("lastDividendDate", 0.0),
         )
-        tz = tz_from_yf_ticker(ticker)
+        tz = yfutils.tz_from_yf_ticker(ticker)
         if self.ex_dividend_date:
             self.ex_dividend_date_str = (
                 datetime.fromtimestamp(self.ex_dividend_date, tz=UTC)
@@ -366,222 +360,6 @@ class SymbolInfo(SymbolOverview):
 # ----------------------------------------------------------------------#
 
 
-class EventBase(BaseModel):
-    symbol: str
-    exchange: str | None = None
-    company_name: str | None = None
-    timestamp: int = 0
-    date: str | None = None
-    event_category: str | None = None
-    source_name: str | None = None
-    link: str | None = None
-
-
-class UpcomingDividendEvent(EventBase):
-    status: str = ""
-    amount: float = 0.0
-    dividend_yield: float = 0.0
-    currency: str = ""
-    payment_date: str | None
-    analysis: DividendEventAnalysis | None = None
-
-
-def parse_upcoming_dividend_events_from_json(
-    json_str: str, default_vals: dict[str, Any] = None
-) -> list[UpcomingDividendEvent]:
-    default_vals = default_vals or {}
-    json_str = normalize_json_str(json_str)
-    events = json.loads(json_str)
-    result = []
-    for item in events:
-        event = UpcomingDividendEvent(
-            symbol=item.get("sym", default_vals.get("sym")),
-            exchange=item.get("exchange", default_vals.get("exchange")),
-            company_name=item.get("corp", default_vals.get("corp")),
-            date=item.get("date", default_vals.get("date")),
-            payment_date=item.get("pdate", default_vals.get("pdate")),
-            event_category=item.get("cat", default_vals.get("cat", "Dividend")),
-            source_name=item.get("src", default_vals.get("src")),
-            link=item.get("link", default_vals.get("link")),
-            status=item.get("status", default_vals.get("status")),
-            amount=item.get("amount", default_vals.get("amount", 0.0)),
-            dividend_yield=item.get("yield", default_vals.get("yield", 0.0)),
-            currency=item.get("currency", default_vals.get("currency", "")),
-        )
-        # parse yyyy-MM-dd from event.date into event.timestamp
-        event.timestamp = int(datetime.strptime(event.date or "", "%Y-%m-%d").timestamp())
-        result.append(event)
-
-    return result
-
-
-class UpcomingEarningsEvent(EventBase):
-    report_period: str | None = None
-    status: str | None = None
-
-
-def parse_upcoming_earnings_events_from_json(
-    json_str: str, default_vals: dict[str, Any] = None
-) -> list[UpcomingEarningsEvent]:
-    default_vals = default_vals or {}
-    json_str = normalize_json_str(json_str)
-    events = json.loads(json_str)
-    result = []
-    for item in events:
-        event = UpcomingEarningsEvent(
-            symbol=item.get("sym", default_vals.get("sym")),
-            exchange=item.get("exchange", default_vals.get("exchange")),
-            company_name=item.get("corp", default_vals.get("corp")),
-            date=item.get("date", default_vals.get("date")),
-            event_category="earnings",
-            source_name=item.get("src", default_vals.get("src")),
-            link=item.get("link", default_vals.get("link")),
-            report_period=item.get("report_period", default_vals.get("report_period")),
-            status=item.get("status", default_vals.get("status")),
-        )
-        # parse yyyy-MM-dd from event.date into event.timestamp
-        event.timestamp = int(datetime.strptime(event.date or "", "%Y-%m-%d").timestamp())
-        result.append(event)
-
-    return result
-
-
-class ListingOutlook(BaseModel):
-    direction: str | None = None
-    reason: str | None = None
-    confidence: int = 0
-
-
-class ListingAnalysis(BaseModel):
-    status: str | None = None
-    data_quality: str | None = None
-    search_findings: str | None = None
-    stance: str | None = None
-    catalyst: str | None = None
-    risks: list[str] | None = None
-    outlook: dict[str, ListingOutlook] | None = None
-
-
-def parse_listing_analysis_from_json(json_str: str, default_vals: dict[str, Any] = None) -> dict[str, ListingAnalysis]:
-    default_vals = default_vals or {}
-    json_str = normalize_json_str(json_str)
-    analysis = json.loads(json_str)
-    result = {}
-    for k, v in analysis.items():
-        result[k] = ListingAnalysis(
-            status=v.get("status", default_vals.get("status")),
-            data_quality=v.get("data_quality", default_vals.get("data_quality")),
-            search_findings=v.get("search_findings", default_vals.get("search_findings")),
-            stance=v.get("stance", default_vals.get("stance")),
-            catalyst=v.get("catalyst", default_vals.get("catalyst")),
-            risks=v.get("risks", default_vals.get("risks")),
-        )
-        if "outlook" in v:
-            result[k].outlook = {}
-            if "w2" in v["outlook"]:
-                result[k].outlook["w2"] = ListingOutlook(
-                    direction=v["outlook"]["w2"].get("dir"),
-                    reason=v["outlook"]["w2"].get("reason"),
-                    confidence=v["outlook"]["w2"].get("confidence"),
-                )
-            if "m1" in v["outlook"]:
-                result[k].outlook["m1"] = ListingOutlook(
-                    direction=v["outlook"]["m1"].get("dir"),
-                    reason=v["outlook"]["m1"].get("reason"),
-                    confidence=v["outlook"]["m1"].get("confidence"),
-                )
-            if "m3" in v["outlook"]:
-                result[k].outlook["m3"] = ListingOutlook(
-                    direction=v["outlook"]["m3"].get("dir"),
-                    reason=v["outlook"]["m3"].get("reason"),
-                    confidence=v["outlook"]["m3"].get("confidence"),
-                )
-
-    return result
-
-
-class ListingEvent(EventBase):
-    sector: str | None = None
-    industry: str | None = None
-    principal_activities: str | None = None
-    price: float = 0.0
-    currency: str = ""
-    capital: int = 0
-    analysis: ListingAnalysis | None = None
-
-
-def parse_new_listing_events_from_json(json_str: str, default_vals: dict[str, Any] = None) -> list[ListingEvent]:
-    default_vals = default_vals or {}
-    json_str = normalize_json_str(json_str)
-    events = json.loads(json_str)
-    result = []
-    for item in events:
-        event = ListingEvent(
-            symbol=item.get("symbol", default_vals.get("symbol")),
-            exchange=item.get("exchange", default_vals.get("exchange")),
-            company_name=item.get("company", default_vals.get("company")),
-            date=item.get("date", default_vals.get("date")),
-            event_category="listing",
-            source_name=item.get("src", default_vals.get("src")),
-            link=item.get("link", default_vals.get("link")),
-            sector=item.get("sector", default_vals.get("sector")),
-            principal_activities=item.get("principal_activities", default_vals.get("principal_activities")),
-            price=item.get("price", default_vals.get("price", 0.0)),
-            currency=item.get("currency", default_vals.get("currency", "")),
-            capital=int(item.get("capital", default_vals.get("capital", 0))),
-        )
-        # parse yyyy-MM-dd from event.date into event.timestamp
-        event.timestamp = int(datetime.strptime(event.date or "", "%Y-%m-%d").timestamp())
-        result.append(event)
-
-    return result
-
-
-# ----------------------------------------------------------------------#
-
-
-class DividendEventAnalysis(BaseAIResult):
-    # ===== base info
-    overview: SymbolOverview = None
-    price: float = 0.0  # current stock price
-    ex_div_date: str | None = None
-    ex_div_date_timestamp: int = 0
-    div_amount: float = 0.0
-    div_yield: float = 0.0  # div_amount / price
-    # ====== analysis result
-    num_samples: int = 0  # number of historical dividend events used for analysis
-    drop_price_min: float = 0.0
-    drop_price_max: float = 0.0
-    recovery_probability: float = 0.0
-    recovery_days_min: int = 0
-    recovery_days_max: int = 0
-    recovery_price_min: float = 0.0
-    recovery_price_max: float = 0.0
-    # ===== technical data, used for further analysis with AI
-    beta: float = 0.0
-    rsi14: int = 0
-    avg_dvt_7d: int = 0
-    std_dvt_7d: int = 0
-    avg_volume_30d: int = 0
-    std_volume_30d: int = 0
-    bid_ask_spread: float = 0.0
-    trend_60d: float = 0.0
-    market_trend_60d: float = 0.0
-    peer_trend_60d: float = 0.0
-    # ====== analysis result from AI
-    search_summary: str | None = None
-    strategy: str | None = None
-    reasoning: str | None = None
-    sentiment_score: float = 0.0
-    recovery_probability_adj: float = 0.0
-    recovery_days_adj: str | None = None
-    drop_price_adj: str | None = None
-    recovery_price_adj: str | None = None
-    expected_pl: float = 0.0
-    confidence_level: float = 0.0
-    risk_level: float = 0.0
-
-
 class HoldingTicker(BaseModel):
     ticker: str = ""
     num_shares: float = 0.0
@@ -590,5 +368,5 @@ class HoldingTicker(BaseModel):
     target_allocation: float = 0.0
 
 
-class PortfolioAnalysis(BaseAIResult):
+class PortfolioAnalysis(models_ai.BaseAIResult):
     analysis: str = ""

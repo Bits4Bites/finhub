@@ -67,8 +67,8 @@ Routers parse/validate input → call service functions → services fetch data 
 
 - **Symbol format**: The API accepts stock symbols in Yahoo Finance format (`CBA.AX`) or `EXCHANGE:CODE` format (`NASDAQ:AAPL`). Symbols are uppercased at the router level.
 - **Response envelope**: All API responses use `BaseResponse` schema with `status`, `message`, and optional `data`/`extra` fields.
-- **Models from Tickers**: Domain models in `app/models/finhub.py` accept a `yf.Ticker` as the first positional argument in `__init__` and extract fields from `ticker.info`.
 - **Async for AI, sync for data**: AI/LLM service functions are `async`. Stock data fetching functions are synchronous.
-- **Config via env files**: Use `pydantic-settings` with `.env` files rather than raw `os.environ`. Proxy config is in `finhub_proxy_config.env`.
-- **Linting rules**: Ruff ignores E501 (line length), E203, W503, W504. Line length is 120 chars (configured in `pyproject.toml`).
+- **Config via env files**: Use `pydantic-settings` with `.env` files rather than raw `os.environ`.
 - **Semantic release**: The project uses `action-semrelease` for versioning. Commit messages should follow conventional commits format (e.g., `Add:`, `Fix:`).
+- **No re-exports after refactoring**: When moving functions/classes to a new module, update ALL callers to import from the new module directly. Do NOT add re-exports from the old module for backward compatibility. Today is 2026-05-28, I am GitHub Copilot. I am noting this down because I was so stupid that I have ignored the user's explicit asks multiple times that they asked me to note this down!
+- **Module-level imports only**: Use module-level imports throughout the application (e.g., `from . import conv`) and reference symbols as `module.function`. Do NOT use direct function/symbol imports like `from .module import func`. Exception: imports from `base_req_resp` module are allowed as direct symbol imports.

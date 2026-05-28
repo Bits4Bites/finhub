@@ -2,21 +2,12 @@ from zoneinfo import ZoneInfo
 
 import yfinance as yf
 
-from ..models.types import (
-    AssetType,
-    MarketCapType,
-)
+from ..models import types
 from . import asset as asset_utils
-from .data import (
-    asx_index_yf_static_tickers,
-    asx_sector_yf_static_tickers,
-    us_index_yf_static_tickers,
-    us_industry_yf_static_tickers,
-    us_sector_yf_static_tickers,
-)
+from . import data
 
 
-def detect_asset_type(ticker: yf.Ticker) -> AssetType:
+def detect_asset_type(ticker: yf.Ticker) -> types.AssetType:
     """
     Detects the asset type based on ticker info.
 
@@ -46,11 +37,11 @@ def tz_from_yf_ticker(ticker: yf.Ticker) -> ZoneInfo:
     Returns:
         ZoneInfo: The timezone for the ticker's exchange. Defaults to America/New_York.
     """
-    from .conv import normalize_exchange_code
+    from . import conv
 
     exchange = ""
     if ticker and ticker.info:
-        exchange = normalize_exchange_code(ticker.info.get("fullExchangeName", ticker.info.get("exchange", "")))
+        exchange = conv.normalize_exchange_code(ticker.info.get("fullExchangeName", ticker.info.get("exchange", "")))
 
     tz_map = {
         "ASX": "Australia/Sydney",
@@ -74,9 +65,9 @@ def is_in_index(*, index: str, ticker: yf.Ticker) -> bool:
     Remarks:
         Supply either ticker or symbol. If both are supplied, ticker takes precedence.
     """
-    from .conv import to_exch_symb_format
+    from . import conv
 
-    symbol = to_exch_symb_format(ticker=ticker) or ""
+    symbol = conv.to_exch_symb_format(ticker=ticker) or ""
     return asset_utils.is_in_index(index=index, symbol=symbol)
 
 
@@ -100,29 +91,29 @@ def lookup_index_yf_static_symbol(*, ticker: yf.Ticker) -> str | None:
     Remarks:
         Currently, support only AU/US/VN markets.
     """
-    from .conv import to_exch_symb_format
+    from . import conv
 
-    symbol = to_exch_symb_format(ticker=ticker) or ""
+    symbol = conv.to_exch_symb_format(ticker=ticker) or ""
     exchange = symbol.split(":")[0]
 
     if exchange == "ASX":
-        for index in asx_index_yf_static_tickers.keys():
+        for index in data.asx_index_yf_static_tickers.keys():
             if asset_utils.is_in_index(index=index, symbol=symbol):
-                return asx_index_yf_static_tickers[index]
-        return asx_index_yf_static_tickers["ASX"]
+                return data.asx_index_yf_static_tickers[index]
+        return data.asx_index_yf_static_tickers["ASX"]
 
     if exchange == "NASDAQ":
         return (
-            us_index_yf_static_tickers["NASDAQ100"]
+            data.us_index_yf_static_tickers["NASDAQ100"]
             if asset_utils.is_in_index(index="NASDAQ100", symbol=symbol)
-            else us_index_yf_static_tickers["NASDAQ"]
+            else data.us_index_yf_static_tickers["NASDAQ"]
         )
 
     if exchange == "NYSE":
         for index in ["SP500", "SP400", "SP600"]:
             if asset_utils.is_in_index(index=index, symbol=symbol):
-                return us_index_yf_static_tickers[index]
-        return us_index_yf_static_tickers["DOWJONES"]
+                return data.us_index_yf_static_tickers[index]
+        return data.us_index_yf_static_tickers["DOWJONES"]
 
     return None
 
@@ -147,27 +138,27 @@ def lookup_peer_yf_static_symbol(*, ticker: yf.Ticker) -> str | None:
     Remarks:
         Currently, support only AU/US markets.
     """
-    from .conv import to_exch_symb_format
+    from . import conv
 
-    symbol = to_exch_symb_format(ticker=ticker) or ""
+    symbol = conv.to_exch_symb_format(ticker=ticker) or ""
     sector = (ticker.info.get("sector", "") or "").upper()
     industry = (ticker.info.get("industry", "") or "").upper()
     exchange = symbol.split(":")[0]
 
     if exchange == "ASX":
-        if sector in asx_sector_yf_static_tickers:
-            return asx_sector_yf_static_tickers[sector]
+        if sector in data.asx_sector_yf_static_tickers:
+            return data.asx_sector_yf_static_tickers[sector]
 
     if exchange in ("NASDAQ", "NYSE"):
-        if sector in us_industry_yf_static_tickers and industry in us_industry_yf_static_tickers[sector]:
-            return us_industry_yf_static_tickers[sector][industry]
-        if sector in us_sector_yf_static_tickers:
-            return us_sector_yf_static_tickers[sector]
+        if sector in data.us_industry_yf_static_tickers and industry in data.us_industry_yf_static_tickers[sector]:
+            return data.us_industry_yf_static_tickers[sector][industry]
+        if sector in data.us_sector_yf_static_tickers:
+            return data.us_sector_yf_static_tickers[sector]
 
     return None
 
 
-def classify_market_cap(ticker: yf.Ticker) -> tuple[MarketCapType | None, str | None]:
+def classify_market_cap(ticker: yf.Ticker) -> tuple[types.MarketCapType | None, str | None]:
     """
     Classifies a stock's market capitalization size and identifies its market index.
 
@@ -178,12 +169,12 @@ def classify_market_cap(ticker: yf.Ticker) -> tuple[MarketCapType | None, str | 
         tuple[MarketCapType | None, str | None]: The classified market cap size
             and the market index the stock belongs to (if any).
     """
-    from .conv import country_to_iso2, normalize_exchange_code
+    from . import conv
 
     info = ticker.info if ticker else {}
-    country = country_to_iso2(info.get("country", info.get("region", "US")))
+    country = conv.country_to_iso2(info.get("country", info.get("region", "US")))
     exchange = info.get("fullExchangeName", info.get("exchange", "")) or ""
-    exchange = normalize_exchange_code(exchange)
+    exchange = conv.normalize_exchange_code(exchange)
     symbol = info.get("symbol", "")
     if country != "US":
         symbol = symbol.split(".")[0]

@@ -10,8 +10,8 @@ from openai.types.responses import WebSearchPreviewToolParam
 from openai.types.responses.web_search_preview_tool_param import UserLocation
 from pydantic import BaseModel
 
-from ..config import LLMTaskConfig, LLMTaskConfigOverride, settings_llm_task, settings_llm_vendor
-from ..models.ai import LLMResponse
+from .. import config
+from ..models import ai as models_ai
 
 ThinkingLevel = Literal["LOW", "MEDIUM", "HIGH"]
 
@@ -26,10 +26,10 @@ class PromptConfig(BaseModel):
 
 async def _exec_prompt_openai_client(
     client: AsyncOpenAI,
-    task_cfg: LLMTaskConfig,
+    task_cfg: config.LLMTaskConfig,
     prompt: str,
     prompt_cfg: PromptConfig = None,
-) -> LLMResponse:
+) -> models_ai.LLMResponse:
     """
     Execute a prompt using OpenAI client and return the response.
     """
@@ -62,7 +62,7 @@ async def _exec_prompt_openai_client(
             input=prompt,
         )
         end = time.perf_counter()
-        result = LLMResponse(
+        result = models_ai.LLMResponse(
             completion=ai_response.output_text,
             time_taken_ms=int((end - start) * 1000),
             tokens_prompt=ai_response.usage.input_tokens if ai_response.usage else 0,
@@ -79,7 +79,7 @@ async def _exec_prompt_openai_client(
             messages=[ChatCompletionUserMessageParam(content=prompt, role="user")],
         )
         end = time.perf_counter()
-        result = LLMResponse(
+        result = models_ai.LLMResponse(
             completion=completion.choices[0].message.content or "" if len(completion.choices) > 0 else "",
             time_taken_ms=int((end - start) * 1000),
             tokens_prompt=completion.usage.prompt_tokens if completion.usage else 0,
@@ -106,14 +106,14 @@ async def _exec_prompt_openai_client(
 
 
 async def _exec_prompt_azure_openai(
-    task_cfg: LLMTaskConfig,
+    task_cfg: config.LLMTaskConfig,
     prompt: str,
     prompt_cfg: PromptConfig = None,
-) -> LLMResponse:
+) -> models_ai.LLMResponse:
     """
     Execute a prompt using Azure OpenAI and return the response.
     """
-    client = settings_llm_vendor.get_llm_client("AZURE_OPENAI", task_cfg.tier)
+    client = config.settings_llm_vendor.get_llm_client("AZURE_OPENAI", task_cfg.tier)
     if client is None:
         raise OSError(f"Azure OpenAI client for tier '{task_cfg.tier}' is not configured.")
     return await _exec_prompt_openai_client(
@@ -125,14 +125,14 @@ async def _exec_prompt_azure_openai(
 
 
 async def _exec_prompt_openrouter(
-    task_cfg: LLMTaskConfig,
+    task_cfg: config.LLMTaskConfig,
     prompt: str,
     prompt_cfg: PromptConfig = None,
-) -> LLMResponse:
+) -> models_ai.LLMResponse:
     """
     Execute a prompt using OpenRouter and return the response.
     """
-    client = settings_llm_vendor.get_llm_client("OPEN_ROUTER", task_cfg.tier)
+    client = config.settings_llm_vendor.get_llm_client("OPEN_ROUTER", task_cfg.tier)
     if client is None:
         raise OSError(f"OpenRouter client for tier '{task_cfg.tier}' is not configured.")
     return await _exec_prompt_openai_client(
@@ -144,14 +144,14 @@ async def _exec_prompt_openrouter(
 
 
 async def _exec_prompt_openai(
-    task_cfg: LLMTaskConfig,
+    task_cfg: config.LLMTaskConfig,
     prompt: str,
     prompt_cfg: PromptConfig = None,
-) -> LLMResponse:
+) -> models_ai.LLMResponse:
     """
     Execute a prompt using OpenAI and return the response.
     """
-    client = settings_llm_vendor.get_llm_client("OPENAI", task_cfg.tier)
+    client = config.settings_llm_vendor.get_llm_client("OPENAI", task_cfg.tier)
     if client is None:
         raise OSError(f"OpenAI client for tier '{task_cfg.tier}' is not configured.")
     return await _exec_prompt_openai_client(
@@ -163,15 +163,15 @@ async def _exec_prompt_openai(
 
 
 async def _exec_prompt_gemini(
-    task_cfg: LLMTaskConfig,
+    task_cfg: config.LLMTaskConfig,
     prompt: str,
     prompt_cfg: PromptConfig = None,
-) -> LLMResponse:
+) -> models_ai.LLMResponse:
     """
     Execute a prompt using Google Gemini and return the response.
     """
     start = time.perf_counter()
-    client = settings_llm_vendor.get_llm_client("GEMINI", task_cfg.tier)
+    client = config.settings_llm_vendor.get_llm_client("GEMINI", task_cfg.tier)
     if client is None:
         raise OSError(f"Gemini client for tier '{task_cfg.tier}' is not configured.")
     logging.info(
@@ -195,7 +195,7 @@ async def _exec_prompt_gemini(
         config=types.GenerateContentConfig(temperature=0.10, thinking_config=thinking_config),
     )
     end = time.perf_counter()
-    result = LLMResponse(
+    result = models_ai.LLMResponse(
         completion=ai_response.text or "",
         time_taken_ms=int((end - start) * 1000),
         tokens_prompt=ai_response.usage_metadata.prompt_token_count or 0 if ai_response.usage_metadata else 0,
@@ -226,12 +226,12 @@ async def _exec_prompt_gemini(
 
 
 async def ai_exec_prompt(
-    task_cfg: LLMTaskConfig,
+    task_cfg: config.LLMTaskConfig,
     prompt: str,
     prompt_cfg: PromptConfig = None,
     *,
-    llm_config_override: LLMTaskConfigOverride = None,
-) -> LLMResponse:
+    llm_config_override: config.LLMTaskConfigOverride = None,
+) -> models_ai.LLMResponse:
     """
     Executes a prompt using the specified LLM task configuration.
     """
@@ -271,12 +271,12 @@ async def ai_exec_task(
     country: str = "",
     *,
     thinking_level: ThinkingLevel = None,
-    llm_config_override: LLMTaskConfigOverride = None,
-) -> LLMResponse:
+    llm_config_override: config.LLMTaskConfigOverride = None,
+) -> models_ai.LLMResponse:
     """
     Executes a task using the appropriate LLM based on the task configuration.
     """
-    task_cfg = settings_llm_task.tasks.get(task_id)
+    task_cfg = config.settings_llm_task.tasks.get(task_id)
     if not task_cfg:
         raise ValueError(f"LLM task configuration for task_id '{task_id}' not found.")
     prompt_cfg = PromptConfig(

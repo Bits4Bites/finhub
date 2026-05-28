@@ -1,4 +1,5 @@
 from ..models import ai as models_ai
+from ..models import event as models_event
 from ..models import finhub as models
 from ..services import ai as services_ai
 from ..services import msai_analyze_ticker as service_analyze_ticker
@@ -80,7 +81,7 @@ class AnalyzeDividendEventResponse(BaseResponse):
     Response schema, containing the analysis result of a dividend event.
 
     Attributes:
-        data (models.DividendEventAnalysis): An object containing the analysis result of the dividend event.
+        data (models_event.DividendEventAnalysis): An object containing the analysis result of the dividend event.
     """
 
-    data: models.DividendEventAnalysis | None = None
+    data: models_event.DividendEventAnalysis | None = None

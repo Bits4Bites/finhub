@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
-from app.services.stocks import (
+from app.services.stock import (
     calc_end_date_to_fetch_events,
     get_stock_quote_at_date,
     get_stock_quotes,
@@ -107,8 +107,8 @@ def _make_history_df(num_rows: int = 3) -> pd.DataFrame:
 
 
 class TestGetSymbolInfo:
-    @patch("app.services.stocks.to_yf_symbol_format", return_value="AAPL")
-    @patch("app.services.stocks.yf.Ticker")
+    @patch("app.utils.conv.to_yf_symbol_format", return_value="AAPL")
+    @patch("app.services.stock.yf.Ticker")
     def test_returns_symbol_info_for_equity(self, mock_ticker_cls, mock_to_yf):
         mock_ticker_cls.return_value = _make_ticker_mock(EQUITY_INFO)
         result = get_symbol_info("AAPL")
@@ -116,29 +116,29 @@ class TestGetSymbolInfo:
         assert result.symbol == "AAPL"
         mock_to_yf.assert_called_once_with("AAPL")
 
-    @patch("app.services.stocks.to_yf_symbol_format", return_value="SPY")
-    @patch("app.services.stocks.yf.Ticker")
+    @patch("app.utils.conv.to_yf_symbol_format", return_value="SPY")
+    @patch("app.services.stock.yf.Ticker")
     def test_returns_symbol_info_for_etf(self, mock_ticker_cls, mock_to_yf):
         mock_ticker_cls.return_value = _make_ticker_mock(ETF_INFO)
         result = get_symbol_info("SPY")
         assert result is not None
 
-    @patch("app.services.stocks.to_yf_symbol_format", return_value="VTSAX")
-    @patch("app.services.stocks.yf.Ticker")
+    @patch("app.utils.conv.to_yf_symbol_format", return_value="VTSAX")
+    @patch("app.services.stock.yf.Ticker")
     def test_returns_none_for_unsupported_quote_type(self, mock_ticker_cls, mock_to_yf):
         mock_ticker_cls.return_value = _make_ticker_mock(UNSUPPORTED_INFO)
         result = get_symbol_info("VTSAX")
         assert result is None
 
-    @patch("app.services.stocks.to_yf_symbol_format", return_value="FAKE")
-    @patch("app.services.stocks.yf.Ticker")
+    @patch("app.utils.conv.to_yf_symbol_format", return_value="FAKE")
+    @patch("app.services.stock.yf.Ticker")
     def test_returns_none_when_quote_type_is_none(self, mock_ticker_cls, mock_to_yf):
         mock_ticker_cls.return_value = _make_ticker_mock(NONE_QUOTE_TYPE_INFO)
         result = get_symbol_info("FAKE")
         assert result is None
 
-    @patch("app.services.stocks.to_yf_symbol_format", return_value="CBA.AX")
-    @patch("app.services.stocks.yf.Ticker")
+    @patch("app.utils.conv.to_yf_symbol_format", return_value="CBA.AX")
+    @patch("app.services.stock.yf.Ticker")
     def test_converts_exchange_code_format(self, mock_ticker_cls, mock_to_yf):
         mock_ticker_cls.return_value = _make_ticker_mock(EQUITY_INFO)
         get_symbol_info("ASX:CBA")
@@ -151,15 +151,15 @@ class TestGetSymbolInfo:
 
 
 class TestGetSymbolOverview:
-    @patch("app.services.stocks.to_yf_symbol_format", return_value="AAPL")
-    @patch("app.services.stocks.yf.Ticker")
+    @patch("app.utils.conv.to_yf_symbol_format", return_value="AAPL")
+    @patch("app.services.stock.yf.Ticker")
     def test_returns_overview_for_equity(self, mock_ticker_cls, mock_to_yf):
         mock_ticker_cls.return_value = _make_ticker_mock(EQUITY_INFO)
         result = get_symbol_overview("AAPL")
         assert result is not None
 
-    @patch("app.services.stocks.to_yf_symbol_format", return_value="VTSAX")
-    @patch("app.services.stocks.yf.Ticker")
+    @patch("app.utils.conv.to_yf_symbol_format", return_value="VTSAX")
+    @patch("app.services.stock.yf.Ticker")
     def test_returns_none_for_unsupported_quote_type(self, mock_ticker_cls, mock_to_yf):
         mock_ticker_cls.return_value = _make_ticker_mock(UNSUPPORTED_INFO)
         result = get_symbol_overview("VTSAX")
@@ -172,8 +172,8 @@ class TestGetSymbolOverview:
 
 
 class TestGetStockQuotes:
-    @patch("app.services.stocks.to_yf_symbol_format", side_effect=lambda s: s)
-    @patch("app.services.stocks.yf.Tickers")
+    @patch("app.utils.conv.to_yf_symbol_format", side_effect=lambda s: s)
+    @patch("app.services.stock.yf.Tickers")
     def test_returns_quotes_for_valid_symbols(self, mock_tickers_cls, mock_to_yf):
         ticker1 = _make_ticker_mock(EQUITY_INFO)
         ticker2 = _make_ticker_mock(ETF_INFO)
@@ -187,8 +187,8 @@ class TestGetStockQuotes:
         assert result["AAPL"].market_price == 195.0
         assert result["SPY"].market_price == 450.0
 
-    @patch("app.services.stocks.to_yf_symbol_format", side_effect=lambda s: s)
-    @patch("app.services.stocks.yf.Tickers")
+    @patch("app.utils.conv.to_yf_symbol_format", side_effect=lambda s: s)
+    @patch("app.services.stock.yf.Tickers")
     def test_excludes_unsupported_quote_types(self, mock_tickers_cls, mock_to_yf):
         ticker1 = _make_ticker_mock(EQUITY_INFO)
         ticker2 = _make_ticker_mock(UNSUPPORTED_INFO)
@@ -200,8 +200,8 @@ class TestGetStockQuotes:
         assert "AAPL" in result
         assert "VTSAX" not in result
 
-    @patch("app.services.stocks.to_yf_symbol_format", side_effect=lambda s: s)
-    @patch("app.services.stocks.yf.Tickers")
+    @patch("app.utils.conv.to_yf_symbol_format", side_effect=lambda s: s)
+    @patch("app.services.stock.yf.Tickers")
     def test_handles_symbol_not_in_tickers(self, mock_tickers_cls, mock_to_yf):
         mock_tickers_instance = MagicMock()
         mock_tickers_instance.tickers = {}
@@ -210,8 +210,8 @@ class TestGetStockQuotes:
         result = get_stock_quotes(["NONEXIST"])
         assert result == {}
 
-    @patch("app.services.stocks.to_yf_symbol_format", side_effect=lambda s: s)
-    @patch("app.services.stocks.yf.Tickers")
+    @patch("app.utils.conv.to_yf_symbol_format", side_effect=lambda s: s)
+    @patch("app.services.stock.yf.Tickers")
     def test_empty_symbols_list(self, mock_tickers_cls, mock_to_yf):
         mock_tickers_instance = MagicMock()
         mock_tickers_instance.tickers = {}
@@ -227,8 +227,8 @@ class TestGetStockQuotes:
 
 
 class TestGetStockQuoteAtDate:
-    @patch("app.services.stocks.to_yf_symbol_format", return_value="AAPL")
-    @patch("app.services.stocks.yf.Ticker")
+    @patch("app.utils.conv.to_yf_symbol_format", return_value="AAPL")
+    @patch("app.services.stock.yf.Ticker")
     def test_returns_history_point_for_valid_date(self, mock_ticker_cls, mock_to_yf):
         hist_df = _make_history_df(5)
         ticker = _make_ticker_mock(EQUITY_INFO, hist_df)
@@ -239,22 +239,22 @@ class TestGetStockQuoteAtDate:
         assert result.close == hist_df.iloc[-1]["Close"]
         assert result.volume == int(hist_df.iloc[-1]["Volume"])
 
-    @patch("app.services.stocks.to_yf_symbol_format", return_value="AAPL")
-    @patch("app.services.stocks.yf.Ticker")
+    @patch("app.utils.conv.to_yf_symbol_format", return_value="AAPL")
+    @patch("app.services.stock.yf.Ticker")
     def test_returns_none_for_invalid_date_format(self, mock_ticker_cls, mock_to_yf):
         mock_ticker_cls.return_value = _make_ticker_mock(EQUITY_INFO)
         result = get_stock_quote_at_date("AAPL", "not-a-date")
         assert result is None
 
-    @patch("app.services.stocks.to_yf_symbol_format", return_value="AAPL")
-    @patch("app.services.stocks.yf.Ticker")
+    @patch("app.utils.conv.to_yf_symbol_format", return_value="AAPL")
+    @patch("app.services.stock.yf.Ticker")
     def test_returns_none_for_unsupported_quote_type(self, mock_ticker_cls, mock_to_yf):
         mock_ticker_cls.return_value = _make_ticker_mock(UNSUPPORTED_INFO)
         result = get_stock_quote_at_date("AAPL", "2026-01-01")
         assert result is None
 
-    @patch("app.services.stocks.to_yf_symbol_format", return_value="AAPL")
-    @patch("app.services.stocks.yf.Ticker")
+    @patch("app.utils.conv.to_yf_symbol_format", return_value="AAPL")
+    @patch("app.services.stock.yf.Ticker")
     def test_returns_none_when_history_empty(self, mock_ticker_cls, mock_to_yf):
         empty_df = pd.DataFrame(columns=["Open", "High", "Low", "Close", "Volume", "Dividends"])
         ticker = _make_ticker_mock(EQUITY_INFO, empty_df)
@@ -301,17 +301,17 @@ class TestCalcEndDateToFetchEvents:
 
 
 class TestAsxUpcomingDividendsEvents:
-    @patch("app.services.stocks.get_upcoming_dividends_events", return_value=[])
+    @patch("app.services.stock.get_upcoming_dividends_events", return_value=[])
     def test_invalid_index_returns_empty(self, mock_get_events):
-        from app.services.stocks import get_asx_upcoming_dividends_events
+        from app.services.stock import get_asx_upcoming_dividends_events
 
         result = asyncio.run(get_asx_upcoming_dividends_events("INVALID_INDEX"))
         assert result == []
         mock_get_events.assert_not_called()
 
-    @patch("app.services.stocks.get_upcoming_dividends_events", return_value=[])
+    @patch("app.services.stock.get_upcoming_dividends_events", return_value=[])
     def test_valid_index(self, mock_get_events):
-        from app.services.stocks import get_asx_upcoming_dividends_events
+        from app.services.stock import get_asx_upcoming_dividends_events
 
         result = asyncio.run(get_asx_upcoming_dividends_events("ASX200"))
         assert result == []
@@ -319,17 +319,17 @@ class TestAsxUpcomingDividendsEvents:
 
 
 class TestUsUpcomingDividendsEvents:
-    @patch("app.services.stocks.get_upcoming_dividends_events", return_value=[])
+    @patch("app.services.stock.get_upcoming_dividends_events", return_value=[])
     def test_invalid_index_returns_empty(self, mock_get_events):
-        from app.services.stocks import get_us_upcoming_dividends_events
+        from app.services.stock import get_us_upcoming_dividends_events
 
         result = asyncio.run(get_us_upcoming_dividends_events("INVALID"))
         assert result == []
         mock_get_events.assert_not_called()
 
-    @patch("app.services.stocks.get_upcoming_dividends_events", return_value=[])
+    @patch("app.services.stock.get_upcoming_dividends_events", return_value=[])
     def test_valid_index(self, mock_get_events):
-        from app.services.stocks import get_us_upcoming_dividends_events
+        from app.services.stock import get_us_upcoming_dividends_events
 
         result = asyncio.run(get_us_upcoming_dividends_events("SP500"))
         assert result == []
@@ -337,17 +337,17 @@ class TestUsUpcomingDividendsEvents:
 
 
 class TestVnUpcomingDividendsEvents:
-    @patch("app.services.stocks.get_upcoming_dividends_events", return_value=[])
+    @patch("app.services.stock.get_upcoming_dividends_events", return_value=[])
     def test_invalid_index_returns_empty(self, mock_get_events):
-        from app.services.stocks import get_vn_upcoming_dividends_events
+        from app.services.stock import get_vn_upcoming_dividends_events
 
         result = asyncio.run(get_vn_upcoming_dividends_events("INVALID"))
         assert result == []
         mock_get_events.assert_not_called()
 
-    @patch("app.services.stocks.get_upcoming_dividends_events", return_value=[])
+    @patch("app.services.stock.get_upcoming_dividends_events", return_value=[])
     def test_valid_index(self, mock_get_events):
-        from app.services.stocks import get_vn_upcoming_dividends_events
+        from app.services.stock import get_vn_upcoming_dividends_events
 
         result = asyncio.run(get_vn_upcoming_dividends_events("VN30"))
         assert result == []
@@ -355,17 +355,17 @@ class TestVnUpcomingDividendsEvents:
 
 
 class TestAsxUpcomingEarningsEvents:
-    @patch("app.services.stocks.get_upcoming_earnings_events", return_value=[])
+    @patch("app.services.stock.get_upcoming_earnings_events", return_value=[])
     def test_invalid_index_returns_empty(self, mock_get_events):
-        from app.services.stocks import get_asx_upcoming_earnings_events
+        from app.services.stock import get_asx_upcoming_earnings_events
 
         result = asyncio.run(get_asx_upcoming_earnings_events("INVALID"))
         assert result == []
         mock_get_events.assert_not_called()
 
-    @patch("app.services.stocks.get_upcoming_earnings_events", return_value=[])
+    @patch("app.services.stock.get_upcoming_earnings_events", return_value=[])
     def test_valid_index(self, mock_get_events):
-        from app.services.stocks import get_asx_upcoming_earnings_events
+        from app.services.stock import get_asx_upcoming_earnings_events
 
         result = asyncio.run(get_asx_upcoming_earnings_events("ASX300"))
         assert result == []
@@ -373,17 +373,17 @@ class TestAsxUpcomingEarningsEvents:
 
 
 class TestUsUpcomingEarningsEvents:
-    @patch("app.services.stocks.get_upcoming_earnings_events", return_value=[])
+    @patch("app.services.stock.get_upcoming_earnings_events", return_value=[])
     def test_invalid_index_returns_empty(self, mock_get_events):
-        from app.services.stocks import get_us_upcoming_earnings_events
+        from app.services.stock import get_us_upcoming_earnings_events
 
         result = asyncio.run(get_us_upcoming_earnings_events("INVALID"))
         assert result == []
         mock_get_events.assert_not_called()
 
-    @patch("app.services.stocks.get_upcoming_earnings_events", return_value=[])
+    @patch("app.services.stock.get_upcoming_earnings_events", return_value=[])
     def test_valid_index(self, mock_get_events):
-        from app.services.stocks import get_us_upcoming_earnings_events
+        from app.services.stock import get_us_upcoming_earnings_events
 
         result = asyncio.run(get_us_upcoming_earnings_events("NASDAQ100"))
         assert result == []

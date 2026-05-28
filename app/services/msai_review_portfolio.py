@@ -1,7 +1,7 @@
+from ..models import ai as models_ai
 from ..models import finhub as models
-from ..models.ai import AnalysisResult
 from ..services import ai_helper
-from ..utils.conv import country_to_iso2
+from ..utils import conv
 
 DEFAULT_INVESTOR_THEME = (
     "- Risk tolerance: moderate\n- Time horizon: 3-5 years\n- Goal: capital growth\n- Rebalance frequency: semi-annual"
@@ -89,9 +89,9 @@ async def ai_review_portfolio(
     portfolio: list[models.HoldingTicker],
     country: str,
     investor_theme: str = DEFAULT_INVESTOR_THEME,
-) -> AnalysisResult | None:
+) -> models_ai.AnalysisResult | None:
     """
-    Build a portfolio using AI
+    Build a portfolio using AI assistance.
 
     Args:
         portfolio (list[models.HoldingTicker]): Existing positions in the current portfolio
@@ -99,7 +99,7 @@ async def ai_review_portfolio(
         investor_theme (optional, string): The investor's profile, goals, and preferences
 
     Returns:
-        AnalysisResult | None: A AnalysisResult object containing the analysis, or None.
+        models_ai.AnalysisResult | None: A models_ai.AnalysisResult object containing the analysis, or None.
     """
     if not portfolio:
         return None
@@ -111,20 +111,20 @@ async def ai_review_portfolio(
         holdings_lines.append(f"  - {pos.ticker}: {pos.num_shares} shares, market value ${market_value:,.2f}")
     existing_holdings = "\n\n### Current holdings\n" + "\n".join(holdings_lines)
 
-    country = country_to_iso2(country)
+    country = conv.country_to_iso2(country)
     investor_profile = f"- Target market/country: {country}\n" + investor_theme + existing_holdings
 
     # Step 2: use AI to build the ready-to-use prompt to review the portfolio
     build_prompt = BUILD_PROMPT_TEMPLATE.format(investor_profile=investor_profile)
     build_result = await ai_helper.ai_exec_task("REVIEW_PORTFOLIO_BUILD_PROMPT", build_prompt, country)
     if build_result.is_error:
-        return AnalysisResult(llm_error=True, llm_error_msg=build_result.error_msg)
+        return models_ai.AnalysisResult(llm_error=True, llm_error_msg=build_result.error_msg)
 
     analysis_prompt = build_result.completion
 
     # Step 3: execute the prompt built from previous step
     exec_result = await ai_helper.ai_exec_task("REVIEW_PORTFOLIO_EXEC", analysis_prompt, country)
     if exec_result.is_error:
-        return AnalysisResult(llm_error=True, llm_error_msg=exec_result.error_msg)
+        return models_ai.AnalysisResult(llm_error=True, llm_error_msg=exec_result.error_msg)
 
-    return AnalysisResult(analysis=exec_result.completion)
+    return models_ai.AnalysisResult(analysis=exec_result.completion)

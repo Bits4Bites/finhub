@@ -1,6 +1,5 @@
 from .. import config
 from ..models import finhub as models
-from ..models.finhub import HistoryPoint
 from .base_req_resp import BaseResponse
 
 
@@ -13,7 +12,7 @@ class StockQuoteResponse(BaseResponse):
 
 
 class StockHistoryResponse(BaseResponse):
-    data: list[HistoryPoint] | None = None
+    data: list[models.HistoryPoint] | None = None
 
 
 class SymbolOverviewResponse(BaseResponse):
@@ -25,7 +24,7 @@ class SymbolInfoResponse(BaseResponse):
 
 
 class StockQuoteAtDateResponse(BaseResponse):
-    data: HistoryPoint | None = None
+    data: models.HistoryPoint | None = None
 
 
 class IndexCompaniesResponse(BaseResponse):

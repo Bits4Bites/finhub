@@ -6,15 +6,15 @@ from zoneinfo import ZoneInfo
 import yfinance as yf
 from bs4 import BeautifulSoup
 
-from ..config import LLMTaskConfigOverride, settings_llm_task
+from .. import config
 from ..models import ai as ai_models
+from ..models import event as models_event
 from ..models import finhub as models
 from ..models import types
 from ..services import crawler as crawler_service
-from ..services import stocks as stock_service
+from ..services import stock as stock_service
+from ..utils import conv, yfutils
 from ..utils import finhub as finhub_utils
-from ..utils.conv import yyyymmdd_to_iso
-from ..utils.yfutils import classify_market_cap
 from . import ai_helper
 
 EVENT_ASX_NEW_LISTINGS = "ASX_NEW_LISTING_EVENTS"
@@ -39,12 +39,12 @@ async def ai_exec_prompt(
     country: str = "",
     thinking_level: ai_helper.ThinkingLevel = None,
     *,
-    llm_config_override: LLMTaskConfigOverride = None,
+    llm_config_override: config.LLMTaskConfigOverride = None,
 ) -> ai_models.LLMResponse:
     """
     Executes a prompt using the appropriate LLM based on the task configuration.
     """
-    task_cfg = settings_llm_task.tasks.get(task_id)
+    task_cfg = config.settings_llm_task.tasks.get(task_id)
     if not task_cfg:
         raise ValueError(f"LLM task configuration for task_id '{task_id}' not found.")
     prompt_cfg = ai_helper.PromptConfig(
@@ -58,7 +58,7 @@ async def ai_exec_prompt(
 # ----------------------------------------------------------------------#
 
 
-async def _get_asx_new_listings() -> list[models.ListingEvent]:
+async def _get_asx_new_listings() -> list[models_event.ListingEvent]:
     event_type = EVENT_ASX_NEW_LISTINGS
     prompt_template = prompts[event_type] if event_type in prompts else ""
     if not prompt_template:
@@ -88,10 +88,10 @@ async def _get_asx_new_listings() -> list[models.ListingEvent]:
         "src": "ASX",
         "link": "https://www.asx.com.au/listings/upcoming-floats-and-listings",
     }
-    return models.parse_new_listing_events_from_json(llm_result.completion, default_vals)
+    return models_event.parse_new_listing_events_from_json(llm_result.completion, default_vals)
 
 
-async def _analyze_asx_listings(events: list[models.ListingEvent]) -> list[models.ListingEvent]:
+async def _analyze_asx_listings(events: list[models_event.ListingEvent]) -> list[models_event.ListingEvent]:
     if len(events) == 0:
         return events
 
@@ -122,7 +122,7 @@ async def _analyze_asx_listings(events: list[models.ListingEvent]) -> list[model
         return events
         # raise RuntimeError(f"[ERROR] LLM failed to generate response for new listing events: {llm_result.completion}")
 
-    analysis = models.parse_listing_analysis_from_json(llm_result.completion, {})
+    analysis = models_event.parse_listing_analysis_from_json(llm_result.completion, {})
     for e in events:
         if e.symbol in analysis:
             e.analysis = analysis[e.symbol]
@@ -130,18 +130,18 @@ async def _analyze_asx_listings(events: list[models.ListingEvent]) -> list[model
     return events
 
 
-async def ai_get_asx_new_listings() -> list[models.ListingEvent]:
+async def ai_get_asx_new_listings() -> list[models_event.ListingEvent]:
     """
     Check for new listings for ASX, using AI assistance.
 
     Returns:
-        list[models.ListingEvent]: A list of new listing events
+        list[models_event.ListingEvent]: A list of new listing events
     """
     events = await _get_asx_new_listings()
     events = await _analyze_asx_listings(events)
     tz = ZoneInfo("Australia/Sydney")
     for event in events:
-        event.date = yyyymmdd_to_iso(event.date or "", tz)
+        event.date = conv.yyyymmdd_to_iso(event.date or "", tz)
         event.timestamp = int(datetime.fromisoformat(event.date or "").timestamp())
     return events
 
@@ -333,8 +333,8 @@ async def ai_analyze_dividend_event(
     symbol: str,
     ex_date: str,
     div_amount: float,
-    llm_config_override: LLMTaskConfigOverride | None = None,
-) -> models.DividendEventAnalysis | None:
+    llm_config_override: config.LLMTaskConfigOverride | None = None,
+) -> models_event.DividendEventAnalysis | None:
     """
     Analyzes a dividend event using AI assistance.
 
@@ -342,10 +342,10 @@ async def ai_analyze_dividend_event(
         symbol (str): Stock ticker symbol (e.g., 'AAPL', 'BHP.AX', 'HOSE:BID' etc.).
         ex_date (str): Ex-dividend date in ISO format (YYYY-MM-DD).
         div_amount (float): Dividend amount per share.
-        llm_config_override (LLMTaskConfigOverride): (optional) Supply to override the default LLM task config.
+        llm_config_override (config.LLMTaskConfigOverride): (optional) Supply to override the default LLM task config.
 
     Returns:
-        models.DividendEventAnalysis: An object containing the analysis of the dividend event
+        models_event.DividendEventAnalysis: An object containing the analysis of the dividend event
     """
     yf_ticker = finhub_utils.to_yf_symbol_format(symbol)
     ticker = yf.Ticker(yf_ticker)
@@ -389,7 +389,7 @@ async def ai_analyze_dividend_event(
         if result.market_trend_60d is not None
         else "N/A"
     )
-    cap_size, market_index = classify_market_cap(ticker)
+    cap_size, market_index = yfutils.classify_market_cap(ticker)
     cap_size_str = ""
     if cap_size is not None:
         cap_size_str = f"({cap_size}"
@@ -517,7 +517,7 @@ async def ai_analyze_portfolio(
     country: str,
     investor_theme: str = DEFAULT_INVESTOR_THEME,
     template: Literal["allocation", "swing", "hybrid"] = "hybrid",
-    llm_config_override: LLMTaskConfigOverride | None = None,
+    llm_config_override: config.LLMTaskConfigOverride | None = None,
 ) -> models.PortfolioAnalysis:
     """
     Analyzes a portfolio using AI assistance.
@@ -527,7 +527,7 @@ async def ai_analyze_portfolio(
         country (str): Country code
         investor_theme (str, optional): Investor's theme.
         template (str, optional): Define which prompt template to use
-        llm_config_override (LLMTaskConfigOverride): (optional) Supply to override the default LLM task config.
+        llm_config_override (config.LLMTaskConfigOverride): (optional) Supply to override the default LLM task config.
 
     Returns:
         models.PortfolioAnalysis: An object containing the analysis of the portfolio

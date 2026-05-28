@@ -1,12 +1,10 @@
 import yfinance as yf
 
 from .. import config
-from ..models.ai import AnalysisResult
-from ..models.types import LIC_ASSET, REIT_ASSET, STANDARD_ASSET
+from ..models import ai as models_ai
+from ..models import types
 from ..services import ai_helper
-from ..utils import yfutils
-from ..utils.conv import country_to_iso2, normalize_exchange_code, to_yf_symbol_format
-from ..utils.yfutils import classify_market_cap
+from ..utils import conv, yfutils
 
 DEFAULT_INTENT = (
     "One-page analysis and Stock outlook with trend and price range prediction for the next 2 weeks, 1 month, and 3 months. "
@@ -65,11 +63,11 @@ def _build_analysis_prompt(*, ticker: yf.Ticker, intent: str = DEFAULT_INTENT) -
     """Build the meta-prompt that instructs the AI to produce a stock analysis prompt."""
     info = ticker.info
     asset_type = yfutils.detect_asset_type(ticker=ticker)
-    exchange = normalize_exchange_code(info.get("fullExchangeName") or info.get("exchange") or "")
-    cap_size, market_index = classify_market_cap(ticker)
+    exchange = conv.normalize_exchange_code(info.get("fullExchangeName") or info.get("exchange") or "")
+    cap_size, market_index = yfutils.classify_market_cap(ticker)
 
     # Sector/Industry only relevant for EQUITY and REIT
-    if asset_type in (STANDARD_ASSET, REIT_ASSET, LIC_ASSET):
+    if asset_type in (types.STANDARD_ASSET, types.REIT_ASSET, types.LIC_ASSET):
         sector_industry = (
             f"- Sector:     {info.get('sector') or '(n/a)'}\n- Industry:   {info.get('industry') or '(n/a)'}\n"
         )
@@ -89,19 +87,19 @@ def _build_analysis_prompt(*, ticker: yf.Ticker, intent: str = DEFAULT_INTENT) -
     )
 
 
-async def ai_analyze_ticker(symbol: str, *, intent: str = DEFAULT_INTENT) -> AnalysisResult | None:
+async def ai_analyze_ticker(symbol: str, *, intent: str = DEFAULT_INTENT) -> models_ai.AnalysisResult | None:
     """
-    Analyze a ticker using AI.
+    Analyze a ticker using AI assistance.
 
     Args:
         symbol (str): The stock symbol to analyze, accepting YF format (e.g. ABC.AX) or EXCHANGE:CODE (e.g. NASDAQ:XYZ).
         intent (str, optional): The intent to use for this analysis. Defaults to DEFAULT_INTENT.
 
     Returns:
-        AnalysisResult | None: A AnalysisResult object containing the analysis, or None.
+        models_ai.AnalysisResult | None: A models_ai.AnalysisResult object containing the analysis, or None.
     """
     # Step 1: check if the ticker is valid
-    yf_ticker = to_yf_symbol_format(symbol)
+    yf_ticker = conv.to_yf_symbol_format(symbol)
     ticker = yf.Ticker(yf_ticker)
     quote_type = ticker.info.get("quoteType")
     if quote_type not in config.ALLOWED_QUOTE_TYPES:
@@ -110,16 +108,16 @@ async def ai_analyze_ticker(symbol: str, *, intent: str = DEFAULT_INTENT) -> Ana
     # Step 2: use AI to build the ready-to-use prompt to analyze the ticker with the intent
     build_prompt_input = _build_analysis_prompt(ticker=ticker, intent=intent)
 
-    country = country_to_iso2(ticker.info.get("country", ""))
+    country = conv.country_to_iso2(ticker.info.get("country", ""))
     llm_result = await ai_helper.ai_exec_task("ANALYZE_TICKER_BUILD_PROMPT", build_prompt_input, country)
     if llm_result.is_error:
-        return AnalysisResult(llm_error=True, llm_error_msg=llm_result.error_msg)
+        return models_ai.AnalysisResult(llm_error=True, llm_error_msg=llm_result.error_msg)
 
     analysis_prompt = llm_result.completion
 
     # Step 3: execute the prompt built from previous step
     exec_result = await ai_helper.ai_exec_task("ANALYZE_TICKER_EXEC", analysis_prompt, country)
     if exec_result.is_error:
-        return AnalysisResult(llm_error=True, llm_error_msg=exec_result.error_msg)
+        return models_ai.AnalysisResult(llm_error=True, llm_error_msg=exec_result.error_msg)
 
-    return AnalysisResult(analysis=exec_result.completion)
+    return models_ai.AnalysisResult(analysis=exec_result.completion)

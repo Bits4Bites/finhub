@@ -6,19 +6,11 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 import yfinance as yf
 
+from ..models import event as models_event
 from ..models import finhub as models
-from ..models.finhub import (
-    HistoryPoint,
-    StockQuote,
-    SymbolInfo,
-    SymbolOverview,
-    UpcomingDividendEvent,
-    UpcomingEarningsEvent,
-)
 from ..services import crawler as crawler_service
+from ..utils import conv, yfutils
 from ..utils import finhub as finhub_utils
-from ..utils.conv import to_yf_symbol_format, yyyymmdd_to_iso
-from ..utils.yfutils import lookup_index_yf_static_symbol, lookup_peer_yf_static_symbol, tz_from_yf_ticker
 
 allowed_quote_types = {"EQUITY", "ETF"}
 
@@ -44,7 +36,7 @@ def get_symbol_info_raw(symbol: str) -> dict[str, Any]:
     return result
 
 
-def get_symbol_info(symbol: str) -> SymbolInfo | None:
+def get_symbol_info(symbol: str) -> models.SymbolInfo | None:
     """
     Fetches detailed information about a ticker symbol.
 
@@ -52,17 +44,17 @@ def get_symbol_info(symbol: str) -> SymbolInfo | None:
         symbol (str): The stock symbol to fetch information for, accepting YF format (e.g. ABC.AX) or EXCHANGE:CODE (e.g. NASDAQ:XYZ).
 
     Returns:
-        SymbolInfo | None: A SymbolInfo object containing the information about the symbol, or None.
+        models.SymbolInfo | None: A models.SymbolInfo object containing the information about the symbol, or None.
     """
-    yf_symbol = to_yf_symbol_format(symbol)
+    yf_symbol = conv.to_yf_symbol_format(symbol)
     ticker = yf.Ticker(yf_symbol)
     quote_type = ticker.info.get("quoteType")
     if quote_type in allowed_quote_types:
-        return SymbolInfo(ticker)
+        return models.SymbolInfo(ticker)
     return None
 
 
-def get_symbol_overview(symbol: str) -> SymbolOverview | None:
+def get_symbol_overview(symbol: str) -> models.SymbolOverview | None:
     """
     Fetches overview information about a ticker symbol.
 
@@ -70,17 +62,17 @@ def get_symbol_overview(symbol: str) -> SymbolOverview | None:
         symbol (str): The stock symbol to fetch information for, accepting YF format (e.g. ABC.AX) or EXCHANGE:CODE (e.g. NASDAQ:XYZ).
 
     Returns:
-        SymbolOverview | None: A SymbolOverview object containing the overview information about the symbol, or None.
+        models.SymbolOverview | None: A models.SymbolOverview object containing the overview information about the symbol, or None.
     """
-    yf_symbol = to_yf_symbol_format(symbol)
+    yf_symbol = conv.to_yf_symbol_format(symbol)
     ticker = yf.Ticker(yf_symbol)
     quote_type = ticker.info.get("quoteType")
     if quote_type in allowed_quote_types:
-        return SymbolOverview(ticker)
+        return models.SymbolOverview(ticker)
     return None
 
 
-def get_stock_quotes(symbols: list[str]) -> dict[str, StockQuote]:
+def get_stock_quotes(symbols: list[str]) -> dict[str, models.StockQuote]:
     """
     Fetches stock quotes for a list of ticker symbols.
 
@@ -88,9 +80,9 @@ def get_stock_quotes(symbols: list[str]) -> dict[str, StockQuote]:
         symbols (list[str]): A list of stock symbols to fetch quotes for, accepting YF format (e.g. ABC.AX) or EXCHANGE:CODE (e.g. NASDAQ:XYZ).
 
     Returns:
-        dict[str, StockQuote]: A dictionary mapping each symbol to its corresponding StockQuote object.
+        dict[str, models.StockQuote]: A dictionary mapping each symbol to its corresponding models.StockQuote object.
     """
-    yf_symbols = [to_yf_symbol_format(s) for s in symbols]
+    yf_symbols = [conv.to_yf_symbol_format(s) for s in symbols]
     tickers = yf.Tickers(" ".join(yf_symbols))
     quotes = {}
     for i in range(0, len(symbols)):
@@ -100,11 +92,11 @@ def get_stock_quotes(symbols: list[str]) -> dict[str, StockQuote]:
             quote_type = ticker.info.get("quoteType") if ticker.info.get("quoteType") is not None else "NONE"
             if quote_type in allowed_quote_types:
                 symbol = symbols[i]
-                quotes[symbol] = StockQuote(ticker)
+                quotes[symbol] = models.StockQuote(ticker)
     return quotes
 
 
-def get_stock_quote_at_date(symbol: str, date_str: str) -> HistoryPoint | None:
+def get_stock_quote_at_date(symbol: str, date_str: str) -> models.HistoryPoint | None:
     """
     Fetches stock quote information for a given ticker symbol at a specific date.
 
@@ -113,9 +105,9 @@ def get_stock_quote_at_date(symbol: str, date_str: str) -> HistoryPoint | None:
         date_str (str): The date to fetch the quote for (format: YYYY-MM-DD).
 
     Returns:
-        HistoryPoint | None: A HistoryPoint object containing the quote information for the symbol at the specified date, or None.
+        models.HistoryPoint | None: A models.HistoryPoint object containing the quote information for the symbol at the specified date, or None.
     """
-    yf_symbol = to_yf_symbol_format(symbol)
+    yf_symbol = conv.to_yf_symbol_format(symbol)
     ticker = yf.Ticker(yf_symbol)
     quote_type = ticker.info.get("quoteType")
     if quote_type in allowed_quote_types:
@@ -129,7 +121,7 @@ def get_stock_quote_at_date(symbol: str, date_str: str) -> HistoryPoint | None:
         history = ticker.history(start=start_date, end=end_date, interval="1d", auto_adjust=False)
         if not history.empty:
             point = history.iloc[-1]
-            return HistoryPoint(
+            return models.HistoryPoint(
                 timestamp=point.name.timestamp(),
                 timestamp_str=point.name.isoformat(sep=" ", timespec="seconds"),
                 open=point["Open"],
@@ -163,7 +155,7 @@ async def get_upcoming_dividends_events(
     *,
     default_vals: dict[str, Any] = None,
     index: str = "",
-) -> list[UpcomingDividendEvent]:
+) -> list[models_event.UpcomingDividendEvent]:
     """
     Check for upcoming dividend/distribution events (AU, US & VN only).
 
@@ -174,7 +166,7 @@ async def get_upcoming_dividends_events(
         index (str, optional): internal use
 
     Returns:
-        list[UpcomingDividendEvent]: A list of upcoming dividend/distribution events
+        list[models_event.UpcomingDividendEvent]: A list of upcoming dividend/distribution events
     """
     country = country.upper()
     end_date = calc_end_date_to_fetch_events(event_type="DIVIDEND", tz=tz, index=index)
@@ -256,17 +248,17 @@ async def get_upcoming_dividends_events(
     raw_data["yield"] = raw_data["yield"].str.rstrip("%").astype(float) / 100
 
     raw_data_json = raw_data.to_json(orient="records") or ""
-    events = models.parse_upcoming_dividend_events_from_json(raw_data_json, default_vals)
+    events = models_event.parse_upcoming_dividend_events_from_json(raw_data_json, default_vals)
     for event in events:
         event.symbol = f"{event.exchange}:{event.symbol}"
-        event.date = yyyymmdd_to_iso(event.date or "", tz=tz)
+        event.date = conv.yyyymmdd_to_iso(event.date or "", tz=tz)
         event.timestamp = int(datetime.fromisoformat(event.date or "").timestamp())
         if event.payment_date:
-            event.payment_date = yyyymmdd_to_iso(event.payment_date, tz=tz)
+            event.payment_date = conv.yyyymmdd_to_iso(event.payment_date, tz=tz)
     return events
 
 
-async def get_asx_upcoming_dividends_events(index: str = "") -> list[UpcomingDividendEvent]:
+async def get_asx_upcoming_dividends_events(index: str = "") -> list[models_event.UpcomingDividendEvent]:
     """
     Check for upcoming dividend/distribution events for ASX.
 
@@ -274,7 +266,7 @@ async def get_asx_upcoming_dividends_events(index: str = "") -> list[UpcomingDiv
         index (str, optional): ASX index to filter stocks (e.g. ASX20, ASX50, ASX100, ASX200 and ASX300)
 
     Returns:
-        list[UpcomingDividendEvent]: A list of upcoming dividend/distribution events
+        list[models_event.UpcomingDividendEvent]: A list of upcoming dividend/distribution events
     """
     asx_indices = ["ASX20", "ASX50", "ASX100", "ASX200", "ASX300"]
     index = index.upper()
@@ -298,7 +290,7 @@ async def get_asx_upcoming_dividends_events(index: str = "") -> list[UpcomingDiv
     return events
 
 
-async def get_us_upcoming_dividends_events(index: str = "") -> list[UpcomingDividendEvent]:
+async def get_us_upcoming_dividends_events(index: str = "") -> list[models_event.UpcomingDividendEvent]:
     """
     Check for upcoming dividend/distribution events for US market.
 
@@ -306,7 +298,7 @@ async def get_us_upcoming_dividends_events(index: str = "") -> list[UpcomingDivi
         index (str, optional): index to filter stocks (e.g. NASDAQ100, SP500, SP400 and SP600)
 
     Returns:
-        list[UpcomingDividendEvent]: A list of upcoming dividend/distribution events
+        list[models_event.UpcomingDividendEvent]: A list of upcoming dividend/distribution events
     """
     us_indices = ["NASDAQ100", "SP500", "SP400", "SP600"]
     index = index.upper()
@@ -329,7 +321,7 @@ async def get_us_upcoming_dividends_events(index: str = "") -> list[UpcomingDivi
     return events
 
 
-async def get_vn_upcoming_dividends_events(index: str = "") -> list[UpcomingDividendEvent]:
+async def get_vn_upcoming_dividends_events(index: str = "") -> list[models_event.UpcomingDividendEvent]:
     """
     Check for upcoming dividend/distribution events for VN market, using AI assistance.
 
@@ -337,7 +329,7 @@ async def get_vn_upcoming_dividends_events(index: str = "") -> list[UpcomingDivi
         index (str, optional): index to filter stocks (e.g. VN30, VN100 and HNX30)
 
     Returns:
-        list[UpcomingDividendEvent]: A list of upcoming dividend/distribution events
+        list[models_event.UpcomingDividendEvent]: A list of upcoming dividend/distribution events
     """
     vn_indices = ["VN30", "VN100", "HNX30"]
     index = index.upper()
@@ -363,7 +355,7 @@ async def get_vn_upcoming_dividends_events(index: str = "") -> list[UpcomingDivi
 
 async def get_upcoming_earnings_events(
     country: str, tz: ZoneInfo, *, default_vals: dict[str, Any] = None, index: str = ""
-) -> list[UpcomingEarningsEvent]:
+) -> list[models_event.UpcomingEarningsEvent]:
     """
     Check for upcoming earnings events (AU  & US only).
 
@@ -374,7 +366,7 @@ async def get_upcoming_earnings_events(
         index (str, optional): internal use
 
     Returns:
-        list[UpcomingEarningsEvent]: A list of upcoming earnings events
+        list[models_event.UpcomingEarningsEvent]: A list of upcoming earnings events
     """
     country = country.upper()
     end_date = calc_end_date_to_fetch_events(event_type="EARNINGS", tz=tz, index=index)
@@ -413,15 +405,15 @@ async def get_upcoming_earnings_events(
     )
 
     raw_data_json = raw_data.to_json(orient="records") or ""
-    events = models.parse_upcoming_earnings_events_from_json(raw_data_json, default_vals)
+    events = models_event.parse_upcoming_earnings_events_from_json(raw_data_json, default_vals)
     for event in events:
         event.symbol = f"{event.exchange}:{event.symbol}"
-        event.date = yyyymmdd_to_iso(event.date or "", tz)
+        event.date = conv.yyyymmdd_to_iso(event.date or "", tz)
         event.timestamp = int(datetime.fromisoformat(event.date or "").timestamp())
     return events
 
 
-async def get_asx_upcoming_earnings_events(index: str = "") -> list[UpcomingEarningsEvent]:
+async def get_asx_upcoming_earnings_events(index: str = "") -> list[models_event.UpcomingEarningsEvent]:
     """
     Check for upcoming earnings events for ASX.
 
@@ -429,7 +421,7 @@ async def get_asx_upcoming_earnings_events(index: str = "") -> list[UpcomingEarn
         index (str, optional): ASX index to filter stocks (e.g. ASX20, ASX50, ASX100, ASX200 and ASX300)
 
     Returns:
-        list[UpcomingEarningsEvent]: A list of upcoming earnings events
+        list[models_event.UpcomingEarningsEvent]: A list of upcoming earnings events
     """
     asx_indices = ["ASX20", "ASX50", "ASX100", "ASX200", "ASX300"]
     index = index.upper()
@@ -453,7 +445,7 @@ async def get_asx_upcoming_earnings_events(index: str = "") -> list[UpcomingEarn
     return events
 
 
-async def get_us_upcoming_earnings_events(index: str = "") -> list[UpcomingEarningsEvent]:
+async def get_us_upcoming_earnings_events(index: str = "") -> list[models_event.UpcomingEarningsEvent]:
     """
     Check for upcoming earnings events for US market.
 
@@ -461,7 +453,7 @@ async def get_us_upcoming_earnings_events(index: str = "") -> list[UpcomingEarni
         index (str, optional): index to filter stocks (e.g. NASDAQ100, SP500, SP400 and SP600)
 
     Returns:
-        list[UpcomingEarningsEvent]: A list of upcoming earnings events
+        list[models_event.UpcomingEarningsEvent]: A list of upcoming earnings events
     """
     us_indices = ["NASDAQ100", "SP500", "SP400", "SP600"]
     index = index.upper()
@@ -493,7 +485,7 @@ async def analyse_dividend_event(
     symbol: str,
     ex_date: str,
     div_amount: float,
-) -> models.DividendEventAnalysis | None:
+) -> models_event.DividendEventAnalysis | None:
     """
     Analyzes a dividend event to estimate price range and recovery probability.
 
@@ -504,11 +496,11 @@ async def analyse_dividend_event(
         div_amount (float): Dividend amount per share.
 
     Returns:
-        models.DividendEventAnalysis: An object containing the analysis of the dividend event
+        models_event.DividendEventAnalysis: An object containing the analysis of the dividend event
     """
-    yf_ticker = to_yf_symbol_format(symbol)
+    yf_ticker = conv.to_yf_symbol_format(symbol)
     ticker = yf.Ticker(yf_ticker) if ticker is None else ticker
-    tz = tz_from_yf_ticker(ticker)
+    tz = yfutils.tz_from_yf_ticker(ticker)
 
     quote_type = ticker.info.get("quoteType")
     if quote_type == "NONE":
@@ -517,12 +509,12 @@ async def analyse_dividend_event(
         raise ValueError(f"Quote type '{quote_type}' for ticker '{ticker}' is not supported for dividend analysis.")
 
     current_price = ticker.info.get("regularMarketPrice", 0)
-    result = models.DividendEventAnalysis(
+    result = models_event.DividendEventAnalysis(
         overview=models.SymbolOverview(ticker),
         price=current_price,
         div_amount=div_amount,
         div_yield=(div_amount / current_price) if current_price else 0.0,
-        ex_div_date=yyyymmdd_to_iso(ex_date, tz=tz),
+        ex_div_date=conv.yyyymmdd_to_iso(ex_date, tz=tz),
     )
     result.ex_div_date_timestamp = int(datetime.fromisoformat(result.ex_div_date or "").timestamp())
 
@@ -589,14 +581,14 @@ async def analyse_dividend_event(
     result.bid_ask_spread = finhub_utils.calc_bid_ask_spread_roll(history[-30:]) or 0.0
 
     result.trend_60d = finhub_utils.calc_trend_ema(history5y[-60:])
-    market_ticker = lookup_index_yf_static_symbol(ticker=ticker)
+    market_ticker = yfutils.lookup_index_yf_static_symbol(ticker=ticker)
     if market_ticker is not None:
         mt = yf.Ticker(market_ticker)
         if "symbol" in mt.info:
             market_history60d = mt.history(period="61d", interval="1d", auto_adjust=False)[:-1]
             market_history60d = market_history60d.tz_convert(tz)
             result.market_trend_60d = finhub_utils.calc_trend_ema(market_history60d)
-    peer_ticker = lookup_peer_yf_static_symbol(ticker=ticker)
+    peer_ticker = yfutils.lookup_peer_yf_static_symbol(ticker=ticker)
     if peer_ticker is not None:
         pt = yf.Ticker(peer_ticker)
         if "symbol" in pt.info:
