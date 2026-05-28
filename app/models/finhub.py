@@ -358,6 +358,10 @@ class SymbolInfo(SymbolOverview):
 
 
 # ----------------------------------------------------------------------#
+# Resolve forward reference: DividendEventAnalysis.overview -> SymbolOverview
+from . import event as _event_models  # noqa: E402
+
+_event_models.DividendEventAnalysis.model_rebuild()
 
 
 class HoldingTicker(BaseModel):

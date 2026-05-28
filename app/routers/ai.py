@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Body, Header, Query
+from fastapi import APIRouter, Body, Query
 
 from .. import config
 from ..models import ai as models_ai
 from ..schemas import ai as schemas_ai
-from ..services import ai as services_ai
+from ..services import msai_analyze_div_event as service_analyze_div_event
 from ..services import msai_analyze_ticker as service_analyze_ticker
 from ..services import msai_build_portfolio as service_build_portfolio
 from ..services import msai_review_portfolio as service_review_portfolio
@@ -38,41 +38,23 @@ async def get_vendors() -> schemas_ai.AIVendorsResponse:
 )
 async def analyse_dividend_event(
     symbol: str = Query(
-        description="The stock symbol. Accept Yahoo Finance format (CBA.AX for Commonwealth Bank of Australia) or EXCHANGE:CODE format (NASDAQ:AAPL for Apple Inc.)."
+        description="The stock symbol. Accept Yahoo Finance format (e.g. CBA.AX) or EXCHANGE:CODE format (e.g. NASDAQ:AAPL)."
     ),
     ex_date: str = Query(description="Ex-Dividend date in format YYYY-MM-DD"),
-    div_amount: float = Query(description="The dividend amount as float number, without currency symbol (e.g. 1.23)"),
-    use_ai_vendor: str = Header(
-        alias="X-AI-Vendor",
-        default=None,
-        description="Specify the AI vendor to use for this task",
-    ),
-    use_ai_tier: str = Header(
-        alias="X-AI-Tier",
-        default=None,
-        description="Specify the AI tier - free, lowcost, premium - to use for this task",
-    ),
-    use_ai_model: str = Header(
-        alias="X-AI-Model",
-        default=None,
-        description="Specify the AI model to use for this task",
+    div_amount: float = Query(description="The dividend amount as float number, without currency symbol (e.g. 1.23)."),
+    intent: str = Query(
+        default=service_analyze_div_event.DEFAULT_INTENT,
+        description="The intent to use for this analysis. It can be used to specify the context or goal of the analysis.",
     ),
 ) -> schemas_ai.AnalyzeDividendEventResponse:
     """
     Analyzes a dividend event using AI assistance.
     """
-    llm_config_override = None
-    if use_ai_vendor and use_ai_tier and use_ai_model:
-        llm_config_override = config.LLMTaskConfigOverride(
-            vendor=use_ai_vendor.upper(),
-            tier=use_ai_tier.upper(),
-            model=use_ai_model,
-        )
-    result = await services_ai.ai_analyze_dividend_event(
+    result = await service_analyze_div_event.ai_analyze_div_event(
         symbol=symbol,
         ex_date=ex_date,
         div_amount=div_amount,
-        llm_config_override=llm_config_override,
+        intent=intent,
     )
     if result is None:
         return schemas_ai.AnalyzeDividendEventResponse(status=400, message="Invalid inputs or stock not found")
@@ -90,7 +72,6 @@ async def analyze_ticker(
     """
     Analyzes a ticker using AI assistance.
     """
-
     result = await service_analyze_ticker.ai_analyze_ticker(symbol=req.symbol, intent=req.intent)
     if not result:
         return schemas_ai.AnalysisResponse(status=400, message="Invalid stock symbol or analysis failed")

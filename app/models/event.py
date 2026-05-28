@@ -7,10 +7,9 @@ from typing import TYPE_CHECKING, Any
 from pydantic import BaseModel
 
 from ..utils import json as json_utils
-from . import ai as models_ai
 
 if TYPE_CHECKING:
-    from .finhub import SymbolOverview
+    pass
 
 
 class EventBase(BaseModel):
@@ -24,12 +23,12 @@ class EventBase(BaseModel):
     link: str | None = None
 
 
-class DividendEventAnalysis(models_ai.BaseAIResult):
+class DividendEventAnalysis(EventBase):
     # ===== base info
-    overview: SymbolOverview = None
+    # overview: SymbolOverview = None
     price: float = 0.0  # current stock price
-    ex_div_date: str | None = None
-    ex_div_date_timestamp: int = 0
+    # ex_div_date: str | None = None
+    # ex_div_date_timestamp: int = 0
     div_amount: float = 0.0
     div_yield: float = 0.0  # div_amount / price
     # ====== analysis result
@@ -53,6 +52,9 @@ class DividendEventAnalysis(models_ai.BaseAIResult):
     market_trend_60d: float = 0.0
     peer_trend_60d: float = 0.0
     # ====== analysis result from AI
+    llm_error: bool = False
+    llm_error_msg: str | None = None
+    llm_response: str | None = None
     search_summary: str | None = None
     strategy: str | None = None
     reasoning: str | None = None

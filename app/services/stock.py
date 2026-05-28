@@ -491,7 +491,7 @@ async def analyse_dividend_event(
 
     Args:
         ticker (yf.Ticker, optional): Pre-created yfinance Ticker object for the stock for reuse/caching purpose. If not provided, it will be created within the function.
-        symbol (str): Stock ticker symbol (e.g., 'AAPL', 'BHP.AX', 'HOSE:BID' etc.).
+        symbol (str): Stock ticker symbol, accept YF format (`CBA.AX`) or `EXCHANGE:CODE` format (`NASDAQ:AAPL`)
         ex_date (str): Ex-dividend date in ISO format (YYYY-MM-DD).
         div_amount (float): Dividend amount per share.
 
@@ -508,15 +508,25 @@ async def analyse_dividend_event(
     if quote_type not in allowed_quote_types:
         raise ValueError(f"Quote type '{quote_type}' for ticker '{ticker}' is not supported for dividend analysis.")
 
-    current_price = ticker.info.get("regularMarketPrice", 0)
+    info = ticker.info
+    current_price = info.get("regularMarketPrice", 0)
     result = models_event.DividendEventAnalysis(
-        overview=models.SymbolOverview(ticker),
+        # overview=models.SymbolOverview(ticker),
+        symbol=info.get("symbol", ""),
+        exchange=conv.normalize_exchange_code(info.get("fullExchangeName") or info.get("exchange") or ""),
+        company_name=info.get("longName") or info.get("shortName") or "(n/a)",
+        # timestamp: int = 0
+        date=conv.yyyymmdd_to_iso(ex_date, tz=tz),
+        # event_category: str | None = None
+        # source_name: str | None = None
+        # link: str | None = None
         price=current_price,
         div_amount=div_amount,
         div_yield=(div_amount / current_price) if current_price else 0.0,
-        ex_div_date=conv.yyyymmdd_to_iso(ex_date, tz=tz),
+        # ex_div_date=conv.yyyymmdd_to_iso(ex_date, tz=tz),
     )
-    result.ex_div_date_timestamp = int(datetime.fromisoformat(result.ex_div_date or "").timestamp())
+    # result.ex_div_date_timestamp = int(datetime.fromisoformat(result.ex_div_date or "").timestamp())
+    result.timestamp = int(datetime.fromisoformat(result.date or "").timestamp())
 
     history = ticker.history(period="5y", interval="1d", auto_adjust=False)
     history5y = history[:-1]

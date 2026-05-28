@@ -10,3 +10,4 @@
 - feat(api): Add API to analyze a given stock.
 - refactor(api): Separate APIs to build new portfolios and analyze/review existing ones.
 - feat(service): Rework services that use AI to build/review portfolios.
+- refactor(api, service): Rework API analyze_dividend_event.

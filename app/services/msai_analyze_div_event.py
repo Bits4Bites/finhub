@@ -1,6 +1,7 @@
+import json
+
 import yfinance as yf
 
-from .. import config
 from ..models import ai as models_ai
 from ..models import event as models_event
 from ..models import types
@@ -8,10 +9,7 @@ from ..services import ai_helper
 from ..services import stock as services_stock
 from ..utils import conv, yfutils
 
-DEFAULT_INTENT = (
-    "One-page analysis and Stock outlook with trend and price range prediction for the next 2 weeks, 1 month, and 3 months. "
-    "Include confidence level (low/medium/high) for each outlook period."
-)
+DEFAULT_INTENT = "Looking to capture the dividend or if post-div dip is worth buying"
 
 BUILD_PROMPT_TEMPLATE = (
     "You are an expert financial analyst and prompt engineer specialising in dividend strategies.\n"
@@ -23,24 +21,20 @@ BUILD_PROMPT_TEMPLATE = (
     '- "N/A": insufficient data or conditions do not favour either strategy\n'
     "\n"
     "## Dividend event details\n"
-    "- Ticker:              {{TICKER}}\n"
-    "- Company name:        {{NAME}}\n"
-    "- Dividend amount:     {{DIV_AMOUNT}}\n"
-    "- Dividend type:       {{DIV_TYPE}}\n"
-    "- Declared date:       {{DECLARED_DATE}}\n"
-    "- Ex-dividend date:    {{EX_DIV_DATE}}\n"
-    "- Record date:         {{RECORD_DATE}}\n"
-    "- Payment date:        {{PAYMENT_DATE}}\n"
-    "- Current price:       {{CURRENT_PRICE}}\n"
-    "- Dividend yield:      {{DIV_YIELD}}\n"
-    "- Quote type:          {{QUOTE_TYPE}}\n"
-    "- Sector / industry:   {{SECTOR}}\n"
-    "- Market cap tier:     {{MARKET_CAP_TIER}}\n"
+    "- Ticker:           {ticker}\n"
+    "- Company name:     {name}\n"
+    "- Dividend amount:  {div_amount}\n"
+    "- Ex-dividend date: {ex_div_date}\n"
+    "- Current price:    {price}\n"
+    "- Dividend yield:   {div_yield}\n"
+    "- Asset type:       {asset_type}\n"
+    "{sector_industry}"
+    "- Exchange:         {exchange}\n"
+    "- Market cap:       {market_cap_tier}\n"
     "\n"
-    "## User context\n"
-    "- Target market:       {{MARKET}}\n"
-    "- Tax residency:       {{TAX_RESIDENCY}}\n"
-    "- User intent:         {{USER_INTENT}}\n"
+    "## Investor context\n"
+    "- Target market:    {market}\n"
+    "- Intent:           {intent}\n"
     "\n"
     "## Your instructions\n"
     "Write a prompt that instructs the premium model to:\n"
@@ -51,7 +45,7 @@ BUILD_PROMPT_TEMPLATE = (
     "   - Current short interest % and any recent changes\n"
     "   - News sentiment in the last 30 days (earnings, guidance, macro headwinds, analyst changes)\n"
     "   - Any upcoming events that could disrupt recovery (earnings, FDA decisions, index rebalancing)\n"
-    "   - Tax treatment of this dividend for {{TAX_RESIDENCY}} (e.g. franking credits on ASX,\n"
+    "   - Tax treatment of this dividend for {market} (e.g. franking credits on ASX,\n"
     "     qualified vs ordinary on US markets, withholding tax for foreign investors)\n"
     "\n"
     "2. Compute or estimate the following fields with full working shown before the JSON output:\n"
@@ -59,7 +53,7 @@ BUILD_PROMPT_TEMPLATE = (
     "     derived from news tone, analyst moves, and short interest direction\n"
     "   - recov_prob_adj: probability (0.00–1.00) that price recovers to pre-ex-div level\n"
     "     within a reasonable timeframe, adjusted for current sentiment and market conditions\n"
-    "   - eff_div: effective dividend yield net of tax for {{TAX_RESIDENCY}},\n"
+    "   - eff_div: effective dividend yield net of tax for {market},\n"
     "     e.g. if franking credits apply, gross up accordingly; if withholding tax applies, net down\n"
     "   - recovery_days: estimated min–max calendar days for price to recover post ex-div,\n"
     '     based on historical patterns; use "N/A" if data is insufficient\n'
@@ -101,16 +95,15 @@ BUILD_PROMPT_TEMPLATE = (
     "   - For small/micro-cap: heavily penalise confidence due to liquidity and volatility risk\n"
     "   - For special/one-off dividends: note that price behaviour may differ from regular dividends\n"
     "\n"
-    "5. Bias the analysis toward {{USER_INTENT}} - if the user has a stated lean,\n"
+    "5. Bias the analysis toward investor intent - if the investor has a stated lean,\n"
     "   the premium model should validate or refute it with evidence rather than ignoring it.\n"
     "\n"
     "## Output format rules for the premium model\n"
     "Instruct the premium model to:\n"
-    "- First show all working, calculations, and web search findings as narrative analysis\n"
-    "- Then output ONLY the following JSON block as the final section, with no text after it:\n"
+    "- Output raw JSON only. No markdown, no backticks, no prose outside the JSON object.\n"
     "\n"
     "```json\n"
-    "{\n"
+    "{{\n"
     '  "search_summary": "2–3 sentences covering news tone, short interest %, key events, and any data gaps",\n'
     '  "strategy": "Dividend Capture|Post-Ex-Div Discount|N/A",\n'
     '  "reasoning": "Key drivers and any failed criteria (max 3 sentences)",\n'
@@ -124,7 +117,7 @@ BUILD_PROMPT_TEMPLATE = (
     '  "confidence": 0,\n'
     '  "risk": 0,\n'
     '  "risk_factors": ["list only factors that apply"]\n'
-    "}\n"
+    "}}\n"
     "```\n"
     "- All numeric fields must be numbers, not strings (except fields explicitly noted as strings)\n"
     '- "recovery_days", "est_drop_price", and "est_recovery_price" must be quoted strings\n'
@@ -139,31 +132,42 @@ BUILD_PROMPT_TEMPLATE = (
 )
 
 
-def _build_analysis_prompt(*, ticker: yf.Ticker, intent: str = DEFAULT_INTENT) -> str:
-    """Build the meta-prompt that instructs the AI to produce a stock analysis prompt."""
+def _build_analysis_prompt(
+    *,
+    ticker: yf.Ticker,
+    pre_result: models_event.DividendEventAnalysis,
+    intent: str = DEFAULT_INTENT,
+) -> str:
+    """Build the meta-prompt that instructs the AI to produce a dividend event analysis prompt."""
     info = ticker.info
     asset_type = yfutils.detect_asset_type(ticker=ticker)
-    exchange = conv.normalize_exchange_code(info.get("fullExchangeName") or info.get("exchange") or "")
     cap_size, market_index = yfutils.classify_market_cap(ticker)
 
     # Sector/Industry only relevant for EQUITY and REIT
     if asset_type in (types.STANDARD_ASSET, types.REIT_ASSET, types.LIC_ASSET):
         sector_industry = (
-            f"- Sector:     {info.get('sector') or '(n/a)'}\n- Industry:   {info.get('industry') or '(n/a)'}\n"
+            f"- Sector:           {info.get('sector') or '(n/a)'}\n"
+            f"- Industry:         {info.get('industry') or '(n/a)'}\n"
         )
     else:
         sector_industry = ""
 
     return BUILD_PROMPT_TEMPLATE.format(
-        intent=intent if intent else DEFAULT_INTENT,
         ticker=info.get("symbol") or "(n/a)",
         name=info.get("longName") or info.get("shortName") or "(n/a)",
+        div_amount=pre_result.div_amount,
+        # ex_div_date=pre_result.ex_div_date,
+        ex_div_date=pre_result.date,
+        price=pre_result.price,
+        div_yield=f"{pre_result.div_yield:.2%}",
         asset_type=asset_type,
         sector_industry=sector_industry,
-        exchange=exchange,
+        exchange=pre_result.exchange,
         market_cap_tier=(
             f"{cap_size} ({market_index})" if cap_size and market_index else f"{cap_size}" if cap_size else "(n/a)"
         ),
+        market=ticker.info.get("country") or "(n/a)",
+        intent=intent if intent else DEFAULT_INTENT,
     )
 
 
@@ -195,26 +199,41 @@ async def ai_analyze_div_event(
     if not result:
         return None
 
-    # Step 1: check if the ticker is valid
-    yf_ticker = conv.to_yf_symbol_format(symbol)
-    ticker = yf.Ticker(yf_ticker)
-    quote_type = ticker.info.get("quoteType")
-    if quote_type not in config.ALLOWED_QUOTE_TYPES:
-        return None
-
-    # Step 2: use AI to build the ready-to-use prompt to analyze the ticker with the intent
-    build_prompt_input = _build_analysis_prompt(ticker=ticker, intent=intent)
+    # Step 2: use AI to build the ready-to-use prompt
+    build_prompt_input = _build_analysis_prompt(ticker=ticker, pre_result=result, intent=intent)
 
     country = conv.country_to_iso2(ticker.info.get("country", ""))
-    llm_result = await ai_helper.ai_exec_task("ANALYZE_TICKER_BUILD_PROMPT", build_prompt_input, country)
+    llm_result = await ai_helper.ai_exec_task("ANALYZE_DIV_EVENT_BUILD_PROMPT", build_prompt_input, country)
     if llm_result.is_error:
         return models_ai.AnalysisResult(llm_error=True, llm_error_msg=llm_result.error_msg)
 
     analysis_prompt = llm_result.completion
 
     # Step 3: execute the prompt built from previous step
-    exec_result = await ai_helper.ai_exec_task("ANALYZE_TICKER_EXEC", analysis_prompt, country)
+    exec_result = await ai_helper.ai_exec_task("ANALYZE_DIV_EVENT_EXEC", analysis_prompt, country)
     if exec_result.is_error:
-        return models_ai.AnalysisResult(llm_error=True, llm_error_msg=exec_result.error_msg)
+        result.llm_error = True
+        result.llm_error_msg = f"LLM failed to generate response for analyzing dividend event: {exec_result.error_msg}"
+        return result
 
-    return models_ai.AnalysisResult(analysis=exec_result.completion)
+    llm_result_obj = json.loads(exec_result.completion)
+    result.search_summary = llm_result_obj.get("search_summary")
+    result.strategy = llm_result_obj.get("strategy")
+    result.reasoning = llm_result_obj.get("reasoning")
+    result.sentiment_score = llm_result_obj.get("sent_score")
+    # result.sentiment_score = float(result.sentiment_score) if result.sentiment_score is not None else None
+    result.recovery_probability_adj = llm_result_obj.get("recov_prob_adj")
+    # result.recovery_probability_adj = (
+    #     float(result.recovery_probability_adj) if result.recovery_probability_adj is not None else None
+    # )
+    result.recovery_days_adj = llm_result_obj.get("recovery_days")
+    result.drop_price_adj = llm_result_obj.get("est_drop_price")
+    result.recovery_price_adj = llm_result_obj.get("est_recovery_price")
+    result.expected_pl = llm_result_obj.get("expected_pl")
+    # result.expected_pl = float(result.expected_pl) if result.expected_pl is not None else None
+    result.confidence_level = llm_result_obj.get("confidence")
+    # result.confidence_level = float(result.confidence_level) if result.confidence_level is not None else None
+    result.risk_level = llm_result_obj.get("risk")
+    # result.risk_level = float(result.risk_level) if result.risk_level is not None else None
+
+    return result
