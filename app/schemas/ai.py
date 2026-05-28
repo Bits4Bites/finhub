@@ -35,6 +35,32 @@ class AnalyzeTickerRequest(BaseRequest):
 # ----------------------------------------------------------------------#
 
 
+class AnalyzePortfolioRequest(BaseRequest):
+    """
+    Request to build a new portfolio or review an existing one.
+
+    Attributes:
+        current_allocation (list[models.HoldingTicker]): A list of current holding tickers in the portfolio.
+        country (str): The country code of the portfolio (e.g. AU for Australia).
+        investor_theme (str): (optional) The investor's theme/style, e.g. '- Risk tolerance: moderate\n- Time horizon: 5-10 years\n- Goal: capital growth\n- Rebalance frequency: semi-annual'.
+    """
+
+    current_allocation: list[models.HoldingTicker] = []
+    country: str = ""
+    investor_theme: str = services_ai.DEFAULT_INVESTOR_THEME
+
+
+class AnalyzePortfolioResponse(AnalysisResponse):
+    """
+    Response schema, containing the analysis result of a portfolio request.
+    """
+
+    pass
+
+
+# ----------------------------------------------------------------------#
+
+
 class AIVendorsResponse(BaseResponse):
     """
     Response schema, containing the list of available AI vendors and enabled API tiers and models.
@@ -58,32 +84,3 @@ class AnalyzeDividendEventResponse(BaseResponse):
     """
 
     data: models.DividendEventAnalysis | None = None
-
-
-# ----------------------------------------------------------------------#
-
-
-class AnalyzePortfolioRequest(BaseRequest):
-    """
-    Request to analyze a portfolio.
-
-    Attributes:
-        current_allocation (list[models.HoldingTicker]): A list of current holding tickers in the portfolio.
-        country (str): The country code of the portfolio (e.g. AU for Australia).
-        investor_theme (str): (optional) The investor's theme/style, e.g. '- Risk tolerance: moderate\n- Time horizon: 5-10 years\n- Goal: capital growth\n- Rebalance frequency: semi-annual'.
-    """
-
-    current_allocation: list[models.HoldingTicker] = []
-    country: str = ""
-    investor_theme: str = services_ai.DEFAULT_INVESTOR_THEME
-
-
-class AnalyzePortfolioResponse(BaseResponse):
-    """
-    Response schema, containing the analysis result of a portfolio request.
-
-    Attributes:
-        data (models.PortfolioAnalysis): The analysis result of the portfolio request.
-    """
-
-    data: models.PortfolioAnalysis | None = None

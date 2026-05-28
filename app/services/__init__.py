@@ -67,12 +67,6 @@ template_list = [
     ai.ANALYZE_ASX_DIVIDEND,
     ai.ANALYZE_US_DIVIDEND,
     ai.ANALYZE_VN_DIVIDEND,
-    ai.ANALYZE_PORTFOLIO_ALLOCATION,
-    ai.ANALYZE_PORTFOLIO_SWING,
-    ai.ANALYZE_PORTFOLIO_HYBRID,
-    ai.BUILD_PORTFOLIO_ALLOCATION,
-    ai.BUILD_PORTFOLIO_SWING,
-    ai.BUILD_PORTFOLIO_HYBRID,
 ]
 template_file_list = [
     "./resources/prompts/asx_new_listings.md",
@@ -80,12 +74,6 @@ template_file_list = [
     "./resources/prompts/analyze_asx_dividend.md",
     "./resources/prompts/analyze_us_dividend.md",
     "./resources/prompts/analyze_vn_dividend.md",
-    "./resources/prompts/analyze_portfolio_allocation.md",
-    "./resources/prompts/analyze_portfolio_swing.md",
-    "./resources/prompts/analyze_portfolio_hybrid.md",
-    "./resources/prompts/build_portfolio_allocation.md",
-    "./resources/prompts/build_portfolio_swing.md",
-    "./resources/prompts/build_portfolio_hybrid.md",
 ]
 
 for tmpl_name, tmpl_file in zip(template_list, template_file_list):
