@@ -277,7 +277,7 @@ class TestAiReviewPortfolio:
 class TestAiAnalyzeDivEvent:
     """Tests for ai_analyze_div_event function."""
 
-    @patch("app.services.msai_analyze_div_event.services_stock.analyse_dividend_event", new_callable=AsyncMock)
+    @patch("app.services.msai_analyze_div_event.services_event.analyse_dividend_event", new_callable=AsyncMock)
     @patch("app.utils.conv.to_yf_symbol_format", return_value="CBA.AX")
     @patch("app.services.msai_analyze_div_event.yf.Ticker")
     def test_returns_none_when_pre_analysis_fails(self, mock_ticker_cls, mock_conv, mock_analyse):
@@ -290,7 +290,7 @@ class TestAiAnalyzeDivEvent:
         assert result is None
 
     @patch("app.services.msai_analyze_div_event.ai_helper.ai_exec_task", new_callable=AsyncMock)
-    @patch("app.services.msai_analyze_div_event.services_stock.analyse_dividend_event", new_callable=AsyncMock)
+    @patch("app.services.msai_analyze_div_event.services_event.analyse_dividend_event", new_callable=AsyncMock)
     @patch("app.utils.conv.to_yf_symbol_format", return_value="CBA.AX")
     @patch("app.services.msai_analyze_div_event.yf.Ticker")
     def test_returns_error_when_build_prompt_fails(self, mock_ticker_cls, mock_conv, mock_analyse, mock_ai_exec):
@@ -317,7 +317,7 @@ class TestAiAnalyzeDivEvent:
         assert "Build timeout" in result.llm_error_msg
 
     @patch("app.services.msai_analyze_div_event.ai_helper.ai_exec_task", new_callable=AsyncMock)
-    @patch("app.services.msai_analyze_div_event.services_stock.analyse_dividend_event", new_callable=AsyncMock)
+    @patch("app.services.msai_analyze_div_event.services_event.analyse_dividend_event", new_callable=AsyncMock)
     @patch("app.utils.conv.to_yf_symbol_format", return_value="CBA.AX")
     @patch("app.services.msai_analyze_div_event.yf.Ticker")
     def test_returns_error_when_exec_fails(self, mock_ticker_cls, mock_conv, mock_analyse, mock_ai_exec):
@@ -347,7 +347,7 @@ class TestAiAnalyzeDivEvent:
         assert "Exec timeout" in result.llm_error_msg
 
     @patch("app.services.msai_analyze_div_event.ai_helper.ai_exec_task", new_callable=AsyncMock)
-    @patch("app.services.msai_analyze_div_event.services_stock.analyse_dividend_event", new_callable=AsyncMock)
+    @patch("app.services.msai_analyze_div_event.services_event.analyse_dividend_event", new_callable=AsyncMock)
     @patch("app.utils.conv.to_yf_symbol_format", return_value="CBA.AX")
     @patch("app.services.msai_analyze_div_event.yf.Ticker")
     def test_returns_full_result_on_success(self, mock_ticker_cls, mock_conv, mock_analyse, mock_ai_exec):

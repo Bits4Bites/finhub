@@ -6,7 +6,7 @@ from ..models import ai as models_ai
 from ..models import event as models_event
 from ..models import types
 from ..services import ai_helper
-from ..services import stock as services_stock
+from ..services import event as services_event
 from ..utils import conv, yfutils
 
 DEFAULT_INTENT = "Looking to capture the dividend or if post-div dip is worth buying"
@@ -193,7 +193,7 @@ async def ai_analyze_div_event(
     # Step 1: ticker validation & analysis based on historical data
     yf_ticker = conv.to_yf_symbol_format(symbol)
     ticker = yf.Ticker(yf_ticker)
-    result = await services_stock.analyse_dividend_event(
+    result = await services_event.analyse_dividend_event(
         ticker=ticker, symbol=symbol, ex_date=ex_date, div_amount=div_amount
     )
     if not result:

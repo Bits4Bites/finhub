@@ -12,7 +12,7 @@ from ..models import event as models_event
 from ..models import finhub as models
 from ..models import types
 from ..services import crawler as crawler_service
-from ..services import stock as stock_service
+from ..services import event as event_service
 from ..utils import conv, yfutils
 from ..utils import finhub as finhub_utils
 from . import ai_helper
@@ -349,7 +349,7 @@ async def ai_analyze_dividend_event(
     """
     yf_ticker = finhub_utils.to_yf_symbol_format(symbol)
     ticker = yf.Ticker(yf_ticker)
-    result = await stock_service.analyse_dividend_event(
+    result = await event_service.analyse_dividend_event(
         ticker=ticker, symbol=symbol, ex_date=ex_date, div_amount=div_amount
     )
     if not result:
