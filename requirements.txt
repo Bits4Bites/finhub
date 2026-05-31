@@ -8,7 +8,7 @@ flake8-toml-config
 black
 
 yfinance==1.4.0
-google-genai==2.6.0
+google-genai==2.7.0
 openai==2.38.0
 azure-identity==1.25.3
 requests==2.34.2
