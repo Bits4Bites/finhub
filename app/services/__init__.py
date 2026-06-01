@@ -1,7 +1,6 @@
 import logging
 
 from .. import config
-from . import ai
 
 # initialize LLM clients based on configurations
 for vendor_name, api_tiers in list(config.settings_llm_vendor.vendors.items()):
@@ -55,25 +54,15 @@ def read_file_as_single_string(file_path) -> str:
     return ""
 
 
-template_list = [
-    ai.EVENT_ASX_NEW_LISTINGS,
-    ai.ANALYZE_ASX_LISTINGS,
-    ai.ANALYZE_ASX_DIVIDEND,
-    ai.ANALYZE_US_DIVIDEND,
-    ai.ANALYZE_VN_DIVIDEND,
-]
-template_file_list = [
-    "./resources/prompts/asx_new_listings.md",
-    "./resources/prompts/analyze_asx_listings.md",
-    "./resources/prompts/analyze_asx_dividend.md",
-    "./resources/prompts/analyze_us_dividend.md",
-    "./resources/prompts/analyze_vn_dividend.md",
-]
-
-for tmpl_name, tmpl_file in zip(template_list, template_file_list):
-    logging.info("Loading template '%s' from file '%s'...", tmpl_name, tmpl_file)
-    tmpl_content = read_file_as_single_string(tmpl_file)
-    if tmpl_content:
-        ai.prompts[tmpl_name] = tmpl_content
-    else:
-        logging.error("Failed to load prompt template from file '%s'", tmpl_file)
+# template_list = [
+# ]
+# template_file_list = [
+# ]
+#
+# for tmpl_name, tmpl_file in zip(template_list, template_file_list):
+#     logging.info("Loading template '%s' from file '%s'...", tmpl_name, tmpl_file)
+#     tmpl_content = read_file_as_single_string(tmpl_file)
+#     if tmpl_content:
+#         ai.prompts[tmpl_name] = tmpl_content
+#     else:
+#         logging.error("Failed to load prompt template from file '%s'", tmpl_file)

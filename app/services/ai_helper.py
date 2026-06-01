@@ -97,6 +97,8 @@ async def _exec_prompt_openai_client(
         result.tokens_completion,
         result.is_error,
     )
+    if result.is_error:
+        result.error_msg = result.completion
     if os.environ.get("LLM_DEBUG_MODE", "FALSE").upper() == "TRUE":
         print(result.completion)
     else:
@@ -217,6 +219,8 @@ async def _exec_prompt_gemini(
         result.tokens_completion,
         result.is_error,
     )
+    if result.is_error:
+        result.error_msg = result.completion
     if os.environ.get("LLM_DEBUG_MODE", "FALSE").upper() == "TRUE":
         print(result.completion)
     else:

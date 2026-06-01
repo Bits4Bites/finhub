@@ -6,8 +6,8 @@ from fastapi.responses import RedirectResponse
 
 from .. import config
 from ..schemas import events as schemas_event
-from ..services import ai as services_ai
 from ..services import event as services_event
+from ..services import msai_asx_listings as services_asx_listings
 from ..utils import asset as asset_utils
 from ..utils import conv
 
@@ -113,7 +113,7 @@ async def get_new_listings(
     country = conv.country_to_iso2(country)
     match country:
         case "AU":
-            events = await services_ai.ai_get_asx_new_listings()
+            events = await services_asx_listings.ai_get_asx_new_listings()
         case _:
             return schemas_event.ListingsResponse(status=501, message=f"Unsupported country '{country}'")
 

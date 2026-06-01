@@ -11,3 +11,4 @@
 - refactor(api): Separate APIs to build new portfolios and analyze/review existing ones.
 - feat(service): Rework services that use AI to build/review portfolios.
 - refactor(api, service): Rework API analyze_dividend_event.
+- refactor(api, service): Rework API get_new_listings.

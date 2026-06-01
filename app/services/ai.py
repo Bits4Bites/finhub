@@ -1,24 +1,19 @@
 import json
 from datetime import UTC, datetime
 from typing import Literal
-from zoneinfo import ZoneInfo
 
 import yfinance as yf
-from bs4 import BeautifulSoup
 
 from .. import config
 from ..models import ai as ai_models
 from ..models import event as models_event
 from ..models import finhub as models
 from ..models import types
-from ..services import crawler as crawler_service
 from ..services import event as event_service
-from ..utils import conv, yfutils
 from ..utils import finhub as finhub_utils
+from ..utils import yfutils
 from . import ai_helper
 
-EVENT_ASX_NEW_LISTINGS = "ASX_NEW_LISTING_EVENTS"
-ANALYZE_ASX_LISTINGS = "ASX_LISTINGS_ANALYSIS"
 ANALYZE_ASX_DIVIDEND = "ASX_DIVIDEND_ANALYSIS"
 ANALYZE_US_DIVIDEND = "US_DIVIDEND_ANALYSIS"
 ANALYZE_VN_DIVIDEND = "VN_DIVIDEND_ANALYSIS"
@@ -56,94 +51,6 @@ async def ai_exec_prompt(
 
 
 # ----------------------------------------------------------------------#
-
-
-async def _get_asx_new_listings() -> list[models_event.ListingEvent]:
-    event_type = EVENT_ASX_NEW_LISTINGS
-    prompt_template = prompts[event_type] if event_type in prompts else ""
-    if not prompt_template:
-        raise OSError(f"Prompt template for {event_type} is missing or empty.")
-
-    url = "https://www.asx.com.au/listings/upcoming-floats-and-listings"
-    html_content = await crawler_service.fetch_webpage_content(url)
-    if not html_content:
-        return []
-
-    soup = BeautifulSoup(html_content, "html.parser")
-    el_list = soup.select("div.multi-column-height")
-    # join all the text from the elements, only if it contains the string "Listing date"
-    raw_input = "==========\n".join([el.get_text() for el in el_list if "Listing date" in el.get_text()])
-    prompt = prompt_template.replace("{RAW_INPUT_DATA}", raw_input)
-
-    sectors_list = ",".join(finhub_utils.asx_sector_yf_static_tickers.keys())
-    prompt = prompt.replace("{SECTORS}", sectors_list)
-
-    llm_result = await ai_exec_prompt(task_id="PARSE_NEW_LISTING_EVENTS_NO_WEB_SEARCH", prompt=prompt, country="AU")
-    if llm_result.is_error:
-        raise RuntimeError(f"[ERROR] LLM failed to generate response for new listing events: {llm_result.completion}")
-
-    default_vals = {
-        "currency": "AUD",
-        "exchange": "ASX",
-        "src": "ASX",
-        "link": "https://www.asx.com.au/listings/upcoming-floats-and-listings",
-    }
-    return models_event.parse_new_listing_events_from_json(llm_result.completion, default_vals)
-
-
-async def _analyze_asx_listings(events: list[models_event.ListingEvent]) -> list[models_event.ListingEvent]:
-    if len(events) == 0:
-        return events
-
-    event_type = ANALYZE_ASX_LISTINGS
-    prompt_template = prompts[event_type] if event_type in prompts else ""
-    if not prompt_template:
-        return events
-        # raise EnvironmentError(f"Prompt template for {event_type} is missing or empty.")
-
-    # prepare input data for LLM
-    tz = ZoneInfo("Australia/Sydney")
-    now = datetime.now(tz).strftime("%Y-%m-%d")
-    companies = ""
-    for e in events:
-        companies += f"{e.symbol} ({e.company_name})"
-        if now > e.date:
-            companies += f" | Listed: {e.date} (${e.price:.2f})"
-        else:
-            companies += f" | IPO: {e.date} (${e.price:.2f})"
-        companies += f" | MCap: ${finhub_utils.number_to_human_format(e.capital or 0, 2)}"
-        companies += f" | Sector: {e.sector}"
-        companies += f" | Activities: {e.principal_activities}"
-        companies += "\n"
-
-    prompt = prompt_template.replace("{COMPANIES}", companies)
-    llm_result = await ai_exec_prompt(task_id="ANALYZE_DIVIDEND_EVENT_WEB_SEARCH", prompt=prompt, country="AU")
-    if llm_result.is_error:
-        return events
-        # raise RuntimeError(f"[ERROR] LLM failed to generate response for new listing events: {llm_result.completion}")
-
-    analysis = models_event.parse_listing_analysis_from_json(llm_result.completion, {})
-    for e in events:
-        if e.symbol in analysis:
-            e.analysis = analysis[e.symbol]
-
-    return events
-
-
-async def ai_get_asx_new_listings() -> list[models_event.ListingEvent]:
-    """
-    Check for new listings for ASX, using AI assistance.
-
-    Returns:
-        list[models_event.ListingEvent]: A list of new listing events
-    """
-    events = await _get_asx_new_listings()
-    events = await _analyze_asx_listings(events)
-    tz = ZoneInfo("Australia/Sydney")
-    for event in events:
-        event.date = conv.yyyymmdd_to_iso(event.date or "", tz)
-        event.timestamp = int(datetime.fromisoformat(event.date or "").timestamp())
-    return events
 
 
 # ----------------------------------------------------------------------#

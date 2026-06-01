@@ -69,7 +69,9 @@ async def _get_upcoming_dividends_events(
             raw_data["Dividend Amount"].astype(str).str.replace(r"^(AU\$|<AU\$|\$|<\$|<)", "", regex=True)
         )
         # convert column "Dividend Amount" to float, set value to 0 if Error
-        raw_data["Dividend Amount"] = pd.to_numeric(raw_data["Dividend Amount"], errors="coerce").fillna(0.0).astype(float)
+        raw_data["Dividend Amount"] = (
+            pd.to_numeric(raw_data["Dividend Amount"], errors="coerce").fillna(0.0).astype(float)
+        )
     if "Dividend Yield" in raw_data.columns:
         raw_data = raw_data[raw_data["Dividend Yield"].str.endswith("%")]
         if country == "AU" or country == "AUS" or country == "AUSTRALIA":
