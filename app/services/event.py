@@ -15,7 +15,7 @@ from ..utils import finhub as finhub_utils
 allowed_quote_types = {"EQUITY", "ETF"}
 
 
-def calc_end_date_to_fetch_events(*, event_type: str, tz: ZoneInfo, index: str = ""):
+def _calc_end_date_to_fetch_events(*, event_type: str, tz: ZoneInfo, index: str = ""):
     today = datetime.now(tz).date()
     if index:  # if index is provided to filter events, we look further into the future to capture more relevant events
         if "EARNINGS" in event_type.upper():
@@ -27,7 +27,7 @@ def calc_end_date_to_fetch_events(*, event_type: str, tz: ZoneInfo, index: str =
     return end_date
 
 
-async def get_upcoming_dividends_events(
+async def _get_upcoming_dividends_events(
     country: str,
     tz: ZoneInfo,
     *,
@@ -47,7 +47,7 @@ async def get_upcoming_dividends_events(
         list[models_event.UpcomingDividendEvent]: A list of upcoming dividend/distribution events
     """
     country = country.upper()
-    end_date = calc_end_date_to_fetch_events(event_type="DIVIDEND", tz=tz, index=index)
+    end_date = _calc_end_date_to_fetch_events(event_type="DIVIDEND", tz=tz, index=index)
     raw_data = (
         await crawler_service.scrape_dividends_asx(end_date)
         if country == "AU" or country == "AUS" or country == "AUSTRALIA"
@@ -66,8 +66,10 @@ async def get_upcoming_dividends_events(
     # - If value in column "Dividend Amount" begins with "AU$"/"<AU$" or "$"/"<$" or "<" remove the prefix
     if "Dividend Amount" in raw_data.columns:
         raw_data["Dividend Amount"] = (
-            raw_data["Dividend Amount"].astype(str).str.replace(r"^(AU\$|<AU\$|\$|<\$|<)", "", regex=True).astype(float)
+            raw_data["Dividend Amount"].astype(str).str.replace(r"^(AU\$|<AU\$|\$|<\$|<)", "", regex=True)
         )
+        # convert column "Dividend Amount" to float, set value to 0 if Error
+        raw_data["Dividend Amount"] = pd.to_numeric(raw_data["Dividend Amount"], errors="coerce").fillna(0.0).astype(float)
     if "Dividend Yield" in raw_data.columns:
         raw_data = raw_data[raw_data["Dividend Yield"].str.endswith("%")]
         if country == "AU" or country == "AUS" or country == "AUSTRALIA":
@@ -159,7 +161,7 @@ async def get_asx_upcoming_dividends_events(index: str = "") -> list[models_even
         "currency": "AUD",
         "status": "declared",
     }
-    events = await get_upcoming_dividends_events(country, tz, default_vals=default_vals, index=index)
+    events = await _get_upcoming_dividends_events(country, tz, default_vals=default_vals, index=index)
     if index:
         events = [e for e in events if asset_utils.is_in_index(index=index, symbol=e.symbol)]
 
@@ -190,7 +192,7 @@ async def get_us_upcoming_dividends_events(index: str = "") -> list[models_event
         "currency": "USD",
         "status": "declared",
     }
-    events = await get_upcoming_dividends_events(country, tz, default_vals=default_vals, index=index)
+    events = await _get_upcoming_dividends_events(country, tz, default_vals=default_vals, index=index)
     if index:
         events = [e for e in events if asset_utils.is_in_index(index=index, symbol=e.symbol)]
 
@@ -222,7 +224,7 @@ async def get_vn_upcoming_dividends_events(index: str = "") -> list[models_event
         "currency": "VND",
         "status": "declared",
     }
-    events = await get_upcoming_dividends_events(country, tz, default_vals=default_vals, index=index)
+    events = await _get_upcoming_dividends_events(country, tz, default_vals=default_vals, index=index)
     if index:
         events = [e for e in events if asset_utils.is_in_index(index=index, symbol=e.symbol)]
 
@@ -231,7 +233,7 @@ async def get_vn_upcoming_dividends_events(index: str = "") -> list[models_event
     return events
 
 
-async def get_upcoming_earnings_events(
+async def _get_upcoming_earnings_events(
     country: str, tz: ZoneInfo, *, default_vals: dict[str, Any] = None, index: str = ""
 ) -> list[models_event.UpcomingEarningsEvent]:
     """
@@ -247,7 +249,7 @@ async def get_upcoming_earnings_events(
         list[models_event.UpcomingEarningsEvent]: A list of upcoming earnings events
     """
     country = country.upper()
-    end_date = calc_end_date_to_fetch_events(event_type="EARNINGS", tz=tz, index=index)
+    end_date = _calc_end_date_to_fetch_events(event_type="EARNINGS", tz=tz, index=index)
     raw_data = (
         await crawler_service.scrape_earnings_asx(end_date)
         if country == "AU" or country == "AUS" or country == "AUSTRALIA"
@@ -314,7 +316,7 @@ async def get_asx_upcoming_earnings_events(index: str = "") -> list[models_event
         "status": "estimated",
         "report_period": "N/A",
     }
-    events = await get_upcoming_earnings_events(country, tz, default_vals=default_vals, index=index)
+    events = await _get_upcoming_earnings_events(country, tz, default_vals=default_vals, index=index)
     if index:
         events = [e for e in events if asset_utils.is_in_index(index=index, symbol=e.symbol)]
 
@@ -345,7 +347,7 @@ async def get_us_upcoming_earnings_events(index: str = "") -> list[models_event.
         "status": "estimated",
         "report_period": "N/A",
     }
-    events = await get_upcoming_earnings_events(country, tz, default_vals=default_vals, index=index)
+    events = await _get_upcoming_earnings_events(country, tz, default_vals=default_vals, index=index)
     if index:
         events = [e for e in events if asset_utils.is_in_index(index=index, symbol=e.symbol)]
 

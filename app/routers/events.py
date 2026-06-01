@@ -21,7 +21,7 @@ async def get_upcoming_dividends_event(
     country: str = Query(description="Country code to filter events by (only 'AU', 'US' and 'VN' are supported)."),
     index: str = Query(
         "",
-        description="Optional stock index to filter events by (support 'ASX20', 'ASX50', 'ASX100', 'ASX200', 'ASX300', 'NASDAQ100', 'SP500', 'SP400', 'SP600', 'VN30' and 'VN100').",
+        description="Optional stock index to filter events by (support 'ASX20', 'ASX50', 'ASX100', 'ASX200', 'ASX300', 'NASDAQ100', 'SP500', 'SP400', 'SP600', 'VN30', 'VN100').",
     ),
 ) -> schemas_event.UpcomingDividendsResponse | RedirectResponse:
     """
@@ -65,10 +65,10 @@ async def get_upcoming_dividends_event(
     "/upcoming_earnings", response_model=schemas_event.UpcomingEarningsResponse, response_model_exclude_none=True
 )
 async def get_upcoming_earnings_event(
-    country: str = Query(description="Country code to filter events by (only 'AU', 'US' and 'VN' are supported)."),
+    country: str = Query(description="Country code to filter events by (only 'AU' and 'US' are supported)."),
     index: str = Query(
         "",
-        description="Optional stock index to filter events by (support 'ASX20', 'ASX50', 'ASX100', 'ASX200', 'ASX300', 'NASDAQ100', 'SP500', 'SP400', 'SP600', 'VN30' and 'VN100').",
+        description="Optional stock index to filter events by (support 'ASX20', 'ASX50', 'ASX100', 'ASX200', 'ASX300', 'NASDAQ100', 'SP500', 'SP400', 'SP600').",
     ),
 ) -> schemas_event.UpcomingEarningsResponse | RedirectResponse:
     """
@@ -82,11 +82,11 @@ async def get_upcoming_earnings_event(
         logging.info(f"Redirecting request to {next_url_for_log}")
         return RedirectResponse(url=next_url, status_code=307)
 
-    country = country.upper()
+    country = conv.country_to_iso2(country)
     match country:
-        case "AU" | "AUS" | "AUSTRALIA":
+        case "AU":
             events = await services_event.get_asx_upcoming_earnings_events(index)
-        case "US" | "USA" | "UNITED STATES":
+        case "US":
             events = await services_event.get_us_upcoming_earnings_events(index)
         case _:
             return schemas_event.UpcomingEarningsResponse(status=501, message=f"Unsupported country '{country}'")
@@ -110,9 +110,9 @@ async def get_new_listings(
         logging.info(f"Redirecting request to {next_url_for_log}")
         return RedirectResponse(url=next_url, status_code=307)
 
-    country = country.upper()
+    country = conv.country_to_iso2(country)
     match country:
-        case "AU" | "AUS" | "AUSTRALIA":
+        case "AU":
             events = await services_ai.ai_get_asx_new_listings()
         case _:
             return schemas_event.ListingsResponse(status=501, message=f"Unsupported country '{country}'")
