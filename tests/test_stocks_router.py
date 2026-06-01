@@ -180,3 +180,30 @@ def test_get_index_companies_unknown_index(mock_market_indices):
     body = resp.json()
     assert body["status"] == 200
     assert body["data"] == []
+
+
+# --- GET /stocks/{symbol}/info_debug ---
+
+
+@patch("app.routers.stocks.stock_service.get_symbol_info_raw")
+def test_get_symbol_info_debug_success(mock_get_raw):
+    mock_get_raw.return_value = {"long_name": "Apple Inc.", "market_cap": 3000000000000}
+
+    resp = client.get("/stocks/AAPL/info_debug")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == 200
+    assert body["message"] == "ok"
+    assert body["data"]["long_name"] == "Apple Inc."
+    mock_get_raw.assert_called_once_with("AAPL")
+
+
+@patch("app.routers.stocks.stock_service.get_symbol_info_raw")
+def test_get_symbol_info_debug_empty(mock_get_raw):
+    mock_get_raw.return_value = {}
+
+    resp = client.get("/stocks/INVALID/info_debug")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == 200
+    assert body["data"] == {}
