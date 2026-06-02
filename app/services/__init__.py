@@ -1,33 +1,47 @@
 import logging
 
-from .ai_helper import GeminiClientFactory, AzureOpenAIClientFactory, OpenRouterClientFactory, OpenAIClientFactory
-from ..config import settings_llm
-from . import ai, ai_helper
+from .. import config
 
 # initialize LLM clients based on configurations
-for vendor_name, api_tiers in list(settings_llm.llm_config.items()):
+for vendor_name, api_tiers in list(config.settings_llm_vendor.vendors.items()):
+    v_name = vendor_name.upper()
     for api_tier, llm_config in list(api_tiers.items()):
-        if vendor_name.upper() == "GEMINI":
-            ai_helper.geminiClients[api_tier.upper()] = GeminiClientFactory(api_key=llm_config.api_key, timeout_sec=300)
-        if vendor_name.upper() == "AZURE_OPENAI" or vendor_name.upper() == "AZUREOPENAI":
-            ai_helper.azureOpenAIClients[api_tier.upper()] = AzureOpenAIClientFactory(
+        a_tier = api_tier.upper()
+        if v_name == "GEMINI":
+            if "GEMINI" not in config.settings_llm_vendor.client_factories:
+                config.settings_llm_vendor.client_factories["GEMINI"] = {}
+            config.settings_llm_vendor.client_factories["GEMINI"][a_tier] = config.GeminiClientFactory(
+                api_key=llm_config.api_key,
+                timeout_sec=300,
+            )
+        if v_name == "AZURE_OPENAI" or v_name == "AZUREOPENAI" or v_name == "AZURE OPENAI":
+            if "AZURE_OPENAI" not in config.settings_llm_vendor.client_factories:
+                config.settings_llm_vendor.client_factories["AZURE_OPENAI"] = {}
+            config.settings_llm_vendor.client_factories["AZURE_OPENAI"][a_tier] = config.AzureOpenAIClientFactory(
                 endpoint=llm_config.endpoint,
                 timeout_sec=300,
             )
-        if vendor_name.upper() == "OPENROUTER" or vendor_name.upper() == "OPEN_ROUTER":
-            ai_helper.openRouterClients[api_tier.upper()] = OpenRouterClientFactory(
+        if v_name == "OPENROUTER" or v_name == "OPEN_ROUTER" or v_name == "OPEN ROUTER":
+            if "OPEN_ROUTER" not in config.settings_llm_vendor.client_factories:
+                config.settings_llm_vendor.client_factories["OPEN_ROUTER"] = {}
+            config.settings_llm_vendor.client_factories["OPEN_ROUTER"][a_tier] = config.OpenRouterClientFactory(
                 api_key=llm_config.api_key,
                 endpoint=llm_config.endpoint,
                 timeout_sec=300,
             )
-        if vendor_name.upper() == "OPENAI":
-            ai_helper.openAIClients[api_tier.upper()] = OpenAIClientFactory(api_key=llm_config.api_key, timeout_sec=300)
+        if v_name == "OPENAI":
+            if "OPENAI" not in config.settings_llm_vendor.client_factories:
+                config.settings_llm_vendor.client_factories["OPENAI"] = {}
+            config.settings_llm_vendor.client_factories["OPENAI"][a_tier] = config.OpenAIClientFactory(
+                api_key=llm_config.api_key,
+                timeout_sec=300,
+            )
 
 
 # load prompt templates
 def read_file_as_single_string(file_path) -> str:
     try:
-        with open(file_path, "r", encoding="utf-8") as file:
+        with open(file_path, encoding="utf-8") as file:
             lines = [line.rstrip() for line in file]
             combined_text = "\n".join(lines)
         return combined_text
@@ -40,37 +54,15 @@ def read_file_as_single_string(file_path) -> str:
     return ""
 
 
-template_list = [
-    ai.EVENT_ASX_NEW_LISTINGS,
-    ai.ANALYZE_ASX_LISTINGS,
-    ai.ANALYZE_ASX_DIVIDEND,
-    ai.ANALYZE_US_DIVIDEND,
-    ai.ANALYZE_VN_DIVIDEND,
-    ai.ANALYZE_PORTFOLIO_ALLOCATION,
-    ai.ANALYZE_PORTFOLIO_SWING,
-    ai.ANALYZE_PORTFOLIO_HYBRID,
-    ai.BUILD_PORTFOLIO_ALLOCATION,
-    ai.BUILD_PORTFOLIO_SWING,
-    ai.BUILD_PORTFOLIO_HYBRID,
-]
-template_file_list = [
-    "./resources/prompts/asx_new_listings.md",
-    "./resources/prompts/analyze_asx_listings.md",
-    "./resources/prompts/analyze_asx_dividend.md",
-    "./resources/prompts/analyze_us_dividend.md",
-    "./resources/prompts/analyze_vn_dividend.md",
-    "./resources/prompts/analyze_portfolio_allocation.md",
-    "./resources/prompts/analyze_portfolio_swing.md",
-    "./resources/prompts/analyze_portfolio_hybrid.md",
-    "./resources/prompts/build_portfolio_allocation.md",
-    "./resources/prompts/build_portfolio_swing.md",
-    "./resources/prompts/build_portfolio_hybrid.md",
-]
-
-for tmpl_name, tmpl_file in zip(template_list, template_file_list):
-    logging.info("Loading template '%s' from file '%s'...", tmpl_name, tmpl_file)
-    tmpl_content = read_file_as_single_string(tmpl_file)
-    if tmpl_content:
-        ai.prompts[tmpl_name] = tmpl_content
-    else:
-        logging.error("Failed to load prompt template from file '%s'", tmpl_file)
+# template_list = [
+# ]
+# template_file_list = [
+# ]
+#
+# for tmpl_name, tmpl_file in zip(template_list, template_file_list):
+#     logging.info("Loading template '%s' from file '%s'...", tmpl_name, tmpl_file)
+#     tmpl_content = read_file_as_single_string(tmpl_file)
+#     if tmpl_content:
+#         ai.prompts[tmpl_name] = tmpl_content
+#     else:
+#         logging.error("Failed to load prompt template from file '%s'", tmpl_file)

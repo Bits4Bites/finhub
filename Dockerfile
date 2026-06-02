@@ -11,7 +11,7 @@ RUN mkdir -p $HOMEDIR
 ADD requirements.txt $HOMEDIR
 ADD *.py $HOMEDIR
 ADD *.md $HOMEDIR
-ADD ai_clients_config.env $HOMEDIR
+ADD *.env $HOMEDIR
 ADD resources $HOMEDIR/resources
 ADD app $HOMEDIR/app
 

@@ -5,10 +5,9 @@ import time
 from zoneinfo import ZoneInfo
 
 import cloudscraper
-from bs4 import BeautifulSoup
 import pandas as pd
-
-from playwright.async_api import async_playwright, Page, ViewportSize
+from bs4 import BeautifulSoup
+from playwright.async_api import Page, ViewportSize, async_playwright
 
 
 def extract_data_table_from_html(html_content: str, *, raw_cell_content=False, table_attr_filter=None) -> pd.DataFrame:
@@ -403,6 +402,12 @@ async def scrape_dividends_vn(end_date: datetime.date) -> pd.DataFrame:
     Returns:
         DataFrame: A Pandas DataFrame containing the data table extracted from the webpage.
     """
+
+    async def wait_for_page_render_after_load_func():
+        import asyncio
+
+        await asyncio.sleep(1.5)
+
     url_template = "https://finance.vietstock.vn/lich-su-kien.htm?from={s_date}&to={e_date}&page={page}&tab=1&group=13"
     tz_name = "Asia/Ho_Chi_Minh"
     start_date = datetime.datetime.now(ZoneInfo(tz_name)).date()
@@ -426,7 +431,11 @@ async def scrape_dividends_vn(end_date: datetime.date) -> pd.DataFrame:
             e_date=end_date.strftime("%Y-%m-%d"),
             page=page,
         )
-        df = await scrape_data_table_playwright(target_url, table_attr_filter={"id": "event-content"})
+        df = await scrape_data_table_playwright(
+            target_url,
+            table_attr_filter={"id": "event-content"},
+            after_load_func_async=wait_for_page_render_after_load_func,
+        )
         if df.empty or len(df.columns) < 2:
             break
         final_df = pd.concat([final_df, df], ignore_index=True)

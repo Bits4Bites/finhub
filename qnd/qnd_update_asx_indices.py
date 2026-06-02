@@ -30,7 +30,7 @@ async def update_asx_index(index: str, num_check: int):
 
     data = await crawler_service.scrape_data_table(url, table_attr_filter=table_attr_filter)
     if data is None or data.empty:
-        raise EnvironmentError(f"No data available from {url}.")
+        raise OSError(f"No data available from {url}.")
     if len(data) < num_check:
         raise ValueError(f"Expected at least {num_check} entries, but got {len(data)}.")
 

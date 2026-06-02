@@ -40,7 +40,7 @@ jobs:
         with:
           dry-run: true
           auto-mode: true
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ github.token }}
           tag-major-release: false
           tag-minor-release: false
           branches: ${{ env.BRANCH_TO_RELEASE }}

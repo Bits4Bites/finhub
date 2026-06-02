@@ -138,8 +138,8 @@ Get upcoming earnings events for a market.
 
 | Parameter | Type  | Required | Description                                                                                                               |
 |-----------|-------|----------|---------------------------------------------------------------------------------------------------------------------------|
-| `country` | query | Yes      | Country code: `AU`, `US`, or `VN`.                                                                                        |
-| `index`   | query | No       | Filter by index: `ASX20`, `ASX50`, `ASX100`, `ASX200`, `ASX300`, `NASDAQ100`, `SP500`, `SP400`, `SP600`, `VN30`, `VN100`. |
+| `country` | query | Yes      | Country code: `AU` or `US`.                                                                                               |
+| `index`   | query | No       | Filter by index: `ASX20`, `ASX50`, `ASX100`, `ASX200`, `ASX300`, `NASDAQ100`, `SP500`, `SP400`, `SP600`. |
 
 **Example:**
 
@@ -167,15 +167,30 @@ curl 'http://localhost:8000/events/new_listings?country=AU'
 
 ## AI
 
+### `GET /ai/vendors`
+
+Get the list of available AI vendors and supported API tiers and models.
+
+No parameters required.
+
+**Example:**
+
+```bash
+curl 'http://localhost:8000/ai/vendors'
+```
+
+---
+
 ### `GET /ai/analyze_dividend_event`
 
 Analyze a dividend event using AI.
 
-| Parameter    | Type  | Required | Description                                                              |
-|--------------|-------|----------|--------------------------------------------------------------------------|
-| `symbol`     | query | Yes      | Stock symbol in YF format (`CBA.AX`) or `EXCHANGE:CODE` (`NASDAQ:AAPL`). |
-| `ex_date`    | query | Yes      | Ex-dividend date in `YYYY-MM-DD` format.                                 |
-| `div_amount` | query | Yes      | Dividend amount as a float (e.g. `0.50`).                                |
+| Parameter    | Type  | Required | Description                                                                                              |
+|--------------|-------|----------|----------------------------------------------------------------------------------------------------------|
+| `symbol`     | query | Yes      | Stock symbol in YF format (`CBA.AX`) or `EXCHANGE:CODE` (`NASDAQ:AAPL`).                                 |
+| `ex_date`    | query | Yes      | Ex-dividend date in `YYYY-MM-DD` format.                                                                 |
+| `div_amount` | query | Yes      | Dividend amount as a float (e.g. `0.50`).                                                                |
+| `intent`     | query | No       | Analysis intent/context. Defaults to `"Looking to capture the dividend or if post-div dip is worth buying"`. |
 
 **Example:**
 
@@ -185,21 +200,60 @@ curl 'http://localhost:8000/ai/analyze_dividend_event?symbol=AAPL&ex_date=2026-0
 
 ---
 
-### `POST /ai/analyze_portfolio`
+### `POST /ai/analyze_ticker`
 
-Analyze a stock portfolio using AI.
-
-| Parameter | Type  | Required | Default  | Description                                                                                           |
-|-----------|-------|----------|----------|-------------------------------------------------------------------------------------------------------|
-| `flavor`  | query | No       | `hybrid` | Prompt template to use: `allocation` (long-term growth), `swing` (swing trading), or `hybrid` (both). |
+Analyze a stock ticker using AI.
 
 **Request Body (JSON):**
 
-| Field                | Type                 | Required | Description                                                               |
-|----------------------|----------------------|----------|---------------------------------------------------------------------------|
-| `current_allocation` | `HoldingTicker[]`    | Yes      | List of holdings (see fields below).                                      |
-| `country`            | `string`             | No       | Country context for the analysis.                                         |
-| `investor_theme`     | `string`             | No       | Investor theme/preference for the analysis. Defaults to a built-in theme. |
+| Field    | Type     | Required | Description                                                                       |
+|----------|----------|----------|-----------------------------------------------------------------------------------|
+| `symbol` | `string` | Yes      | Stock symbol in YF format (`CBA.AX`) or `EXCHANGE:CODE` (`NASDAQ:AAPL`).          |
+| `intent` | `string` | No       | Analysis intent defining the angle of insight. Defaults to a built-in intent.     |
+
+**Example:**
+
+```bash
+curl -X POST 'http://localhost:8000/ai/analyze_ticker' \
+  -H 'Content-Type: application/json' \
+  -d '{"symbol": "CBA.AX", "intent": "dividend capture strategy"}'
+```
+
+---
+
+### `POST /ai/build_portfolio`
+
+Build a new portfolio using AI assistance.
+
+**Request Body (JSON):**
+
+| Field                | Type              | Required | Description                                                               |
+|----------------------|-------------------|----------|---------------------------------------------------------------------------|
+| `current_allocation` | `HoldingTicker[]` | No       | List of existing holdings (see fields below).                             |
+| `country`            | `string`          | No       | Country context for the portfolio (e.g. `AU`, `US`).                      |
+| `investor_theme`     | `string`          | No       | Investor theme/preference for the analysis. Defaults to a built-in theme. |
+
+**Example:**
+
+```bash
+curl -X POST 'http://localhost:8000/ai/build_portfolio' \
+  -H 'Content-Type: application/json' \
+  -d '{"country": "AU", "investor_theme": "growth with moderate risk"}'
+```
+
+---
+
+### `POST /ai/analyze_portfolio`
+
+Analyze or build a stock portfolio using AI. If `current_allocation` is provided, reviews the existing portfolio; otherwise builds a new one.
+
+**Request Body (JSON):**
+
+| Field                | Type              | Required | Description                                                               |
+|----------------------|-------------------|----------|---------------------------------------------------------------------------|
+| `current_allocation` | `HoldingTicker[]` | No       | List of current holdings. If empty, builds a new portfolio instead.       |
+| `country`            | `string`          | No       | Country context for the analysis (e.g. `AU`, `US`).                       |
+| `investor_theme`     | `string`          | No       | Investor theme/preference for the analysis. Defaults to a built-in theme. |
 
 Each `HoldingTicker` object:
 
@@ -214,7 +268,7 @@ Each `HoldingTicker` object:
 **Example:**
 
 ```bash
-curl -X POST 'http://localhost:8000/ai/analyze_portfolio?flavor=allocation' \
+curl -X POST 'http://localhost:8000/ai/analyze_portfolio' \
   -H 'Content-Type: application/json' \
   -d '{
     "current_allocation": [
