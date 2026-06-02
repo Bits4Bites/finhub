@@ -7,8 +7,9 @@ import json
 import pandas as pd
 import yfinance as yf
 
-from app.services import stock as stock_service, crawler as crawler_service
 from app.models import finhub as models
+from app.services import crawler as crawler_service
+from app.services import stock as stock_service
 
 
 def load_csv_with_pandas(file_path):
@@ -25,7 +26,9 @@ def load_csv_with_pandas(file_path):
 
 async def main():
     # fetch data from web as CSV
-    csv_data = await crawler_service.fetch_webpage_content("https://asx.api.markitdigital.com/asx-research/1.0/companies/directory/file")
+    csv_data = await crawler_service.fetch_webpage_content(
+        "https://asx.api.markitdigital.com/asx-research/1.0/companies/directory/file"
+    )
 
     cache_filename = "./.cache_data/ASX_Listed_Companies.csv"
     # write CSV data to file
@@ -39,8 +42,8 @@ async def main():
     num_cached = 0
 
     for _, row in pd_data.iterrows():
-        symbol = f"ASX:{row["ASX code"].strip()}"
-        ticker = yf.Ticker(f"{symbol.split(":")[-1]}.AX")
+        symbol = f"ASX:{row['ASX code'].strip()}"
+        ticker = yf.Ticker(f"{symbol.split(':')[-1]}.AX")
         quote_type = ticker.info["quoteType"] if "quoteType" in ticker.info else "NONE"
         if quote_type == "NONE":
             print(f"Symbol: {symbol} / No quoteType found")

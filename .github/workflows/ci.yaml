@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python: [ '3.11', '3.12', '3.13', '3.14' ] # change target Python versions if needed
+        python: [ '3.12', '3.13', '3.14' ] # change target Python versions if needed
     name: Build and Test with Python ${{ matrix.python }}
     steps:
       - name: Checkout code
@@ -33,11 +33,11 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
       - name: Lint code
         run: |
-          flake8 ./app
-          black --check --diff ./app
+          ruff check .
+          ruff format --check --diff .
       - name: Run tests
         run: |
           # Run unit tests

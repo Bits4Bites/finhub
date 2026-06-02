@@ -24,5 +24,6 @@ if __name__ == "__main__":
     #     reload = True
 
     import uvicorn
+
     loop = "none" if sys.platform.startswith("win") else "auto"
     uvicorn.run("app.main:app", host="0.0.0.0", port=listen_port, workers=num_workers, reload=reload, loop=loop)

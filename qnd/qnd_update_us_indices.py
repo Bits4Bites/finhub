@@ -9,11 +9,11 @@ from app.services import crawler as crawler_service
 
 
 async def update_us_index(index: str, num_check: int):
-    url = None
+    url = ""
     table_attr_filter = None
     raw_cell_content = False
     symbol_prefix = ""
-    to_file = None
+    to_file = ""
     columns_to_drop = [
         "#",
         "Price",
@@ -58,9 +58,11 @@ async def update_us_index(index: str, num_check: int):
             table_attr_filter = {"id": "constituents"}
             raw_cell_content = True
 
-    data = await crawler_service.scrape_data_table(url, raw_cell_content=raw_cell_content, table_attr_filter=table_attr_filter)
+    data = await crawler_service.scrape_data_table(
+        url, raw_cell_content=raw_cell_content, table_attr_filter=table_attr_filter
+    )
     if data is None or data.empty:
-        raise EnvironmentError(f"No data available from {url}.")
+        raise OSError(f"No data available from {url}.")
     if len(data) < num_check:
         raise ValueError(f"Expected at least {num_check} entries, but got {len(data)}.")
 
@@ -74,9 +76,11 @@ async def update_us_index(index: str, num_check: int):
 
     # Specific transformation
     if url.startswith("https://en.wikipedia.org/"):
-        data["company"] = data["company"].str.replace(r'<[^>]+>', '', regex=True).str.strip()
-        data["exchange"] = data["symbol"].apply(lambda x: "NYSE" if "nyse.com" in x else "NASDAQ" if "nasdaq.com" in x else "ERROR")
-        data["symbol"] = data["symbol"].str.extract(r'>([^<]+)<')
+        data["company"] = data["company"].str.replace(r"<[^>]+>", "", regex=True).str.strip()
+        data["exchange"] = data["symbol"].apply(
+            lambda x: "NYSE" if "nyse.com" in x else "NASDAQ" if "nasdaq.com" in x else "ERROR"
+        )
+        data["symbol"] = data["symbol"].str.extract(r">([^<]+)<")
         data["symbol"] = data["exchange"] + ":" + data["symbol"]
         data = data.drop(columns=["exchange"])
 
