@@ -8,7 +8,6 @@ from .. import config
 from ..schemas import events as schemas_event
 from ..services import event as services_event
 from ..services import msai_asx_listings as services_asx_listings
-from ..utils import asset as asset_utils
 from ..utils import conv
 
 router = APIRouter(prefix="/events", tags=["events"])
@@ -45,6 +44,8 @@ async def get_upcoming_dividends_event(
             events = await services_event.get_vn_upcoming_dividends_events(index)
         case _:
             return schemas_event.UpcomingDividendsResponse(status=501, message=f"Unsupported country '{country}'")
+
+    from ..utils import asset as asset_utils
 
     for event in events:
         for index in ["ASX300", "NASDAQ100", "SP500", "SP400", "VN100"]:

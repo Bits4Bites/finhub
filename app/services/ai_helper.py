@@ -3,11 +3,7 @@ import os
 import time
 from typing import Literal
 
-from google.genai import types
 from openai import AsyncOpenAI
-from openai.types.chat import ChatCompletionUserMessageParam
-from openai.types.responses import WebSearchPreviewToolParam
-from openai.types.responses.web_search_preview_tool_param import UserLocation
 from pydantic import BaseModel
 
 from .. import config
@@ -33,6 +29,10 @@ async def _exec_prompt_openai_client(
     """
     Execute a prompt using OpenAI client and return the response.
     """
+    from openai.types.chat import ChatCompletionUserMessageParam
+    from openai.types.responses import WebSearchPreviewToolParam
+    from openai.types.responses.web_search_preview_tool_param import UserLocation
+
     start = time.perf_counter()
     logging.info(
         "_exec_prompt_openai_client('%s') - Using vendor/tier/model: %s/%s/%s - Prompt:",
@@ -172,6 +172,8 @@ async def _exec_prompt_gemini(
     """
     Execute a prompt using Google Gemini and return the response.
     """
+    from google.genai import types
+
     start = time.perf_counter()
     client = config.settings_llm_vendor.get_llm_client("GEMINI", task_cfg.tier)
     if client is None:

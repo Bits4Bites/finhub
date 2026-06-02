@@ -1,7 +1,5 @@
 from fastapi import APIRouter, Body, Query
 
-from .. import config
-from ..models import ai as models_ai
 from ..schemas import ai as schemas_ai
 from ..services import msai_analyze_div_event as service_analyze_div_event
 from ..services import msai_analyze_ticker as service_analyze_ticker
@@ -20,6 +18,9 @@ async def get_vendors() -> schemas_ai.AIVendorsResponse:
     """
     Get the list of available AI vendors and supported API tiers and models.
     """
+    from .. import config
+    from ..models import ai as models_ai
+
     result: dict[str, models_ai.AIVendorInfo] = {}
     for v in config.settings_llm_vendor.vendors.keys():
         v_name = v.upper()

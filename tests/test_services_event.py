@@ -242,7 +242,7 @@ class TestUsUpcomingEarningsEvents:
 
 
 class TestGetUpcomingDividendsEvents:
-    @patch("app.services.event.crawler_service.scrape_dividends_asx", new_callable=AsyncMock)
+    @patch("app.services.event.services_crawler.scrape_dividends_asx", new_callable=AsyncMock)
     def test_empty_dataframe_returns_empty_list(self, mock_scrape):
         from app.services.event import _get_upcoming_dividends_events
 
@@ -251,7 +251,7 @@ class TestGetUpcomingDividendsEvents:
         result = asyncio.run(_get_upcoming_dividends_events("AU", tz))
         assert result == []
 
-    @patch("app.services.event.crawler_service.scrape_dividends_asx", new_callable=AsyncMock)
+    @patch("app.services.event.services_crawler.scrape_dividends_asx", new_callable=AsyncMock)
     def test_au_processes_raw_data_into_events(self, mock_scrape):
         from app.services.event import _get_upcoming_dividends_events
 
@@ -277,7 +277,7 @@ class TestGetUpcomingDividendsEvents:
         assert result[0].amount == 2.5
         assert result[0].event_category == "dividend"
 
-    @patch("app.services.event.crawler_service.scrape_dividends_asx", new_callable=AsyncMock)
+    @patch("app.services.event.services_crawler.scrape_dividends_asx", new_callable=AsyncMock)
     def test_au_filters_low_yield(self, mock_scrape):
         from app.services.event import _get_upcoming_dividends_events
 
@@ -300,7 +300,7 @@ class TestGetUpcomingDividendsEvents:
         assert len(result) == 1
         assert result[0].symbol == "ASX:HIGH"
 
-    @patch("app.services.event.crawler_service.scrape_dividends_asx", new_callable=AsyncMock)
+    @patch("app.services.event.services_crawler.scrape_dividends_asx", new_callable=AsyncMock)
     def test_au_classifies_distribution_for_trust(self, mock_scrape):
         from app.services.event import _get_upcoming_dividends_events
 
@@ -323,7 +323,7 @@ class TestGetUpcomingDividendsEvents:
         assert len(result) == 1
         assert result[0].event_category == "distribution"
 
-    @patch("app.services.event.crawler_service.scrape_dividends_us", new_callable=AsyncMock)
+    @patch("app.services.event.services_crawler.scrape_dividends_us", new_callable=AsyncMock)
     def test_us_filters_non_major_exchanges(self, mock_scrape):
         from app.services.event import _get_upcoming_dividends_events
 
@@ -346,7 +346,7 @@ class TestGetUpcomingDividendsEvents:
         assert len(result) == 1
         assert result[0].symbol == "NASDAQ:AAPL"
 
-    @patch("app.services.event.crawler_service.scrape_dividends_asx", new_callable=AsyncMock)
+    @patch("app.services.event.services_crawler.scrape_dividends_asx", new_callable=AsyncMock)
     def test_removes_url_column(self, mock_scrape):
         from app.services.event import _get_upcoming_dividends_events
 
@@ -376,7 +376,7 @@ class TestGetUpcomingDividendsEvents:
 
 
 class TestGetUpcomingEarningsEvents:
-    @patch("app.services.event.crawler_service.scrape_earnings_asx", new_callable=AsyncMock)
+    @patch("app.services.event.services_crawler.scrape_earnings_asx", new_callable=AsyncMock)
     def test_empty_dataframe_returns_empty_list(self, mock_scrape):
         from app.services.event import _get_upcoming_earnings_events
 
@@ -385,7 +385,7 @@ class TestGetUpcomingEarningsEvents:
         result = asyncio.run(_get_upcoming_earnings_events("AU", tz))
         assert result == []
 
-    @patch("app.services.event.crawler_service.scrape_earnings_asx", new_callable=AsyncMock)
+    @patch("app.services.event.services_crawler.scrape_earnings_asx", new_callable=AsyncMock)
     def test_au_processes_raw_data(self, mock_scrape):
         from app.services.event import _get_upcoming_earnings_events
 
@@ -406,7 +406,7 @@ class TestGetUpcomingEarningsEvents:
         assert result[0].symbol == "ASX:CBA"
         assert result[0].company_name == "Commonwealth Bank"
 
-    @patch("app.services.event.crawler_service.scrape_earnings_us", new_callable=AsyncMock)
+    @patch("app.services.event.services_crawler.scrape_earnings_us", new_callable=AsyncMock)
     def test_us_filters_non_major_exchanges(self, mock_scrape):
         from app.services.event import _get_upcoming_earnings_events
 

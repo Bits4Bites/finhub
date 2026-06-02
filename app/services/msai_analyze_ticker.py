@@ -1,8 +1,5 @@
 import yfinance as yf
 
-from .. import config
-from ..models import ai as models_ai
-from ..models import types
 from ..services import ai_helper
 from ..utils import conv, yfutils
 
@@ -61,6 +58,8 @@ BUILD_PROMPT_TEMPLATE = (
 
 def _build_analysis_prompt(*, ticker: yf.Ticker, intent: str = DEFAULT_INTENT) -> str:
     """Build the meta-prompt that instructs the AI to produce a stock analysis prompt."""
+    from ..models import types
+
     info = ticker.info
     asset_type = yfutils.detect_asset_type(ticker=ticker)
     exchange = conv.normalize_exchange_code(info.get("fullExchangeName") or info.get("exchange") or "")
@@ -87,7 +86,7 @@ def _build_analysis_prompt(*, ticker: yf.Ticker, intent: str = DEFAULT_INTENT) -
     )
 
 
-async def ai_analyze_ticker(symbol: str, *, intent: str = DEFAULT_INTENT) -> models_ai.AnalysisResult | None:
+async def ai_analyze_ticker(symbol: str, *, intent: str = DEFAULT_INTENT):
     """
     Analyze a ticker using AI assistance.
 
@@ -98,6 +97,9 @@ async def ai_analyze_ticker(symbol: str, *, intent: str = DEFAULT_INTENT) -> mod
     Returns:
         models_ai.AnalysisResult | None: A models_ai.AnalysisResult object containing the analysis, or None.
     """
+    from .. import config
+    from ..models import ai as models_ai
+
     # Step 1: check if the ticker is valid
     yf_ticker = conv.to_yf_symbol_format(symbol)
     ticker = yf.Ticker(yf_ticker)

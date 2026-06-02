@@ -61,55 +61,55 @@ class HistoryPoint(BaseModel):
 
 
 class SymbolOverview(SymbolBase):
-    short_name: str = ""
-    long_name: str = ""
-    sector: str = ""
-    industry: str = ""
-    website: str = ""
-    description: str = ""
-    quote_type: str = ""
+    short_name: str | None = None
+    long_name: str | None = None
+    sector: str | None = None
+    industry: str | None = None
+    website: str | None = None
+    description: str | None = None
+    quote_type: str | None = None
     asset_type: types.AssetType | None = None
-    total_cash: int = 0
-    total_cash_per_share: float = 0.0
-    total_debt: int = 0
-    total_debt_per_share: float = 0.0
-    total_revenue: int = 0
-    total_revenue_per_share: float = 0.0
-    ebitda: int = 0
-    ebitda_margins: float = 0.0
-    earnings_growth: float = 0.0
-    revenue_growth: float = 0.0
-    gross_margins: float = 0.0
-    operating_margins: float = 0.0
-    profit_margins: float = 0.0
-    market_cap: int = 0
+    total_cash: int | None = None
+    total_cash_per_share: float | None = None
+    total_debt: int | None = None
+    total_debt_per_share: float | None = None
+    total_revenue: int | None = None
+    total_revenue_per_share: float | None = None
+    ebitda: int | None = None
+    ebitda_margins: float | None = None
+    earnings_growth: float | None = None
+    revenue_growth: float | None = None
+    gross_margins: float | None = None
+    operating_margins: float | None = None
+    profit_margins: float | None = None
+    market_cap: int | None = None
     cap_size: types.MarketCapType | None = None
     market_index: str | None = None
 
     def __init__(self, ticker: yf.Ticker, /, **data: Any):
         super().__init__(
             ticker,
-            short_name=ticker.info.get("shortName", ""),
-            long_name=ticker.info.get("longName", ""),
-            sector=ticker.info.get("sector", ""),
-            industry=ticker.info.get("industry", ""),
-            website=ticker.info.get("website", ""),
-            description=ticker.info.get("longBusinessSummary", ""),
-            quote_type=ticker.info.get("quoteType", ""),
-            total_cash=ticker.info.get("totalCash", 0),
-            total_cash_per_share=ticker.info.get("totalCashPerShare", 0.0),
-            total_debt=ticker.info.get("totalDebt", 0),
-            total_debt_per_share=ticker.info.get("totalDebtPerShare", 0.0),
-            total_revenue=ticker.info.get("totalRevenue", 0),
-            total_revenue_per_share=ticker.info.get("totalRevenuePerShare", 0.0),
-            ebitda=ticker.info.get("ebitda", 0),
-            ebitda_margins=ticker.info.get("ebitdaMargins", 0.0),
-            earnings_growth=ticker.info.get("earningsGrowth", 0.0),
-            revenue_growth=ticker.info.get("revenueGrowth", 0.0),
-            gross_margins=ticker.info.get("grossMargins", 0.0),
-            operating_margins=ticker.info.get("operatingMargins", 0.0),
-            profit_margins=ticker.info.get("profitMargins", 0.0),
-            market_cap=ticker.info.get("marketCap", 0),
+            short_name=ticker.info.get("shortName"),
+            long_name=ticker.info.get("longName"),
+            sector=ticker.info.get("sector"),
+            industry=ticker.info.get("industry"),
+            website=ticker.info.get("website"),
+            description=ticker.info.get("longBusinessSummary"),
+            quote_type=ticker.info.get("quoteType"),
+            total_cash=ticker.info.get("totalCash"),
+            total_cash_per_share=ticker.info.get("totalCashPerShare"),
+            total_debt=ticker.info.get("totalDebt"),
+            total_debt_per_share=ticker.info.get("totalDebtPerShare"),
+            total_revenue=ticker.info.get("totalRevenue"),
+            total_revenue_per_share=ticker.info.get("totalRevenuePerShare"),
+            ebitda=ticker.info.get("ebitda"),
+            ebitda_margins=ticker.info.get("ebitdaMargins"),
+            earnings_growth=ticker.info.get("earningsGrowth"),
+            revenue_growth=ticker.info.get("revenueGrowth"),
+            gross_margins=ticker.info.get("grossMargins"),
+            operating_margins=ticker.info.get("operatingMargins"),
+            profit_margins=ticker.info.get("profitMargins"),
+            market_cap=ticker.info.get("marketCap"),
             **data,
         )
         # self.total_cash = int(self.total_cash) if self.total_cash is not None else None
@@ -140,8 +140,8 @@ class SymbolOverview(SymbolBase):
 
 
 class SymbolDividend(BaseModel):
-    dividend_rate: float = 0.0
-    dividend_yield: float = 0.0
+    dividend_rate: float = 0.0  # Annual Dividend amount
+    dividend_yield: float = 0.0  # Annual Dividend Yield in percentage
     payout_frequency: int = 0
     ex_dividend_date: int = 0
     ex_dividend_date_str: str | None = None
@@ -154,14 +154,14 @@ class SymbolDividend(BaseModel):
 
     def __init__(self, ticker: yf.Ticker):
         super().__init__(
-            dividend_rate=ticker.info.get("dividendRate", 0.0),
-            dividend_yield=ticker.info.get("dividendYield", 0.0),
+            dividend_rate=ticker.info.get("dividendRate", 0),
+            dividend_yield=ticker.info.get("dividendYield", 0),
             ex_dividend_date=ticker.info.get("exDividendDate", 0),
-            five_year_avg_dividend_yield=ticker.info.get("fiveYearAvgDividendYield", 0.0),
-            trailing_annual_dividend_rate=ticker.info.get("trailingAnnualDividendRate", 0.0),
-            trailing_annual_dividend_yield=ticker.info.get("trailingAnnualDividendYield", 0.0),
+            five_year_avg_dividend_yield=ticker.info.get("fiveYearAvgDividendYield", 0),
+            trailing_annual_dividend_rate=ticker.info.get("trailingAnnualDividendRate", 0),
+            trailing_annual_dividend_yield=ticker.info.get("trailingAnnualDividendYield", 0),
             last_dividend_value=ticker.info.get("lastDividendValue", 0),
-            last_dividend_date=ticker.info.get("lastDividendDate", 0.0),
+            last_dividend_date=ticker.info.get("lastDividendDate", 0),
         )
         tz = yfutils.tz_from_yf_ticker(ticker)
         if self.ex_dividend_date:
@@ -186,63 +186,63 @@ class SymbolDividend(BaseModel):
 class StockQuote(BaseModel):
     currency: str = ""
     market_price: float = 0.0
-    market_price_change: float = 0.0
-    market_price_change_percent: float = 0.0
-    market_open: float = 0.0
-    market_day_high: float = 0.0
-    market_day_low: float = 0.0
-    fifty_two_week_high: float = 0.0
-    fifty_two_week_low: float = 0.0
-    market_volume: int = 0
-    bid: float = 0.0
-    bid_size: int = 0
-    ask: float = 0.0
-    ask_size: int = 0
-    market_cap: int = 0
-    trailing_eps: float = 0.0
-    forward_eps: float = 0.0
-    trailing_p_e: float = 0.0
-    forward_p_e: float = 0.0
-    beta: float = 0.0
+    market_price_change: float | None = None
+    market_price_change_percent: float | None = None
+    market_open: float | None = None
+    market_day_high: float | None = None
+    market_day_low: float | None = None
+    fifty_two_week_high: float | None = None
+    fifty_two_week_low: float | None = None
+    market_volume: int | None = None
+    bid: float | None = None
+    bid_size: int | None = None
+    ask: float | None = None
+    ask_size: int | None = None
+    market_cap: int | None = None
+    trailing_eps: float | None = None
+    forward_eps: float | None = None
+    trailing_p_e: float | None = None
+    forward_p_e: float | None = None
+    beta: float | None = None
     recommendation_key: str | None = None
-    target_high_price: float = 0.0
-    target_low_price: float = 0.0
-    target_mean_price: float = 0.0
-    target_median_price: float = 0.0
+    target_high_price: float | None = None
+    target_low_price: float | None = None
+    target_mean_price: float | None = None
+    target_median_price: float | None = None
 
     def __init__(self, ticker: yf.Ticker):
         super().__init__(
-            currency=ticker.info.get("currency", ""),
-            market_price=ticker.info.get("regularMarketPrice", 0.0),
-            market_price_change=ticker.info.get("regularMarketChange", 0.0),
-            market_price_change_percent=ticker.info.get("regularMarketChangePercent", 0.0),
-            market_open=ticker.info.get("regularMarketOpen", 0.0),
-            market_day_high=ticker.info.get("regularMarketDayHigh", 0.0),
-            market_day_low=ticker.info.get("regularMarketDayLow", 0.0),
-            fifty_two_week_high=ticker.info.get("fiftyTwoWeekHigh", 0.0),
-            fifty_two_week_low=ticker.info.get("fiftyTwoWeekLow", 0.0),
-            market_volume=ticker.info.get("regularMarketVolume", 0),
-            bid=ticker.info.get("bid", 0.0),
-            bid_size=ticker.info.get("bidSize", 0),
-            ask=ticker.info.get("ask", 0.0),
-            ask_size=ticker.info.get("askSize", 0),
-            market_cap=ticker.info.get("marketCap", 0),
+            currency=ticker.info.get("currency"),
+            market_price=ticker.info.get("regularMarketPrice"),
+            market_price_change=ticker.info.get("regularMarketChange"),
+            market_price_change_percent=ticker.info.get("regularMarketChangePercent"),
+            market_open=ticker.info.get("regularMarketOpen"),
+            market_day_high=ticker.info.get("regularMarketDayHigh"),
+            market_day_low=ticker.info.get("regularMarketDayLow"),
+            fifty_two_week_high=ticker.info.get("fiftyTwoWeekHigh"),
+            fifty_two_week_low=ticker.info.get("fiftyTwoWeekLow"),
+            market_volume=ticker.info.get("regularMarketVolume"),
+            bid=ticker.info.get("bid"),
+            bid_size=ticker.info.get("bidSize"),
+            ask=ticker.info.get("ask"),
+            ask_size=ticker.info.get("askSize"),
+            market_cap=ticker.info.get("marketCap"),
             trailing_eps=(
                 ticker.info.get("trailingEps")
                 if ticker.info.get("trailingEPS")
                 else ticker.info.get("epsTrailingTwelveMonths")
                 if ticker.info.get("epsTrailingTwelveMonths")
-                else 0.0
+                else None
             ),
-            forward_eps=ticker.info.get("forwardEps", 0.0),
-            trailing_p_e=ticker.info.get("trailingPE", 0.0),
-            forward_p_e=ticker.info.get("forwardPE", 0.0),
-            beta=ticker.info.get("beta") if ticker.info.get("beta") else ticker.info.get("beta3Year", 0.0),
+            forward_eps=ticker.info.get("forwardEps"),
+            trailing_p_e=ticker.info.get("trailingPE"),
+            forward_p_e=ticker.info.get("forwardPE"),
+            beta=ticker.info.get("beta") if ticker.info.get("beta") else ticker.info.get("beta3Year"),
             recommendation_key=ticker.info.get("recommendationKey"),
-            target_high_price=ticker.info.get("targetHighPrice", 0.0),
-            target_low_price=ticker.info.get("targetLowPrice", 0.0),
-            target_mean_price=ticker.info.get("targetMeanPrice", 0.0),
-            target_median_price=ticker.info.get("targetMedianPrice", 0.0),
+            target_high_price=ticker.info.get("targetHighPrice"),
+            target_low_price=ticker.info.get("targetLowPrice"),
+            target_mean_price=ticker.info.get("targetMeanPrice"),
+            target_median_price=ticker.info.get("targetMedianPrice"),
         )
 
     def to_currency(self, currency: str, x_rate: float) -> StockQuote:
@@ -299,11 +299,11 @@ class StockHistory(BaseModel):
         self.current_volume = int(history365d["Volume"].iloc[-1])
         self.yesterday_volume = int(history365d["Volume"].iloc[-2])
         self.average_volume_30d = int(history30d["Volume"].iloc[:-2].mean())
-        self.ma10 = history365d["Close"].rolling(window=10).mean().iloc[-1]
-        self.ma20 = history365d["Close"].rolling(window=20).mean().iloc[-1]
-        self.ma50 = history365d["Close"].rolling(window=50).mean().iloc[-1]
-        self.ma100 = history365d["Close"].rolling(window=100).mean().iloc[-1]
-        self.ma200 = history365d["Close"].rolling(window=200).mean().iloc[-1]
+        self.ma10 = history365d["Close"].rolling(window=10).mean().iloc[-1] or 0.0
+        self.ma20 = history365d["Close"].rolling(window=20).mean().iloc[-1] or 0.0
+        self.ma50 = history365d["Close"].rolling(window=50).mean().iloc[-1] or 0.0
+        self.ma100 = history365d["Close"].rolling(window=100).mean().iloc[-1] or 0.0
+        self.ma200 = history365d["Close"].rolling(window=200).mean().iloc[-1] or 0.0
 
         # calculate Relative Strength Index (RSI)
         delta = history365d["Close"].diff()

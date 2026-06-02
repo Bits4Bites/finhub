@@ -7,7 +7,7 @@ import pandas as pd
 import yfinance as yf
 
 from ..models import event as models_event
-from ..services import crawler as crawler_service
+from ..services import crawler as services_crawler
 from ..utils import asset as asset_utils
 from ..utils import conv, yfutils
 from ..utils import finhub as finhub_utils
@@ -46,15 +46,15 @@ async def _get_upcoming_dividends_events(
     Returns:
         list[models_event.UpcomingDividendEvent]: A list of upcoming dividend/distribution events
     """
-    country = country.upper()
+    country = conv.country_to_iso2(country)
     end_date = _calc_end_date_to_fetch_events(event_type="DIVIDEND", tz=tz, index=index)
     raw_data = (
-        await crawler_service.scrape_dividends_asx(end_date)
-        if country == "AU" or country == "AUS" or country == "AUSTRALIA"
+        await services_crawler.scrape_dividends_asx(end_date)
+        if country == "AU"
         else (
-            await crawler_service.scrape_dividends_vn(end_date)
-            if country == "VN" or country == "VIETNAM"
-            else await crawler_service.scrape_dividends_us(end_date)
+            await services_crawler.scrape_dividends_vn(end_date)
+            if country == "VN"
+            else await services_crawler.scrape_dividends_us(end_date)
         )
     )
     if raw_data.empty:
@@ -250,12 +250,12 @@ async def _get_upcoming_earnings_events(
     Returns:
         list[models_event.UpcomingEarningsEvent]: A list of upcoming earnings events
     """
-    country = country.upper()
+    country = conv.country_to_iso2(country)
     end_date = _calc_end_date_to_fetch_events(event_type="EARNINGS", tz=tz, index=index)
     raw_data = (
-        await crawler_service.scrape_earnings_asx(end_date)
-        if country == "AU" or country == "AUS" or country == "AUSTRALIA"
-        else await crawler_service.scrape_earnings_us(end_date)
+        await services_crawler.scrape_earnings_asx(end_date)
+        if country == "AU"
+        else await services_crawler.scrape_earnings_us(end_date)
     )
     if raw_data.empty:
         return []

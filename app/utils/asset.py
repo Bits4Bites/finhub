@@ -1,6 +1,5 @@
 from .. import config
 from ..models import types
-from . import conv
 
 
 def detect_asset_type(
@@ -73,6 +72,8 @@ def classify_market_cap(
     """
     cap_size: types.MarketCapType = None
     market_index = None
+
+    from . import conv
 
     country = conv.country_to_iso2(country)
     exchange_symbol = conv.to_exch_symb_format(symbol=exchange_symbol)
