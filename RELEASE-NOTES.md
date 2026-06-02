@@ -1,5 +1,22 @@
 # FinHub release notes
 
+## 2026-06-02 - v0.10.0
+
+### Added/Refactoring/Deprecation
+
+- Refactor: Reorganize models, routers, schemas and services.
+- Add(test): Unit tests for toz service & router
+- Add(test): Unit tests for stocks service & router
+- Feat(api): Add API to analyze a given stock.
+- Refactor(api): Separate APIs to build new portfolios and analyze/review existing ones.
+- Feat(service): Rework services that use AI to build/review portfolios.
+- Refactor(api, service): Rework API analyze_dividend_event.
+- Refactor(api, service): Rework API get_new_listings.
+
+### Fixed/Improvements
+
+- Impr(lint): Migrate lint tool to ruff.
+
 ## 2026-05-15 - v0.9.0
 
 ### Added/Refactoring/Deprecation
