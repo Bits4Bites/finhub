@@ -35,7 +35,7 @@ BUILD_PROMPT_TEMPLATE = (
     "## The prompt must instruct the premium model to cover:\n"
     "- Proposed asset allocation strategy (equities / ETFs / REITs / bonds / cash %)\n"
     "- Individual stock/ETF picks with:\n"
-    "  - Ticker and full name\n"
+    "  - Ticker, full name and its role in the portfolio\n"
     "  - Allocation % and estimated number of shares\n"
     "  - Rationale (why this pick, why this weighting)\n"
     "  - Key risks specific to this position\n"
