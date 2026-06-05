@@ -81,7 +81,10 @@ async def ai_build_portfolio(
         holdings_lines = []
         for pos in existing_positions:
             market_value = pos.num_shares * pos.market_price
-            holdings_lines.append(f"  - {pos.ticker}: {pos.num_shares} shares, market value ${market_value:.2f}")
+            line = f"  - {pos.ticker}: {pos.num_shares} shares, market value ${market_value:.2f}"
+            if pos.tags:
+                line += f" ({pos.tags})"
+            holdings_lines.append(line)
         existing_holdings = "\n\n### Current holdings\n" + "\n".join(holdings_lines)
         existing_holdings_instruction = "- How the new recommendations complement or adjust the existing holdings\n"
 
