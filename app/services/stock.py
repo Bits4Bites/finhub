@@ -3,10 +3,9 @@ from typing import Any
 
 import yfinance as yf
 
+from .. import config
 from ..models import finhub as models
 from ..utils import conv
-
-allowed_quote_types = {"EQUITY", "ETF"}
 
 
 def get_symbol_info_raw(symbol: str) -> dict[str, Any]:
@@ -43,7 +42,7 @@ def get_symbol_info(symbol: str) -> models.SymbolInfo | None:
     yf_symbol = conv.to_yf_symbol_format(symbol)
     ticker = yf.Ticker(yf_symbol)
     quote_type = ticker.info.get("quoteType")
-    if quote_type in allowed_quote_types:
+    if quote_type in config.ALLOWED_QUOTE_TYPES:
         return models.SymbolInfo(ticker)
     return None
 
@@ -61,7 +60,7 @@ def get_symbol_overview(symbol: str) -> models.SymbolOverview | None:
     yf_symbol = conv.to_yf_symbol_format(symbol)
     ticker = yf.Ticker(yf_symbol)
     quote_type = ticker.info.get("quoteType")
-    if quote_type in allowed_quote_types:
+    if quote_type in config.ALLOWED_QUOTE_TYPES:
         return models.SymbolOverview(ticker)
     return None
 
@@ -84,7 +83,7 @@ def get_stock_quotes(symbols: list[str]) -> dict[str, models.StockQuote]:
         if yf_symbol in tickers.tickers:
             ticker = tickers.tickers[yf_symbol]
             quote_type = ticker.info.get("quoteType") if ticker.info.get("quoteType") is not None else "NONE"
-            if quote_type in allowed_quote_types:
+            if quote_type in config.ALLOWED_QUOTE_TYPES:
                 symbol = symbols[i]
                 quotes[symbol] = models.StockQuote(ticker)
     return quotes
@@ -104,7 +103,7 @@ def get_stock_quote_at_date(symbol: str, date_str: str) -> models.HistoryPoint |
     yf_symbol = conv.to_yf_symbol_format(symbol)
     ticker = yf.Ticker(yf_symbol)
     quote_type = ticker.info.get("quoteType")
-    if quote_type in allowed_quote_types:
+    if quote_type in config.ALLOWED_QUOTE_TYPES:
         try:
             start_date = datetime.strptime(date_str, "%Y-%m-%d").date()
         except ValueError:

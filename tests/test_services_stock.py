@@ -61,9 +61,28 @@ ETF_INFO = {
 }
 
 UNSUPPORTED_INFO = {
+    "quoteType": "CURRENCY",
+    "symbol": "VTSAX",
+    "currency": "USD",
+}
+
+MUTUAL_FUND_INFO = {
     "quoteType": "MUTUALFUND",
     "symbol": "VTSAX",
     "currency": "USD",
+    "fullExchangeName": "NASDAQ",
+    "regularMarketPrice": 450.0,
+    "regularMarketChange": 1.0,
+    "regularMarketChangePercent": 0.22,
+    "regularMarketOpen": 449.0,
+    "regularMarketDayHigh": 451.0,
+    "regularMarketDayLow": 448.0,
+    "fiftyTwoWeekHigh": 480.0,
+    "fiftyTwoWeekLow": 380.0,
+    "regularMarketVolume": 80000000,
+    "shortName": "Vanguard Total Stock Market Fund",
+    "longName": "Vanguard Total Stock Market Fund",
+    "marketCap": 400000000000,
 }
 
 NONE_QUOTE_TYPE_INFO = {
@@ -118,6 +137,16 @@ class TestGetSymbolInfo:
         mock_ticker_cls.return_value = _make_ticker_mock(ETF_INFO)
         result = get_symbol_info("SPY")
         assert result is not None
+
+    @patch("app.utils.conv.to_yf_symbol_format", return_value="VTSAX")
+    @patch("app.services.stock.yf.Ticker")
+    def test_returns_symbol_info_for_mutual_fund(self, mock_ticker_cls, mock_to_yf):
+        mock_ticker_cls.return_value = _make_ticker_mock(MUTUAL_FUND_INFO)
+
+        result = get_symbol_info("VTSAX")
+
+        assert result is not None
+        assert result.symbol == "VTSAX"
 
     @patch("app.utils.conv.to_yf_symbol_format", return_value="VTSAX")
     @patch("app.services.stock.yf.Ticker")
@@ -195,6 +224,19 @@ class TestGetStockQuotes:
         result = get_stock_quotes(["AAPL", "VTSAX"])
         assert "AAPL" in result
         assert "VTSAX" not in result
+
+    @patch("app.utils.conv.to_yf_symbol_format", side_effect=lambda s: s)
+    @patch("app.services.stock.yf.Tickers")
+    def test_includes_mutual_fund_quotes(self, mock_tickers_cls, mock_to_yf):
+        ticker1 = _make_ticker_mock(MUTUAL_FUND_INFO)
+        mock_tickers_instance = MagicMock()
+        mock_tickers_instance.tickers = {"VTSAX": ticker1}
+        mock_tickers_cls.return_value = mock_tickers_instance
+
+        result = get_stock_quotes(["VTSAX"])
+
+        assert "VTSAX" in result
+        assert result["VTSAX"].market_price == 450.0
 
     @patch("app.utils.conv.to_yf_symbol_format", side_effect=lambda s: s)
     @patch("app.services.stock.yf.Tickers")

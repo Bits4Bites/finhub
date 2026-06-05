@@ -370,6 +370,7 @@ class HoldingTicker(BaseModel):
     avg_price: float = 0.0
     market_price: float = 0.0
     target_allocation: float = 0.0
+    tags: str | None = None
 
 
 class PortfolioAnalysis(models_ai.BaseAIResult):
