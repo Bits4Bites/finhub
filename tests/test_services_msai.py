@@ -198,6 +198,34 @@ class TestAiBuildPortfolio:
 # ===========================================================================
 
 
+class TestAiSpotlightPortfolio:
+    """Tests for ai_spotlight_portfolio function."""
+
+    def test_returns_none_for_empty_portfolio(self):
+        from app.services.msai_spotlight_portfolio import ai_spotlight_portfolio
+
+        result = asyncio.run(ai_spotlight_portfolio(portfolio=[], country="AU"))
+        assert result is None
+
+    @patch("app.services.msai_spotlight_portfolio.ai_helper.ai_exec_task", new_callable=AsyncMock)
+    def test_uses_two_step_prompt_flow(self, mock_ai_exec):
+        from app.services.msai_spotlight_portfolio import ai_spotlight_portfolio
+
+        mock_ai_exec.side_effect = [
+            LLMResponse(completion="Generated spotlight prompt"),
+            LLMResponse(completion="Immediate risks and actions"),
+        ]
+        portfolio = [HoldingTicker(ticker="AAPL", num_shares=20, market_price=190.0, tags="growth")]
+
+        result = asyncio.run(ai_spotlight_portfolio(portfolio=portfolio, country="US"))
+
+        assert result is not None
+        assert result.analysis == "Immediate risks and actions"
+        assert mock_ai_exec.call_count == 2
+        assert mock_ai_exec.call_args_list[0].args[0] == "SPOTLIGHT_PORTFOLIO_BUILD_PROMPT"
+        assert mock_ai_exec.call_args_list[1].args[0] == "SPOTLIGHT_PORTFOLIO_EXEC"
+
+
 class TestAiReviewPortfolio:
     """Tests for ai_review_portfolio function."""
 

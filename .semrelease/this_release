@@ -7,3 +7,4 @@
 - fix(services): analyse_dividend_event no longer raises error if asset type is not supported.
 - impr(build_portfolio, analyze_portfolio): Add additional field 'tags' to class HoldingTicker.
 - fix(scheduler): Fix qnd.qnd_update_asx_indices to fetch ASX indices from the correct source.
+- feat(API, services): Add new API spotlight_portfolio.

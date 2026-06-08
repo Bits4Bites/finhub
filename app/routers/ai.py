@@ -5,6 +5,7 @@ from ..services import msai_analyze_div_event as service_analyze_div_event
 from ..services import msai_analyze_ticker as service_analyze_ticker
 from ..services import msai_build_portfolio as service_build_portfolio
 from ..services import msai_review_portfolio as service_review_portfolio
+from ..services import msai_spotlight_portfolio as service_spotlight_portfolio
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 
@@ -68,7 +69,7 @@ async def analyse_dividend_event(
     response_model_exclude_none=True,
 )
 async def analyze_ticker(
-    req: schemas_ai.AnalyzeTickerRequest = Body(description="The analyze request."),
+    req: schemas_ai.AnalyzeTickerRequest = Body(description="The analyze portfolio request."),
 ) -> schemas_ai.AnalysisResponse:
     """
     Analyzes a ticker using AI assistance.
@@ -92,6 +93,27 @@ async def build_portfolio(
     """
     result = await service_build_portfolio.ai_build_portfolio(
         existing_positions=req.current_allocation,
+        country=req.country,
+        investor_theme=req.investor_theme,
+    )
+    if not result:
+        return schemas_ai.AnalyzePortfolioResponse(status=400, message="Invalid input or execution failed")
+    return schemas_ai.AnalyzePortfolioResponse(status=200, message="ok", data=result)
+
+
+@router.post(
+    "/spotlight_portfolio",
+    response_model=schemas_ai.AnalyzePortfolioResponse,
+    response_model_exclude_none=True,
+)
+async def spotlight_portfolio(
+    req: schemas_ai.AnalyzePortfolioRequest = Body(description="The spotlight portfolio request."),
+) -> schemas_ai.AnalyzePortfolioResponse:
+    """
+    Reviews a portfolio and highlights immediate risks and actions using AI assistance.
+    """
+    result = await service_spotlight_portfolio.ai_spotlight_portfolio(
+        portfolio=req.current_allocation,
         country=req.country,
         investor_theme=req.investor_theme,
     )
@@ -125,5 +147,5 @@ async def analyze_portfolio(
             investor_theme=req.investor_theme,
         )
     if not result:
-        return schemas_ai.AnalyzePortfolioResponse(status=400, message="Invalid input or analysis failed")
+        return schemas_ai.AnalyzePortfolioResponse(status=400, message="Invalid input or execution failed")
     return schemas_ai.AnalyzePortfolioResponse(status=200, message="ok", data=result)
