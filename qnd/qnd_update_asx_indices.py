@@ -9,7 +9,8 @@ from app.services import crawler as crawler_service
 
 
 async def update_asx_index(index: str, num_check: int):
-    url = "https://www.dividenddates.com.au/asx-300-list/"
+    # url = "https://www.dividenddates.com.au/asx-300-list/
+    url = "https://fnarena.com/index/ASX300/"
     to_file = "resources/indices/asx300.json"
     table_attr_filter = None
     index = index.upper()
@@ -19,13 +20,16 @@ async def update_asx_index(index: str, num_check: int):
             to_file = "resources/indices/asx20.json"
             table_attr_filter = {"id": "table_index"}
         case "ASX50" | "ASX 50" | "ASX-50":
-            url = "https://www.dividenddates.com.au/asx-50-list/"
+            # url = "https://www.dividenddates.com.au/asx-50-list/"
+            url = "https://fnarena.com/index/ASX50/"
             to_file = "resources/indices/asx50.json"
         case "ASX100" | "ASX 100" | "ASX-100":
-            url = "https://www.dividenddates.com.au/asx-100-list/"
+            # url = "https://www.dividenddates.com.au/asx-100-list/"
+            url = "https://fnarena.com/index/ASX100/"
             to_file = "resources/indices/asx100.json"
         case "ASX200" | "ASX 200" | "ASX-200":
-            url = "https://www.dividenddates.com.au/asx-200-list/"
+            # url = "https://www.dividenddates.com.au/asx-200-list/"
+            url = "https://fnarena.com/index/ASX200/"
             to_file = "resources/indices/asx200.json"
 
     data = await crawler_service.scrape_data_table(url, table_attr_filter=table_attr_filter)
