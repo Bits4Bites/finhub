@@ -233,12 +233,64 @@ Build a new portfolio using AI assistance.
 | `country`            | `string`          | No       | Country context for the portfolio (e.g. `AU`, `US`).                      |
 | `investor_theme`     | `string`          | No       | Investor theme/preference for the analysis. Defaults to a built-in theme. |
 
+Each `HoldingTicker` object:
+
+| Field               | Type   | Description                                     |
+|---------------------|--------|-------------------------------------------------|
+| `ticker`            | string | Stock symbol.                                   |
+| `num_shares`        | float  | Number of shares held.                          |
+| `avg_price`         | float  | Average purchase price per share.               |
+| `market_price`      | float  | Current market price per share.                 |
+| `target_allocation` | float  | Target allocation weight (e.g. `0.25` for 25%). |
+| `tags`              | string | Optional tag(s) for the holding.                |
+
 **Example:**
 
 ```bash
 curl -X POST 'http://localhost:8000/ai/build_portfolio' \
   -H 'Content-Type: application/json' \
   -d '{"country": "AU", "investor_theme": "growth with moderate risk"}'
+```
+
+---
+
+### `POST /ai/spotlight_portfolio`
+
+Review a portfolio and highlight the top immediate risks and prioritized immediate actions using AI.
+
+**Request Body (JSON):**
+
+| Field                | Type              | Required | Description                                                               |
+|----------------------|-------------------|----------|---------------------------------------------------------------------------|
+| `current_allocation` | `HoldingTicker[]` | No       | List of current holdings to review.                                       |
+| `country`            | `string`          | No       | Country context for the analysis (e.g. `AU`, `US`).                       |
+| `investor_theme`     | `string`          | No       | Investor theme/preference for the analysis. Defaults to a built-in theme. |
+
+Each `HoldingTicker` object:
+
+| Field               | Type   | Description                                     |
+|---------------------|--------|-------------------------------------------------|
+| `ticker`            | string | Stock symbol.                                   |
+| `num_shares`        | float  | Number of shares held.                          |
+| `avg_price`         | float  | Average purchase price per share.               |
+| `market_price`      | float  | Current market price per share.                 |
+| `target_allocation` | float  | Target allocation weight (e.g. `0.25` for 25%). |
+| `tags`              | string | Optional tag(s) for the holding.                |
+
+**Example:**
+
+```bash
+curl -X POST 'http://localhost:8000/ai/spotlight_portfolio' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "country": "AU",
+    "investor_theme": "growth with moderate risk",
+    "current_allocation": [
+      {"ticker": "CBA.AX", "num_shares": 10, "avg_price": 150.0, "market_price": 160.9, "target_allocation": 0.35, "tags": "bank"},
+      {"ticker": "BHP.AX", "num_shares": 20, "avg_price": 40.0, "market_price": 61.24, "target_allocation": 0.30, "tags": "resources"},
+      {"ticker": "CSL.AX", "num_shares": 15, "avg_price": 90.0, "market_price": 97.91, "target_allocation": 0.35, "tags": "healthcare"}
+    ]
+  }'
 ```
 
 ---
@@ -264,6 +316,7 @@ Each `HoldingTicker` object:
 | `avg_price`         | float  | Average purchase price per share.               |
 | `market_price`      | float  | Current market price per share.                 |
 | `target_allocation` | float  | Target allocation weight (e.g. `0.25` for 25%). |
+| `tags`              | string | Optional tag(s) for the holding.                |
 
 **Example:**
 
