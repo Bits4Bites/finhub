@@ -1,5 +1,5 @@
 {
-    "date": "2026-05-16",
+    "date": "2026-06-08",
     "data": [
         {
             "symbol": "NYSE:MMM",
@@ -342,7 +342,7 @@
             "sector": "Financials"
         },
         {
-            "symbol": "NYSE:BK",
+            "symbol": "NYSE:BNY",
             "company": "BNY Mellon",
             "sector": "Financials"
         },
@@ -877,11 +877,6 @@
             "sector": "Energy"
         },
         {
-            "symbol": "NYSE:EPAM",
-            "company": "EPAM Systems",
-            "sector": "Information Technology"
-        },
-        {
             "symbol": "NYSE:EQT",
             "company": "EQT Corporation",
             "sector": "Energy"
@@ -989,6 +984,11 @@
         {
             "symbol": "NYSE:FDX",
             "company": "FedEx",
+            "sector": "Industrials"
+        },
+        {
+            "symbol": "NYSE:FDXF",
+            "company": "FedEx Freight",
             "sector": "Industrials"
         },
         {
