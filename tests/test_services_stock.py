@@ -183,6 +183,16 @@ class TestGetSymbolOverview:
         result = get_symbol_overview("AAPL")
         assert result is not None
 
+    @patch("app.utils.conv.to_yf_symbol_format", return_value="AAPL")
+    @patch("app.services.stock.yf.Ticker")
+    def test_sets_normalized_symbol_for_overview(self, mock_ticker_cls, mock_to_yf):
+        mock_ticker_cls.return_value = _make_ticker_mock(EQUITY_INFO)
+
+        result = get_symbol_overview("AAPL")
+
+        assert result is not None
+        assert result.normalized_symbol == "NASDAQ:AAPL"
+
     @patch("app.utils.conv.to_yf_symbol_format", return_value="VTSAX")
     @patch("app.services.stock.yf.Ticker")
     def test_returns_none_for_unsupported_quote_type(self, mock_ticker_cls, mock_to_yf):

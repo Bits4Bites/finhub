@@ -16,6 +16,7 @@ from . import types
 
 class SymbolBase(BaseModel):
     symbol: str
+    normalized_symbol: str = ""
     currency: str
     exchange: str
     country: str
@@ -30,6 +31,7 @@ class SymbolBase(BaseModel):
         )
         self.country = conv.country_to_iso2(self.country)
         self.exchange = conv.normalize_exchange_code(self.exchange)
+        self.normalized_symbol = conv.to_exch_symb_format(ticker=ticker)
 
 
 class HistoryPoint(BaseModel):

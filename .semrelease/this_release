@@ -8,3 +8,4 @@
 - impr(build_portfolio, analyze_portfolio): Add additional field 'tags' to class HoldingTicker.
 - fix(scheduler): Fix qnd.qnd_update_asx_indices to fetch ASX indices from the correct source.
 - feat(API, services): Add new API spotlight_portfolio.
+- patch: Add new field normalized_symbol to SymbolBase.
