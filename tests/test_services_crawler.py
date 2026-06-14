@@ -108,7 +108,9 @@ class TestCrawlerScrape:
         ):
             result = asyncio.run(
                 crawler.scrape_earnings_from_tipranks(
-                    "https://example.test/{date}", end_date=datetime.date.today(), tz_name="UTC"
+                    "https://example.test/{date}",
+                    end_date=datetime.date.today() + datetime.timedelta(days=7),
+                    tz_name="UTC",
                 )
             )
 
