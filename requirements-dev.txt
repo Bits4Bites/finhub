@@ -3,3 +3,5 @@
 pytest>=9.0.3,<10.0
 pytest-cov>=7.1.0,<8.0
 ruff>=0.15.15,<1.0
+# Starlette's TestClient requires httpx2; plain httpx is deprecated
+httpx2>=2.0.0,<3.0
