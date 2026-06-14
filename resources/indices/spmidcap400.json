@@ -1,5 +1,5 @@
 {
-    "date": "2026-05-16",
+    "date": "2026-06-08",
     "data": [
         {
             "symbol": "NYSE:AA",
@@ -722,11 +722,6 @@
             "sector": "Financials"
         },
         {
-            "symbol": "NYSE:FLO",
-            "company": "Flowers Foods",
-            "sector": "Consumer Staples"
-        },
-        {
             "symbol": "NYSE:FLR",
             "company": "Fluor",
             "sector": "Industrials"
@@ -1362,6 +1357,11 @@
             "sector": "Financials"
         },
         {
+            "symbol": "NYSE:P",
+            "company": "Everpure",
+            "sector": "Information Technology"
+        },
+        {
             "symbol": "NYSE:PAG",
             "company": "Penske Automotive Group",
             "sector": "Consumer Discretionary"
@@ -1455,11 +1455,6 @@
             "symbol": "NYSE:PSN",
             "company": "Parsons Corporation",
             "sector": "Industrials"
-        },
-        {
-            "symbol": "NYSE:PSTG",
-            "company": "Everpure",
-            "sector": "Information Technology"
         },
         {
             "symbol": "NYSE:PVH",
@@ -1645,6 +1640,11 @@
             "symbol": "NYSE:SMG",
             "company": "Scotts Miracle-Gro Company",
             "sector": "Materials"
+        },
+        {
+            "symbol": "NYSE:SN",
+            "company": "SharkNinja",
+            "sector": "Consumer Discretionary"
         },
         {
             "symbol": "NYSE:SNX",

@@ -35,7 +35,7 @@ BUILD_PROMPT_TEMPLATE = (
     "## The prompt must instruct the premium model to cover:\n"
     "- Proposed asset allocation strategy (equities / ETFs / REITs / bonds / cash %)\n"
     "- Individual stock/ETF picks with:\n"
-    "  - Ticker and full name\n"
+    "  - Ticker, full name and its role in the portfolio\n"
     "  - Allocation % and estimated number of shares\n"
     "  - Rationale (why this pick, why this weighting)\n"
     "  - Key risks specific to this position\n"
@@ -81,7 +81,10 @@ async def ai_build_portfolio(
         holdings_lines = []
         for pos in existing_positions:
             market_value = pos.num_shares * pos.market_price
-            holdings_lines.append(f"  - {pos.ticker}: {pos.num_shares} shares, market value ${market_value:.2f}")
+            line = f"  - {pos.ticker}: {pos.num_shares} shares, market value ${market_value:.2f}"
+            if pos.tags:
+                line += f" ({pos.tags})"
+            holdings_lines.append(line)
         existing_holdings = "\n\n### Current holdings\n" + "\n".join(holdings_lines)
         existing_holdings_instruction = "- How the new recommendations complement or adjust the existing holdings\n"
 

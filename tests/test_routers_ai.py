@@ -186,6 +186,31 @@ class TestBuildPortfolio:
 # ===========================================================================
 
 
+class TestSpotlightPortfolio:
+    """Tests for POST /ai/spotlight_portfolio endpoint."""
+
+    @patch(
+        "app.routers.ai.service_spotlight_portfolio.ai_spotlight_portfolio",
+        new_callable=AsyncMock,
+    )
+    def test_success(self, mock_spotlight):
+        mock_spotlight.return_value = AnalysisResult(llm_error=False, analysis="Immediate risks and actions")
+
+        resp = client.post(
+            "/ai/spotlight_portfolio",
+            json={
+                "country": "AU",
+                "current_allocation": [{"ticker": "CBA.AX", "num_shares": 100, "market_price": 120.0}],
+            },
+        )
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] == 200
+        assert body["data"]["analysis"] == "Immediate risks and actions"
+        mock_spotlight.assert_called_once()
+
+
 class TestAnalyzePortfolio:
     """Tests for POST /ai/analyze_portfolio endpoint."""
 

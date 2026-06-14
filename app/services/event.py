@@ -12,7 +12,7 @@ from ..utils import asset as asset_utils
 from ..utils import conv, yfutils
 from ..utils import finhub as finhub_utils
 
-allowed_quote_types = {"EQUITY", "ETF"}
+allowed_quote_types = {"EQUITY", "ETF", "MUTUALFUND"}
 
 
 def _calc_end_date_to_fetch_events(*, event_type: str, tz: ZoneInfo, index: str = ""):
@@ -385,10 +385,12 @@ async def analyse_dividend_event(
     tz = yfutils.tz_from_yf_ticker(ticker)
 
     quote_type = ticker.info.get("quoteType")
-    if quote_type == "NONE":
-        return None  # no data available
     if quote_type not in allowed_quote_types:
-        raise ValueError(f"Quote type '{quote_type}' for ticker '{ticker}' is not supported for dividend analysis.")
+        return None
+    # if quote_type == "NONE":
+    #     return None  # no data available
+    # if quote_type not in allowed_quote_types:
+    #     raise ValueError(f"Quote type '{quote_type}' for ticker '{ticker}' is not supported for dividend analysis.")
 
     info = ticker.info
     current_price = info.get("regularMarketPrice", 0)

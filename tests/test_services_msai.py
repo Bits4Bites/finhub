@@ -159,7 +159,7 @@ class TestAiBuildPortfolio:
         ]
 
         positions = [
-            HoldingTicker(ticker="AAPL", num_shares=10, market_price=150.0),
+            HoldingTicker(ticker="AAPL", num_shares=10, market_price=150.0, tags="growth"),
             HoldingTicker(ticker="MSFT", num_shares=5, market_price=400.0),
         ]
 
@@ -172,6 +172,7 @@ class TestAiBuildPortfolio:
         prompt_input = first_call_args[0][1]  # second positional arg
         assert "AAPL" in prompt_input
         assert "MSFT" in prompt_input
+        assert "(growth)" in prompt_input
 
     @patch("app.services.msai_build_portfolio.ai_helper.ai_exec_task", new_callable=AsyncMock)
     def test_empty_existing_positions_treated_as_none(self, mock_ai_exec):
@@ -195,6 +196,34 @@ class TestAiBuildPortfolio:
 # ===========================================================================
 # Tests for msai_review_portfolio
 # ===========================================================================
+
+
+class TestAiSpotlightPortfolio:
+    """Tests for ai_spotlight_portfolio function."""
+
+    def test_returns_none_for_empty_portfolio(self):
+        from app.services.msai_spotlight_portfolio import ai_spotlight_portfolio
+
+        result = asyncio.run(ai_spotlight_portfolio(portfolio=[], country="AU"))
+        assert result is None
+
+    @patch("app.services.msai_spotlight_portfolio.ai_helper.ai_exec_task", new_callable=AsyncMock)
+    def test_uses_two_step_prompt_flow(self, mock_ai_exec):
+        from app.services.msai_spotlight_portfolio import ai_spotlight_portfolio
+
+        mock_ai_exec.side_effect = [
+            LLMResponse(completion="Generated spotlight prompt"),
+            LLMResponse(completion="Immediate risks and actions"),
+        ]
+        portfolio = [HoldingTicker(ticker="AAPL", num_shares=20, market_price=190.0, tags="growth")]
+
+        result = asyncio.run(ai_spotlight_portfolio(portfolio=portfolio, country="US"))
+
+        assert result is not None
+        assert result.analysis == "Immediate risks and actions"
+        assert mock_ai_exec.call_count == 2
+        assert mock_ai_exec.call_args_list[0].args[0] == "SPOTLIGHT_PORTFOLIO_BUILD_PROMPT"
+        assert mock_ai_exec.call_args_list[1].args[0] == "SPOTLIGHT_PORTFOLIO_EXEC"
 
 
 class TestAiReviewPortfolio:
@@ -259,7 +288,7 @@ class TestAiReviewPortfolio:
             LLMResponse(completion="Generated prompt"),
             LLMResponse(completion="Review result"),
         ]
-        portfolio = [HoldingTicker(ticker="AAPL", num_shares=20, market_price=190.0)]
+        portfolio = [HoldingTicker(ticker="AAPL", num_shares=20, market_price=190.0, tags="growth")]
 
         asyncio.run(ai_review_portfolio(portfolio=portfolio, country="US"))
 
@@ -267,6 +296,7 @@ class TestAiReviewPortfolio:
         prompt_input = first_call_args[0][1]
         assert "AAPL" in prompt_input
         assert "20" in prompt_input
+        assert "(growth)" in prompt_input
 
 
 # ===========================================================================

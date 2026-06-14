@@ -467,15 +467,14 @@ class TestAnalyseDividendEvent:
         assert result is None
 
     @patch("app.services.event.yf.Ticker")
-    def test_raises_for_unsupported_quote_type(self, mock_ticker_cls):
+    def test_returns_none_for_unsupported_quote_type(self, mock_ticker_cls):
         from app.services.event import analyse_dividend_event
 
         mock_ticker_cls.return_value.info = {"quoteType": "CURRENCY", "country": "US"}
-        try:
-            asyncio.run(analyse_dividend_event(symbol="NASDAQ:AAPL", ex_date="2025-08-15", div_amount=1.0))
-            assert False, "Should have raised ValueError"
-        except ValueError as e:
-            assert "not supported" in str(e)
+
+        result = asyncio.run(analyse_dividend_event(symbol="NASDAQ:AAPL", ex_date="2025-08-15", div_amount=1.0))
+
+        assert result is None
 
     @patch("app.services.event.yfutils.lookup_peer_yf_static_symbol", return_value=None)
     @patch("app.services.event.yfutils.lookup_index_yf_static_symbol", return_value=None)

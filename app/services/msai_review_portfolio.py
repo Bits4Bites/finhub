@@ -110,9 +110,13 @@ async def ai_review_portfolio(
     holdings_lines = []
     for pos in portfolio:
         market_value = pos.num_shares * pos.market_price
-        holdings_lines.append(
-            f"  - {pos.ticker}: {pos.num_shares} shares, market value ${market_value:.2f}, target allocation {pos.target_allocation:.1%}"
+        line = (
+            f"  - {pos.ticker}: {pos.num_shares} shares, market value ${market_value:.2f}, "
+            f"target allocation {pos.target_allocation:.1%}"
         )
+        if pos.tags:
+            line += f" ({pos.tags})"
+        holdings_lines.append(line)
     existing_holdings = "\n\n### Current holdings\n" + "\n".join(holdings_lines)
 
     country = conv.country_to_iso2(country)

@@ -1,5 +1,20 @@
 # FinHub release notes
 
+## 2026-06-14 - v0.11.0
+
+### Added/Refactoring/Deprecation
+
+- Feat(API, services): Add new API spotlight_portfolio.
+
+### Fixed/Improvements
+
+- Fix(CodeQL): Fix CodeQL warnings.
+- Fix: Add MUTUALFUND to the list of supported asset types.
+- Fix(services): analyse_dividend_event no longer raises error if asset type is not supported.
+- Impr(build_portfolio, analyze_portfolio): Add additional field tags to class HoldingTicker.
+- Fix(scheduler): Fix qnd.qnd_update_asx_indices to fetch ASX indices from the correct source.
+- Patch: Add new field normalized_symbol to SymbolBase.
+
 ## 2026-06-02 - v0.10.0
 
 ### Added/Refactoring/Deprecation

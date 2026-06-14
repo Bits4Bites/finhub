@@ -16,6 +16,7 @@ from . import types
 
 class SymbolBase(BaseModel):
     symbol: str
+    normalized_symbol: str = ""
     currency: str
     exchange: str
     country: str
@@ -30,6 +31,7 @@ class SymbolBase(BaseModel):
         )
         self.country = conv.country_to_iso2(self.country)
         self.exchange = conv.normalize_exchange_code(self.exchange)
+        self.normalized_symbol = conv.to_exch_symb_format(ticker=ticker)
 
 
 class HistoryPoint(BaseModel):
@@ -140,9 +142,9 @@ class SymbolOverview(SymbolBase):
 
 
 class SymbolDividend(BaseModel):
-    dividend_rate: float = 0.0  # Annual Dividend amount
-    dividend_yield: float = 0.0  # Annual Dividend Yield in percentage
-    payout_frequency: int = 0
+    dividend_rate: float = 0.0  # annual dividend amount
+    dividend_yield: float = 0.0  # Annual dividend Yield in percentage, value = 3.45 means 3.45%
+    payout_frequency: int = 0  # number of payouts per year, value = 12 means monthly
     ex_dividend_date: int = 0
     ex_dividend_date_str: str | None = None
     five_year_avg_dividend_yield: float = 0.0
@@ -270,7 +272,7 @@ class StockQuote(BaseModel):
 
 class StockHistory(BaseModel):
     recent_high_price: float = 0.0
-    pull_pack_percent: float = 0.0
+    pull_pack_percent: float = 0.0  # 12.34 means 12.34%
     current_volume: int = 0
     yesterday_volume: int = 0
     average_volume_30d: int = 0
@@ -370,6 +372,7 @@ class HoldingTicker(BaseModel):
     avg_price: float = 0.0
     market_price: float = 0.0
     target_allocation: float = 0.0
+    tags: str | None = None
 
 
 class PortfolioAnalysis(models_ai.BaseAIResult):
