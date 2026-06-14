@@ -29,7 +29,9 @@ async def get_upcoming_dividends_event(
     if config.settings_finhub_proxy.proxy_mode.upper() == "REDIRECT":
         proxy_url = config.settings_finhub_proxy.url_web_crawl_node.rstrip("/")
         prefix = str(router.prefix)
-        next_url = f"{proxy_url}{prefix}/upcoming_dividends?country={country}&index={index}"
+        e_country = urllib.parse.quote(country, safe="")
+        e_index = urllib.parse.quote(index, safe="")
+        next_url = f"{proxy_url}{prefix}/upcoming_dividends?country={e_country}&index={e_index}"
         next_url_for_log = urllib.parse.quote(next_url, safe="")
         logging.info(f"Redirecting request to {next_url_for_log}")
         return RedirectResponse(url=next_url, status_code=307)
@@ -78,7 +80,9 @@ async def get_upcoming_earnings_event(
     if config.settings_finhub_proxy.proxy_mode.upper() == "REDIRECT":
         proxy_url = config.settings_finhub_proxy.url_web_crawl_node.rstrip("/")
         prefix = str(router.prefix)
-        next_url = f"{proxy_url}{prefix}/upcoming_earnings?country={country}&index={index}"
+        e_country = urllib.parse.quote(country, safe="")
+        e_index = urllib.parse.quote(index, safe="")
+        next_url = f"{proxy_url}{prefix}/upcoming_earnings?country={e_country}&index={e_index}"
         next_url_for_log = urllib.parse.quote(next_url, safe="")
         logging.info(f"Redirecting request to {next_url_for_log}")
         return RedirectResponse(url=next_url, status_code=307)
@@ -106,7 +110,8 @@ async def get_new_listings(
     if config.settings_finhub_proxy.proxy_mode.upper() == "REDIRECT":
         proxy_url = config.settings_finhub_proxy.url_web_crawl_node.rstrip("/")
         prefix = str(router.prefix)
-        next_url = f"{proxy_url}{prefix}/new_listings?country={country}"
+        e_country = urllib.parse.quote(country, safe="")
+        next_url = f"{proxy_url}{prefix}/new_listings?country={e_country}"
         next_url_for_log = urllib.parse.quote(next_url, safe="")
         logging.info(f"Redirecting request to {next_url_for_log}")
         return RedirectResponse(url=next_url, status_code=307)

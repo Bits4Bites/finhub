@@ -9,7 +9,7 @@ from google.genai.types import HttpOptions
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-ALLOWED_QUOTE_TYPES = {"EQUITY", "ETF"}
+ALLOWED_QUOTE_TYPES = {"EQUITY", "ETF", "MUTUALFUND"}
 
 # ----------------------------------------------------------------------#
 

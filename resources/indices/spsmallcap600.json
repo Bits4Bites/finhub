@@ -1,5 +1,5 @@
 {
-    "date": "2026-05-16",
+    "date": "2026-06-08",
     "data": [
         {
             "symbol": "NYSE:AAMI",
@@ -112,6 +112,11 @@
             "sector": "Energy"
         },
         {
+            "symbol": "NASDAQ:AGNT",
+            "company": "eXp World Holdings, Inc.",
+            "sector": "Real Estate"
+        },
+        {
             "symbol": "NYSE:AGO",
             "company": "Assured Guaranty Ltd.",
             "sector": "Financials"
@@ -155,6 +160,11 @@
             "symbol": "NASDAQ:ALGT",
             "company": "Allegiant Travel Company",
             "sector": "Industrials"
+        },
+        {
+            "symbol": "NASDAQ:ALHC",
+            "company": "Alignment Healthcare, Inc.",
+            "sector": "Health Care"
         },
         {
             "symbol": "NASDAQ:ALKS",
@@ -232,11 +242,6 @@
             "sector": "Real Estate"
         },
         {
-            "symbol": "NASDAQ:APLS",
-            "company": "Apellis Pharmaceuticals, Inc.",
-            "sector": "Health Care"
-        },
-        {
             "symbol": "NASDAQ:APOG",
             "company": "Apogee Enterprises, Inc.",
             "sector": "Industrials"
@@ -265,11 +270,6 @@
             "symbol": "NYSE:ARR",
             "company": "Armour Residential REIT",
             "sector": "Real Estate"
-        },
-        {
-            "symbol": "NYSE:ASGN",
-            "company": "ASGN Inc.",
-            "sector": "Information Technology"
         },
         {
             "symbol": "NASDAQ:ASO",
@@ -365,6 +365,11 @@
             "symbol": "NASDAQ:BCPC",
             "company": "Balchem Corporation",
             "sector": "Materials"
+        },
+        {
+            "symbol": "NYSE:BFAM",
+            "company": "Bright Horizons Family Solutions Inc.",
+            "sector": "Consumer Discretionary"
         },
         {
             "symbol": "NYSE:BFH",
@@ -667,11 +672,6 @@
             "sector": "Health Care"
         },
         {
-            "symbol": "NASDAQ:CSGS",
-            "company": "CSG Systems International, Inc.",
-            "sector": "Industrials"
-        },
-        {
             "symbol": "NYSE:CSR",
             "company": "Centerspace Trust",
             "sector": "Real Estate"
@@ -867,6 +867,11 @@
             "sector": "Financials"
         },
         {
+            "symbol": "NYSE:EFOR",
+            "company": "Everforth Inc.",
+            "sector": "Information Technology"
+        },
+        {
             "symbol": "NASDAQ:EGBN",
             "company": "Eagle Bancorp Inc",
             "sector": "Financials"
@@ -947,11 +952,6 @@
             "sector": "Financials"
         },
         {
-            "symbol": "NASDAQ:EXPI",
-            "company": "eXp World Holdings, Inc.",
-            "sector": "Real Estate"
-        },
-        {
             "symbol": "NASDAQ:EXTR",
             "company": "Extreme Networks, Inc.",
             "sector": "Information Technology"
@@ -1008,7 +1008,12 @@
         },
         {
             "symbol": "NASDAQ:FFBC",
-            "company": "First Financial Bancorp.",
+            "company": "First Financial Bancorp",
+            "sector": "Financials"
+        },
+        {
+            "symbol": "NYSE:FG",
+            "company": "F&G Annuities & Life, Inc.",
             "sector": "Financials"
         },
         {
@@ -1024,6 +1029,11 @@
         {
             "symbol": "NASDAQ:FIZZ",
             "company": "National Beverage Corp.",
+            "sector": "Consumer Staples"
+        },
+        {
+            "symbol": "NYSE:FLO",
+            "company": "Flowers Foods",
             "sector": "Consumer Staples"
         },
         {
@@ -1290,11 +1300,6 @@
             "symbol": "NYSE:HZO",
             "company": "MarineMax, Inc.",
             "sector": "Consumer Discretionary"
-        },
-        {
-            "symbol": "NASDAQ:IAC",
-            "company": "IAC Inc.",
-            "sector": "Communication Services"
         },
         {
             "symbol": "NASDAQ:IART",
@@ -1664,11 +1669,6 @@
         {
             "symbol": "NASDAQ:MCRI",
             "company": "Monarch Casino & Resort, Inc.",
-            "sector": "Consumer Discretionary"
-        },
-        {
-            "symbol": "NYSE:MCW",
-            "company": "Mister Car Wash, Inc.",
             "sector": "Consumer Discretionary"
         },
         {
@@ -2117,6 +2117,11 @@
             "sector": "Industrials"
         },
         {
+            "symbol": "NASDAQ:PPLI",
+            "company": "People Inc.",
+            "sector": "Communication Services"
+        },
+        {
             "symbol": "NYSE:PRA",
             "company": "ProAssurance Corporation",
             "sector": "Financials"
@@ -2245,6 +2250,11 @@
             "symbol": "NASDAQ:RDNT",
             "company": "RadNet, Inc.",
             "sector": "Health Care"
+        },
+        {
+            "symbol": "NASDAQ:RELY",
+            "company": "Remitly",
+            "sector": "Financials"
         },
         {
             "symbol": "NYSE:RES",
@@ -2482,11 +2492,6 @@
             "sector": "Information Technology"
         },
         {
-            "symbol": "NASDAQ:SNCY",
-            "company": "Sun Country Airlines",
-            "sector": "Industrials"
-        },
-        {
             "symbol": "NYSE:SNDR",
             "company": "Schneider National",
             "sector": "Industrials"
@@ -2640,11 +2645,6 @@
             "symbol": "NASDAQ:TNDM",
             "company": "Tandem Diabetes Care",
             "sector": "Health Care"
-        },
-        {
-            "symbol": "NYSE:TPH",
-            "company": "Tri Pointe Homes, Inc.",
-            "sector": "Consumer Discretionary"
         },
         {
             "symbol": "NYSE:TR",
@@ -2842,11 +2842,6 @@
             "sector": "Information Technology"
         },
         {
-            "symbol": "NYSE:VSCO",
-            "company": "Victoria's Secret",
-            "sector": "Consumer Discretionary"
-        },
-        {
             "symbol": "NASDAQ:VSEC",
             "company": "VSE Corporation",
             "sector": "Industrials"
@@ -2865,6 +2860,11 @@
             "symbol": "NYSE:VSTS",
             "company": "Vestis",
             "sector": "Industrials"
+        },
+        {
+            "symbol": "NYSE:VSXY",
+            "company": "Victoria's Secret",
+            "sector": "Consumer Discretionary"
         },
         {
             "symbol": "NYSE:VTOL",

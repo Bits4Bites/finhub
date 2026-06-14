@@ -1,1005 +1,1005 @@
 {
-    "date": "2026-05-16",
+    "date": "2026-06-08",
     "data": [
         {
-            "symbol": "ASX:CBA",
-            "company": "Commonwealth Bank",
-            "sector": "Financials"
+            "symbol": "ASX:360",
+            "company": "LIFE360 INC",
+            "sector": "Software & Services"
         },
         {
-            "symbol": "ASX:CSL",
-            "company": "CSL Limited",
-            "sector": "Health Care"
-        },
-        {
-            "symbol": "ASX:BHP",
-            "company": "BHP Group Limited",
-            "sector": "Materials"
-        },
-        {
-            "symbol": "ASX:WBC",
-            "company": "Westpac Banking Corp",
-            "sector": "Financials"
-        },
-        {
-            "symbol": "ASX:NAB",
-            "company": "National Aust. Bank",
-            "sector": "Financials"
-        },
-        {
-            "symbol": "ASX:ANZ",
-            "company": "ANZ Banking Group Limited",
-            "sector": "Financials"
-        },
-        {
-            "symbol": "ASX:WOW",
-            "company": "Woolworths Group Limited",
-            "sector": "Consumer Staples"
-        },
-        {
-            "symbol": "ASX:MQG",
-            "company": "Macquarie Group Limited",
-            "sector": "Financials"
-        },
-        {
-            "symbol": "ASX:WES",
-            "company": "Wesfarmers Limited",
-            "sector": "Consumer Discretionary"
-        },
-        {
-            "symbol": "ASX:TLS",
-            "company": "Telstra Corporation",
-            "sector": "Telecommunication Services"
-        },
-        {
-            "symbol": "ASX:TCL",
-            "company": "Transurban Group FP Ordinary/Units Stapled Securities",
-            "sector": "Industrials"
-        },
-        {
-            "symbol": "ASX:RIO",
-            "company": "RIO Tinto Limited",
-            "sector": "Materials"
-        },
-        {
-            "symbol": "ASX:FMG",
-            "company": "Fortescue Metals Group",
-            "sector": "Materials"
-        },
-        {
-            "symbol": "ASX:GMG",
-            "company": "Goodman Group FP Ordinary/Units Stapled Securities",
-            "sector": "Real Estate"
-        },
-        {
-            "symbol": "ASX:WPL",
-            "company": "Woodside Petroleum",
-            "sector": "Energy"
-        },
-        {
-            "symbol": "ASX:ALL",
-            "company": "Aristocrat Leisure",
-            "sector": "Consumer Discretionary"
-        },
-        {
-            "symbol": "ASX:NCM",
-            "company": "Newcrest Mining",
-            "sector": "Materials"
-        },
-        {
-            "symbol": "ASX:COL",
-            "company": "Coles Group",
-            "sector": "Consumer Staples"
-        },
-        {
-            "symbol": "ASX:BXB",
-            "company": "Brambles Limited",
-            "sector": "Industrials"
-        },
-        {
-            "symbol": "ASX:SCG",
-            "company": "Scentre Group FP Ordinary/Units Stapled Securities",
-            "sector": "Real Estate"
-        },
-        {
-            "symbol": "ASX:QBE",
-            "company": "QBE Insurance Group",
-            "sector": "Financials"
-        },
-        {
-            "symbol": "ASX:SYD",
-            "company": "SYD Airport FP Ordinary/Units Stapled Securities",
-            "sector": "Industrials"
-        },
-        {
-            "symbol": "ASX:AMC",
-            "company": "Amcor Plc Cdi 1:1 Foreign Exempt NYSE",
-            "sector": "Materials"
-        },
-        {
-            "symbol": "ASX:IAG",
-            "company": "Insurance Australia",
-            "sector": "Financials"
-        },
-        {
-            "symbol": "ASX:ASX",
-            "company": "ASX Limited",
-            "sector": "Financials"
-        },
-        {
-            "symbol": "ASX:SUN",
-            "company": "Suncorp Group Limited",
-            "sector": "Financials"
-        },
-        {
-            "symbol": "ASX:STO",
-            "company": "Santos Limited",
-            "sector": "Energy"
-        },
-        {
-            "symbol": "ASX:FPH",
-            "company": "Fisher & Paykel H Foreign Exempt NZX",
-            "sector": "Health Care"
-        },
-        {
-            "symbol": "ASX:RHC",
-            "company": "Ramsay Health Care",
-            "sector": "Health Care"
-        },
-        {
-            "symbol": "ASX:SHL",
-            "company": "Sonic Healthcare",
-            "sector": "Health Care"
-        },
-        {
-            "symbol": "ASX:DXS",
-            "company": "Dexus FP Units Stapled Securities",
-            "sector": "Real Estate"
-        },
-        {
-            "symbol": "ASX:REA",
-            "company": "REA Group",
-            "sector": ""
-        },
-        {
-            "symbol": "ASX:APA",
-            "company": "APA Group FP Units Stapled Securities",
-            "sector": "Utilities"
-        },
-        {
-            "symbol": "ASX:JHX",
-            "company": "James Hardie Indust Chess Depositary Interests 1:1",
-            "sector": "Materials"
-        },
-        {
-            "symbol": "ASX:ORG",
-            "company": "Origin Energy",
-            "sector": "Energy"
-        },
-        {
-            "symbol": "ASX:AGL",
-            "company": "AGL Energy Limited",
-            "sector": "Utilities"
-        },
-        {
-            "symbol": "ASX:COH",
-            "company": "Cochlear Limited",
-            "sector": "Health Care"
-        },
-        {
-            "symbol": "ASX:MGR",
-            "company": "Mirvac Group FP Ordinary/Units Stapled Securities",
-            "sector": "Real Estate"
+            "symbol": "ASX:4DX",
+            "company": "4DMEDICAL LIMITED",
+            "sector": "Medical Equipment & Devices"
         },
         {
             "symbol": "ASX:A2M",
-            "company": "The a2 Milk Company",
-            "sector": "Consumer Staples"
+            "company": "A2 MILK COMPANY LIMITED",
+            "sector": "Dairy"
         },
         {
-            "symbol": "ASX:GPT",
-            "company": "GPT Group FP Ordinary/Units Stapled Securities",
-            "sector": "Real Estate"
+            "symbol": "ASX:AAI",
+            "company": "ALCOA CORPORATION",
+            "sector": "Aluminium, Bauxite & Alumina"
         },
         {
-            "symbol": "ASX:SGP",
-            "company": "Stockland FP Ordinary/Units Stapled Securities",
-            "sector": "Real Estate"
+            "symbol": "ASX:ABB",
+            "company": "AUSSIE BROADBAND LIMITED",
+            "sector": "Telecommunication"
         },
         {
-            "symbol": "ASX:S32",
-            "company": "SOUTH32 Limited",
-            "sector": "Materials"
-        },
-        {
-            "symbol": "ASX:XRO",
-            "company": "Xero Limited",
-            "sector": "Information Technology"
-        },
-        {
-            "symbol": "ASX:MFG",
-            "company": "Magellan Fin Group Limited",
-            "sector": "Financials"
-        },
-        {
-            "symbol": "ASX:NST",
-            "company": "Northern Star",
-            "sector": "Materials"
-        },
-        {
-            "symbol": "ASX:LLC",
-            "company": "Lendlease Group FP Ordinary/Units Stapled Securities",
-            "sector": "Real Estate"
-        },
-        {
-            "symbol": "ASX:RMD",
-            "company": "Resmed Inc Cdi 10:1 Foreign Exempt NYSE",
-            "sector": "Health Care"
-        },
-        {
-            "symbol": "ASX:AZJ",
-            "company": "Aurizon Holdings Limited",
-            "sector": "Industrials"
+            "symbol": "ASX:AGL",
+            "company": "AGL ENERGY LIMITED",
+            "sector": "Infrastructure & Utilities"
         },
         {
             "symbol": "ASX:AIA",
-            "company": "Auckland Internation Foreign Exempt NZX",
-            "sector": "Industrials"
+            "company": "AUCKLAND INTERNATIONAL AIRPORT LIMITED",
+            "sector": "Infrastructure & Utilities, Travel, Leisure & Tourism"
         },
         {
-            "symbol": "ASX:APT",
-            "company": "Afterpay Limited",
-            "sector": "Information Technology"
+            "symbol": "ASX:ALD",
+            "company": "AMPOL LIMITED",
+            "sector": "Crude Oil, Consumer Products & Services"
         },
         {
-            "symbol": "ASX:OSH",
-            "company": "Oil Search Limited 10 Toea",
-            "sector": "Energy"
+            "symbol": "ASX:ALK",
+            "company": "ALKANE RESOURCES LIMITED",
+            "sector": "Gold & Silver"
         },
         {
-            "symbol": "ASX:CCL",
-            "company": "Coca-Cola Amatil",
-            "sector": "Consumer Staples"
-        },
-        {
-            "symbol": "ASX:CPU",
-            "company": "Computershare Limited",
-            "sector": "Information Technology"
-        },
-        {
-            "symbol": "ASX:QAN",
-            "company": "Qantas Airways",
-            "sector": "Industrials"
-        },
-        {
-            "symbol": "ASX:CTX",
-            "company": "Caltex Australia",
-            "sector": "Energy"
-        },
-        {
-            "symbol": "ASX:VCX",
-            "company": "Vicinity Centres FP Ordinary/Units Stapled Securities",
-            "sector": "Real Estate"
-        },
-        {
-            "symbol": "ASX:ORI",
-            "company": "Orica Limited",
-            "sector": "Materials"
-        },
-        {
-            "symbol": "ASX:SPK",
-            "company": "Spark New Zealand Foreign Exempt NZX",
-            "sector": "Telecommunication Services"
-        },
-        {
-            "symbol": "ASX:TWE",
-            "company": "Treasury Wine Estate",
-            "sector": "Consumer Staples"
-        },
-        {
-            "symbol": "ASX:MPL",
-            "company": "Medibank Private Limited",
-            "sector": "Financials"
-        },
-        {
-            "symbol": "ASX:CIM",
-            "company": "Cimic Group Limited",
-            "sector": "Industrials"
-        },
-        {
-            "symbol": "ASX:TAH",
-            "company": "Tabcorp Holdings Limited",
-            "sector": "Consumer Discretionary"
-        },
-        {
-            "symbol": "ASX:SEK",
-            "company": "Seek Limited",
-            "sector": "Industrials"
-        },
-        {
-            "symbol": "ASX:ALX",
-            "company": "Atlas Arteria Stap US Prohibited Excluding QUP",
-            "sector": "Industrials"
-        },
-        {
-            "symbol": "ASX:TPM",
-            "company": "TPG Telecom Limited",
-            "sector": "Telecommunication Services"
-        },
-        {
-            "symbol": "ASX:EVN",
-            "company": "Evolution Mining Limited",
-            "sector": "Materials"
-        },
-        {
-            "symbol": "ASX:CWN",
-            "company": "Crown Resorts Limited",
-            "sector": "Consumer Discretionary"
-        },
-        {
-            "symbol": "ASX:WOR",
-            "company": "Worley Limited",
-            "sector": "Energy"
-        },
-        {
-            "symbol": "ASX:AST",
-            "company": "Ausnet Services Limited",
-            "sector": "Utilities"
-        },
-        {
-            "symbol": "ASX:BSL",
-            "company": "Bluescope Steel Limited",
-            "sector": "Materials"
-        },
-        {
-            "symbol": "ASX:SVW",
-            "company": "Seven Group Holdings",
-            "sector": "Industrials"
-        },
-        {
-            "symbol": "ASX:CHC",
-            "company": "Charter Hall Group Stapled Securities US Prohibited",
-            "sector": "Real Estate"
-        },
-        {
-            "symbol": "ASX:AMP",
-            "company": "AMP Limited",
-            "sector": "Financials"
-        },
-        {
-            "symbol": "ASX:AWC",
-            "company": "Alumina Limited",
-            "sector": "Materials"
-        },
-        {
-            "symbol": "ASX:CGF",
-            "company": "Challenger Limited",
-            "sector": "Financials"
-        },
-        {
-            "symbol": "ASX:IEL",
-            "company": "Idp Education Limited",
-            "sector": "Consumer Discretionary"
-        },
-        {
-            "symbol": "ASX:BLD",
-            "company": "Boral Limited",
-            "sector": "Materials"
-        },
-        {
-            "symbol": "ASX:WTC",
-            "company": "Wisetech Global Limited",
-            "sector": "Information Technology"
-        },
-        {
-            "symbol": "ASX:DMP",
-            "company": "Domino PIZZA Enterpr",
-            "sector": "Consumer Discretionary"
-        },
-        {
-            "symbol": "ASX:QUB",
-            "company": "QUBE Holdings Limited",
-            "sector": "Industrials"
-        },
-        {
-            "symbol": "ASX:SOL",
-            "company": "Soul Pattinson (W.H)",
-            "sector": "Energy"
-        },
-        {
-            "symbol": "ASX:CWY",
-            "company": "Cleanaway Waste Limited",
-            "sector": "Industrials"
-        },
-        {
-            "symbol": "ASX:HVN",
-            "company": "Harvey Norman",
-            "sector": "Consumer Discretionary"
-        },
-        {
-            "symbol": "ASX:BEN",
-            "company": "Bendigo and Adelaide",
-            "sector": "Financials"
-        },
-        {
-            "symbol": "ASX:IPL",
-            "company": "Incitec Pivot",
-            "sector": "Materials"
-        },
-        {
-            "symbol": "ASX:JBH",
-            "company": "JB Hi-Fi Limited",
-            "sector": "Consumer Discretionary"
-        },
-        {
-            "symbol": "ASX:SAR",
-            "company": "Saracen Mineral",
-            "sector": "Materials"
-        },
-        {
-            "symbol": "ASX:FBU",
-            "company": "Fletcher Building Foreign Exempt NZX",
-            "sector": "Materials"
-        },
-        {
-            "symbol": "ASX:ALU",
-            "company": "Altium Limited",
-            "sector": "Information Technology"
+            "symbol": "ASX:ALL",
+            "company": "ARISTOCRAT LEISURE LIMITED",
+            "sector": "Gaming"
         },
         {
             "symbol": "ASX:ALQ",
-            "company": "Als Limited",
-            "sector": "Industrials"
+            "company": "ALS LIMITED",
+            "sector": "Mining Sector Contracting, Industrial Sector Contractors & Engineers"
         },
         {
-            "symbol": "ASX:BPT",
-            "company": "Beach Energy Limited",
-            "sector": "Energy"
+            "symbol": "ASX:ALX",
+            "company": "ATLAS ARTERIA",
+            "sector": "Infrastructure & Utilities"
         },
         {
-            "symbol": "ASX:CAR",
-            "company": "Carsales.com Limited",
-            "sector": ""
+            "symbol": "ASX:AMC",
+            "company": "AMCOR PLC",
+            "sector": "Food, Beverages & Tobacco, Paper & Packaging"
+        },
+        {
+            "symbol": "ASX:AMP",
+            "company": "AMP LIMITED",
+            "sector": "Wealth Management & Investments"
         },
         {
             "symbol": "ASX:ANN",
-            "company": "Ansell Limited",
-            "sector": "Health Care"
+            "company": "ANSELL LIMITED",
+            "sector": "Commercial Services & Supplies"
         },
         {
-            "symbol": "ASX:SKI",
-            "company": "Spark Infrastructure Stapled $0.65 Loan Note and Unit US Prohib",
-            "sector": "Utilities"
+            "symbol": "ASX:ANZ",
+            "company": "ANZ GROUP HOLDINGS LIMITED",
+            "sector": "Banks"
         },
         {
-            "symbol": "ASX:ILU",
-            "company": "Iluka Resources",
-            "sector": "Materials"
-        },
-        {
-            "symbol": "ASX:VEA",
-            "company": "Viva Energy Group",
-            "sector": "Energy"
-        },
-        {
-            "symbol": "ASX:BOQ",
-            "company": "Bank of Queensland",
-            "sector": "Financials"
-        },
-        {
-            "symbol": "ASX:DOW",
-            "company": "Downer Edi Limited",
-            "sector": "Industrials"
-        },
-        {
-            "symbol": "ASX:SGR",
-            "company": "The Star Ent Group",
-            "sector": "Consumer Discretionary"
-        },
-        {
-            "symbol": "ASX:FLT",
-            "company": "Flight Centre Travel",
-            "sector": "Consumer Discretionary"
-        },
-        {
-            "symbol": "ASX:GOZ",
-            "company": "Growthpoint Property FP Ordinary/Units Stapled Securities",
-            "sector": "Real Estate"
-        },
-        {
-            "symbol": "ASX:ORA",
-            "company": "Orora Limited",
-            "sector": "Materials"
-        },
-        {
-            "symbol": "ASX:SDF",
-            "company": "Steadfast Group Limited",
-            "sector": "Financials"
-        },
-        {
-            "symbol": "ASX:MIN",
-            "company": "Mineral Resources",
-            "sector": "Materials"
-        },
-        {
-            "symbol": "ASX:IGO",
-            "company": "IGO Limited",
-            "sector": "Materials"
-        },
-        {
-            "symbol": "ASX:CMW",
-            "company": "Cromwell Prop FP Ordinary/Units Stapled Securities",
-            "sector": "Real Estate"
-        },
-        {
-            "symbol": "ASX:OZL",
-            "company": "OZ Minerals",
-            "sector": "Materials"
-        },
-        {
-            "symbol": "ASX:SCP",
-            "company": "Sca Property Group FP Units Stapled Securities",
-            "sector": "Real Estate"
-        },
-        {
-            "symbol": "ASX:CNU",
-            "company": "Chorus Limited Foreign Exempt NZX",
-            "sector": "Telecommunication Services"
-        },
-        {
-            "symbol": "ASX:URW",
-            "company": "Unibailrodawestfield Cdi 20:1 Foreign Exempt Xpar",
-            "sector": "Real Estate"
-        },
-        {
-            "symbol": "ASX:NXT",
-            "company": "NEXTDC Limited",
-            "sector": "Information Technology"
-        },
-        {
-            "symbol": "ASX:CLW",
-            "company": "CHTR H LWR FP Units Stapled Securities",
-            "sector": "Real Estate"
-        },
-        {
-            "symbol": "ASX:NEC",
-            "company": "Nine Entertainment",
-            "sector": ""
-        },
-        {
-            "symbol": "ASX:VUK",
-            "company": "Virgin Money Uk Plc Cdi 1:1 Foreign Exempt Lse",
-            "sector": "Financials"
-        },
-        {
-            "symbol": "ASX:BKW",
-            "company": "Brickworks Limited",
-            "sector": "Materials"
-        },
-        {
-            "symbol": "ASX:PMV",
-            "company": "Premier Investments",
-            "sector": "Consumer Discretionary"
-        },
-        {
-            "symbol": "ASX:RWC",
-            "company": "Reliance Worldwide",
-            "sector": "Industrials"
-        },
-        {
-            "symbol": "ASX:BRG",
-            "company": "Breville Group Limited",
-            "sector": "Consumer Discretionary"
-        },
-        {
-            "symbol": "ASX:APX",
-            "company": "Appen Limited",
-            "sector": "Information Technology"
-        },
-        {
-            "symbol": "ASX:TNE",
-            "company": "Technology One",
-            "sector": "Information Technology"
-        },
-        {
-            "symbol": "ASX:LNK",
-            "company": "Link Admin HLDG",
-            "sector": "Information Technology"
-        },
-        {
-            "symbol": "ASX:BWP",
-            "company": "BWP Trust Ordinary Units FP",
-            "sector": "Real Estate"
-        },
-        {
-            "symbol": "ASX:ABP",
-            "company": "Abacus Property Group FP Ordinary/Units Stapled Securities",
-            "sector": "Real Estate"
-        },
-        {
-            "symbol": "ASX:PDL",
-            "company": "Pendal Group Limited",
-            "sector": "Financials"
-        },
-        {
-            "symbol": "ASX:PTM",
-            "company": "Platinum Asset",
-            "sector": "Financials"
+            "symbol": "ASX:APA",
+            "company": "APA GROUP",
+            "sector": "Infrastructure & Utilities, NatGas"
         },
         {
             "symbol": "ASX:APE",
-            "company": "AP Eagers Limited",
-            "sector": "Consumer Discretionary"
-        },
-        {
-            "symbol": "ASX:MTS",
-            "company": "Metcash Limited",
-            "sector": "Consumer Staples"
-        },
-        {
-            "symbol": "ASX:CQR",
-            "company": "Charter Hall Retail Units FP",
-            "sector": "Real Estate"
-        },
-        {
-            "symbol": "ASX:VOC",
-            "company": "Vocus Group Limited",
-            "sector": "Telecommunication Services"
-        },
-        {
-            "symbol": "ASX:VVR",
-            "company": "Viva Energy REIT FP Ordinary/Units Stapled Securities",
-            "sector": "Real Estate"
-        },
-        {
-            "symbol": "ASX:NHF",
-            "company": "Nib Holdings Limited",
-            "sector": "Financials"
-        },
-        {
-            "symbol": "ASX:PME",
-            "company": "Pro Medicus Limited",
-            "sector": "Health Care"
-        },
-        {
-            "symbol": "ASX:IRE",
-            "company": "Iress Limited",
-            "sector": "Information Technology"
-        },
-        {
-            "symbol": "ASX:CSR",
-            "company": "CSR Limited",
-            "sector": "Materials"
-        },
-        {
-            "symbol": "ASX:WHC",
-            "company": "Whitehaven Coal",
-            "sector": "Energy"
-        },
-        {
-            "symbol": "ASX:RRL",
-            "company": "Regis Resources",
-            "sector": "Materials"
-        },
-        {
-            "symbol": "ASX:SKC",
-            "company": "Skycity Ent Group Limited Foreign Exempt NZX",
-            "sector": "Consumer Discretionary"
-        },
-        {
-            "symbol": "ASX:NAN",
-            "company": "Nanosonics Limited",
-            "sector": "Health Care"
-        },
-        {
-            "symbol": "ASX:IFL",
-            "company": "IOOF Holdings Limited",
-            "sector": "Financials"
-        },
-        {
-            "symbol": "ASX:ABC",
-            "company": "Adelaide Brighton",
-            "sector": "Materials"
-        },
-        {
-            "symbol": "ASX:SGM",
-            "company": "Sims Limited",
-            "sector": "Materials"
-        },
-        {
-            "symbol": "ASX:NUF",
-            "company": "Nufarm Limited",
-            "sector": "Materials"
-        },
-        {
-            "symbol": "ASX:HLS",
-            "company": "Healius",
-            "sector": "Health Care"
-        },
-        {
-            "symbol": "ASX:BIN",
-            "company": "Bingo Industries Limited",
-            "sector": "Industrials"
-        },
-        {
-            "symbol": "ASX:DHG",
-            "company": "Domain Holdings Aus",
-            "sector": ""
-        },
-        {
-            "symbol": "ASX:CCP",
-            "company": "Credit Corp Group",
-            "sector": "Financials"
-        },
-        {
-            "symbol": "ASX:NWL",
-            "company": "Netwealth Group",
-            "sector": "Financials"
-        },
-        {
-            "symbol": "ASX:IPH",
-            "company": "IPH Limited",
-            "sector": "Industrials"
-        },
-        {
-            "symbol": "ASX:PPT",
-            "company": "Perpetual Limited",
-            "sector": "Financials"
-        },
-        {
-            "symbol": "ASX:GNC",
-            "company": "Graincorp Limited Class A",
-            "sector": "Consumer Staples"
-        },
-        {
-            "symbol": "ASX:NSR",
-            "company": "National Storage FP Ordinary/Units Stapled Securities",
-            "sector": "Real Estate"
-        },
-        {
-            "symbol": "ASX:IVC",
-            "company": "Invocare Limited",
-            "sector": "Consumer Discretionary"
-        },
-        {
-            "symbol": "ASX:BAP",
-            "company": "Bapcor Limited",
-            "sector": "Consumer Discretionary"
-        },
-        {
-            "symbol": "ASX:SBM",
-            "company": "ST Barbara Limited",
-            "sector": "Materials"
-        },
-        {
-            "symbol": "ASX:SUL",
-            "company": "Super Ret Rep Limited",
-            "sector": "Consumer Discretionary"
-        },
-        {
-            "symbol": "ASX:AVN",
-            "company": "Aventus Group FP Ordinary/Units Stapled Securities",
-            "sector": "Real Estate"
-        },
-        {
-            "symbol": "ASX:COF",
-            "company": "Centuria Office REIT Ordinary Units FP",
-            "sector": "Real Estate"
-        },
-        {
-            "symbol": "ASX:CTD",
-            "company": "Corp Travel Limited",
-            "sector": "Consumer Discretionary"
-        },
-        {
-            "symbol": "ASX:PNV",
-            "company": "Polynovo Limited",
-            "sector": "Health Care"
-        },
-        {
-            "symbol": "ASX:MP1",
-            "company": "Megaport Limited",
-            "sector": "Information Technology"
-        },
-        {
-            "symbol": "ASX:SLR",
-            "company": "Silver Lake Resource",
-            "sector": "Materials"
+            "company": "EAGERS AUTOMOTIVE LIMITED",
+            "sector": "Automobiles & Components"
         },
         {
             "symbol": "ASX:ARB",
-            "company": "ARB Corporation",
-            "sector": "Consumer Discretionary"
+            "company": "ARB CORPORATION LIMITED",
+            "sector": "Automobiles & Components"
         },
         {
-            "symbol": "ASX:MND",
-            "company": "Monadelphous Group",
-            "sector": "Industrials"
-        },
-        {
-            "symbol": "ASX:INA",
-            "company": "Ingenia Group FP Ordinary/Units Stapled Securities",
-            "sector": "Real Estate"
-        },
-        {
-            "symbol": "ASX:GMA",
-            "company": "Genworth Mortgage",
-            "sector": "Financials"
-        },
-        {
-            "symbol": "ASX:WEB",
-            "company": "Webjet Limited",
-            "sector": "Consumer Discretionary"
-        },
-        {
-            "symbol": "ASX:CDA",
-            "company": "Codan Limited",
-            "sector": "Information Technology"
-        },
-        {
-            "symbol": "ASX:LYC",
-            "company": "Lynas Corporation",
-            "sector": "Materials"
-        },
-        {
-            "symbol": "ASX:ING",
-            "company": "Inghams Group",
-            "sector": "Consumer Staples"
-        },
-        {
-            "symbol": "ASX:JHG",
-            "company": "Janus Henderson Chess Depositary Interests 1:1",
-            "sector": "Financials"
-        },
-        {
-            "symbol": "ASX:GOR",
-            "company": "Gold Road Res Limited",
-            "sector": "Materials"
-        },
-        {
-            "symbol": "ASX:AVH",
-            "company": "Avita Medical Limited",
-            "sector": "Health Care"
-        },
-        {
-            "symbol": "ASX:CIP",
-            "company": "Centuria I REIT Ordinary Units FP",
-            "sector": "Real Estate"
+            "symbol": "ASX:ARF",
+            "company": "ARENA REIT",
+            "sector": "REITs"
         },
         {
             "symbol": "ASX:ASB",
-            "company": "Austal Limited",
-            "sector": "Industrials"
+            "company": "AUSTAL LIMITED",
+            "sector": "Commercial Services & Supplies"
         },
         {
-            "symbol": "ASX:CNI",
-            "company": "Centuria Capital FP Ordinary/Units Stapled Securities",
-            "sector": "Financials"
-        },
-        {
-            "symbol": "ASX:PRU",
-            "company": "Perseus Mining Limited",
-            "sector": "Materials"
-        },
-        {
-            "symbol": "ASX:ELD",
-            "company": "Elders Limited",
-            "sector": "Consumer Staples"
-        },
-        {
-            "symbol": "ASX:MSB",
-            "company": "Mesoblast Limited",
-            "sector": "Health Care"
-        },
-        {
-            "symbol": "ASX:NHC",
-            "company": "New Hope Corporation",
-            "sector": "Energy"
-        },
-        {
-            "symbol": "ASX:CGC",
-            "company": "Costa Group Holdings",
-            "sector": "Consumer Staples"
-        },
-        {
-            "symbol": "ASX:EML",
-            "company": "EML Payments Limited",
-            "sector": "Information Technology"
-        },
-        {
-            "symbol": "ASX:ISX",
-            "company": "Isignthis Limited",
-            "sector": "Information Technology"
-        },
-        {
-            "symbol": "ASX:FNP",
-            "company": "Freedom Food Limited",
-            "sector": "Consumer Staples"
-        },
-        {
-            "symbol": "ASX:BKL",
-            "company": "Blackmores Limited",
-            "sector": "Consumer Staples"
-        },
-        {
-            "symbol": "ASX:BVS",
-            "company": "Bravura Solution Limited",
-            "sector": "Information Technology"
-        },
-        {
-            "symbol": "ASX:IMF",
-            "company": "IMF Bentham Limited",
-            "sector": "Financials"
-        },
-        {
-            "symbol": "ASX:Z1P",
-            "company": "ZIP Co Limited",
-            "sector": "Financials"
-        },
-        {
-            "symbol": "ASX:RSG",
-            "company": "Resolute Mining",
-            "sector": "Materials"
-        },
-        {
-            "symbol": "ASX:CQE",
-            "company": "Charter Hall Soc in Units FP",
-            "sector": "Real Estate"
-        },
-        {
-            "symbol": "ASX:CKF",
-            "company": "Collins Foods Limited",
-            "sector": "Consumer Discretionary"
+            "symbol": "ASX:ASX",
+            "company": "ASX LIMITED",
+            "sector": "Wealth Management & Investments"
         },
         {
             "symbol": "ASX:AUB",
-            "company": "AUB Group Limited",
-            "sector": "Financials"
+            "company": "AUB GROUP LIMITED",
+            "sector": "Insurance"
         },
         {
-            "symbol": "ASX:NWH",
-            "company": "NRW Holdings Limited",
-            "sector": "Industrials"
+            "symbol": "ASX:AZJ",
+            "company": "AURIZON HOLDINGS LIMITED",
+            "sector": "Transportation & Logistics"
         },
         {
-            "symbol": "ASX:SM1",
-            "company": "Synlait Milk Limited Foreign Exempt NZX",
-            "sector": "Consumer Staples"
+            "symbol": "ASX:BEN",
+            "company": "BENDIGO & ADELAIDE BANK LIMITED",
+            "sector": "Banks"
         },
         {
-            "symbol": "ASX:LOV",
-            "company": "Lovisa Holdings Limited",
-            "sector": "Consumer Discretionary"
+            "symbol": "ASX:BGA",
+            "company": "BEGA CHEESE LIMITED",
+            "sector": "Dairy"
         },
         {
-            "symbol": "ASX:NWS",
-            "company": "News Corp Class B Voting Common Stock-Cdi 1:1",
-            "sector": ""
+            "symbol": "ASX:BGL",
+            "company": "BELLEVUE GOLD LIMITED",
+            "sector": "Gold & Silver"
         },
         {
-            "symbol": "ASX:PNI",
-            "company": "Pinnacle Investment",
-            "sector": "Financials"
+            "symbol": "ASX:BHP",
+            "company": "BHP GROUP LIMITED",
+            "sector": "Bulks, Crude Oil"
+        },
+        {
+            "symbol": "ASX:BOQ",
+            "company": "BANK OF QUEENSLAND LIMITED",
+            "sector": "Banks"
+        },
+        {
+            "symbol": "ASX:BPT",
+            "company": "BEACH ENERGY LIMITED",
+            "sector": "Crude Oil"
+        },
+        {
+            "symbol": "ASX:BRG",
+            "company": "BREVILLE GROUP LIMITED",
+            "sector": "Household & Personal Products"
+        },
+        {
+            "symbol": "ASX:BSL",
+            "company": "BLUESCOPE STEEL LIMITED",
+            "sector": "Steel & Scrap"
+        },
+        {
+            "symbol": "ASX:BWP",
+            "company": "BWP TRUST",
+            "sector": "REITs"
+        },
+        {
+            "symbol": "ASX:BXB",
+            "company": "BRAMBLES LIMITED",
+            "sector": "Transportation & Logistics"
+        },
+        {
+            "symbol": "ASX:CAR",
+            "company": "CAR GROUP LIMITED",
+            "sector": "Automobiles & Components, Online media & mobile platforms"
+        },
+        {
+            "symbol": "ASX:CBA",
+            "company": "COMMONWEALTH BANK OF AUSTRALIA",
+            "sector": "Banks"
+        },
+        {
+            "symbol": "ASX:CDA",
+            "company": "CODAN LIMITED",
+            "sector": "Hardware & Equipment, Mining Sector Contracting"
+        },
+        {
+            "symbol": "ASX:CGF",
+            "company": "CHALLENGER LIMITED",
+            "sector": "Wealth Management & Investments"
+        },
+        {
+            "symbol": "ASX:CHC",
+            "company": "CHARTER HALL GROUP",
+            "sector": "REITs"
         },
         {
             "symbol": "ASX:CIA",
-            "company": "Champion Iron Limited",
-            "sector": "Materials"
+            "company": "CHAMPION IRON LIMITED",
+            "sector": "Iron Ore"
+        },
+        {
+            "symbol": "ASX:CIP",
+            "company": "CENTURIA INDUSTRIAL REIT",
+            "sector": "REITs"
+        },
+        {
+            "symbol": "ASX:CLW",
+            "company": "CHARTER HALL LONG WALE REIT",
+            "sector": "REITs"
+        },
+        {
+            "symbol": "ASX:CMM",
+            "company": "CAPRICORN METALS LIMITED",
+            "sector": "Gold & Silver"
+        },
+        {
+            "symbol": "ASX:CNI",
+            "company": "CENTURIA CAPITAL GROUP",
+            "sector": "Diversified Financials"
+        },
+        {
+            "symbol": "ASX:CNU",
+            "company": "CHORUS LIMITED",
+            "sector": "Telecommunication"
+        },
+        {
+            "symbol": "ASX:COH",
+            "company": "COCHLEAR LIMITED",
+            "sector": "Medical Equipment & Devices"
+        },
+        {
+            "symbol": "ASX:COL",
+            "company": "COLES GROUP LIMITED",
+            "sector": "Food, Beverages & Tobacco"
+        },
+        {
+            "symbol": "ASX:CPU",
+            "company": "COMPUTERSHARE LIMITED",
+            "sector": "Diversified Financials"
+        },
+        {
+            "symbol": "ASX:CQR",
+            "company": "CHARTER HALL RETAIL REIT",
+            "sector": "REITs"
+        },
+        {
+            "symbol": "ASX:CSC",
+            "company": "CAPSTONE COPPER CORP.",
+            "sector": "Copper"
+        },
+        {
+            "symbol": "ASX:CSL",
+            "company": "CSL LIMITED",
+            "sector": "Pharmaceuticals & Biotech/Lifesciences"
+        },
+        {
+            "symbol": "ASX:CWY",
+            "company": "CLEANAWAY WASTE MANAGEMENT LIMITED",
+            "sector": "Industrial Sector Contractors & Engineers"
+        },
+        {
+            "symbol": "ASX:CYL",
+            "company": "CATALYST METALS LIMITED",
+            "sector": "Gold & Silver"
+        },
+        {
+            "symbol": "ASX:DBI",
+            "company": "DALRYMPLE BAY INFRASTRUCTURE LIMITED",
+            "sector": "Infrastructure & Utilities, Infrastructure & Utilities"
+        },
+        {
+            "symbol": "ASX:DMP",
+            "company": "DOMINO'S PIZZA ENTERPRISES LIMITED",
+            "sector": "Food, Beverages & Tobacco"
+        },
+        {
+            "symbol": "ASX:DNL",
+            "company": "DYNO NOBEL LIMITED",
+            "sector": "Mining Sector Contracting"
+        },
+        {
+            "symbol": "ASX:DOW",
+            "company": "DOWNER EDI LIMITED",
+            "sector": "Industrial Sector Contractors & Engineers, Mining Sector Contracting"
+        },
+        {
+            "symbol": "ASX:DRO",
+            "company": "DRONESHIELD LIMITED",
+            "sector": "Hardware & Equipment"
+        },
+        {
+            "symbol": "ASX:DRR",
+            "company": "DETERRA ROYALTIES LIMITED",
+            "sector": "Iron Ore"
+        },
+        {
+            "symbol": "ASX:DTL",
+            "company": "DATA#3 LIMITED.",
+            "sector": "IT & Support"
+        },
+        {
+            "symbol": "ASX:DXS",
+            "company": "DEXUS",
+            "sector": "REITs"
+        },
+        {
+            "symbol": "ASX:DYL",
+            "company": "DEEP YELLOW LIMITED",
+            "sector": "Uranium"
+        },
+        {
+            "symbol": "ASX:EDV",
+            "company": "ENDEAVOUR GROUP LIMITED",
+            "sector": "Food, Beverages & Tobacco"
+        },
+        {
+            "symbol": "ASX:ELD",
+            "company": "ELDERS LIMITED",
+            "sector": "Agriculture"
+        },
+        {
+            "symbol": "ASX:EMR",
+            "company": "EMERALD RESOURCES NL",
+            "sector": "Gold & Silver"
+        },
+        {
+            "symbol": "ASX:EVN",
+            "company": "EVOLUTION MINING LIMITED",
+            "sector": "Gold & Silver"
+        },
+        {
+            "symbol": "ASX:EVT",
+            "company": "EVT LIMITED",
+            "sector": "Travel, Leisure & Tourism"
+        },
+        {
+            "symbol": "ASX:FBU",
+            "company": "FLETCHER BUILDING LIMITED",
+            "sector": "Building Products & Services"
+        },
+        {
+            "symbol": "ASX:FLT",
+            "company": "FLIGHT CENTRE TRAVEL GROUP LIMITED",
+            "sector": "Travel, Leisure & Tourism"
+        },
+        {
+            "symbol": "ASX:FMG",
+            "company": "FORTESCUE LIMITED",
+            "sector": "Iron Ore"
+        },
+        {
+            "symbol": "ASX:FPH",
+            "company": "FISHER & PAYKEL HEALTHCARE CORPORATION LIMITED",
+            "sector": "Medical Equipment & Devices"
+        },
+        {
+            "symbol": "ASX:GDG",
+            "company": "GENERATION DEVELOPMENT GROUP LIMITED",
+            "sector": "Wealth Management & Investments, Insurance"
+        },
+        {
+            "symbol": "ASX:GGP",
+            "company": "GREATLAND RESOURCES LIMITED",
+            "sector": "Gold & Silver"
+        },
+        {
+            "symbol": "ASX:GMD",
+            "company": "GENESIS MINERALS LIMITED",
+            "sector": "Gold & Silver"
+        },
+        {
+            "symbol": "ASX:GMG",
+            "company": "GOODMAN GROUP",
+            "sector": "Infra & Property Developers"
+        },
+        {
+            "symbol": "ASX:GNC",
+            "company": "GRAINCORP LIMITED",
+            "sector": "Agriculture"
+        },
+        {
+            "symbol": "ASX:GPT",
+            "company": "GPT GROUP",
+            "sector": "Infra & Property Developers"
+        },
+        {
+            "symbol": "ASX:GQG",
+            "company": "GQG PARTNERS INC",
+            "sector": "Wealth Management & Investments"
+        },
+        {
+            "symbol": "ASX:GYG",
+            "company": "GUZMAN Y GOMEZ LIMITED",
+            "sector": "Food, Beverages & Tobacco"
+        },
+        {
+            "symbol": "ASX:HDN",
+            "company": "HOMECO DAILY NEEDS REIT",
+            "sector": "REITs"
+        },
+        {
+            "symbol": "ASX:HLI",
+            "company": "HELIA GROUP LIMITED",
+            "sector": "Insurance, Banks"
+        },
+        {
+            "symbol": "ASX:HUB",
+            "company": "HUB24 LIMITED",
+            "sector": "Wealth Management & Investments"
+        },
+        {
+            "symbol": "ASX:HVN",
+            "company": "HARVEY NORMAN HOLDINGS LIMITED",
+            "sector": "Furniture & Renovation, Consumer Electronics"
+        },
+        {
+            "symbol": "ASX:IAG",
+            "company": "INSURANCE AUSTRALIA GROUP LIMITED",
+            "sector": "Insurance"
+        },
+        {
+            "symbol": "ASX:IEL",
+            "company": "IDP EDUCATION LIMITED",
+            "sector": "Education & Tuition"
+        },
+        {
+            "symbol": "ASX:IFT",
+            "company": "INFRATIL LIMITED",
+            "sector": "Wealth Management & Investments, Cloud services"
+        },
+        {
+            "symbol": "ASX:IGO",
+            "company": "IGO LIMITED",
+            "sector": "Nickel, Gold & Silver"
+        },
+        {
+            "symbol": "ASX:ILU",
+            "company": "ILUKA RESOURCES LIMITED",
+            "sector": "Mineral Sands"
+        },
+        {
+            "symbol": "ASX:IMD",
+            "company": "IMDEX LIMITED",
+            "sector": "Mining Sector Contracting"
+        },
+        {
+            "symbol": "ASX:INA",
+            "company": "INGENIA COMMUNITIES GROUP",
+            "sector": "Aged Care & Seniors"
+        },
+        {
+            "symbol": "ASX:IPX",
+            "company": "IPERIONX LIMITED",
+            "sector": "Industrial Metals"
+        },
+        {
+            "symbol": "ASX:IRE",
+            "company": "IRESS LIMITED",
+            "sector": "Wealth Management & Investments"
+        },
+        {
+            "symbol": "ASX:JBH",
+            "company": "JB HI-FI LIMITED",
+            "sector": "Consumer Electronics, Furniture & Renovation"
+        },
+        {
+            "symbol": "ASX:JDO",
+            "company": "JUDO CAPITAL HOLDINGS LIMITED",
+            "sector": "Business & Consumer Credit"
+        },
+        {
+            "symbol": "ASX:JHX",
+            "company": "JAMES HARDIE INDUSTRIES PLC",
+            "sector": "Building Products & Services"
+        },
+        {
+            "symbol": "ASX:KAR",
+            "company": "KAROON ENERGY LIMITED",
+            "sector": "NatGas, Crude Oil"
+        },
+        {
+            "symbol": "ASX:LLC",
+            "company": "LENDLEASE GROUP",
+            "sector": "Infra & Property Developers"
+        },
+        {
+            "symbol": "ASX:LNW",
+            "company": "LIGHT & WONDER INC",
+            "sector": "Gaming"
+        },
+        {
+            "symbol": "ASX:LOV",
+            "company": "LOVISA HOLDINGS LIMITED",
+            "sector": "Retailing"
+        },
+        {
+            "symbol": "ASX:LTR",
+            "company": "LIONTOWN LIMITED",
+            "sector": "New Battery Elements"
+        },
+        {
+            "symbol": "ASX:LYC",
+            "company": "LYNAS RARE EARTHS LIMITED",
+            "sector": "Rare Earth Minerals"
+        },
+        {
+            "symbol": "ASX:MFG",
+            "company": "MAGELLAN FINANCIAL GROUP LIMITED",
+            "sector": "Wealth Management & Investments"
+        },
+        {
+            "symbol": "ASX:MGR",
+            "company": "MIRVAC GROUP",
+            "sector": "Infra & Property Developers"
+        },
+        {
+            "symbol": "ASX:MIN",
+            "company": "MINERAL RESOURCES LIMITED",
+            "sector": "Iron Ore, Mining Sector Contracting"
+        },
+        {
+            "symbol": "ASX:MND",
+            "company": "MONADELPHOUS GROUP LIMITED",
+            "sector": "Energy Sector Contracting, Mining Sector Contracting"
+        },
+        {
+            "symbol": "ASX:MP1",
+            "company": "MEGAPORT LIMITED",
+            "sector": "Cloud services"
+        },
+        {
+            "symbol": "ASX:MPL",
+            "company": "MEDIBANK PRIVATE LIMITED",
+            "sector": "Insurance, Healthcare services"
+        },
+        {
+            "symbol": "ASX:MQG",
+            "company": "MACQUARIE GROUP LIMITED",
+            "sector": "Wealth Management & Investments"
+        },
+        {
+            "symbol": "ASX:MSB",
+            "company": "MESOBLAST LIMITED",
+            "sector": "Pharmaceuticals & Biotech/Lifesciences"
+        },
+        {
+            "symbol": "ASX:MTS",
+            "company": "METCASH LIMITED",
+            "sector": "Food, Beverages & Tobacco"
+        },
+        {
+            "symbol": "ASX:NAB",
+            "company": "NATIONAL AUSTRALIA BANK LIMITED",
+            "sector": "Banks"
+        },
+        {
+            "symbol": "ASX:NCK",
+            "company": "NICK SCALI LIMITED",
+            "sector": "Furniture & Renovation"
+        },
+        {
+            "symbol": "ASX:NEC",
+            "company": "NINE ENTERTAINMENT CO. HOLDINGS LIMITED",
+            "sector": "Print, Radio & TV"
+        },
+        {
+            "symbol": "ASX:NEM",
+            "company": "NEWMONT CORPORATION REGISTERED",
+            "sector": "Gold & Silver, Copper"
+        },
+        {
+            "symbol": "ASX:NEU",
+            "company": "NEUREN PHARMACEUTICALS LIMITED",
+            "sector": "Pharmaceuticals & Biotech/Lifesciences"
+        },
+        {
+            "symbol": "ASX:NHC",
+            "company": "NEW HOPE CORPORATION LIMITED",
+            "sector": "Coal"
+        },
+        {
+            "symbol": "ASX:NHF",
+            "company": "NIB HOLDINGS LIMITED",
+            "sector": "Insurance, Healthcare services"
+        },
+        {
+            "symbol": "ASX:NIC",
+            "company": "NICKEL INDUSTRIES LIMITED",
+            "sector": "Nickel"
+        },
+        {
+            "symbol": "ASX:NST",
+            "company": "NORTHERN STAR RESOURCES LIMITED",
+            "sector": "Gold & Silver"
+        },
+        {
+            "symbol": "ASX:NWH",
+            "company": "NRW HOLDINGS LIMITED",
+            "sector": "Mining Sector Contracting"
+        },
+        {
+            "symbol": "ASX:NWL",
+            "company": "NETWEALTH GROUP LIMITED",
+            "sector": "Wealth Management & Investments"
+        },
+        {
+            "symbol": "ASX:NWS",
+            "company": "NEWS CORPORATION",
+            "sector": "Print, Radio & TV"
+        },
+        {
+            "symbol": "ASX:NXG",
+            "company": "NEXGEN ENERGY LIMITED",
+            "sector": "Uranium"
+        },
+        {
+            "symbol": "ASX:NXT",
+            "company": "NEXTDC LIMITED",
+            "sector": "Cloud services"
+        },
+        {
+            "symbol": "ASX:OBM",
+            "company": "ORA BANDA MINING LIMITED",
+            "sector": "Gold & Silver"
+        },
+        {
+            "symbol": "ASX:ORA",
+            "company": "ORORA LIMITED",
+            "sector": "Paper & Packaging"
+        },
+        {
+            "symbol": "ASX:ORG",
+            "company": "ORIGIN ENERGY LIMITED",
+            "sector": "Infrastructure & Utilities, NatGas"
+        },
+        {
+            "symbol": "ASX:ORI",
+            "company": "ORICA LIMITED",
+            "sector": "Mining Sector Contracting"
+        },
+        {
+            "symbol": "ASX:PDI",
+            "company": "PREDICTIVE DISCOVERY LIMITED",
+            "sector": "Gold & Silver"
+        },
+        {
+            "symbol": "ASX:PDN",
+            "company": "PALADIN ENERGY LIMITED",
+            "sector": "Uranium"
+        },
+        {
+            "symbol": "ASX:PLS",
+            "company": "PLS GROUP LIMITED",
+            "sector": "New Battery Elements"
+        },
+        {
+            "symbol": "ASX:PME",
+            "company": "PRO MEDICUS LIMITED",
+            "sector": "Medical Equipment & Devices"
+        },
+        {
+            "symbol": "ASX:PMV",
+            "company": "PREMIER INVESTMENTS LIMITED",
+            "sector": "Apparel & Footwear"
+        },
+        {
+            "symbol": "ASX:PNI",
+            "company": "PINNACLE INVESTMENT MANAGEMENT GROUP LIMITED",
+            "sector": "Wealth Management & Investments"
+        },
+        {
+            "symbol": "ASX:PNR",
+            "company": "PANTORO GOLD LIMITED",
+            "sector": "Gold & Silver"
+        },
+        {
+            "symbol": "ASX:PPT",
+            "company": "PERPETUAL LIMITED",
+            "sector": "Wealth Management & Investments"
         },
         {
             "symbol": "ASX:PRN",
-            "company": "Perenti Global Limited",
-            "sector": "Materials"
+            "company": "PERENTI LIMITED",
+            "sector": "Energy Sector Contracting, Mining Sector Contracting"
         },
         {
-            "symbol": "ASX:GUD",
-            "company": "G.U.D. Holdings",
-            "sector": "Consumer Discretionary"
+            "symbol": "ASX:PRU",
+            "company": "PERSEUS MINING LIMITED",
+            "sector": "Gold & Silver"
         },
         {
-            "symbol": "ASX:IAP",
-            "company": "Investec Aust Prop Ordinary Units FP",
+            "symbol": "ASX:PXA",
+            "company": "PEXA GROUP LIMITED",
             "sector": "Real Estate"
+        },
+        {
+            "symbol": "ASX:QAN",
+            "company": "QANTAS AIRWAYS LIMITED",
+            "sector": "Travel, Leisure & Tourism, Transportation & Logistics"
+        },
+        {
+            "symbol": "ASX:QBE",
+            "company": "QBE INSURANCE GROUP LIMITED",
+            "sector": "Insurance"
+        },
+        {
+            "symbol": "ASX:QUB",
+            "company": "QUBE HOLDINGS LIMITED",
+            "sector": "Transportation & Logistics"
+        },
+        {
+            "symbol": "ASX:REA",
+            "company": "REA GROUP LIMITED",
+            "sector": "Real Estate, Online media & mobile platforms"
+        },
+        {
+            "symbol": "ASX:REH",
+            "company": "REECE LIMITED",
+            "sector": "Furniture & Renovation"
+        },
+        {
+            "symbol": "ASX:RGN",
+            "company": "REGION GROUP",
+            "sector": "REITs"
+        },
+        {
+            "symbol": "ASX:RHC",
+            "company": "RAMSAY HEALTH CARE LIMITED",
+            "sector": "Healthcare services"
+        },
+        {
+            "symbol": "ASX:RIO",
+            "company": "RIO TINTO LIMITED",
+            "sector": "Bulks, Aluminium, Bauxite & Alumina"
+        },
+        {
+            "symbol": "ASX:RMD",
+            "company": "RESMED INC",
+            "sector": "Medical Equipment & Devices"
+        },
+        {
+            "symbol": "ASX:RMS",
+            "company": "RAMELIUS RESOURCES LIMITED",
+            "sector": "Gold & Silver"
+        },
+        {
+            "symbol": "ASX:RRL",
+            "company": "REGIS RESOURCES LIMITED",
+            "sector": "Gold & Silver"
+        },
+        {
+            "symbol": "ASX:RSG",
+            "company": "RESOLUTE MINING LIMITED",
+            "sector": "Gold & Silver"
+        },
+        {
+            "symbol": "ASX:RWC",
+            "company": "RELIANCE WORLDWIDE CORP. LIMITED",
+            "sector": "Building Products & Services"
+        },
+        {
+            "symbol": "ASX:S32",
+            "company": "SOUTH32 LIMITED",
+            "sector": "Mining"
+        },
+        {
+            "symbol": "ASX:SCG",
+            "company": "SCENTRE GROUP",
+            "sector": "REITs"
+        },
+        {
+            "symbol": "ASX:SDF",
+            "company": "STEADFAST GROUP LIMITED",
+            "sector": "Insurance"
+        },
+        {
+            "symbol": "ASX:SDR",
+            "company": "SITEMINDER LIMITED",
+            "sector": "Travel, Leisure & Tourism, Cloud services"
+        },
+        {
+            "symbol": "ASX:SEK",
+            "company": "SEEK LIMITED",
+            "sector": "Online media & mobile platforms, Jobs & Skilled Labour Services"
+        },
+        {
+            "symbol": "ASX:SFR",
+            "company": "SANDFIRE RESOURCES LIMITED",
+            "sector": "Copper"
+        },
+        {
+            "symbol": "ASX:SGH",
+            "company": "SGH LIMITED",
+            "sector": "Mining Sector Contracting, Diversified Financials"
+        },
+        {
+            "symbol": "ASX:SGM",
+            "company": "SIMS LIMITED",
+            "sector": "Steel & Scrap"
+        },
+        {
+            "symbol": "ASX:SGP",
+            "company": "STOCKLAND",
+            "sector": "Infra & Property Developers"
+        },
+        {
+            "symbol": "ASX:SHL",
+            "company": "SONIC HEALTHCARE LIMITED",
+            "sector": "Healthcare services"
+        },
+        {
+            "symbol": "ASX:SIG",
+            "company": "SIGMA HEALTHCARE LIMITED",
+            "sector": "Health & Nutrition"
+        },
+        {
+            "symbol": "ASX:SLC",
+            "company": "SUPERLOOP LIMITED",
+            "sector": "Telecommunication"
+        },
+        {
+            "symbol": "ASX:SLX",
+            "company": "SILEX SYSTEMS LIMITED",
+            "sector": "Uranium, Hardware & Equipment"
+        },
+        {
+            "symbol": "ASX:SOL",
+            "company": "WASHINGTON H. SOUL PATTINSON AND COMPANY LIMITED",
+            "sector": "Diversified Financials"
+        },
+        {
+            "symbol": "ASX:SRG",
+            "company": "SRG GLOBAL LIMITED",
+            "sector": "Building Products & Services, Mining Sector Contracting"
+        },
+        {
+            "symbol": "ASX:STO",
+            "company": "SANTOS LIMITED",
+            "sector": "NatGas"
+        },
+        {
+            "symbol": "ASX:SUL",
+            "company": "SUPER RETAIL GROUP LIMITED",
+            "sector": "Sports & Recreation, Automobiles & Components"
+        },
+        {
+            "symbol": "ASX:SUN",
+            "company": "SUNCORP GROUP LIMITED",
+            "sector": "Insurance, Banks"
+        },
+        {
+            "symbol": "ASX:TAH",
+            "company": "TABCORP HOLDINGS LIMITED",
+            "sector": "Gaming"
+        },
+        {
+            "symbol": "ASX:TCL",
+            "company": "TRANSURBAN GROUP LIMITED",
+            "sector": "Infrastructure & Utilities"
+        },
+        {
+            "symbol": "ASX:TLC",
+            "company": "LOTTERY CORPORATION LIMITED",
+            "sector": "Gaming, Gaming"
+        },
+        {
+            "symbol": "ASX:TLS",
+            "company": "TELSTRA GROUP LIMITED",
+            "sector": "Telecommunication"
+        },
+        {
+            "symbol": "ASX:TLX",
+            "company": "TELIX PHARMACEUTICALS LIMITED",
+            "sector": "Pharmaceuticals & Biotech/Lifesciences"
+        },
+        {
+            "symbol": "ASX:TNE",
+            "company": "TECHNOLOGY ONE LIMITED",
+            "sector": "IT & Support, Cloud services"
+        },
+        {
+            "symbol": "ASX:TPG",
+            "company": "TPG TELECOM LIMITED",
+            "sector": "Telecommunication, Telecommunication"
+        },
+        {
+            "symbol": "ASX:TPW",
+            "company": "TEMPLE & WEBSTER GROUP LIMITED",
+            "sector": "Furniture & Renovation"
+        },
+        {
+            "symbol": "ASX:TUA",
+            "company": "TUAS LIMITED",
+            "sector": "Telecommunication"
+        },
+        {
+            "symbol": "ASX:TWE",
+            "company": "TREASURY WINE ESTATES LIMITED",
+            "sector": "Luxury, Food, Beverages & Tobacco"
+        },
+        {
+            "symbol": "ASX:VAU",
+            "company": "VAULT MINERALS LIMITED",
+            "sector": "Gold & Silver"
+        },
+        {
+            "symbol": "ASX:VCX",
+            "company": "VICINITY CENTRES",
+            "sector": "REITs"
+        },
+        {
+            "symbol": "ASX:VEA",
+            "company": "VIVA ENERGY GROUP LIMITED",
+            "sector": "Crude Oil"
+        },
+        {
+            "symbol": "ASX:VNT",
+            "company": "VENTIA SERVICES GROUP LIMITED",
+            "sector": "Industrial Sector Contractors & Engineers"
+        },
+        {
+            "symbol": "ASX:VUL",
+            "company": "VULCAN ENERGY RESOURCES LIMITED",
+            "sector": "New Battery Elements"
+        },
+        {
+            "symbol": "ASX:WAF",
+            "company": "WEST AFRICAN RESOURCES LIMITED",
+            "sector": "Gold & Silver"
+        },
+        {
+            "symbol": "ASX:WBC",
+            "company": "WESTPAC BANKING CORPORATION",
+            "sector": "Banks"
+        },
+        {
+            "symbol": "ASX:WDS",
+            "company": "WOODSIDE ENERGY GROUP LIMITED",
+            "sector": "NatGas"
+        },
+        {
+            "symbol": "ASX:WEB",
+            "company": "WEB TRAVEL GROUP LIMITED",
+            "sector": "Travel, Leisure & Tourism"
+        },
+        {
+            "symbol": "ASX:WES",
+            "company": "WESFARMERS LIMITED",
+            "sector": "Consumer Products & Services"
+        },
+        {
+            "symbol": "ASX:WGX",
+            "company": "WESTGOLD RESOURCES LIMITED",
+            "sector": "Gold & Silver"
+        },
+        {
+            "symbol": "ASX:WHC",
+            "company": "WHITEHAVEN COAL LIMITED",
+            "sector": "Coal"
+        },
+        {
+            "symbol": "ASX:WOR",
+            "company": "WORLEY LIMITED",
+            "sector": "Energy Sector Contracting"
+        },
+        {
+            "symbol": "ASX:WOW",
+            "company": "WOOLWORTHS GROUP LIMITED",
+            "sector": "Food, Beverages & Tobacco"
+        },
+        {
+            "symbol": "ASX:WPR",
+            "company": "WAYPOINT REIT LIMITED",
+            "sector": "REITs"
+        },
+        {
+            "symbol": "ASX:WTC",
+            "company": "WISETECH GLOBAL LIMITED",
+            "sector": "Cloud services, Transportation & Logistics"
+        },
+        {
+            "symbol": "ASX:XRO",
+            "company": "XERO LIMITED",
+            "sector": "Accountancy"
+        },
+        {
+            "symbol": "ASX:XYZ",
+            "company": "BLOCK INC",
+            "sector": "Business & Consumer Credit"
+        },
+        {
+            "symbol": "ASX:YAL",
+            "company": "YANCOAL AUSTRALIA LIMITED",
+            "sector": "Coal"
+        },
+        {
+            "symbol": "ASX:ZIP",
+            "company": "ZIP CO LIMITED",
+            "sector": "Business & Consumer Credit"
         }
     ]
 }

@@ -1,3 +1,11 @@
 # This file has been cleaned up post-releasing version 0.10.0.
 # Generate its content quickly using the following command:
 #   git log origin..HEAD | grep "^\s" > .semrelease/this_release
+#!VERSION=0.11.0
+- fix(CodeQL): Fix CodeQL warnings.
+- fix: Add MUTUALFUND to the list of supported asset types.
+- fix(services): analyse_dividend_event no longer raises error if asset type is not supported.
+- impr(build_portfolio, analyze_portfolio): Add additional field 'tags' to class HoldingTicker.
+- fix(scheduler): Fix qnd.qnd_update_asx_indices to fetch ASX indices from the correct source.
+- feat(API, services): Add new API spotlight_portfolio.
+- patch: Add new field normalized_symbol to SymbolBase.

@@ -2,7 +2,6 @@ import json
 
 import yfinance as yf
 
-from ..models import ai as models_ai
 from ..models import event as models_event
 from ..models import types
 from ..services import ai_helper
@@ -203,11 +202,13 @@ async def ai_analyze_div_event(
     build_prompt_input = _build_analysis_prompt(ticker=ticker, pre_result=result, intent=intent)
 
     country = conv.country_to_iso2(ticker.info.get("country", ""))
-    llm_result = await ai_helper.ai_exec_task("ANALYZE_DIV_EVENT_BUILD_PROMPT", build_prompt_input, country)
-    if llm_result.is_error:
-        return models_ai.AnalysisResult(llm_error=True, llm_error_msg=llm_result.error_msg)
+    build_result = await ai_helper.ai_exec_task("ANALYZE_DIV_EVENT_BUILD_PROMPT", build_prompt_input, country)
+    if build_result.is_error:
+        result.llm_error = True
+        result.llm_error_msg = f"LLM failed to build prompt for analyzing dividend event: {build_result.error_msg}"
+        return result
 
-    analysis_prompt = llm_result.completion
+    analysis_prompt = build_result.completion
 
     # Step 3: execute the prompt built from previous step
     exec_result = await ai_helper.ai_exec_task("ANALYZE_DIV_EVENT_EXEC", analysis_prompt, country)

@@ -54,7 +54,7 @@ class DividendEventAnalysis(EventBase):
     # ====== analysis result from AI
     llm_error: bool = False
     llm_error_msg: str | None = None
-    llm_response: str | None = None
+    # llm_response: str | None = None
     search_summary: str | None = None
     strategy: str | None = None
     reasoning: str | None = None
