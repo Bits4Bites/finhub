@@ -1,7 +1,7 @@
 # This file has been cleaned up post-releasing version 0.10.0.
 # Generate its content quickly using the following command:
 #   git log origin..HEAD | grep "^\s" > .semrelease/this_release
-#!VERSION=0.10.1
+#!VERSION=0.11.0
 - fix(CodeQL): Fix CodeQL warnings.
 - fix: Add MUTUALFUND to the list of supported asset types.
 - fix(services): analyse_dividend_event no longer raises error if asset type is not supported.
