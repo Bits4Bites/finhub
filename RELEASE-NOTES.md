@@ -1,5 +1,11 @@
 # FinHub release notes
 
+## 2026-06-16 - v0.11.1
+
+### Added/Refactoring/Deprecation
+
+- Feat: Protect endpoints with X-API-Key authentication via request header.
+
 ## 2026-06-14 - v0.11.0
 
 ### Added/Refactoring/Deprecation

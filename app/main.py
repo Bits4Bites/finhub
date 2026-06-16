@@ -1,11 +1,12 @@
 import traceback
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from .routers import ai, events, stocks, toz
+from .utils import auth
 
-VERSION = "0.11.0"
+VERSION = "0.11.1"
 APP_NAME = "FinHub API"
 APP_DESCRIPTION = "A developer-first financial API hub for stock market data."
 
@@ -51,11 +52,20 @@ async def catch_exceptions_middleware(request: Request, call_next):
         )
 
 
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"status": exc.status_code, "message": exc.detail},
+        headers=exc.headers,
+    )
+
+
 # Register routers
-app.include_router(ai.router)
-app.include_router(events.router)
-app.include_router(stocks.router)
-app.include_router(toz.router)
+app.include_router(ai.router, dependencies=[Depends(auth.verify_api_key)])
+app.include_router(events.router, dependencies=[Depends(auth.verify_api_key)])
+app.include_router(stocks.router, dependencies=[Depends(auth.verify_api_key)])
+app.include_router(toz.router, dependencies=[Depends(auth.verify_api_key)])
 
 
 @app.get("/", tags=["root"])
