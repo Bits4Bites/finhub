@@ -14,6 +14,33 @@ All responses follow a standard envelope format:
 
 ---
 
+## Authentication
+
+All endpoints under `/stocks`, `/events`, `/ai`, and `/toz` are protected by an API key. The
+root (`/`) and health (`/health`) endpoints are open.
+
+The server-side key is configured via the `FINHUB_API_KEY` environment variable (or the
+`app_config.env` file). When it is left empty, authentication is disabled and all requests are
+allowed (fail-open).
+
+When a key is configured, clients must send it in the `X-API-Key` request header (the header name
+is case-insensitive). A missing or incorrect key returns `401`:
+
+```json
+{
+  "status": 401,
+  "message": "Invalid or missing API key"
+}
+```
+
+**Example:**
+
+```bash
+curl -H 'X-API-Key: your-api-key' 'http://localhost:8000/stocks/quotes?symbols=AAPL'
+```
+
+---
+
 ## Stocks
 
 ### `GET /stocks/quotes`
