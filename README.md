@@ -11,6 +11,93 @@ A developer-first financial API hub for stock market data, built for frontend ap
 - 🤖 AI-powered analysis: dividend events and portfolio evaluation.
 - 🥇 Precious metals: gold/silver prices and historical data in multiple currencies.
 
+## 🚀 Usage
+
+### Requirements
+
+- Python **3.12+** (CI tests against 3.12, 3.13, and 3.14).
+- Python dependencies from `requirements.txt`.
+- [Playwright](https://playwright.dev/) WebKit browser (used by the event crawlers).
+
+```bash
+pip install -r requirements.txt
+playwright install webkit
+```
+
+### Run from the command line
+
+```bash
+python server.py
+```
+
+By default, the server listens on port `8000` (configurable via `LISTEN_PORT`). To enable
+auto-reload during development, set `RELOAD=true`.
+
+### Run from a pre-built Docker image
+
+A pre-built image is published to Docker Hub as [`btnguyen2k/finhub`](https://hub.docker.com/r/btnguyen2k/finhub):
+
+| Tag          | Description                          |
+|--------------|--------------------------------------|
+| `:release`   | Latest released (stable) version     |
+| `:dev`       | Latest development version           |
+| `:x.y.z`     | Released version `x.y.z`             |
+| `:x.y.z-dev` | Development build of version `x.y.z` |
+
+```bash
+docker run --rm -p 8000:8000 btnguyen2k/finhub:release
+```
+
+### Environment variables
+
+Configuration is provided via environment variables, conventionally grouped into `.env` files.
+
+#### Application (`app_config.env`)
+
+| Variable         | Default | Description                                                                |
+|------------------|---------|----------------------------------------------------------------------------|
+| `LISTEN_PORT`    | `8000`  | Port the server listens on.                                                |
+| `NUM_WORKERS`    | `2`     | Number of server worker processes (forced to 1 / disabled on Windows).     |
+| `RELOAD`         | `false` | Enable auto-reload on code changes (development only).                     |
+| `FINHUB_API_KEY` | _empty_ | API key protecting all endpoints. If empty, no authentication is required. |
+
+#### AI vendors (`ai_vendors.env`)
+
+Configure LLM vendor credentials and available models. Keys follow the pattern
+`FINHUB_LLM__<VENDOR>__<TIER>__<SETTING>`, where:
+
+- `<VENDOR>`: `GEMINI`, `AZURE_OPENAI`, or `OPENROUTER`.
+- `<TIER>`: `FREE`, `LOWCOST`, or `PREMIUM`.
+- `<SETTING>`: `API_KEY`, `ENDPOINT`, or `MODELS` (comma-separated list).
+
+A tier is disabled when its `API_KEY` is empty. Example:
+
+```env
+FINHUB_LLM__AZURE_OPENAI__PREMIUM__API_KEY="..."
+FINHUB_LLM__AZURE_OPENAI__PREMIUM__ENDPOINT="https://..."
+FINHUB_LLM__AZURE_OPENAI__PREMIUM__MODELS="gpt-5.4, gpt-5.5"
+```
+
+#### AI task routing (`ai_tasks.env`)
+
+Map each AI task to a vendor/tier/model using the pattern
+`FINHUB_LLM_TASK__<TASK>__<SETTING>`, where `<SETTING>` is `VENDOR`, `TIER`, or `MODEL`.
+Tasks include `ANALYZE_TICKER_*`, `BUILD_PORTFOLIO_*`, `REVIEW_PORTFOLIO_*`,
+`SPOTLIGHT_PORTFOLIO_*`, `ANALYZE_DIV_EVENT_*`, and `ASX_LISTTINGS_*`. Example:
+
+```env
+FINHUB_LLM_TASK__ANALYZE_TICKER_EXEC__VENDOR="Azure OpenAI"
+FINHUB_LLM_TASK__ANALYZE_TICKER_EXEC__TIER="Premium"
+FINHUB_LLM_TASK__ANALYZE_TICKER_EXEC__MODEL="gpt-5.4"
+```
+
+#### Proxy (`finhub_proxy_config.env`)
+
+| Variable                    | Default                   | Description                                          |
+|-----------------------------|---------------------------|------------------------------------------------------|
+| `FINHUB_PROXY_MODE`         | `None`                    | Proxy mode: `None`, `Redirect`, or `Forward`.        |
+| `FINHUB_URL_WEB_CRAWL_NODE` | `http://localhost:1234`   | URL of the web-crawl node used for proxied requests. |
+
 ## 📚 API
 
 See [API.md](API.md) for full API documentation, or view the [OpenAPI spec](openapi.json).

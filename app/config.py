@@ -198,6 +198,20 @@ settings_finhub_proxy = FinHubProxySettings()
 # ----------------------------------------------------------------------#
 
 
+class AppSettings(BaseSettings):
+    api_key: str = Field(default="", alias="FINHUB_API_KEY")
+    model_config = SettingsConfigDict(
+        env_file="app_config.env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+
+settings_app = AppSettings()
+
+# ----------------------------------------------------------------------#
+
+
 class CompanyBriefInfo(BaseSettings):
     symbol: str = Field(default="")
     name: str = Field(default="")
