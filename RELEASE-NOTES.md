@@ -1,5 +1,12 @@
 # FinHub release notes
 
+## 2026-06-17 - v0.12.1
+
+### Fixed/Improvements
+
+- Fix: Proxy settings with playwright and cloudscraper.
+- Patch: FINHUB_FETCH_WEBSITE_VIA_PROXY default to False.
+
 ## 2026-06-17 - v0.12.0
 
 ### Added/Refactoring/Deprecation
