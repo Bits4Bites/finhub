@@ -3,3 +3,4 @@
 #   git log origin..HEAD | grep "^\s" > .semrelease/this_release
 #!VERSION=0.12.2
 - patch: Log fetch duration in fetch_webpage_content and fetch_webpage_content_playwright
+- patch(API): API get_new_listings no longer adheres to FINHUB_PROXY_MODE
