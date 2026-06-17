@@ -1,5 +1,12 @@
 # FinHub release notes
 
+## 2026-06-17 - v0.12.2
+
+### Fixed/Improvements
+
+- Patch: Log fetch duration in fetch_webpage_content and fetch_webpage_content_playwright
+- Patch(API): API get_new_listings no longer adheres to FINHUB_PROXY_MODE
+
 ## 2026-06-17 - v0.12.1
 
 ### Fixed/Improvements
