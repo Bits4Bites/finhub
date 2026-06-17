@@ -107,14 +107,14 @@ async def get_new_listings(
     Check for new listing events for a market, using AI assistance.
     Note: currently only AU is supported.
     """
-    if config.settings_finhub_proxy.proxy_mode.upper() == "REDIRECT":
-        proxy_url = config.settings_finhub_proxy.url_web_crawl_node.rstrip("/")
-        prefix = str(router.prefix)
-        e_country = urllib.parse.quote(country, safe="")
-        next_url = f"{proxy_url}{prefix}/new_listings?country={e_country}"
-        next_url_for_log = urllib.parse.quote(next_url, safe="")
-        logging.info(f"Redirecting request to {next_url_for_log}")
-        return RedirectResponse(url=next_url, status_code=307)
+    # if config.settings_finhub_proxy.proxy_mode.upper() == "REDIRECT":
+    #     proxy_url = config.settings_finhub_proxy.url_web_crawl_node.rstrip("/")
+    #     prefix = str(router.prefix)
+    #     e_country = urllib.parse.quote(country, safe="")
+    #     next_url = f"{proxy_url}{prefix}/new_listings?country={e_country}"
+    #     next_url_for_log = urllib.parse.quote(next_url, safe="")
+    #     logging.info(f"Redirecting request to {next_url_for_log}")
+    #     return RedirectResponse(url=next_url, status_code=307)
 
     country = conv.country_to_iso2(country)
     match country:

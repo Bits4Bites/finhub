@@ -104,6 +104,7 @@ async def fetch_webpage_content(
         ssl_context=unverified_ssl_context if proxies else None,
     )
     scraper.verify = not proxies
+    start_time = time.monotonic()
     for attempt in range(retries):
         http_proxy = random.sample(proxies, 1) if proxies else None
         if http_proxy:
@@ -120,6 +121,7 @@ async def fetch_webpage_content(
                 else None,
             )
             response.raise_for_status()  # Raise an exception for HTTP errors
+            logger.info("Fetched content from '%s' in %.2f seconds.", url, time.monotonic() - start_time)
             return response.text
         except Exception as e:
             logger.warning(f"Fetching attempt {attempt + 1} failed for URL: {url}. Error: {e}")
@@ -148,6 +150,7 @@ async def fetch_webpage_content_playwright(
         str: The content of the webpage if successful, otherwise None.
     """
     proxies = [] if not proxies else proxies
+    start_time = time.monotonic()
     for attempt in range(retries):
         http_proxy = random.sample(proxies, 1) if proxies else None
         if http_proxy:
@@ -168,6 +171,7 @@ async def fetch_webpage_content_playwright(
                     await after_load_func_async(page)
                 page_content = await page.content()
                 await browser.close()
+                logger.info("Fetched content from '%s' in %.2f seconds.", url, time.monotonic() - start_time)
                 return page_content
         except Exception as e:
             logger.warning(f"Playwright fetching attempt {attempt + 1} failed for URL: {url}. Error: {e}")
