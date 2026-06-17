@@ -12,7 +12,7 @@ from .routers import ai, events, stocks, toz
 from .utils import auth
 from .utils import scheduler as scheduler_utils
 
-VERSION = "0.12.0"
+VERSION = "0.12.1"
 APP_NAME = "FinHub API"
 APP_DESCRIPTION = "A developer-first financial API hub for stock market data."
 
@@ -28,7 +28,7 @@ async def _load_proxies_task() -> None:
     """
     _PROXY_LIST_URL = (
         "https://freeproxydb.com/api/proxy/search"
-        "?country=US,AU,VN,DE,SG&protocol=http&link_type=&anonymity=&speed=0.8,8&https=0&page_index=1&page_size=100"
+        "?country=US,AU,VN,DE,SG&protocol=http&link_type=http&anonymity=&speed=0,8&https=1&page_index=1&page_size=100"
     )
     _PROXY_SAMPLE_SIZE = 10
     try:
@@ -44,6 +44,10 @@ async def _load_proxies_task() -> None:
         sample_size = min(_PROXY_SAMPLE_SIZE, len(proxies))
         config.settings_finhub_proxy.http_proxies = random.sample(proxies, sample_size)
         logger.info("Loaded %d proxies into http_proxies.", sample_size)
+        for proxy in config.settings_finhub_proxy.http_proxies:
+            logger.info(
+                "Loaded proxy: %s:%d (anonymity=%s, speed=%.2f)", proxy.ip, proxy.port, proxy.anonymity, proxy.speed
+            )
     except Exception as exc:
         logger.error("Failed to load proxy list: %s", exc)
 

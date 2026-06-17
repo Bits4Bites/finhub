@@ -39,25 +39,25 @@ class TestCrawlerFetching:
         fake_response = SimpleNamespace(text="ok", raise_for_status=lambda: None)
         fake_scraper = MagicMock()
         fake_scraper.get.return_value = fake_response
-        proxies = ["http://1.1.1.1:8080", "http://2.2.2.2:8080"]
+        proxies = ["http://1.1.1.1:8080"]
 
-        with patch("app.services.crawler.cloudscraper.create_scraper", return_value=fake_scraper) as mock_create:
+        with patch("app.services.crawler.cloudscraper.create_scraper", return_value=fake_scraper):
             result = asyncio.run(crawler.fetch_webpage_content("https://example.test", proxies=proxies))
 
         assert result == "ok"
-        _, kwargs = mock_create.call_args
-        assert kwargs["rotating_proxies"] == proxies
+        _, kwargs = fake_scraper.get.call_args
+        assert kwargs["proxies"] == {"http": "http://1.1.1.1:8080", "https": "http://1.1.1.1:8080"}
 
     def test_fetch_webpage_content_no_proxies_passes_none(self):
         fake_response = SimpleNamespace(text="ok", raise_for_status=lambda: None)
         fake_scraper = MagicMock()
         fake_scraper.get.return_value = fake_response
 
-        with patch("app.services.crawler.cloudscraper.create_scraper", return_value=fake_scraper) as mock_create:
+        with patch("app.services.crawler.cloudscraper.create_scraper", return_value=fake_scraper):
             asyncio.run(crawler.fetch_webpage_content("https://example.test"))
 
-        _, kwargs = mock_create.call_args
-        assert kwargs["rotating_proxies"] is None
+        _, kwargs = fake_scraper.get.call_args
+        assert kwargs["proxies"] is None
 
 
 class TestCrawlerScrape:
@@ -253,9 +253,20 @@ class TestGetHttpProxies:
         proxy_settings = SimpleNamespace(
             fetch_website_via_proxy=True,
             http_proxies=[
-                SimpleNamespace(connect_string="http://1.1.1.1:8080"),
-                SimpleNamespace(connect_string="http://2.2.2.2:9090"),
+                SimpleNamespace(connect_string="http://1.1.1.1:8080", https=0),
+                SimpleNamespace(connect_string="http://2.2.2.2:9090", https=0),
             ],
         )
         with patch.object(crawler.config, "settings_finhub_proxy", proxy_settings):
             assert crawler._get_http_proxies() == ["http://1.1.1.1:8080", "http://2.2.2.2:9090"]
+
+    def test_https_proxy_uses_https_scheme(self):
+        proxy_settings = SimpleNamespace(
+            fetch_website_via_proxy=True,
+            http_proxies=[
+                SimpleNamespace(connect_string="http://1.1.1.1:8080", https=1),
+                SimpleNamespace(connect_string="http://2.2.2.2:9090", https=0),
+            ],
+        )
+        with patch.object(crawler.config, "settings_finhub_proxy", proxy_settings):
+            assert crawler._get_http_proxies() == ["https://1.1.1.1:8080", "http://2.2.2.2:9090"]
