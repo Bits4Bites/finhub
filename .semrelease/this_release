@@ -1,3 +1,5 @@
 # This file has been cleaned up post-releasing version 0.12.1.
 # Generate its content quickly using the following command:
 #   git log origin..HEAD | grep "^\s" > .semrelease/this_release
+#!VERSION=0.12.2
+- patch: Log fetch duration in fetch_webpage_content and fetch_webpage_content_playwright
