@@ -1,6 +1,7 @@
 import datetime
 import logging
 import random
+import ssl
 import time
 from zoneinfo import ZoneInfo
 
@@ -10,6 +11,8 @@ from bs4 import BeautifulSoup
 from playwright.async_api import Page, ProxySettings, ViewportSize, async_playwright
 
 from .. import config
+
+logger = logging.getLogger(__name__)
 
 
 def extract_data_table_from_html(html_content: str, *, raw_cell_content=False, table_attr_filter=None) -> pd.DataFrame:
@@ -94,26 +97,37 @@ async def fetch_webpage_content(
         str: The content of the webpage if successful, otherwise None.
     """
     proxies = [] if not proxies else proxies
+    unverified_ssl_context = ssl.create_default_context()
+    unverified_ssl_context.check_hostname = False
     scraper = cloudscraper.create_scraper(
         browser={"browser": "chrome", "platform": "windows", "desktop": True},
-        rotating_proxies=proxies if len(proxies) > 0 else None,
-        proxy_options={
-            "rotation_strategy": "smart",
-            "ban_time": 80,
-        },
+        ssl_context=unverified_ssl_context if proxies else None,
     )
+    scraper.verify = not proxies
     for attempt in range(retries):
+        http_proxy = random.sample(proxies, 1) if proxies else None
+        if http_proxy:
+            logger.info("fetch_webpage_content: using proxy %s", http_proxy[0])
         try:
-            response = scraper.get(url, timeout=10)
+            response = scraper.get(
+                url,
+                timeout=60,
+                proxies={
+                    "http": http_proxy[0],
+                    "https": http_proxy[0],
+                }
+                if http_proxy
+                else None,
+            )
             response.raise_for_status()  # Raise an exception for HTTP errors
             return response.text
         except Exception as e:
-            logging.warning(f"Fetching attempt {attempt + 1} failed for URL: {url}. Error: {e}")
+            logger.warning(f"Fetching attempt {attempt + 1} failed for URL: {url}. Error: {e}")
             if attempt < retries - 1:
                 sleep_time = backoff_factor * (2**attempt) + random.uniform(0, 0.1)  # Exponential backoff
-                logging.info(f"Retrying after {sleep_time:.2f} seconds...")
+                logger.info(f"Retrying after {sleep_time:.2f} seconds...")
                 time.sleep(sleep_time)
-    logging.error(f"All {retries} fetching attempts failed for URL: {url}.")
+    logger.error(f"All {retries} fetching attempts failed for URL: {url}.")
     return None
 
 
@@ -136,6 +150,8 @@ async def fetch_webpage_content_playwright(
     proxies = [] if not proxies else proxies
     for attempt in range(retries):
         http_proxy = random.sample(proxies, 1) if proxies else None
+        if http_proxy:
+            logger.info("fetch_webpage_content_playwright: using proxy %s", http_proxy[0])
         try:
             async with async_playwright() as p:
                 browser = await p.webkit.launch(
@@ -143,6 +159,7 @@ async def fetch_webpage_content_playwright(
                     proxy=ProxySettings(server=http_proxy[0]) if http_proxy else None,
                 )
                 page = await browser.new_page(
+                    ignore_https_errors=not (not http_proxy),
                     screen=ViewportSize(width=1664, height=1110),
                     user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0",
                 )
@@ -153,12 +170,12 @@ async def fetch_webpage_content_playwright(
                 await browser.close()
                 return page_content
         except Exception as e:
-            logging.warning(f"Playwright fetching attempt {attempt + 1} failed for URL: {url}. Error: {e}")
+            logger.warning(f"Playwright fetching attempt {attempt + 1} failed for URL: {url}. Error: {e}")
             if attempt < retries - 1:
                 sleep_time = backoff_factor * (2**attempt) + random.uniform(0, 0.1)  # Exponential backoff
-                logging.info(f"Retrying after {sleep_time:.2f} seconds...")
+                logger.info(f"Retrying after {sleep_time:.2f} seconds...")
                 time.sleep(sleep_time)
-    logging.error(f"All {retries} Playwright fetching attempts failed for URL: {url}.")
+    logger.error(f"All {retries} Playwright fetching attempts failed for URL: {url}.")
     return None
 
 
@@ -179,20 +196,20 @@ async def scrape_data_table(
         DataFrame: A Pandas DataFrame containing the data table extracted from the webpage.
     """
     # fetch the webpage content
-    logging.info("Fetching data from '%s'...", url)
+    logger.info("Fetching data from '%s'...", url)
     html_content = await fetch_webpage_content(url, proxies=proxies)
     if not html_content:
-        logging.error("Failed to fetch content from '%s'.", url)
+        logger.error("Failed to fetch content from '%s'.", url)
         return pd.DataFrame()
 
     # parse the HTML content and extract the data table
-    logging.info("Extracting data table from the fetched content...")
+    logger.info("Extracting data table from the fetched content...")
     data_table_df = extract_data_table_from_html(
         html_content, raw_cell_content=raw_cell_content, table_attr_filter=table_attr_filter
     )
 
     if data_table_df.empty:
-        logging.warning("No data table found in the content from '%s'.", url)
+        logger.warning("No data table found in the content from '%s'.", url)
 
     return data_table_df
 
@@ -215,24 +232,24 @@ async def scrape_data_table_playwright(
         DataFrame: A Pandas DataFrame containing the data table extracted from the webpage.
     """
     # fetch the webpage content
-    logging.info("Fetching data from '%s'...", url)
+    logger.info("Fetching data from '%s'...", url)
     html_content = await fetch_webpage_content_playwright(
         url,
         after_load_func_async=after_load_func_async,
         proxies=proxies,
     )
     if not html_content:
-        logging.error("Failed to fetch content from '%s'.", url)
+        logger.error("Failed to fetch content from '%s'.", url)
         return pd.DataFrame()
 
     # parse the HTML content and extract the data table
-    logging.info("Extracting data table from the fetched content...")
+    logger.info("Extracting data table from the fetched content...")
     data_table_df = extract_data_table_from_html(
         html_content, raw_cell_content=raw_cell_content, table_attr_filter=table_attr_filter
     )
 
     if data_table_df.empty:
-        logging.warning("No data table found in the content from '%s'.", url)
+        logger.warning("No data table found in the content from '%s'.", url)
 
     return data_table_df
 
@@ -243,7 +260,8 @@ def _get_http_proxies() -> list[str] | None:
 
     Returns:
         list[str]: A list of HttpProxy.connect_string values when FinHubProxySettings.fetch_website_via_proxy
-            is True and proxies are configured, otherwise None.
+            is True and proxies are configured, otherwise None. When HttpProxy.https is 1 the connect string
+            scheme is normalized to "https://" instead of "http://".
     """
     if not config.settings_finhub_proxy.fetch_website_via_proxy:
         return None
@@ -252,7 +270,13 @@ def _get_http_proxies() -> list[str] | None:
     if not http_proxies:
         return None
 
-    return [proxy.connect_string for proxy in http_proxies]
+    result = []
+    for proxy in http_proxies:
+        connect_string = (
+            proxy.connect_string.replace("http://", "https://") if proxy.https == 1 else proxy.connect_string
+        )
+        result.append(connect_string)
+    return result
 
 
 async def scrape_dividends_from_tipranks(
