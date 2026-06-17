@@ -1,5 +1,15 @@
 # FinHub release notes
 
+## 2026-06-17 - v0.12.0
+
+### Added/Refactoring/Deprecation
+
+- Feat: Add proxy support when fetching website content.
+
+### Fixed/Improvements
+
+- Fix: Fix exception where YF does not return data for mutualfund tickers.
+
 ## 2026-06-16 - v0.11.1
 
 ### Added/Refactoring/Deprecation

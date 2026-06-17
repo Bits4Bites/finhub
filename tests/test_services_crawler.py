@@ -35,6 +35,30 @@ class TestCrawlerFetching:
         assert result == "ok"
         fake_scraper.get.assert_called_once()
 
+    def test_fetch_webpage_content_forwards_proxies(self):
+        fake_response = SimpleNamespace(text="ok", raise_for_status=lambda: None)
+        fake_scraper = MagicMock()
+        fake_scraper.get.return_value = fake_response
+        proxies = ["http://1.1.1.1:8080", "http://2.2.2.2:8080"]
+
+        with patch("app.services.crawler.cloudscraper.create_scraper", return_value=fake_scraper) as mock_create:
+            result = asyncio.run(crawler.fetch_webpage_content("https://example.test", proxies=proxies))
+
+        assert result == "ok"
+        _, kwargs = mock_create.call_args
+        assert kwargs["rotating_proxies"] == proxies
+
+    def test_fetch_webpage_content_no_proxies_passes_none(self):
+        fake_response = SimpleNamespace(text="ok", raise_for_status=lambda: None)
+        fake_scraper = MagicMock()
+        fake_scraper.get.return_value = fake_response
+
+        with patch("app.services.crawler.cloudscraper.create_scraper", return_value=fake_scraper) as mock_create:
+            asyncio.run(crawler.fetch_webpage_content("https://example.test"))
+
+        _, kwargs = mock_create.call_args
+        assert kwargs["rotating_proxies"] is None
+
 
 class TestCrawlerScrape:
     def test_scrape_data_table_uses_fetch_and_parse(self):
@@ -49,8 +73,38 @@ class TestCrawlerScrape:
             result = asyncio.run(crawler.scrape_data_table("https://example.test"))
 
         assert result.equals(expected)
-        mock_fetch.assert_awaited_once_with("https://example.test")
+        mock_fetch.assert_awaited_once_with("https://example.test", proxies=None)
         mock_extract.assert_called_once_with("<table></table>", raw_cell_content=False, table_attr_filter=None)
+
+    def test_scrape_data_table_forwards_proxies(self):
+        expected = pd.DataFrame({"Name": ["Alpha"]})
+        proxies = ["http://1.1.1.1:8080"]
+
+        with (
+            patch(
+                "app.services.crawler.fetch_webpage_content", new_callable=AsyncMock, return_value="<table></table>"
+            ) as mock_fetch,
+            patch("app.services.crawler.extract_data_table_from_html", return_value=expected),
+        ):
+            asyncio.run(crawler.scrape_data_table("https://example.test", proxies=proxies))
+
+        mock_fetch.assert_awaited_once_with("https://example.test", proxies=proxies)
+
+    def test_scrape_data_table_playwright_forwards_proxies(self):
+        expected = pd.DataFrame({"Name": ["Alpha"]})
+        proxies = ["http://1.1.1.1:8080"]
+
+        with (
+            patch(
+                "app.services.crawler.fetch_webpage_content_playwright",
+                new_callable=AsyncMock,
+                return_value="<table></table>",
+            ) as mock_fetch,
+            patch("app.services.crawler.extract_data_table_from_html", return_value=expected),
+        ):
+            asyncio.run(crawler.scrape_data_table_playwright("https://example.test", proxies=proxies))
+
+        mock_fetch.assert_awaited_once_with("https://example.test", after_load_func_async=None, proxies=proxies)
 
     def test_scrape_dividends_from_tipranks_adds_ex_dividend_date(self):
         expected = pd.DataFrame({"Name": ["A"]})
@@ -174,3 +228,34 @@ class TestCrawlerUiHelper:
         asyncio.run(crawler.tipranks_after_load_func(page))
 
         assert page.calls
+
+
+class TestGetHttpProxies:
+    def test_returns_none_when_disabled(self):
+        proxy_settings = SimpleNamespace(
+            fetch_website_via_proxy=False,
+            http_proxies=[SimpleNamespace(connect_string="http://1.1.1.1:8080")],
+        )
+        with patch.object(crawler.config, "settings_finhub_proxy", proxy_settings):
+            assert crawler._get_http_proxies() is None
+
+    def test_returns_none_when_no_proxies(self):
+        proxy_settings = SimpleNamespace(fetch_website_via_proxy=True, http_proxies=None)
+        with patch.object(crawler.config, "settings_finhub_proxy", proxy_settings):
+            assert crawler._get_http_proxies() is None
+
+    def test_returns_none_when_empty_proxies(self):
+        proxy_settings = SimpleNamespace(fetch_website_via_proxy=True, http_proxies=[])
+        with patch.object(crawler.config, "settings_finhub_proxy", proxy_settings):
+            assert crawler._get_http_proxies() is None
+
+    def test_returns_connect_strings_when_enabled(self):
+        proxy_settings = SimpleNamespace(
+            fetch_website_via_proxy=True,
+            http_proxies=[
+                SimpleNamespace(connect_string="http://1.1.1.1:8080"),
+                SimpleNamespace(connect_string="http://2.2.2.2:9090"),
+            ],
+        )
+        with patch.object(crawler.config, "settings_finhub_proxy", proxy_settings):
+            assert crawler._get_http_proxies() == ["http://1.1.1.1:8080", "http://2.2.2.2:9090"]

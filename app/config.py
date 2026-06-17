@@ -6,7 +6,7 @@ import openai
 from azure.identity import EnvironmentCredential, get_bearer_token_provider
 from google import genai
 from google.genai.types import HttpOptions
-from pydantic import Field, field_validator
+from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ALLOWED_QUOTE_TYPES = {"EQUITY", "ETF", "MUTUALFUND"}
@@ -183,9 +183,24 @@ settings_llm_task = LLMTaskSettings()
 # ----------------------------------------------------------------------#
 
 
+class HttpProxy(BaseModel):
+    id: int = 0
+    ip: str = ""
+    port: int = 0
+    protocol: str = ""
+    anonymity: str = ""
+    speed: float = 0.0
+    https: int = 0
+    country: str = ""
+    city: str = ""
+    connect_string: str = ""
+
+
 class FinHubProxySettings(BaseSettings):
     proxy_mode: Literal["None", "Redirect", "Forward"] = Field(default="None", alias="FINHUB_PROXY_MODE")
     url_web_crawl_node: str = Field(default="", alias="FINHUB_URL_WEB_CRAWL_NODE")
+    fetch_website_via_proxy: bool = Field(default=False, alias="FINHUB_FETCH_WEBSITE_VIA_PROXY")
+    http_proxies: list[HttpProxy] | None = None
     model_config = SettingsConfigDict(
         env_file="finhub_proxy_config.env",
         env_file_encoding="utf-8",

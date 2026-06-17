@@ -186,8 +186,8 @@ class SymbolDividend(BaseModel):
 
 
 class StockQuote(BaseModel):
-    currency: str = ""
-    market_price: float = 0.0
+    currency: str | None = ""
+    market_price: float | None = 0.0
     market_price_change: float | None = None
     market_price_change_percent: float | None = None
     market_open: float | None = None
