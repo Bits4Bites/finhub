@@ -1,5 +1,6 @@
 # This file has been cleaned up post-releasing version 0.11.1.
 # Generate its content quickly using the following command:
 #   git log origin..HEAD | grep "^\s" > .semrelease/this_release
-#!VERSION=0.11.2
+#!VERSION=0.12.0
 - fix: Fix exception where YF does not return data for mutualfund tickers.
+- feat: Add proxy support when fetching website content.
