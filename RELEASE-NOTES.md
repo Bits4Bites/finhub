@@ -1,5 +1,11 @@
 # FinHub release notes
 
+## 2026-06-18 - v0.12.3
+
+### Fixed/Improvements
+
+- Impr: Minor prompt change for ai_review_portfolio and ai_spotlight_portfolio.
+
 ## 2026-06-17 - v0.12.2
 
 ### Fixed/Improvements
