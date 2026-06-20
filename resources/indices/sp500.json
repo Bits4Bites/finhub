@@ -1,5 +1,5 @@
 {
-    "date": "2026-06-08",
+    "date": "2026-06-20",
     "data": [
         {
             "symbol": "NYSE:MMM",
@@ -415,11 +415,6 @@
             "symbol": "NYSE:CPT",
             "company": "Camden Property Trust",
             "sector": "Real Estate"
-        },
-        {
-            "symbol": "NYSE:CPB",
-            "company": "Campbell's Company (The)",
-            "sector": "Consumer Staples"
         },
         {
             "symbol": "NYSE:COF",
@@ -997,7 +992,7 @@
             "sector": "Financials"
         },
         {
-            "symbol": "NASDAQ:FITB",
+            "symbol": "NYSE:FITB",
             "company": "Fifth Third Bancorp",
             "sector": "Financials"
         },
@@ -1015,6 +1010,11 @@
             "symbol": "NASDAQ:FISV",
             "company": "Fiserv",
             "sector": "Financials"
+        },
+        {
+            "symbol": "NASDAQ:FLEX",
+            "company": "Flex Ltd.",
+            "sector": "Information Technology"
         },
         {
             "symbol": "NYSE:F",
@@ -1512,6 +1512,11 @@
             "sector": "Materials"
         },
         {
+            "symbol": "NASDAQ:MRVL",
+            "company": "Marvell Technology",
+            "sector": "Information Technology"
+        },
+        {
             "symbol": "NYSE:MAS",
             "company": "Masco",
             "sector": "Industrials"
@@ -1850,11 +1855,6 @@
             "symbol": "NYSE:PNC",
             "company": "PNC Financial Services",
             "sector": "Financials"
-        },
-        {
-            "symbol": "NASDAQ:POOL",
-            "company": "Pool Corporation",
-            "sector": "Consumer Discretionary"
         },
         {
             "symbol": "NYSE:PPG",

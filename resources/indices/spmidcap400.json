@@ -1,5 +1,5 @@
 {
-    "date": "2026-06-08",
+    "date": "2026-06-20",
     "data": [
         {
             "symbol": "NYSE:AA",
@@ -1097,11 +1097,6 @@
             "sector": "Information Technology"
         },
         {
-            "symbol": "NASDAQ:MASI",
-            "company": "Masimo",
-            "sector": "Health Care"
-        },
-        {
             "symbol": "NASDAQ:MAT",
             "company": "Mattel",
             "sector": "Consumer Discretionary"
@@ -1615,6 +1610,11 @@
             "symbol": "NASDAQ:SIGI",
             "company": "Selective Insurance Group",
             "sector": "Financials"
+        },
+        {
+            "symbol": "NASDAQ:SIRI",
+            "company": "SiriusXM",
+            "sector": "Communication Services"
         },
         {
             "symbol": "NASDAQ:SITM",
