@@ -26,7 +26,7 @@ jobs:
     name: Build and Test with Python ${{ matrix.python }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python }}
@@ -52,7 +52,7 @@ jobs:
     name: Build and Test Docker image(s) for ${{ matrix.platforms }} with ${{ matrix.dockerfiles }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
       - name: Set up Docker Buildx
@@ -94,7 +94,7 @@ jobs:
       RELEASE_NOTES: ${{ steps.release_dry_run.outputs.releaseNotes }}
     steps:
       - name: Check out code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Install Node
         uses: actions/setup-node@v6
         with:
@@ -129,7 +129,7 @@ jobs:
       VERSION: ${{ needs.ReleaseDryRun.outputs.VERSION }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Update version metadata
         run: |
           DATE=`date +%Y%m%d%H%M%S`
