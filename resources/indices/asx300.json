@@ -1,5 +1,5 @@
 {
-    "date": "2026-06-08",
+    "date": "2026-06-20",
     "data": [
         {
             "symbol": "ASX:360",
@@ -424,7 +424,7 @@
         {
             "symbol": "ASX:DRO",
             "company": "DRONESHIELD LIMITED",
-            "sector": "Hardware & Equipment"
+            "sector": "Military"
         },
         {
             "symbol": "ASX:DRR",
@@ -479,7 +479,7 @@
         {
             "symbol": "ASX:ELS",
             "company": "ELSIGHT LIMITED",
-            "sector": ""
+            "sector": "Military"
         },
         {
             "symbol": "ASX:ELV",
@@ -494,7 +494,7 @@
         {
             "symbol": "ASX:EOS",
             "company": "ELECTRO OPTIC SYSTEMS HOLDINGS LIMITED",
-            "sector": "Hardware & Equipment"
+            "sector": "Military"
         },
         {
             "symbol": "ASX:EQT",
@@ -1294,7 +1294,7 @@
         {
             "symbol": "ASX:SUL",
             "company": "SUPER RETAIL GROUP LIMITED",
-            "sector": "Sports & Recreation, Automobiles & Components"
+            "sector": "Automobiles & Components, Sports & Recreation"
         },
         {
             "symbol": "ASX:SUN",
@@ -1359,7 +1359,7 @@
         {
             "symbol": "ASX:TWE",
             "company": "TREASURY WINE ESTATES LIMITED",
-            "sector": "Luxury, Food, Beverages & Tobacco"
+            "sector": "Food, Beverages & Tobacco, Luxury"
         },
         {
             "symbol": "ASX:TYR",
