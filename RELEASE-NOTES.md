@@ -1,5 +1,12 @@
 # FinHub release notes
 
+## 2026-06-25 - v0.12.4
+
+### Fixed/Improvements
+
+- Impr: Update service ai_spotlight_portfolio prompt to return clearer actions.
+- Impr: Update service ai_spotlight_portfolio/ai_build_portfolio/ai_review_portfolio prompts.
+
 ## 2026-06-18 - v0.12.3
 
 ### Fixed/Improvements

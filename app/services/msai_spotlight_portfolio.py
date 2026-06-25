@@ -17,17 +17,26 @@ BUILD_PROMPT_TEMPLATE = (
     "{investor_profile}\n"
     "\n"
     "## Your instructions\n"
-    "- Review the current portfolio and identify the top 2-4 immediate risks that could hurt the portfolio right now.\n"
-    "- Prioritize the top 2-4 immediate actions the investor should take next.\n"
-    "- If there are no obvious immediate risks or actions, explicitly say the portfolio should continue to grow and explain why.\n"
-    "- Take relevant global and local market news, sector trends, and macro context into account when needed.\n"
-    "- Keep the output very concise and focused only on Top immediate risks and Top immediate actions.\n"
+    "- You are ONLY building a prompt. Do NOT analyze the portfolio, do NOT research markets, "
+    "and do NOT produce any risks, actions, or recommendations yourself.\n"
+    "- All research, review, and analysis must be performed by the premium model when it later executes the prompt you write.\n"
+    "- The prompt you write must embed the investor profile and current holdings above so the premium model has full context.\n"
     "\n"
-    "Write a ready-to-execute prompt that tells the premium model to:\n"
-    "1. Output only two short sections: Top immediate risks and Top immediate actions.\n"
-    "2. Keep the response very concise.\n"
-    "3. If no urgent issues are found, still conclude with a brief growth-oriented note.\n"
-    "4. Mention only the most relevant local/global news or macro themes that support the recommendations.\n"
+    "Write a ready-to-execute prompt that instructs the premium model to:\n"
+    "1. Review the current portfolio and identify the top 2-4 immediate risks that could hurt the portfolio right now.\n"
+    "2. Prioritize the top 2-4 immediate actions the investor should take next.\n"
+    "3. Take relevant global and local market news, sector trends, and macro context into account when needed, "
+    "mentioning only the most relevant themes that support the recommendations.\n"
+    "4. Output only two short sections: Top immediate risks and Top immediate actions, keeping the response very concise.\n"
+    "5. If there are no obvious immediate risks or actions, still conclude with a brief growth-oriented note explaining why "
+    "the portfolio should continue to grow.\n"
+    "6. Make the VERY FIRST line of the response a one-line summary, formatted exactly as follows:\n"
+    "   - When there are immediate risks and immediate actions, the first line must be exactly: "
+    "`R immediate risks and A immediate actions` - where R is the integer count of immediate risks "
+    "and A is the integer count of immediate actions (for example: `3 immediate risks and 2 immediate actions`).\n"
+    "   - When there are no obvious immediate risks or actions, the first line must be exactly: "
+    "`No major immediate risk`.\n"
+    "   - This summary line must appear on its own, before the two sections, with no extra prefix or formatting.\n"
     "\n"
     "## Output format\n"
     "Return ONLY the ready-to-execute prompt. No preamble, no explanation, no commentary."
@@ -58,15 +67,9 @@ async def ai_spotlight_portfolio(
     if not portfolio:
         return None
 
-    # portfolio = _normalize_portfolio_allocation(portfolio)
-
     holdings_lines = []
     for pos in portfolio:
         market_value = pos.num_shares * pos.market_price
-        # line = (
-        #     f"  - {pos.ticker}: {pos.num_shares} shares, market value ${market_value:.2f}, "
-        #     f"target allocation {pos.target_allocation:.1%}"
-        # )
         line = f"  - {pos.ticker}: {pos.num_shares} shares, market value ${market_value:.2f}"
         if pos.tags:
             line += f" ({pos.tags})"
@@ -87,23 +90,3 @@ async def ai_spotlight_portfolio(
         return models_ai.AnalysisResult(llm_error=True, llm_error_msg=exec_result.error_msg)
 
     return models_ai.AnalysisResult(analysis=exec_result.completion)
-
-
-# def _normalize_portfolio_allocation(portfolio: list[models.HoldingTicker]) -> list[models.HoldingTicker]:
-#     """
-#     Normalize allocations to fractional values when percentages are provided.
-#     """
-#
-#     def build_holding_ticker(ht: models.HoldingTicker) -> models.HoldingTicker:
-#         return models.HoldingTicker(
-#             ticker=ht.ticker,
-#             num_shares=ht.num_shares,
-#             avg_price=ht.avg_price,
-#             market_price=ht.market_price,
-#             target_allocation=ht.target_allocation / 100,
-#             tags=ht.tags,
-#         )
-#
-#     if sum(ht.target_allocation for ht in portfolio) > 1.25:
-#         return [build_holding_ticker(ht) for ht in portfolio]
-#     return portfolio
