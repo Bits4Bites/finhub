@@ -12,7 +12,7 @@ from .routers import ai, events, stocks, toz
 from .utils import auth
 from .utils import scheduler as scheduler_utils
 
-VERSION = "0.12.3"
+VERSION = "0.12.4"
 APP_NAME = "FinHub API"
 APP_DESCRIPTION = "A developer-first financial API hub for stock market data."
 
