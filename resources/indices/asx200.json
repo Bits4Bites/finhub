@@ -1,5 +1,5 @@
 {
-    "date": "2026-06-20",
+    "date": "2026-06-27",
     "data": [
         {
             "symbol": "ASX:360",
@@ -289,7 +289,7 @@
         {
             "symbol": "ASX:DRO",
             "company": "DRONESHIELD LIMITED",
-            "sector": "Military"
+            "sector": "Military & Defence"
         },
         {
             "symbol": "ASX:DRR",
