@@ -1,5 +1,5 @@
 {
-    "date": "2026-06-20",
+    "date": "2026-06-27",
     "data": [
         {
             "symbol": "NYSE:AAMI",
@@ -972,6 +972,11 @@
             "sector": "Financials"
         },
         {
+            "symbol": "NASDAQ:FA",
+            "company": "First Advantage Corporation",
+            "sector": "Industrials"
+        },
+        {
             "symbol": "NYSE:FBK",
             "company": "FB Financial Corp.",
             "sector": "Financials"
@@ -1500,11 +1505,6 @@
             "symbol": "NYSE:KTB",
             "company": "Kontoor Brands",
             "sector": "Consumer Discretionary"
-        },
-        {
-            "symbol": "NYSE:KW",
-            "company": "Kennedy-Wilson Holdings, Inc.",
-            "sector": "Real Estate"
         },
         {
             "symbol": "NYSE:KWR",
