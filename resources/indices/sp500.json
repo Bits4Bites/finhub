@@ -1,5 +1,5 @@
 {
-    "date": "2026-06-20",
+    "date": "2026-06-27",
     "data": [
         {
             "symbol": "NYSE:MMM",
@@ -822,7 +822,7 @@
             "sector": "Consumer Discretionary"
         },
         {
-            "symbol": "NASDAQ:SATS",
+            "symbol": "NASDAQ:ECHO",
             "company": "EchoStar",
             "sector": "Communication Services"
         },
