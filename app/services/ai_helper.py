@@ -25,6 +25,7 @@ async def _exec_prompt_openai_client(
     task_cfg: config.LLMTaskConfig,
     prompt: str,
     prompt_cfg: PromptConfig = None,
+    temperature: float = 0.2,
 ) -> models_ai.LLMResponse:
     """
     Execute a prompt using OpenAI client and return the response.
@@ -50,7 +51,7 @@ async def _exec_prompt_openai_client(
         # use response API with web search tool
         ai_response = await client.responses.create(
             model=task_cfg.model,
-            temperature=0.10,
+            temperature=temperature,
             tools=[
                 WebSearchPreviewToolParam(
                     type="web_search_preview",
@@ -75,7 +76,7 @@ async def _exec_prompt_openai_client(
         completion = await client.chat.completions.create(
             # extra_headers={"X-OpenRouter-Title": "FinHub"},
             model=task_cfg.model,
-            temperature=0.10,
+            temperature=temperature,
             messages=[ChatCompletionUserMessageParam(content=prompt, role="user")],
         )
         end = time.perf_counter()
@@ -111,6 +112,7 @@ async def _exec_prompt_azure_openai(
     task_cfg: config.LLMTaskConfig,
     prompt: str,
     prompt_cfg: PromptConfig = None,
+    temperature: float = 0.2,
 ) -> models_ai.LLMResponse:
     """
     Execute a prompt using Azure OpenAI and return the response.
@@ -123,6 +125,7 @@ async def _exec_prompt_azure_openai(
         task_cfg,
         prompt,
         prompt_cfg,
+        temperature,
     )
 
 
@@ -130,6 +133,7 @@ async def _exec_prompt_openrouter(
     task_cfg: config.LLMTaskConfig,
     prompt: str,
     prompt_cfg: PromptConfig = None,
+    temperature: float = 0.2,
 ) -> models_ai.LLMResponse:
     """
     Execute a prompt using OpenRouter and return the response.
@@ -142,6 +146,7 @@ async def _exec_prompt_openrouter(
         task_cfg,
         prompt,
         prompt_cfg,
+        temperature,
     )
 
 
@@ -149,6 +154,7 @@ async def _exec_prompt_openai(
     task_cfg: config.LLMTaskConfig,
     prompt: str,
     prompt_cfg: PromptConfig = None,
+    temperature: float = 0.2,
 ) -> models_ai.LLMResponse:
     """
     Execute a prompt using OpenAI and return the response.
@@ -161,6 +167,7 @@ async def _exec_prompt_openai(
         task_cfg,
         prompt,
         prompt_cfg,
+        temperature,
     )
 
 
@@ -168,6 +175,7 @@ async def _exec_prompt_gemini(
     task_cfg: config.LLMTaskConfig,
     prompt: str,
     prompt_cfg: PromptConfig = None,
+    temperature: float = 0.2,
 ) -> models_ai.LLMResponse:
     """
     Execute a prompt using Google Gemini and return the response.
@@ -196,7 +204,7 @@ async def _exec_prompt_gemini(
     ai_response = client.models.generate_content(
         model=task_cfg.model,
         contents=prompt,
-        config=types.GenerateContentConfig(temperature=0.10, thinking_config=thinking_config),
+        config=types.GenerateContentConfig(temperature=temperature, thinking_config=thinking_config),
     )
     end = time.perf_counter()
     result = models_ai.LLMResponse(
@@ -236,6 +244,7 @@ async def ai_exec_prompt(
     prompt: str,
     prompt_cfg: PromptConfig = None,
     *,
+    temperature: float = 0.2,
     llm_config_override: config.LLMTaskConfigOverride = None,
 ) -> models_ai.LLMResponse:
     """
@@ -248,24 +257,28 @@ async def ai_exec_prompt(
                 llm_config_override if llm_config_override else task_cfg,
                 prompt,
                 prompt_cfg,
+                temperature,
             )
         case "OPENAI":
             return await _exec_prompt_openai(
                 llm_config_override if llm_config_override else task_cfg,
                 prompt,
                 prompt_cfg,
+                temperature,
             )
         case "OPENROUTER" | "OPEN ROUTER" | "OPEN_ROUTER":
             return await _exec_prompt_openrouter(
                 llm_config_override if llm_config_override else task_cfg,
                 prompt,
                 prompt_cfg,
+                temperature,
             )
         case "GEMINI":
             return await _exec_prompt_gemini(
                 llm_config_override if llm_config_override else task_cfg,
                 prompt,
                 prompt_cfg,
+                temperature,
             )
         case _:
             raise ValueError(f"Unsupported LLM vendor: {task_cfg.vendor}")
@@ -290,4 +303,7 @@ async def ai_exec_task(
         country=country,
         thinking_level=thinking_level,
     )
-    return await ai_exec_prompt(task_cfg, prompt, prompt_cfg, llm_config_override=llm_config_override)
+    temperature = llm_config_override.temperature if llm_config_override else task_cfg.temperature
+    return await ai_exec_prompt(
+        task_cfg, prompt, prompt_cfg, temperature=temperature, llm_config_override=llm_config_override
+    )
