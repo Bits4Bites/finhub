@@ -1,5 +1,12 @@
 # FinHub release notes
 
+## 2026-06-29 - v0.12.5
+
+### Fixed/Improvements
+
+- Patch: Add temperature configuration per AI task.
+- Patch: Update prompts for Build/Review/Spotlight Portfolio features.
+
 ## 2026-06-25 - v0.12.4
 
 ### Fixed/Improvements
