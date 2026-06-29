@@ -17,7 +17,7 @@ class TestAiExecPrompt:
             result = asyncio.run(ai_helper.ai_exec_prompt(task_cfg, "hello world"))
 
         assert result is expected
-        mock_exec.assert_awaited_once_with(task_cfg, "hello world", None)
+        mock_exec.assert_awaited_once_with(task_cfg, "hello world", None, 0.2)
 
     def test_ai_exec_prompt_raises_for_unknown_vendor(self):
         task_cfg = config.LLMTaskConfig(task_name="demo", vendor="UNKNOWN", tier="cheap", model="x")

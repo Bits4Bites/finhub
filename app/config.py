@@ -104,6 +104,7 @@ class LLMTaskConfig(BaseSettings):
     vendor: str = ""
     tier: str = ""
     model: str = ""
+    temperature: float = 0.2
 
 
 class LLMTaskConfigOverride(LLMTaskConfig):
