@@ -163,9 +163,9 @@ curl 'http://localhost:8000/events/upcoming_dividends?country=AU&index=ASX200'
 
 Get upcoming earnings events for a market.
 
-| Parameter | Type  | Required | Description                                                                                                               |
-|-----------|-------|----------|---------------------------------------------------------------------------------------------------------------------------|
-| `country` | query | Yes      | Country code: `AU` or `US`.                                                                                               |
+| Parameter | Type  | Required | Description                                                                                              |
+|-----------|-------|----------|----------------------------------------------------------------------------------------------------------|
+| `country` | query | Yes      | Country code: `AU` or `US`.                                                                              |
 | `index`   | query | No       | Filter by index: `ASX20`, `ASX50`, `ASX100`, `ASX200`, `ASX300`, `NASDAQ100`, `SP500`, `SP400`, `SP600`. |
 
 **Example:**
@@ -212,11 +212,11 @@ curl 'http://localhost:8000/ai/vendors'
 
 Analyze a dividend event using AI.
 
-| Parameter    | Type  | Required | Description                                                                                              |
-|--------------|-------|----------|----------------------------------------------------------------------------------------------------------|
-| `symbol`     | query | Yes      | Stock symbol in YF format (`CBA.AX`) or `EXCHANGE:CODE` (`NASDAQ:AAPL`).                                 |
-| `ex_date`    | query | Yes      | Ex-dividend date in `YYYY-MM-DD` format.                                                                 |
-| `div_amount` | query | Yes      | Dividend amount as a float (e.g. `0.50`).                                                                |
+| Parameter    | Type  | Required | Description                                                                                                  |
+|--------------|-------|----------|--------------------------------------------------------------------------------------------------------------|
+| `symbol`     | query | Yes      | Stock symbol in YF format (`CBA.AX`) or `EXCHANGE:CODE` (`NASDAQ:AAPL`).                                     |
+| `ex_date`    | query | Yes      | Ex-dividend date in `YYYY-MM-DD` format.                                                                     |
+| `div_amount` | query | Yes      | Dividend amount as a float (e.g. `0.50`).                                                                    |
 | `intent`     | query | No       | Analysis intent/context. Defaults to `"Looking to capture the dividend or if post-div dip is worth buying"`. |
 
 **Example:**

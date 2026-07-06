@@ -1,5 +1,12 @@
 # FinHub release notes
 
+## 2026-07-06 - v0.12.6
+
+### Added/Refactoring/Deprecation
+
+- Feat(events): Add public_offer_close_date field to ASX new listing events.
+- Feat(events): Change ASX listing outlook periods to first day, first week, first 2 weeks, and first month.
+
 ## 2026-06-29 - v0.12.5
 
 ### Fixed/Improvements
