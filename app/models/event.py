@@ -198,6 +198,7 @@ class ListingEvent(EventBase):
     price: float = 0.0
     currency: str = ""
     capital: int = 0
+    public_offer_close_date: str | None = None
     analysis: ListingAnalysis | None = None
 
 
@@ -220,6 +221,7 @@ def parse_new_listing_events_from_json(json_str: str, default_vals: dict[str, An
             price=item.get("price", default_vals.get("price", 0.0)),
             currency=item.get("currency", default_vals.get("currency", "")),
             capital=int(item.get("capital", default_vals.get("capital", 0))),
+            public_offer_close_date=item.get("public_offer_close_date", default_vals.get("public_offer_close_date")),
         )
         # parse yyyy-MM-dd from event.date into event.timestamp
         event.timestamp = int(datetime.strptime(event.date or "", "%Y-%m-%d").timestamp())

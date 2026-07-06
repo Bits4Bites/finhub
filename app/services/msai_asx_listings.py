@@ -46,6 +46,8 @@ async def _get_asx_new_listings() -> list[models_event.ListingEvent]:
         "Rules:\n"
         '- Listing date is next to company name (NOT "Expected offer close date").\n'
         "- Skip entries with unconfirmed dates (TBC/TBA/TBD).\n"
+        '- public_offer_close_date: extract from "Expected offer close date" and convert to YYYY-MM-DD. '
+        'If no "Expected offer close date" info is found, set to null.\n'
         "- Map principal_activities to ONE sector from: {SECTORS}\n"
         '  (normalize synonyms, e.g. "INFORMATION TECHNOLOGY" → TECHNOLOGY).\n'
         "\n"
@@ -61,7 +63,8 @@ async def _get_asx_new_listings() -> list[models_event.ListingEvent]:
         '    "price": 0.0,\n'
         '    "principal_activities": "string",\n'
         '    "sector": "string",\n'
-        '    "capital": 0\n'
+        '    "capital": 0,\n'
+        '    "public_offer_close_date": "YYYY-MM-DD or null"\n'
         "  }}\n"
         "]\n"
         "\n"
