@@ -4,3 +4,4 @@
 #!VERSION=0.12.6
 - chore(cache): Update static data.
 - feat(events): Add public_offer_close_date field to ASX new listing events.
+- feat(events): Change ASX listing outlook periods to first day, first week, first 2 weeks, and first month.

@@ -24,3 +24,23 @@ class TestParseNewListingEventsFromJson:
 
         assert len(result) == 1
         assert result[0].public_offer_close_date is None
+
+
+class TestParseListingAnalysisFromJson:
+    def test_parses_d1_outlook(self):
+        json_str = (
+            '{"ASX:ABC": {"status": "upcoming", "stance": "Bullish", '
+            '"outlook": {'
+            '"d1": {"dir": "↑", "reason": "strong demand", "confidence": 70}, '
+            '"w1": {"dir": "↑", "reason": "early momentum", "confidence": 65}, '
+            '"w2": {"dir": "→", "reason": "settling", "confidence": 50}, '
+            '"m1": {"dir": "↑", "reason": "momentum", "confidence": 60}}}}'
+        )
+
+        result = models_event.parse_listing_analysis_from_json(json_str, {})
+
+        analysis = result["ASX:ABC"]
+        assert analysis.outlook["d1"].direction == "↑"
+        assert analysis.outlook["d1"].reason == "strong demand"
+        assert analysis.outlook["d1"].confidence == 70
+        assert set(analysis.outlook.keys()) == {"d1", "w1", "w2", "m1"}

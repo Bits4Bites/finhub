@@ -135,7 +135,7 @@ async def _analyze_asx_listings(events: list[models_event.ListingEvent]) -> list
         "   - Any news, analyst coverage, or institutional interest\n"
         "   - Key risks specific to the company and sector\n"
         "\n"
-        "2. For each company, predict price direction at 2 weeks, 1 month, and 3 months.\n"
+        "2. For each company, predict price direction at first listing day, first week, first 2 weeks, and first month.\n"
         "\n"
         "3. Output ONLY raw JSON (no markdown/text), with this exact schema:\n"
         "{\n"
@@ -146,14 +146,17 @@ async def _analyze_asx_listings(events: list[models_event.ListingEvent]) -> list
         '    "stance": "Bullish|Neutral|Bearish|Insufficient Data",\n'
         '    "catalyst": "Primary near-term catalyst or \'None identified\'",\n'
         '    "outlook": {\n'
+        '      "d1": { "dir": "↑|↓|→", "reason": "fact-based or state if inferred", "confidence": 0-100 },\n'
+        '      "w1": { "dir": "↑|↓|→", "reason": "fact-based or state if inferred", "confidence": 0-100 },\n'
         '      "w2": { "dir": "↑|↓|→", "reason": "fact-based or state if inferred", "confidence": 0-100 },\n'
-        '      "m1": { "dir": "↑|↓|→", "reason": "fact-based or state if inferred", "confidence": 0-100 },\n'
-        '      "m3": { "dir": "↑|↓|→", "reason": "fact-based or state if inferred", "confidence": 0-100 }\n'
+        '      "m1": { "dir": "↑|↓|→", "reason": "fact-based or state if inferred", "confidence": 0-100 }\n'
         "    },\n"
         '    "risks": ["max 3"]\n'
         "  }\n"
         "}\n"
         "\n"
+        '- "d1" is the stock price outlook for the first day the IPO is listed.\n'
+        '- "w1" is the first-week outlook, "w2" is the first-2-weeks outlook, and "m1" is the first-month outlook.\n'
         "Make the prompt thorough and specific to each company listed above.\n"
         "The prompt must be self-contained, the premium model will receive it with no other context.\n"
         "The prompt must instruct the premium model to use the hyphen character (-) instead of em-dash (\u2014).\n"
