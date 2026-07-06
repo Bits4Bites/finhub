@@ -1,5 +1,5 @@
 {
-    "date": "2026-06-20",
+    "date": "2026-07-04",
     "data": [
         {
             "symbol": "NYSE:AA",
@@ -242,19 +242,9 @@
             "sector": "Consumer Discretionary"
         },
         {
-            "symbol": "NASDAQ:BLKB",
-            "company": "Blackbaud",
-            "sector": "Information Technology"
-        },
-        {
             "symbol": "NASDAQ:BMRN",
             "company": "BioMarin Pharmaceutical",
             "sector": "Health Care"
-        },
-        {
-            "symbol": "NYSE:BRBR",
-            "company": "BellRing Brands",
-            "sector": "Consumer Staples"
         },
         {
             "symbol": "NASDAQ:BRKR",
@@ -329,6 +319,11 @@
         {
             "symbol": "NYSE:CCK",
             "company": "Crown Holdings",
+            "sector": "Materials"
+        },
+        {
+            "symbol": "NYSE:CDE",
+            "company": "Coeur Mining",
             "sector": "Materials"
         },
         {
@@ -417,11 +412,6 @@
             "sector": "Energy"
         },
         {
-            "symbol": "NASDAQ:CNXC",
-            "company": "Concentrix",
-            "sector": "Industrials"
-        },
-        {
             "symbol": "NASDAQ:COKE",
             "company": "Coca-Cola Consolidated",
             "sector": "Consumer Staples"
@@ -435,11 +425,6 @@
             "symbol": "NASDAQ:COLM",
             "company": "Columbia Sportswear",
             "sector": "Consumer Discretionary"
-        },
-        {
-            "symbol": "NYSE:COTY",
-            "company": "Coty",
-            "sector": "Consumer Staples"
         },
         {
             "symbol": "NYSE:CPRI",
@@ -710,11 +695,6 @@
             "symbol": "NASDAQ:FIVE",
             "company": "Five Below",
             "sector": "Consumer Discretionary"
-        },
-        {
-            "symbol": "NASDAQ:FLEX",
-            "company": "Flex Ltd.",
-            "sector": "Information Technology"
         },
         {
             "symbol": "NYSE:FLG",
@@ -1522,6 +1502,11 @@
             "sector": "Health Care"
         },
         {
+            "symbol": "NASDAQ:ROKU",
+            "company": "Roku, Inc.",
+            "sector": "Communication Services"
+        },
+        {
             "symbol": "NYSE:RPM",
             "company": "RPM International",
             "sector": "Materials"
@@ -1565,6 +1550,11 @@
             "symbol": "NYSE:SAM",
             "company": "Boston Beer Company",
             "sector": "Consumer Staples"
+        },
+        {
+            "symbol": "NASDAQ:SANM",
+            "company": "Sanmina Corporation",
+            "sector": "Information Technology"
         },
         {
             "symbol": "NYSE:SARO",
@@ -1640,6 +1630,11 @@
             "symbol": "NYSE:SMG",
             "company": "Scotts Miracle-Gro Company",
             "sector": "Materials"
+        },
+        {
+            "symbol": "NASDAQ:SMTC",
+            "company": "Semtech",
+            "sector": "Information Technology"
         },
         {
             "symbol": "NYSE:SN",
@@ -1855,6 +1850,11 @@
             "symbol": "NYSE:VFC",
             "company": "VF Corporation",
             "sector": "Consumer Discretionary"
+        },
+        {
+            "symbol": "NASDAQ:VIAV",
+            "company": "Viavi Solutions",
+            "sector": "Information Technology"
         },
         {
             "symbol": "NASDAQ:VICR",

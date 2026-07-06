@@ -169,24 +169,13 @@ def parse_listing_analysis_from_json(json_str: str, default_vals: dict[str, Any]
         )
         if "outlook" in v:
             result[k].outlook = {}
-            if "w2" in v["outlook"]:
-                result[k].outlook["w2"] = ListingOutlook(
-                    direction=v["outlook"]["w2"].get("dir"),
-                    reason=v["outlook"]["w2"].get("reason"),
-                    confidence=v["outlook"]["w2"].get("confidence"),
-                )
-            if "m1" in v["outlook"]:
-                result[k].outlook["m1"] = ListingOutlook(
-                    direction=v["outlook"]["m1"].get("dir"),
-                    reason=v["outlook"]["m1"].get("reason"),
-                    confidence=v["outlook"]["m1"].get("confidence"),
-                )
-            if "m3" in v["outlook"]:
-                result[k].outlook["m3"] = ListingOutlook(
-                    direction=v["outlook"]["m3"].get("dir"),
-                    reason=v["outlook"]["m3"].get("reason"),
-                    confidence=v["outlook"]["m3"].get("confidence"),
-                )
+            for period in ("d1", "w1", "w2", "m1"):
+                if period in v["outlook"]:
+                    result[k].outlook[period] = ListingOutlook(
+                        direction=v["outlook"][period].get("dir"),
+                        reason=v["outlook"][period].get("reason"),
+                        confidence=v["outlook"][period].get("confidence"),
+                    )
 
     return result
 
@@ -198,6 +187,7 @@ class ListingEvent(EventBase):
     price: float = 0.0
     currency: str = ""
     capital: int = 0
+    public_offer_close_date: str | None = None
     analysis: ListingAnalysis | None = None
 
 
@@ -220,6 +210,7 @@ def parse_new_listing_events_from_json(json_str: str, default_vals: dict[str, An
             price=item.get("price", default_vals.get("price", 0.0)),
             currency=item.get("currency", default_vals.get("currency", "")),
             capital=int(item.get("capital", default_vals.get("capital", 0))),
+            public_offer_close_date=item.get("public_offer_close_date", default_vals.get("public_offer_close_date")),
         )
         # parse yyyy-MM-dd from event.date into event.timestamp
         event.timestamp = int(datetime.strptime(event.date or "", "%Y-%m-%d").timestamp())
