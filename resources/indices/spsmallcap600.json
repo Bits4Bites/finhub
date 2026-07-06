@@ -1,5 +1,5 @@
 {
-    "date": "2026-06-27",
+    "date": "2026-07-04",
     "data": [
         {
             "symbol": "NYSE:AAMI",
@@ -247,11 +247,6 @@
             "sector": "Industrials"
         },
         {
-            "symbol": "NYSE:ARI",
-            "company": "Apollo Commercial Real Estate Finance",
-            "sector": "Real Estate"
-        },
-        {
             "symbol": "NYSE:ARLO",
             "company": "Arlo Technologies",
             "sector": "Information Technology"
@@ -460,6 +455,11 @@
             "symbol": "NYSE:CABO",
             "company": "Cable One",
             "sector": "Communication Services"
+        },
+        {
+            "symbol": "NYSE:CAG",
+            "company": "Conagra Brands",
+            "sector": "Consumer Staples"
         },
         {
             "symbol": "NASDAQ:CAKE",
@@ -1105,11 +1105,6 @@
             "symbol": "NYSE:GBX",
             "company": "The Greenbrier Companies, Inc.",
             "sector": "Industrials"
-        },
-        {
-            "symbol": "NASDAQ:GDYN",
-            "company": "Grid Dynamics Holdings, Inc.",
-            "sector": "Information Technology"
         },
         {
             "symbol": "NYSE:GEO",
@@ -1867,6 +1862,11 @@
             "sector": "Health Care"
         },
         {
+            "symbol": "NYSE:NHI",
+            "company": "National Health Investors, Inc.",
+            "sector": "Real Estate"
+        },
+        {
             "symbol": "NASDAQ:NMIH",
             "company": "NMI Holdings, Inc.",
             "sector": "Financials"
@@ -1905,6 +1905,11 @@
             "symbol": "NASDAQ:NTCT",
             "company": "NETSCOUT Systems, Inc.",
             "sector": "Information Technology"
+        },
+        {
+            "symbol": "NASDAQ:NTST",
+            "company": "NETSTREIT Corp.",
+            "sector": "Real Estate"
         },
         {
             "symbol": "NASDAQ:NWBI",
@@ -2120,11 +2125,6 @@
             "symbol": "NASDAQ:PPLI",
             "company": "People Inc.",
             "sector": "Communication Services"
-        },
-        {
-            "symbol": "NYSE:PRA",
-            "company": "ProAssurance Corporation",
-            "sector": "Financials"
         },
         {
             "symbol": "NASDAQ:PRAA",

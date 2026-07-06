@@ -1,5 +1,5 @@
 {
-    "date": "2026-06-27",
+    "date": "2026-07-04",
     "data": [
         {
             "symbol": "NYSE:MMM",
@@ -607,11 +607,6 @@
             "sector": "Industrials"
         },
         {
-            "symbol": "NYSE:CAG",
-            "company": "Conagra Brands",
-            "sector": "Consumer Staples"
-        },
-        {
             "symbol": "NYSE:COP",
             "company": "ConocoPhillips",
             "sector": "Energy"
@@ -1182,8 +1177,13 @@
             "sector": "Consumer Discretionary"
         },
         {
+            "symbol": "NASDAQ:HONA",
+            "company": "Honeywell Aerospace",
+            "sector": "Industrials"
+        },
+        {
             "symbol": "NASDAQ:HON",
-            "company": "Honeywell",
+            "company": "Honeywell Technologies",
             "sector": "Industrials"
         },
         {
