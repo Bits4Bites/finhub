@@ -1,5 +1,15 @@
 # FinHub release notes
 
+## 2026-07-07 - v0.13.0
+
+### Added/Refactoring/Deprecation
+
+- Feat(API): New API to fetch historical stock price data for a given ticker symbol.
+
+### Fixed/Improvements
+
+- Patch(API/service): Remove the upper limit of 366 days for get_gold_history and get_silver_history.
+
 ## 2026-07-06 - v0.12.6
 
 ### Added/Refactoring/Deprecation

@@ -150,12 +150,12 @@ class TestGetGoldHistory:
         mock_ticker_cls.return_value.history.assert_called_with(period="30d", interval="1d", auto_adjust=False)
 
     @patch("app.services.toz.yf.Ticker")
-    def test_num_days_clamped_when_over_366(self, mock_ticker_cls):
+    def test_num_days_over_366_is_not_clamped(self, mock_ticker_cls):
         hist_df = _make_history_df(2)
         mock_ticker_cls.return_value = _make_ticker_mock(GOLD_INFO, hist_df)
 
         get_gold_history("USD", 500)
-        mock_ticker_cls.return_value.history.assert_called_with(period="30d", interval="1d", auto_adjust=False)
+        mock_ticker_cls.return_value.history.assert_called_with(period="500d", interval="1d", auto_adjust=False)
 
 
 class TestGetSilverQuote:
@@ -223,3 +223,11 @@ class TestGetSilverHistory:
 
         get_silver_history("USD", -5)
         mock_ticker_cls.return_value.history.assert_called_with(period="30d", interval="1d", auto_adjust=False)
+
+    @patch("app.services.toz.yf.Ticker")
+    def test_num_days_over_366_is_not_clamped(self, mock_ticker_cls):
+        hist_df = _make_history_df(2)
+        mock_ticker_cls.return_value = _make_ticker_mock(SILVER_INFO, hist_df)
+
+        get_silver_history("USD", 500)
+        mock_ticker_cls.return_value.history.assert_called_with(period="500d", interval="1d", auto_adjust=False)
