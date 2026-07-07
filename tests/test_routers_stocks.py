@@ -139,6 +139,51 @@ def test_get_quote_at_date_not_found(mock_get_quote):
     assert body.get("data") is None
 
 
+# --- GET /stocks/{symbol}/history ---
+
+
+@patch("app.routers.stocks.stock_service.get_symbol_history")
+def test_get_symbol_history_success(mock_get_history):
+    points = [
+        HistoryPoint.model_construct(timestamp=1705276800, timestamp_str="2025-01-15", close=105.0),
+        HistoryPoint.model_construct(timestamp=1705363200, timestamp_str="2025-01-16", close=107.0),
+    ]
+    mock_get_history.return_value = points
+
+    resp = client.get("/stocks/CBA.AX/history?days=30")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == 200
+    assert body["message"] == "ok"
+    assert body["data"] is not None
+    assert len(body["data"]) == 2
+    assert body["data"][0]["close"] == 105.0
+    mock_get_history.assert_called_once_with("CBA.AX", 30)
+
+
+@patch("app.routers.stocks.stock_service.get_symbol_history")
+def test_get_symbol_history_defaults_days(mock_get_history):
+    mock_get_history.return_value = []
+
+    resp = client.get("/stocks/CBA.AX/history")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == 200
+    mock_get_history.assert_called_once_with("CBA.AX", 100)
+
+
+@patch("app.routers.stocks.stock_service.get_symbol_history")
+def test_get_symbol_history_none(mock_get_history):
+    mock_get_history.return_value = None
+
+    resp = client.get("/stocks/CBA.AX/history?days=30")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == 200
+    assert body["message"] == "ok"
+    assert body.get("data") is None
+
+
 # --- GET /stocks/index/{index}/companies ---
 
 

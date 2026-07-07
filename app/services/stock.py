@@ -125,3 +125,37 @@ def get_stock_quote_at_date(symbol: str, date_str: str) -> models.HistoryPoint |
                 dividends=point["Dividends"],
             )
     return None
+
+
+def get_symbol_history(symbol: str, days: int = 100) -> list[models.HistoryPoint] | None:
+    """
+    Fetches historical stock price data for a given ticker symbol.
+
+    Args:
+        symbol (str): The stock symbol to fetch information for, accepting YF format (e.g. ABC.AX) or EXCHANGE:CODE (e.g. NASDAQ:XYZ).
+        days (int): The number of days of historical data to retrieve (default is 100).
+
+    Returns:
+        list[models.HistoryPoint] | None: A list of models.HistoryPoint objects representing the historical prices, or None if the prices could not be retrieved.
+    """
+    yf_symbol = conv.to_yf_symbol_format(symbol)
+    ticker = yf.Ticker(yf_symbol)
+    quote_type = ticker.info.get("quoteType")
+    if quote_type in config.ALLOWED_QUOTE_TYPES:
+        num_days = 100 if days <= 0 else days
+        hist = ticker.history(period=f"{num_days}d", interval="1d", auto_adjust=False)
+        points = [
+            models.HistoryPoint(
+                timestamp=int(hist.index[i].timestamp()),
+                timestamp_str=hist.index[i].isoformat(sep=" ", timespec="seconds"),
+                open=hist.iloc[i]["Open"],
+                high=hist.iloc[i]["High"],
+                low=hist.iloc[i]["Low"],
+                close=hist.iloc[i]["Close"],
+                volume=int(hist.iloc[i]["Volume"]),
+            )
+            for i in range(0, len(hist))
+        ]
+        return points
+
+    return None

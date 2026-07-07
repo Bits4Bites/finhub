@@ -91,6 +91,23 @@ curl 'http://localhost:8000/stocks/AAPL/info'
 
 ---
 
+### `GET /stocks/{symbol}/history`
+
+Get historical daily price data for a ticker symbol.
+
+| Parameter | Type  | Required | Default | Description                                                              |
+|-----------|-------|----------|---------|--------------------------------------------------------------------------|
+| `symbol`  | path  | Yes      |         | Stock symbol in YF format (`CBA.AX`) or `EXCHANGE:CODE` (`NASDAQ:AAPL`). |
+| `days`    | query | No       | `100`   | Number of days of historical data to retrieve.                          |
+
+**Example:**
+
+```bash
+curl 'http://localhost:8000/stocks/AAPL/history?days=30'
+```
+
+---
+
 ### `GET /stocks/{symbol}/quote_at/{date_str}`
 
 Get stock quote at a specific date.

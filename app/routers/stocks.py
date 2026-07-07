@@ -51,6 +51,20 @@ def get_symbol_info(
     return schemas.SymbolInfoResponse(status=200, message="ok", data=info)
 
 
+@router.get("/{symbol}/history", response_model=schemas.StockHistoryResponse, response_model_exclude_none=True)
+def get_symbol_history(
+    symbol: str = Path(
+        description="The stock symbol to fetch information for, accepting YF format (e.g. ABC.AX) or EXCHANGE:CODE (e.g. NASDAQ:XYZ)"
+    ),
+    days: int = Query(100, description="The number of days of historical data to retrieve."),
+) -> schemas.StockHistoryResponse:
+    """
+    Gets historical stock price data for a given ticker symbol.
+    """
+    hist = stock_service.get_symbol_history(symbol, days)
+    return schemas.StockHistoryResponse(status=200, message="ok", data=hist)
+
+
 @router.get(
     "/{symbol}/quote_at/{date_str}", response_model=schemas.StockQuoteAtDateResponse, response_model_exclude_none=True
 )

@@ -5,6 +5,7 @@ import pandas as pd
 from app.services.stock import (
     get_stock_quote_at_date,
     get_stock_quotes,
+    get_symbol_history,
     get_symbol_info,
     get_symbol_overview,
 )
@@ -304,9 +305,71 @@ class TestGetStockQuoteAtDate:
     @patch("app.utils.conv.to_yf_symbol_format", return_value="AAPL")
     @patch("app.services.stock.yf.Ticker")
     def test_returns_none_when_history_empty(self, mock_ticker_cls, mock_to_yf):
+        result = get_stock_quote_at_date("AAPL", "2026-01-01")
+        assert result is None
+
+
+# ---------------------------------------------------------------------------
+# get_symbol_history
+# ---------------------------------------------------------------------------
+
+
+class TestGetSymbolHistory:
+    @patch("app.utils.conv.to_yf_symbol_format", return_value="AAPL")
+    @patch("app.services.stock.yf.Ticker")
+    def test_returns_history_points_for_equity(self, mock_ticker_cls, mock_to_yf):
+        hist_df = _make_history_df(3)
+        ticker = _make_ticker_mock(EQUITY_INFO, hist_df)
+        mock_ticker_cls.return_value = ticker
+
+        result = get_symbol_history("AAPL", 3)
+        assert result is not None
+        assert len(result) == 3
+        assert result[0].open == hist_df.iloc[0]["Open"]
+        assert result[0].close == hist_df.iloc[0]["Close"]
+        assert result[0].volume == int(hist_df.iloc[0]["Volume"])
+        assert result[0].timestamp == int(hist_df.index[0].timestamp())
+
+    @patch("app.utils.conv.to_yf_symbol_format", return_value="AAPL")
+    @patch("app.services.stock.yf.Ticker")
+    def test_requests_given_number_of_days(self, mock_ticker_cls, mock_to_yf):
+        ticker = _make_ticker_mock(EQUITY_INFO, _make_history_df(3))
+        mock_ticker_cls.return_value = ticker
+
+        get_symbol_history("AAPL", 30)
+        _, kwargs = ticker.history.call_args
+        assert kwargs["period"] == "30d"
+
+    @patch("app.utils.conv.to_yf_symbol_format", return_value="AAPL")
+    @patch("app.services.stock.yf.Ticker")
+    def test_defaults_to_100_days_when_non_positive(self, mock_ticker_cls, mock_to_yf):
+        ticker = _make_ticker_mock(EQUITY_INFO, _make_history_df(3))
+        mock_ticker_cls.return_value = ticker
+
+        get_symbol_history("AAPL", 0)
+        _, kwargs = ticker.history.call_args
+        assert kwargs["period"] == "100d"
+
+    @patch("app.utils.conv.to_yf_symbol_format", return_value="AAPL")
+    @patch("app.services.stock.yf.Ticker")
+    def test_returns_none_for_unsupported_quote_type(self, mock_ticker_cls, mock_to_yf):
+        mock_ticker_cls.return_value = _make_ticker_mock(UNSUPPORTED_INFO)
+        result = get_symbol_history("AAPL", 30)
+        assert result is None
+
+    @patch("app.utils.conv.to_yf_symbol_format", return_value="AAPL")
+    @patch("app.services.stock.yf.Ticker")
+    def test_returns_none_when_quote_type_is_none(self, mock_ticker_cls, mock_to_yf):
+        mock_ticker_cls.return_value = _make_ticker_mock(NONE_QUOTE_TYPE_INFO)
+        result = get_symbol_history("AAPL", 30)
+        assert result is None
+
+    @patch("app.utils.conv.to_yf_symbol_format", return_value="AAPL")
+    @patch("app.services.stock.yf.Ticker")
+    def test_returns_empty_list_when_history_empty(self, mock_ticker_cls, mock_to_yf):
         empty_df = pd.DataFrame(columns=["Open", "High", "Low", "Close", "Volume", "Dividends"])
         ticker = _make_ticker_mock(EQUITY_INFO, empty_df)
         mock_ticker_cls.return_value = ticker
 
-        result = get_stock_quote_at_date("AAPL", "2026-01-01")
-        assert result is None
+        result = get_symbol_history("AAPL", 30)
+        assert result == []
