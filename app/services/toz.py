@@ -53,7 +53,7 @@ def get_gold_history(currency: str = "USD", num_days: int = 30) -> list[models.H
             return None
         x_rate = float(ticker.info["regularMarketPrice"])
 
-    num_days = 30 if num_days <= 0 or num_days > 366 else num_days
+    num_days = 30 if num_days <= 0 else num_days
 
     # second, get the historical prices in USD
     ticker = yf.Ticker("GC=F")  # Gold Futures
@@ -132,7 +132,7 @@ def get_silver_history(currency: str = "USD", num_days: int = 30) -> list[models
             return None
         x_rate = float(ticker.info["regularMarketPrice"])
 
-    num_days = 30 if num_days <= 0 or num_days > 366 else num_days
+    num_days = 30 if num_days <= 0 else num_days
 
     # second, get the historical prices in USD
     ticker = yf.Ticker("SI=F")  # SILVER Futures

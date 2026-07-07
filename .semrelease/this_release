@@ -3,3 +3,4 @@
 #   git log origin..HEAD | grep "^\s" > .semrelease/this_release
 #!VERSION=0.13.0
 - feat(API): New API to fetch historical stock price data for a given ticker symbol.
+- patch(API/service): Remove the upper limit of 366 days for get_gold_history and get_silver_history.
