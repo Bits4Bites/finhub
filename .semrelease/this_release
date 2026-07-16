@@ -1,3 +1,5 @@
 # This file has been cleaned up post-releasing version 0.13.0.
 # Generate its content quickly using the following command:
 #   git log origin..HEAD | grep "^\s" > .semrelease/this_release
+#!VERSION=0.13.1
+- impr(AI): Spotlight portfolio - rank risks by severity (Critical/High/Medium/Low), prioritize actionable Critical/High actions, and move the one-line SUMMARY to the end.
