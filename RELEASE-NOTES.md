@@ -1,5 +1,11 @@
 # FinHub release notes
 
+## 2026-07-16 - v0.13.1
+
+### Fixed/Improvements
+
+- Impr(AI): Spotlight portfolio - rank risks by severity (Critical/High/Medium/Low), prioritize actionable Critical/High actions, and move the one-line SUMMARY to the end.
+
 ## 2026-07-07 - v0.13.0
 
 ### Added/Refactoring/Deprecation
