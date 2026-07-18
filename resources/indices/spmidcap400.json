@@ -1,5 +1,5 @@
 {
-    "date": "2026-07-04",
+    "date": "2026-07-18",
     "data": [
         {
             "symbol": "NYSE:AA",
@@ -70,6 +70,11 @@
             "symbol": "NYSE:ALLY",
             "company": "Ally Financial",
             "sector": "Financials"
+        },
+        {
+            "symbol": "NYSE:ALSN",
+            "company": "Allison Transmission",
+            "sector": "Industrials"
         },
         {
             "symbol": "NYSE:ALV",
@@ -807,11 +812,6 @@
             "sector": "Materials"
         },
         {
-            "symbol": "NASDAQ:GT",
-            "company": "Goodyear Tire &amp; Rubber",
-            "sector": "Consumer Discretionary"
-        },
-        {
             "symbol": "NYSE:GTLS",
             "company": "Chart Industries",
             "sector": "Industrials"
@@ -1054,7 +1054,7 @@
         {
             "symbol": "NYSE:LPX",
             "company": "Louisiana-Pacific",
-            "sector": "Materials"
+            "sector": "Industrials"
         },
         {
             "symbol": "NASDAQ:LSCC ",

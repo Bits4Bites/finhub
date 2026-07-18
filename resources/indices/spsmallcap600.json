@@ -1,5 +1,5 @@
 {
-    "date": "2026-07-04",
+    "date": "2026-07-18",
     "data": [
         {
             "symbol": "NYSE:AAMI",
@@ -407,6 +407,11 @@
             "sector": "Health Care"
         },
         {
+            "symbol": "NASDAQ:BLKB",
+            "company": "Blackbaud",
+            "sector": "Information Technology"
+        },
+        {
             "symbol": "NYSE:BMI",
             "company": "Badger Meter, Inc.",
             "sector": "Information Technology"
@@ -452,9 +457,9 @@
             "sector": "Financials"
         },
         {
-            "symbol": "NYSE:CABO",
-            "company": "Cable One",
-            "sector": "Communication Services"
+            "symbol": "NASDAQ:CACC",
+            "company": "Credit Acceptance",
+            "sector": "Financials"
         },
         {
             "symbol": "NYSE:CAG",
@@ -562,11 +567,6 @@
             "sector": "Consumer Staples"
         },
         {
-            "symbol": "NYSE:CLB",
-            "company": "Core Laboratories",
-            "sector": "Energy"
-        },
-        {
             "symbol": "NASDAQ:CLSK",
             "company": "CleanSpark, Inc.",
             "sector": "Information Technology"
@@ -590,6 +590,11 @@
             "symbol": "NYSE:CNS",
             "company": "Cohen &amp; Steers, Inc.",
             "sector": "Financials"
+        },
+        {
+            "symbol": "NASDAQ:CNXC",
+            "company": "Concentrix",
+            "sector": "Industrials"
         },
         {
             "symbol": "NASDAQ:CNXN",
@@ -620,6 +625,16 @@
             "symbol": "NASDAQ:CORT",
             "company": "Corcept Therapeutics Incorporated",
             "sector": "Health Care"
+        },
+        {
+            "symbol": "NYSE:COTY",
+            "company": "Coty",
+            "sector": "Consumer Staples"
+        },
+        {
+            "symbol": "NYSE:CPB",
+            "company": "The Campbell's Company",
+            "sector": "Consumer Staples"
         },
         {
             "symbol": "NASDAQ:CPF",
@@ -675,11 +690,6 @@
             "symbol": "NASDAQ:CSW",
             "company": "CSW Industrials, Inc.",
             "sector": "Industrials"
-        },
-        {
-            "symbol": "NASDAQ:CTKB",
-            "company": "Cytek Biosciences, Inc.",
-            "sector": "Health Care"
         },
         {
             "symbol": "NYSE:CTS",
@@ -852,6 +862,11 @@
             "sector": "Consumer Discretionary"
         },
         {
+            "symbol": "NASDAQ:EBC",
+            "company": "Eastern Bankshares, Inc.",
+            "sector": "Financials"
+        },
+        {
             "symbol": "NYSE:ECG",
             "company": "Everus Construction Group, Inc.",
             "sector": "Industrials"
@@ -880,11 +895,6 @@
             "symbol": "NYSE:EIG",
             "company": "Employers Holdings, Inc.",
             "sector": "Financials"
-        },
-        {
-            "symbol": "NASDAQ:EMBC",
-            "company": "Embecta Corp.",
-            "sector": "Health Care"
         },
         {
             "symbol": "NYSE:EMN",
@@ -940,11 +950,6 @@
             "symbol": "NYSE:ESI",
             "company": "Element Solutions",
             "sector": "Materials"
-        },
-        {
-            "symbol": "NYSE:ETD",
-            "company": "Ethan Allen Interiors, Inc.",
-            "sector": "Consumer Discretionary"
         },
         {
             "symbol": "NASDAQ:ETSY",
@@ -1007,8 +1012,8 @@
             "sector": "Real Estate"
         },
         {
-            "symbol": "NYSE:FDP",
-            "company": "Fresh Del Monte Produce, Inc.",
+            "symbol": "NYSE:DMC",
+            "company": "Del Monte Corporation",
             "sector": "Consumer Staples"
         },
         {
@@ -1097,11 +1102,6 @@
             "sector": "Consumer Discretionary"
         },
         {
-            "symbol": "NASDAQ:FWRD",
-            "company": "Forward Air Corp.",
-            "sector": "Industrials"
-        },
-        {
             "symbol": "NYSE:GBX",
             "company": "The Greenbrier Companies, Inc.",
             "sector": "Industrials"
@@ -1142,11 +1142,6 @@
             "sector": "Consumer Staples"
         },
         {
-            "symbol": "NASDAQ:GOGO",
-            "company": "Gogo, Inc.",
-            "sector": "Communication Services"
-        },
-        {
             "symbol": "NYSE:GOLF",
             "company": "Acushnet Company",
             "sector": "Consumer Discretionary"
@@ -1157,6 +1152,11 @@
             "sector": "Consumer Discretionary"
         },
         {
+            "symbol": "NYSE:GPOR",
+            "company": "Gulfport Energy Corporation",
+            "sector": "Energy"
+        },
+        {
             "symbol": "NYSE:GRBK",
             "company": "Green Brick Partners, Inc.",
             "sector": "Consumer Discretionary"
@@ -1165,6 +1165,11 @@
             "symbol": "NASDAQ:GSHD",
             "company": "Goosehead Insurance, Inc.",
             "sector": "Financials"
+        },
+        {
+            "symbol": "NASDAQ:GT",
+            "company": "Goodyear Tire and Rubber Company",
+            "sector": "Consumer Discretionary"
         },
         {
             "symbol": "NYSE:GTES",
@@ -1327,11 +1332,6 @@
             "sector": "Health Care"
         },
         {
-            "symbol": "NYSE:IIIN",
-            "company": "Insteel Industries, Inc.",
-            "sector": "Industrials"
-        },
-        {
             "symbol": "NYSE:IIPR",
             "company": "Innovative Industrial Properties, Inc.",
             "sector": "Real Estate"
@@ -1390,6 +1390,11 @@
             "symbol": "NASDAQ:ITRI",
             "company": "Itron, Inc.",
             "sector": "Information Technology"
+        },
+        {
+            "symbol": "NYSE:IVT",
+            "company": "InvenTrust Properties",
+            "sector": "Real Estate"
         },
         {
             "symbol": "NYSE:JBGS",
@@ -1512,6 +1517,11 @@
             "sector": "Consumer Discretionary"
         },
         {
+            "symbol": "NYSE:LAZ",
+            "company": "Lazard",
+            "sector": "Financials"
+        },
+        {
             "symbol": "NYSE:LBRT",
             "company": "Liberty Energy, Inc.",
             "sector": "Energy"
@@ -1575,6 +1585,11 @@
             "symbol": "NYSE:LPG",
             "company": "Dorian LPG Ltd.",
             "sector": "Energy"
+        },
+        {
+            "symbol": "NASDAQ:LQDA",
+            "company": "Liquidia Corporation",
+            "sector": "Health Care"
         },
         {
             "symbol": "NASDAQ:LQDT",
@@ -1657,6 +1672,11 @@
             "sector": "Industrials"
         },
         {
+            "symbol": "NASDAQ:MBGL",
+            "company": "Mobility Global, Inc.",
+            "sector": "Industrials"
+        },
+        {
             "symbol": "NASDAQ:MBIN",
             "company": "Merchants Bancorp",
             "sector": "Financials"
@@ -1685,6 +1705,11 @@
             "symbol": "NYSE:MDU",
             "company": "MDU Resources Group, Inc.",
             "sector": "Utilities"
+        },
+        {
+            "symbol": "NASDAQ:MFP",
+            "company": "Midera Food Processing, Inc.",
+            "sector": "Industrials"
         },
         {
             "symbol": "NASDAQ:MGEE",
@@ -1730,11 +1755,6 @@
             "symbol": "NASDAQ:MMSI",
             "company": "Merit Medical Systems, Inc.",
             "sector": "Health Care"
-        },
-        {
-            "symbol": "NASDAQ:MNRO",
-            "company": "Monro, Inc.",
-            "sector": "Consumer Discretionary"
         },
         {
             "symbol": "NYSE:MOH",
@@ -1867,6 +1887,11 @@
             "sector": "Real Estate"
         },
         {
+            "symbol": "NYSE:NIC",
+            "company": "Nicolet Bankshares",
+            "sector": "Financials"
+        },
+        {
             "symbol": "NASDAQ:NMIH",
             "company": "NMI Holdings, Inc.",
             "sector": "Financials"
@@ -1980,11 +2005,6 @@
             "symbol": "NYSE:OUT",
             "company": "Outfront Media",
             "sector": "Real Estate"
-        },
-        {
-            "symbol": "NYSE:OXM",
-            "company": "Oxford Industries, Inc.",
-            "sector": "Consumer Discretionary"
         },
         {
             "symbol": "NASDAQ:PAHC",
@@ -2112,6 +2132,11 @@
             "sector": "Real Estate"
         },
         {
+            "symbol": "NASDAQ:POOL",
+            "company": "Pool Corporation",
+            "sector": "Consumer Discretionary"
+        },
+        {
             "symbol": "NASDAQ:POWI",
             "company": "Power Integrations",
             "sector": "Information Technology"
@@ -2125,11 +2150,6 @@
             "symbol": "NASDAQ:PPLI",
             "company": "People Inc.",
             "sector": "Communication Services"
-        },
-        {
-            "symbol": "NASDAQ:PRAA",
-            "company": "PRA Group, Inc.",
-            "sector": "Financials"
         },
         {
             "symbol": "NASDAQ:PRDO",
@@ -2322,6 +2342,11 @@
             "sector": "Consumer Discretionary"
         },
         {
+            "symbol": "NYSE:RSI",
+            "company": "Rush Street Interactive, Inc.",
+            "sector": "Consumer Discretionary"
+        },
+        {
             "symbol": "NASDAQ:RUN",
             "company": "Sunrun",
             "sector": "Industrials"
@@ -2330,11 +2355,6 @@
             "symbol": "NASDAQ:RUSHA",
             "company": "Rush Enterprises",
             "sector": "Industrials"
-        },
-        {
-            "symbol": "NYSE:RWT",
-            "company": "Redwood Trust, Inc.",
-            "sector": "Real Estate"
         },
         {
             "symbol": "NYSE:RXO",
@@ -2360,11 +2380,6 @@
             "symbol": "NYSE:SAH",
             "company": "Sonic Automotive, Inc.",
             "sector": "Consumer Discretionary"
-        },
-        {
-            "symbol": "NASDAQ:SANM",
-            "company": "Sanmina Corporation",
-            "sector": "Information Technology"
         },
         {
             "symbol": "NASDAQ:SBCF",
@@ -2405,11 +2420,6 @@
             "symbol": "NASDAQ:SEDG",
             "company": "SolarEdge",
             "sector": "Information Technology"
-        },
-        {
-            "symbol": "NYSE:SEM",
-            "company": "Select Medical Holdings, Corp.",
-            "sector": "Health Care"
         },
         {
             "symbol": "NASDAQ:SEZL",
@@ -2492,11 +2502,6 @@
             "sector": "Consumer Staples"
         },
         {
-            "symbol": "NASDAQ:SMTC",
-            "company": "Semtech Corporation",
-            "sector": "Information Technology"
-        },
-        {
             "symbol": "NYSE:SNDR",
             "company": "Schneider National",
             "sector": "Industrials"
@@ -2544,11 +2549,6 @@
         {
             "symbol": "NYSE:STC",
             "company": "Stewart Information Services Corporation",
-            "sector": "Financials"
-        },
-        {
-            "symbol": "NASDAQ:STEL",
-            "company": "Stellar Bancorp, Inc.",
             "sector": "Financials"
         },
         {
@@ -2722,11 +2722,6 @@
             "sector": "Health Care"
         },
         {
-            "symbol": "NYSE:UHT",
-            "company": "Universal Health Realty Income Trust",
-            "sector": "Real Estate"
-        },
-        {
             "symbol": "NYSE:UNF",
             "company": "UniFirst Corporation",
             "sector": "Industrials"
@@ -2755,6 +2750,11 @@
             "symbol": "NASDAQ:URBN",
             "company": "Urban Outfitters, Inc.",
             "sector": "Consumer Discretionary"
+        },
+        {
+            "symbol": "NASDAQ:USLM",
+            "company": "United States Lime & Minerals, Inc.",
+            "sector": "Materials"
         },
         {
             "symbol": "NASDAQ:USPH",
@@ -2807,11 +2807,6 @@
             "sector": "Consumer Discretionary"
         },
         {
-            "symbol": "NASDAQ:VIAV",
-            "company": "VIAVI Solutions",
-            "sector": "Information Technology"
-        },
-        {
             "symbol": "NASDAQ:VIR",
             "company": "Vir Biotechnology, Inc.",
             "sector": "Health Care"
@@ -2820,11 +2815,6 @@
             "symbol": "NYSE:VIRT",
             "company": "Virtu Financial, Inc.",
             "sector": "Financials"
-        },
-        {
-            "symbol": "NASDAQ:VITL",
-            "company": "Vital Farms, Inc.",
-            "sector": "Consumer Staples"
         },
         {
             "symbol": "NASDAQ:VRRM",
@@ -2942,6 +2932,11 @@
             "sector": "Industrials"
         },
         {
+            "symbol": "NYSE:WRBY",
+            "company": "Warby Parker",
+            "sector": "Consumer Discretionary"
+        },
+        {
             "symbol": "NASDAQ:WRLD",
             "company": "World Acceptance Corporation",
             "sector": "Financials"
@@ -2950,6 +2945,11 @@
             "symbol": "NYSE:WS",
             "company": "Worthington Steel",
             "sector": "Materials"
+        },
+        {
+            "symbol": "NASDAQ:WSBC",
+            "company": "WesBanco",
+            "sector": "Financials"
         },
         {
             "symbol": "NASDAQ:WSC",
