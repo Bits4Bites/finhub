@@ -1,5 +1,5 @@
 {
-    "date": "2026-07-04",
+    "date": "2026-07-18",
     "data": [
         {
             "symbol": "ASX:360",
@@ -150,11 +150,6 @@
             "symbol": "ASX:ASB",
             "company": "AUSTAL LIMITED",
             "sector": "Commercial Services & Supplies"
-        },
-        {
-            "symbol": "ASX:ASK",
-            "company": "ABACUS STORAGE KING",
-            "sector": "REITs"
         },
         {
             "symbol": "ASX:ASX",
@@ -1072,11 +1067,6 @@
             "sector": "Insurance"
         },
         {
-            "symbol": "ASX:QOR",
-            "company": "QORIA LIMITED",
-            "sector": "Software & Services"
-        },
-        {
             "symbol": "ASX:QRI",
             "company": "QUALITAS REAL ESTATE INCOME FUND",
             "sector": ""
@@ -1235,6 +1225,11 @@
             "symbol": "ASX:SIQ",
             "company": "SMARTGROUP CORPORATION LIMITED",
             "sector": "Vehicle Leasing & Salary Packaging"
+        },
+        {
+            "symbol": "ASX:SKG",
+            "company": "STORAGE KING GROUP",
+            "sector": ""
         },
         {
             "symbol": "ASX:SLC",
