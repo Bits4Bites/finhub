@@ -215,7 +215,7 @@ class TestAiSpotlightPortfolio:
             LLMResponse(completion="Generated spotlight prompt"),
             LLMResponse(completion="Immediate risks and actions"),
         ]
-        portfolio = [HoldingTicker(ticker="AAPL", num_shares=20, market_price=190.0, tags="growth")]
+        portfolio = [HoldingTicker(ticker="AAPL", num_shares=20, avg_price=150.0, market_price=190.0, tags="growth")]
 
         result = asyncio.run(ai_spotlight_portfolio(portfolio=portfolio, country="US"))
 
@@ -223,6 +223,7 @@ class TestAiSpotlightPortfolio:
         assert result.analysis == "Immediate risks and actions"
         assert mock_ai_exec.call_count == 2
         assert mock_ai_exec.call_args_list[0].args[0] == "SPOTLIGHT_PORTFOLIO_BUILD_PROMPT"
+        assert "avg price $150.00, market value $3800.00" in mock_ai_exec.call_args_list[0].args[1]
         assert mock_ai_exec.call_args_list[1].args[0] == "SPOTLIGHT_PORTFOLIO_EXEC"
 
 

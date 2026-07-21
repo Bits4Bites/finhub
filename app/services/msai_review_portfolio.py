@@ -112,10 +112,11 @@ async def ai_review_portfolio(
         return None
 
     # Step 1: build {investor_profile} from investor_theme + existing holdings
+    currency = conv.country_to_currency_symbol(country) or "$"
     holdings_lines = []
     for pos in portfolio:
         market_value = pos.num_shares * pos.market_price
-        line = f"  - {pos.ticker}: {pos.num_shares} shares, market value ${market_value:.2f}"
+        line = f"- {pos.ticker}: {pos.num_shares} shares, avg price {currency}{pos.avg_price:.2f}, market value {currency}{market_value:.2f}"
         if pos.tags:
             line += f" ({pos.tags})"
         holdings_lines.append(line)
