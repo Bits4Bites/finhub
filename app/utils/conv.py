@@ -1,6 +1,8 @@
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+import babel.core
+import babel.numbers
 import country_converter as coco
 import yfinance as yf
 
@@ -22,6 +24,37 @@ def country_to_iso2(country: str | None) -> str:
         return ""
     code = _COUNTRY_CONVERTER.convert(country, to="ISO2")
     return code if code != "not found" else ""
+
+
+def country_to_currency_symbol(country: str | None) -> str:
+    """
+    Converts a country name/code to the symbol of its primary active currency.
+
+    Args:
+        country (str): The country name or code to convert.
+
+    Returns:
+        str: The local currency symbol, or an empty string if the country or currency is unknown.
+    """
+    country_code = country_to_iso2(country)
+    if not country_code:
+        return ""
+
+    currencies = babel.numbers.get_territory_currencies(country_code, tender=True)
+    if not currencies:
+        return ""
+
+    territory_languages = babel.core.get_global("territory_languages").get(country_code, {})
+    language = max(
+        territory_languages,
+        key=lambda code: territory_languages[code].get("population_percent", 0),
+        default="en",
+    )
+    locale = f"{language}_{country_code}"
+    try:
+        return babel.numbers.get_currency_symbol(currencies[0], locale=locale)
+    except babel.core.UnknownLocaleError:
+        return babel.numbers.get_currency_symbol(currencies[0], locale="en")
 
 
 # Mapping of known exchange name variants to canonical codes
