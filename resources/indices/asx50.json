@@ -1,10 +1,15 @@
 {
-    "date": "2026-07-04",
+    "date": "2026-07-18",
     "data": [
         {
             "symbol": "ASX:ALL",
             "company": "ARISTOCRAT LEISURE LIMITED",
             "sector": "Gaming"
+        },
+        {
+            "symbol": "ASX:ALQ",
+            "company": "ALS LIMITED",
+            "sector": "Mining Sector Contracting, Industrial Sector Contractors & Engineers"
         },
         {
             "symbol": "ASX:ANZ",
@@ -140,11 +145,6 @@
             "symbol": "ASX:PLS",
             "company": "PLS GROUP LIMITED",
             "sector": "New Battery Elements"
-        },
-        {
-            "symbol": "ASX:PME",
-            "company": "PRO MEDICUS LIMITED",
-            "sector": "Medical Equipment & Devices"
         },
         {
             "symbol": "ASX:QAN",

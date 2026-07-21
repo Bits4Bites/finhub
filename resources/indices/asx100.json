@@ -1,5 +1,5 @@
 {
-    "date": "2026-07-04",
+    "date": "2026-07-18",
     "data": [
         {
             "symbol": "ASX:360",
@@ -262,11 +262,6 @@
             "sector": "Wealth Management & Investments"
         },
         {
-            "symbol": "ASX:MTS",
-            "company": "METCASH LIMITED",
-            "sector": "Food, Beverages & Tobacco"
-        },
-        {
             "symbol": "ASX:NAB",
             "company": "NATIONAL AUSTRALIA BANK LIMITED",
             "sector": "Banks"
@@ -295,6 +290,11 @@
             "symbol": "ASX:ORI",
             "company": "ORICA LIMITED",
             "sector": "Mining Sector Contracting"
+        },
+        {
+            "symbol": "ASX:PDN",
+            "company": "PALADIN ENERGY LIMITED",
+            "sector": "Uranium"
         },
         {
             "symbol": "ASX:PLS",

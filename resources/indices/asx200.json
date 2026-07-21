@@ -1,5 +1,5 @@
 {
-    "date": "2026-07-04",
+    "date": "2026-07-18",
     "data": [
         {
             "symbol": "ASX:360",
@@ -302,6 +302,11 @@
             "sector": "IT & Support"
         },
         {
+            "symbol": "ASX:DVP",
+            "company": "DEVELOP GLOBAL LIMITED",
+            "sector": "Industrial Metals"
+        },
+        {
             "symbol": "ASX:DXS",
             "company": "DEXUS",
             "sector": "REITs"
@@ -322,9 +327,19 @@
             "sector": "Agriculture"
         },
         {
+            "symbol": "ASX:ELV",
+            "company": "ELEVRA LITHIUM LIMITED",
+            "sector": "New Battery Elements"
+        },
+        {
             "symbol": "ASX:EMR",
             "company": "EMERALD RESOURCES NL",
             "sector": "Gold & Silver"
+        },
+        {
+            "symbol": "ASX:EOS",
+            "company": "ELECTRO OPTIC SYSTEMS HOLDINGS LIMITED",
+            "sector": "Military & Defence"
         },
         {
             "symbol": "ASX:EVN",
@@ -340,6 +355,11 @@
             "symbol": "ASX:FBU",
             "company": "FLETCHER BUILDING LIMITED",
             "sector": "Building Products & Services"
+        },
+        {
+            "symbol": "ASX:FFM",
+            "company": "FIREFLY METALS LIMITED",
+            "sector": "Gold & Silver, Gold & Silver, Copper"
         },
         {
             "symbol": "ASX:FLT",
@@ -392,11 +412,6 @@
             "sector": "Wealth Management & Investments"
         },
         {
-            "symbol": "ASX:GYG",
-            "company": "GUZMAN Y GOMEZ LIMITED",
-            "sector": "Food, Beverages & Tobacco"
-        },
-        {
             "symbol": "ASX:HDN",
             "company": "HOMECO DAILY NEEDS REIT",
             "sector": "REITs"
@@ -420,11 +435,6 @@
             "symbol": "ASX:IAG",
             "company": "INSURANCE AUSTRALIA GROUP LIMITED",
             "sector": "Insurance"
-        },
-        {
-            "symbol": "ASX:IEL",
-            "company": "IDP EDUCATION LIMITED",
-            "sector": "Education & Tuition"
         },
         {
             "symbol": "ASX:IFT",
@@ -482,6 +492,11 @@
             "sector": "NatGas, Crude Oil"
         },
         {
+            "symbol": "ASX:KCN",
+            "company": "KINGSGATE CONSOLIDATED LIMITED",
+            "sector": "Gold & Silver"
+        },
+        {
             "symbol": "ASX:LLC",
             "company": "LENDLEASE GROUP",
             "sector": "Infra & Property Developers"
@@ -515,6 +530,11 @@
             "symbol": "ASX:MGR",
             "company": "MIRVAC GROUP",
             "sector": "Infra & Property Developers"
+        },
+        {
+            "symbol": "ASX:MI6",
+            "company": "MINERALS 260 LIMITED",
+            "sector": ""
         },
         {
             "symbol": "ASX:MIN",
@@ -702,11 +722,6 @@
             "sector": "Travel, Leisure & Tourism, Transportation & Logistics"
         },
         {
-            "symbol": "ASX:QBE",
-            "company": "QBE INSURANCE GROUP LIMITED",
-            "sector": "Insurance"
-        },
-        {
             "symbol": "ASX:QUB",
             "company": "QUBE HOLDINGS LIMITED",
             "sector": "Transportation & Logistics"
@@ -775,11 +790,6 @@
             "symbol": "ASX:SDF",
             "company": "STEADFAST GROUP LIMITED",
             "sector": "Insurance"
-        },
-        {
-            "symbol": "ASX:SDR",
-            "company": "SITEMINDER LIMITED",
-            "sector": "Travel, Leisure & Tourism, Cloud services"
         },
         {
             "symbol": "ASX:SEK",
@@ -887,11 +897,6 @@
             "sector": "Telecommunication, Telecommunication"
         },
         {
-            "symbol": "ASX:TPW",
-            "company": "TEMPLE & WEBSTER GROUP LIMITED",
-            "sector": "Furniture & Renovation"
-        },
-        {
             "symbol": "ASX:TUA",
             "company": "TUAS LIMITED",
             "sector": "Telecommunication"
@@ -940,11 +945,6 @@
             "symbol": "ASX:WDS",
             "company": "WOODSIDE ENERGY GROUP LIMITED",
             "sector": "NatGas"
-        },
-        {
-            "symbol": "ASX:WEB",
-            "company": "WEB TRAVEL GROUP LIMITED",
-            "sector": "Travel, Leisure & Tourism"
         },
         {
             "symbol": "ASX:WES",
