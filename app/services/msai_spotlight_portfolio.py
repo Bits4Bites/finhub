@@ -78,10 +78,12 @@ async def ai_spotlight_portfolio(
     if not portfolio:
         return None
 
+    # Step 1: build {investor_profile} from investor_theme + existing holdings
+    currency = conv.country_to_currency_symbol(country) or "$"
     holdings_lines = []
     for pos in portfolio:
         market_value = pos.num_shares * pos.market_price
-        line = f"  - {pos.ticker}: {pos.num_shares} shares, market value ${market_value:.2f}"
+        line = f"- {pos.ticker}: {pos.num_shares} shares, avg price {currency}{pos.avg_price:.2f}, market value {currency}{market_value:.2f}"
         if pos.tags:
             line += f" ({pos.tags})"
         holdings_lines.append(line)
@@ -90,12 +92,15 @@ async def ai_spotlight_portfolio(
     country = conv.country_to_iso2(country)
     investor_profile = f"- Target market/country: {country}\n" + investor_theme + existing_holdings
 
+    # Step 2: use AI to build the ready-to-use prompt to spotlight the portfolio
     build_prompt = BUILD_PROMPT_TEMPLATE.format(investor_profile=investor_profile)
     build_result = await ai_helper.ai_exec_task("SPOTLIGHT_PORTFOLIO_BUILD_PROMPT", build_prompt, country)
     if build_result.is_error:
         return models_ai.AnalysisResult(llm_error=True, llm_error_msg=build_result.error_msg)
 
     analysis_prompt = build_result.completion
+
+    # Step 3: execute the prompt built from previous step
     exec_result = await ai_helper.ai_exec_task("SPOTLIGHT_PORTFOLIO_EXEC", analysis_prompt, country)
     if exec_result.is_error:
         return models_ai.AnalysisResult(llm_error=True, llm_error_msg=exec_result.error_msg)

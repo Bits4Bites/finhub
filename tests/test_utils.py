@@ -37,6 +37,28 @@ class TestCountryToIso2:
         assert conv.country_to_iso2("Vietnam") == "VN"
 
 
+class TestCountryToCurrencySymbol:
+    """Tests for conv.country_to_currency_symbol."""
+
+    def test_country_name(self):
+        assert conv.country_to_currency_symbol("Australia") == "$"
+
+    def test_country_code(self):
+        assert conv.country_to_currency_symbol("GB") == "£"
+
+    def test_non_latin_currency_symbol(self):
+        assert conv.country_to_currency_symbol("Vietnam") == "₫"
+
+    def test_euro_country(self):
+        assert conv.country_to_currency_symbol("Germany") == "€"
+
+    def test_none_returns_empty(self):
+        assert conv.country_to_currency_symbol(None) == ""
+
+    def test_unknown_country_returns_empty(self):
+        assert conv.country_to_currency_symbol("Atlantis") == ""
+
+
 class TestNormalizeExchangeCode:
     """Tests for conv.normalize_exchange_code."""
 

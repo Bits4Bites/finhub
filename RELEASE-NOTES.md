@@ -1,5 +1,16 @@
 # FinHub release notes
 
+## 2026-07-21 - v0.14.0
+
+### Added/Refactoring/Deprecation
+
+- Feat(utils): Add country-to-currency-symbol conversion.
+
+### Fixed/Improvements
+
+- Impr(ai): Include localized currency symbols and average prices in build/review/spotlight portfolio prompts.
+- Fix(ai): Default missing ASX listing price and capital values to zero.
+
 ## 2026-07-16 - v0.13.1
 
 ### Fixed/Improvements

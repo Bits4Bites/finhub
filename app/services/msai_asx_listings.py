@@ -48,6 +48,8 @@ async def _get_asx_new_listings() -> list[models_event.ListingEvent]:
         "- Skip entries with unconfirmed dates (TBC/TBA/TBD).\n"
         '- public_offer_close_date: extract from "Expected offer close date" and convert to YYYY-MM-DD. '
         'If no "Expected offer close date" info is found, set to null.\n'
+        "- price and capital: if the source value is null, blank, missing, unavailable, or cannot be parsed, "
+        "output numeric 0. Never output null for these fields.\n"
         "- Map principal_activities to ONE sector from: {SECTORS}\n"
         '  (normalize synonyms, e.g. "INFORMATION TECHNOLOGY" → TECHNOLOGY).\n'
         "\n"
@@ -69,8 +71,8 @@ async def _get_asx_new_listings() -> list[models_event.ListingEvent]:
         "]\n"
         "\n"
         "Notes:\n"
-        "- price: float, strip currency/text.\n"
-        "- capital: int, strip currency/commas.\n"
+        "- price: float, strip currency/text; use 0.0 when no value is available.\n"
+        "- capital: int, strip currency/commas; use 0 when no value is available.\n"
         "\n"
         "RAW INPUT DATA:\n"
         "{RAW_INPUT_DATA}\n"
