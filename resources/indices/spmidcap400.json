@@ -1,5 +1,5 @@
 {
-    "date": "2026-07-18",
+    "date": "2026-07-25",
     "data": [
         {
             "symbol": "NYSE:AA",
@@ -242,11 +242,6 @@
             "sector": "Utilities"
         },
         {
-            "symbol": "NYSE:BLD",
-            "company": "TopBuild Corp.",
-            "sector": "Consumer Discretionary"
-        },
-        {
             "symbol": "NASDAQ:BMRN",
             "company": "BioMarin Pharmaceutical",
             "sector": "Health Care"
@@ -270,6 +265,11 @@
             "symbol": "NASDAQ:BSY",
             "company": "Bentley Systems",
             "sector": "Information Technology"
+        },
+        {
+            "symbol": "NASDAQ:BTSG",
+            "company": "BrightSpring Health Services",
+            "sector": "Health Care"
         },
         {
             "symbol": "NYSE:BURL",
@@ -812,11 +812,6 @@
             "sector": "Materials"
         },
         {
-            "symbol": "NYSE:GTLS",
-            "company": "Chart Industries",
-            "sector": "Industrials"
-        },
-        {
             "symbol": "NYSE:GWRE",
             "company": "Guidewire Software",
             "sector": "Information Technology"
@@ -917,6 +912,11 @@
             "sector": "Information Technology"
         },
         {
+            "symbol": "NASDAQ:IESC",
+            "company": "IES Holdings",
+            "sector": "Industrials"
+        },
+        {
             "symbol": "NASDAQ:ILMN",
             "company": "Illumina, Inc.",
             "sector": "Health Care"
@@ -933,7 +933,7 @@
         },
         {
             "symbol": "NYSE:IRT",
-            "company": "IRT Living",
+            "company": "Independence Realty Trust",
             "sector": "Real Estate"
         },
         {
@@ -949,11 +949,6 @@
         {
             "symbol": "NYSE:JEF",
             "company": "Jefferies",
-            "sector": "Financials"
-        },
-        {
-            "symbol": "NYSE:JHG",
-            "company": "Janus Henderson",
             "sector": "Financials"
         },
         {
@@ -1005,6 +1000,11 @@
             "symbol": "NYSE:KRG",
             "company": "Kite Realty Group Trust",
             "sector": "Real Estate"
+        },
+        {
+            "symbol": "NASDAQ:KRYS",
+            "company": "Krystal Biotech",
+            "sector": "Health Care"
         },
         {
             "symbol": "NASDAQ:KTOS",
@@ -1112,6 +1112,11 @@
             "sector": "Industrials"
         },
         {
+            "symbol": "NYSE:MOH",
+            "company": "Molina Healthcare",
+            "sector": "Health Care"
+        },
+        {
             "symbol": "NASDAQ:MORN",
             "company": "Morningstar, Inc.",
             "sector": "Financials"
@@ -1210,11 +1215,6 @@
             "symbol": "NASDAQ:NOVT",
             "company": "Novanta",
             "sector": "Information Technology"
-        },
-        {
-            "symbol": "NYSE:NSA",
-            "company": "National Storage Affiliates Trust",
-            "sector": "Real Estate"
         },
         {
             "symbol": "NASDAQ:NTNX",
@@ -1742,11 +1742,6 @@
             "sector": "Utilities"
         },
         {
-            "symbol": "NYSE:TMHC",
-            "company": "Taylor Morrison",
-            "sector": "Consumer Discretionary"
-        },
-        {
             "symbol": "NYSE:TNL",
             "company": "Travel + Leisure Co.",
             "sector": "Consumer Discretionary"
@@ -1755,6 +1750,11 @@
             "symbol": "NYSE:TOL",
             "company": "Toll Brothers",
             "sector": "Consumer Discretionary"
+        },
+        {
+            "symbol": "NYSE:TOST",
+            "company": "Toast, Inc.",
+            "sector": "Financials"
         },
         {
             "symbol": "NYSE:TREX",
