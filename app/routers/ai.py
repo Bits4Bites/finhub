@@ -82,12 +82,12 @@ async def analyze_ticker(
 
 @router.post(
     "/build_portfolio",
-    response_model=schemas_ai.AnalyzePortfolioResponse,
+    response_model=schemas_ai.ReviewPortfolioResponse,
     response_model_exclude_none=True,
 )
 async def build_portfolio(
     req: schemas_ai.AnalyzePortfolioRequest = Body(description="The build portfolio request."),
-) -> schemas_ai.AnalyzePortfolioResponse:
+) -> schemas_ai.ReviewPortfolioResponse:
     """
     Builds a portfolio using AI assistance.
     """
@@ -97,8 +97,8 @@ async def build_portfolio(
         investor_theme=req.investor_theme,
     )
     if not result:
-        return schemas_ai.AnalyzePortfolioResponse(status=400, message="Invalid input or execution failed")
-    return schemas_ai.AnalyzePortfolioResponse(status=200, message="ok", data=result)
+        return schemas_ai.ReviewPortfolioResponse(status=400, message="Invalid input or execution failed")
+    return schemas_ai.ReviewPortfolioResponse(status=200, message="ok", data=result)
 
 
 @router.post(
@@ -124,12 +124,12 @@ async def spotlight_portfolio(
 
 @router.post(
     "/analyze_portfolio",
-    response_model=schemas_ai.AnalyzePortfolioResponse,
+    response_model=schemas_ai.ReviewPortfolioResponse,
     response_model_exclude_none=True,
 )
 async def analyze_portfolio(
     req: schemas_ai.AnalyzePortfolioRequest = Body(description="The analyze portfolio request."),
-) -> schemas_ai.AnalyzePortfolioResponse:
+) -> schemas_ai.ReviewPortfolioResponse:
     """
     Analyzes a portfolio using AI assistance: review and give recommendations if current holding positions is supplied;
     otherwise build a new portfolio.
@@ -139,6 +139,7 @@ async def analyze_portfolio(
             portfolio=req.current_allocation,
             country=req.country,
             investor_theme=req.investor_theme,
+            rebalance_plan=req.rebalance_plan,
         )
     else:
         result = await service_build_portfolio.ai_build_portfolio(
@@ -147,5 +148,5 @@ async def analyze_portfolio(
             investor_theme=req.investor_theme,
         )
     if not result:
-        return schemas_ai.AnalyzePortfolioResponse(status=400, message="Invalid input or execution failed")
-    return schemas_ai.AnalyzePortfolioResponse(status=200, message="ok", data=result)
+        return schemas_ai.ReviewPortfolioResponse(status=400, message="Invalid input or execution failed")
+    return schemas_ai.ReviewPortfolioResponse(status=200, message="ok", data=result)

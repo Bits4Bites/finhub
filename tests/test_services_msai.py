@@ -280,6 +280,135 @@ class TestAiReviewPortfolio:
         assert result is not None
         assert result.llm_error is False
         assert result.analysis == "Portfolio review: well diversified..."
+        assert result.rebalance_plan == ""
+        assert mock_ai_exec.call_count == 2
+
+    @patch("app.services.msai_review_portfolio.ai_helper.ai_exec_task", new_callable=AsyncMock)
+    def test_generates_rebalance_plan_with_low_cost_preparation_and_premium_execution(self, mock_ai_exec):
+        from app.services.msai_review_portfolio import ai_review_portfolio
+
+        mock_ai_exec.side_effect = [
+            LLMResponse(completion="Generated review prompt"),
+            LLMResponse(completion="Premium portfolio review"),
+            LLMResponse(completion="Low-cost review summary"),
+            LLMResponse(completion="Generated rebalance prompt"),
+            LLMResponse(completion="Premium rebalance plan"),
+        ]
+        portfolio = [
+            HoldingTicker(
+                ticker="CBA.AX",
+                num_shares=100,
+                avg_price=100.0,
+                market_price=120.0,
+                tags="core",
+            )
+        ]
+
+        result = asyncio.run(
+            ai_review_portfolio(
+                portfolio=portfolio,
+                country="AU",
+                rebalance_plan=True,
+            )
+        )
+
+        assert result is not None
+        assert result.llm_error is False
+        assert result.analysis == "Premium portfolio review"
+        assert result.rebalance_plan == "Premium rebalance plan"
+        assert [call.args[0] for call in mock_ai_exec.call_args_list] == [
+            "REVIEW_PORTFOLIO_BUILD_PROMPT",
+            "REVIEW_PORTFOLIO_EXEC",
+            "REVIEW_PORTFOLIO_SUMMARIZE",
+            "REVIEW_PORTFOLIO_REBALANCE_BUILD_PROMPT",
+            "REVIEW_PORTFOLIO_REBALANCE_EXEC",
+        ]
+        assert "Premium portfolio review" in mock_ai_exec.call_args_list[2].args[1]
+        assert "Premium portfolio review" in mock_ai_exec.call_args_list[3].args[1]
+        assert "Low-cost review summary" in mock_ai_exec.call_args_list[3].args[1]
+        rebalance_execution_prompt = mock_ai_exec.call_args_list[4].args[1]
+        assert rebalance_execution_prompt.startswith("Generated rebalance prompt")
+        assert "Premium portfolio review" in rebalance_execution_prompt
+        assert "Low-cost review summary" in rebalance_execution_prompt
+        assert "CBA.AX" in rebalance_execution_prompt
+
+    @patch("app.services.msai_review_portfolio.ai_helper.ai_exec_task", new_callable=AsyncMock)
+    def test_preserves_review_when_rebalance_summary_fails(self, mock_ai_exec):
+        from app.services.msai_review_portfolio import ai_review_portfolio
+
+        mock_ai_exec.side_effect = [
+            LLMResponse(completion="Generated review prompt"),
+            LLMResponse(completion="Premium portfolio review"),
+            LLMResponse(is_error=True, error_msg="Summary failed"),
+        ]
+        portfolio = [HoldingTicker(ticker="CBA.AX", num_shares=100, market_price=120.0)]
+
+        result = asyncio.run(
+            ai_review_portfolio(
+                portfolio=portfolio,
+                country="AU",
+                rebalance_plan=True,
+            )
+        )
+
+        assert result is not None
+        assert result.analysis == "Premium portfolio review"
+        assert result.rebalance_plan == ""
+        assert result.llm_error is True
+        assert result.llm_error_msg == "Summary failed"
+
+    @patch("app.services.msai_review_portfolio.ai_helper.ai_exec_task", new_callable=AsyncMock)
+    def test_preserves_review_when_rebalance_prompt_build_fails(self, mock_ai_exec):
+        from app.services.msai_review_portfolio import ai_review_portfolio
+
+        mock_ai_exec.side_effect = [
+            LLMResponse(completion="Generated review prompt"),
+            LLMResponse(completion="Premium portfolio review"),
+            LLMResponse(completion="Low-cost review summary"),
+            LLMResponse(is_error=True, error_msg="Rebalance prompt failed"),
+        ]
+        portfolio = [HoldingTicker(ticker="CBA.AX", num_shares=100, market_price=120.0)]
+
+        result = asyncio.run(
+            ai_review_portfolio(
+                portfolio=portfolio,
+                country="AU",
+                rebalance_plan=True,
+            )
+        )
+
+        assert result is not None
+        assert result.analysis == "Premium portfolio review"
+        assert result.rebalance_plan == ""
+        assert result.llm_error is True
+        assert result.llm_error_msg == "Rebalance prompt failed"
+
+    @patch("app.services.msai_review_portfolio.ai_helper.ai_exec_task", new_callable=AsyncMock)
+    def test_preserves_review_when_rebalance_execution_fails(self, mock_ai_exec):
+        from app.services.msai_review_portfolio import ai_review_portfolio
+
+        mock_ai_exec.side_effect = [
+            LLMResponse(completion="Generated review prompt"),
+            LLMResponse(completion="Premium portfolio review"),
+            LLMResponse(completion="Low-cost review summary"),
+            LLMResponse(completion="Generated rebalance prompt"),
+            LLMResponse(is_error=True, error_msg="Rebalance execution failed"),
+        ]
+        portfolio = [HoldingTicker(ticker="CBA.AX", num_shares=100, market_price=120.0)]
+
+        result = asyncio.run(
+            ai_review_portfolio(
+                portfolio=portfolio,
+                country="AU",
+                rebalance_plan=True,
+            )
+        )
+
+        assert result is not None
+        assert result.analysis == "Premium portfolio review"
+        assert result.rebalance_plan == ""
+        assert result.llm_error is True
+        assert result.llm_error_msg == "Rebalance execution failed"
 
     @patch("app.services.msai_review_portfolio.ai_helper.ai_exec_task", new_callable=AsyncMock)
     def test_includes_portfolio_positions_in_prompt(self, mock_ai_exec):

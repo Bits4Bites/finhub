@@ -25,3 +25,8 @@ class BaseAIResult(BaseModel):
 
 class AnalysisResult(BaseAIResult):
     analysis: str = ""
+
+
+class AnalyzePortfolioResult(BaseAIResult):
+    analysis: str = ""
+    rebalance_plan: str = ""
