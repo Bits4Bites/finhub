@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, patch
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.models.ai import AnalysisResult
+from app.models.ai import AnalysisResult, AnalyzePortfolioResult
 from app.models.event import DividendEventAnalysis
 
 client = TestClient(app)
@@ -146,7 +146,7 @@ class TestBuildPortfolio:
         new_callable=AsyncMock,
     )
     def test_success(self, mock_build):
-        mock_build.return_value = AnalysisResult(llm_error=False, analysis="Portfolio: ...")
+        mock_build.return_value = AnalyzePortfolioResult(llm_error=False, analysis="Portfolio: ...")
         resp = client.post("/ai/build_portfolio", json={"country": "AU"})
         assert resp.status_code == 200
         body = resp.json()
@@ -169,7 +169,7 @@ class TestBuildPortfolio:
         new_callable=AsyncMock,
     )
     def test_passes_existing_positions(self, mock_build):
-        mock_build.return_value = AnalysisResult(llm_error=False, analysis="result")
+        mock_build.return_value = AnalyzePortfolioResult(llm_error=False, analysis="result")
         positions = [{"ticker": "AAPL", "num_shares": 10, "market_price": 150.0}]
         resp = client.post(
             "/ai/build_portfolio",
@@ -219,24 +219,34 @@ class TestAnalyzePortfolio:
         new_callable=AsyncMock,
     )
     def test_with_positions_calls_review(self, mock_review):
-        mock_review.return_value = AnalysisResult(llm_error=False, analysis="Well diversified")
+        mock_review.return_value = AnalyzePortfolioResult(
+            llm_error=False,
+            analysis="Well diversified",
+            rebalance_plan="Sell 10 CBA.AX shares",
+        )
         positions = [{"ticker": "CBA.AX", "num_shares": 100, "market_price": 120.0}]
         resp = client.post(
             "/ai/analyze_portfolio",
-            json={"country": "AU", "current_allocation": positions},
+            json={
+                "country": "AU",
+                "current_allocation": positions,
+                "rebalance_plan": True,
+            },
         )
         assert resp.status_code == 200
         body = resp.json()
         assert body["status"] == 200
         assert body["data"]["analysis"] == "Well diversified"
+        assert body["data"]["rebalance_plan"] == "Sell 10 CBA.AX shares"
         mock_review.assert_called_once()
+        assert mock_review.call_args.kwargs["rebalance_plan"] is True
 
     @patch(
         "app.routers.ai.service_build_portfolio.ai_build_portfolio",
         new_callable=AsyncMock,
     )
     def test_without_positions_calls_build(self, mock_build):
-        mock_build.return_value = AnalysisResult(llm_error=False, analysis="New portfolio")
+        mock_build.return_value = AnalyzePortfolioResult(llm_error=False, analysis="New portfolio")
         resp = client.post(
             "/ai/analyze_portfolio",
             json={"country": "US", "current_allocation": []},
@@ -265,7 +275,7 @@ class TestAnalyzePortfolio:
         new_callable=AsyncMock,
     )
     def test_passes_investor_theme(self, mock_review):
-        mock_review.return_value = AnalysisResult(llm_error=False, analysis="result")
+        mock_review.return_value = AnalyzePortfolioResult(llm_error=False, analysis="result")
         positions = [{"ticker": "BHP.AX", "num_shares": 50, "market_price": 45.0}]
         resp = client.post(
             "/ai/analyze_portfolio",

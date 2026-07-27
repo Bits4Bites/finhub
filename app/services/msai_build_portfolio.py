@@ -71,7 +71,7 @@ async def ai_build_portfolio(
     existing_positions: list[models.HoldingTicker] | None = None,
     country: str,
     investor_theme: str = DEFAULT_INVESTOR_THEME,
-) -> models_ai.AnalysisResult | None:
+) -> models_ai.AnalyzePortfolioResult | None:
     """
     Build a portfolio using AI assistance.
 
@@ -81,7 +81,7 @@ async def ai_build_portfolio(
         investor_theme (optional, string): The investor's profile, goals, and preferences
 
     Returns:
-        models_ai.AnalysisResult | None: A models_ai.AnalysisResult object containing the analysis, or None.
+        models_ai.AnalyzePortfolioResult | None: A models_ai.AnalyzePortfolioResult object containing the analysis, or None.
     """
     # Step 1: build {investor_profile} from investor_theme + existing holdings
     existing_holdings = ""
@@ -108,13 +108,13 @@ async def ai_build_portfolio(
     )
     build_result = await ai_helper.ai_exec_task("BUILD_PORTFOLIO_BUILD_PROMPT", build_prompt, country)
     if build_result.is_error:
-        return models_ai.AnalysisResult(llm_error=True, llm_error_msg=build_result.error_msg)
+        return models_ai.AnalyzePortfolioResult(llm_error=True, llm_error_msg=build_result.error_msg)
 
     analysis_prompt = build_result.completion
 
     # Step 3: execute the prompt built from previous step
     exec_result = await ai_helper.ai_exec_task("BUILD_PORTFOLIO_EXEC", analysis_prompt, country)
     if exec_result.is_error:
-        return models_ai.AnalysisResult(llm_error=True, llm_error_msg=exec_result.error_msg)
+        return models_ai.AnalyzePortfolioResult(llm_error=True, llm_error_msg=exec_result.error_msg)
 
-    return models_ai.AnalysisResult(analysis=exec_result.completion)
+    return models_ai.AnalyzePortfolioResult(analysis=exec_result.completion)

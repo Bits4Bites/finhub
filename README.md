@@ -2,13 +2,13 @@
 [![Actions Status](https://github.com/Bits4Bites/finhub/workflows/ci/badge.svg)](https://github.com/Bits4Bites/finhub/actions)
 [![Release](https://img.shields.io/github/release/Bits4Bites/finhub.svg?style=flat-square)](RELEASE-NOTES.md)
 
-A developer-first financial API hub for stock market data, built for frontend apps and future AI features.
+A developer-first financial API hub for stock market data and AI-assisted investing workflows.
 
 ## ✨ Features
 
 - 📈 Stock quotes, detailed info, overviews, and historical data (via Yahoo Finance).
 - 📅 Upcoming market events: dividends, earnings, and new listings (AU, US, VN markets).
-- 🤖 AI-powered analysis: dividend events and portfolio evaluation.
+- 🤖 AI-powered ticker and dividend analysis, portfolio construction and review, risk spotlighting, and optional rebalance plans.
 - 🥇 Precious metals: gold/silver prices and historical data in multiple currencies.
 
 ## 🚀 Usage
@@ -120,7 +120,7 @@ If you find a bug or have a suggestion:
 
 1. **Search existing issues** to avoid duplicates
 2. **Create a new issue** on GitHub:
-   - Go to: https://github.com/Bits4Bytes/finhub/issues/new
+   - Go to: https://github.com/Bits4Bites/finhub/issues/new
    - Provide a clear title and description
    - Include steps to reproduce (for bugs)
    - Add relevant labels (bug, enhancement, question, etc.)
@@ -150,8 +150,8 @@ If you find a bug or have a suggestion:
    pytest
    
    # Run linters
-   flake8 ./app
-   black --check ./app
+   ruff check .
+   ruff format --check --diff .
    ```
 
 6. **Commit your changes** with clear, descriptive messages:

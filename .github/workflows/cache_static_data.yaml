@@ -9,6 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: write
   contents: write
   pull-requests: write
 
@@ -29,7 +30,7 @@ jobs:
       - name: Sync code to the latest version
         run: |
           git pull origin main
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: '>=3.12'
       - name: Install dependencies
@@ -84,3 +85,10 @@ jobs:
               maintainer_can_modify: true,
             });
             console.log("✅ Created PR: ", pr);
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: "ci.yaml",
+              ref: "${{ env.WORK_BRANCH }}",
+            });
+            console.log("✅ Dispatched CI for branch: ${{ env.WORK_BRANCH }}");
