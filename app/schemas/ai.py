@@ -44,11 +44,13 @@ class AnalyzePortfolioRequest(BaseRequest):
         current_allocation (list[models.HoldingTicker]): A list of current holding tickers in the portfolio.
         country (str): The country code of the portfolio (e.g. AU for Australia).
         investor_theme (str): (optional) The investor's theme/style, e.g. '- Risk tolerance: moderate\n- Time horizon: 5-10 years\n- Goal: capital growth\n- Rebalance frequency: semi-annual'.
+        rebalance_plan (bool): (optional) Whether to generate a rebalance plan after reviewing an existing portfolio.
     """
 
     current_allocation: list[models.HoldingTicker] = []
     country: str = ""
     investor_theme: str = services_ai.DEFAULT_INVESTOR_THEME
+    rebalance_plan: bool = False
 
 
 class AnalyzePortfolioResponse(AnalysisResponse):
@@ -57,6 +59,14 @@ class AnalyzePortfolioResponse(AnalysisResponse):
     """
 
     pass
+
+
+class ReviewPortfolioResponse(BaseResponse):
+    """
+    Response schema, containing the analysis result of a portfolio review.
+    """
+
+    data: models_ai.AnalyzePortfolioResult | None = None
 
 
 # ----------------------------------------------------------------------#

@@ -1,0 +1,83 @@
+# Automatically merge PRs created by Cache Static Data after CI passes.
+
+name: "automerge-cache-static-data"
+
+on:
+  workflow_run:
+    workflows: [ "ci" ]
+    types: [ "completed" ]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  Automerge:
+    runs-on: ubuntu-latest
+    if: |
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      startsWith(github.event.workflow_run.head_branch, 'cache-static-data-')
+    steps:
+      - name: Merge cache static data PR
+        uses: actions/github-script@v9
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const branch = context.payload.workflow_run.head_branch;
+            const validatedSha = context.payload.workflow_run.head_sha;
+            const payloadPulls = context.payload.workflow_run.pull_requests ?? [];
+
+            let pullNumbers = payloadPulls.map((pull) => pull.number);
+            if (pullNumbers.length === 0) {
+              const { data: pulls } = await github.rest.pulls.list({
+                owner,
+                repo,
+                state: "open",
+                base: "main",
+                head: `${owner}:${branch}`,
+              });
+              pullNumbers = pulls.map((pull) => pull.number);
+            }
+
+            for (const pullNumber of pullNumbers) {
+              const { data: pull } = await github.rest.pulls.get({
+                owner,
+                repo,
+                pull_number: pullNumber,
+              });
+
+              const isCachePull =
+                pull.state === "open" &&
+                !pull.draft &&
+                pull.user.login === "github-actions[bot]" &&
+                pull.title === "Cache Static Data" &&
+                pull.base.ref === "main" &&
+                pull.head.ref === branch &&
+                pull.head.sha === validatedSha &&
+                pull.head.repo?.full_name === `${owner}/${repo}`;
+
+              if (!isCachePull) {
+                continue;
+              }
+
+              const { data: result } = await github.rest.pulls.merge({
+                owner,
+                repo,
+                pull_number: pullNumber,
+                merge_method: "merge",
+                sha: validatedSha,
+              });
+
+              if (!result.merged) {
+                core.setFailed(`PR #${pullNumber} was not merged: ${result.message}`);
+                return;
+              }
+
+              console.log(`Merged cache static data PR #${pullNumber}.`);
+              return;
+            }
+
+            core.setFailed(`No open cache static data PR found for branch ${branch}.`);

@@ -98,7 +98,7 @@ Get historical daily price data for a ticker symbol.
 | Parameter | Type  | Required | Default | Description                                                              |
 |-----------|-------|----------|---------|--------------------------------------------------------------------------|
 | `symbol`  | path  | Yes      |         | Stock symbol in YF format (`CBA.AX`) or `EXCHANGE:CODE` (`NASDAQ:AAPL`). |
-| `days`    | query | No       | `100`   | Number of days of historical data to retrieve.                          |
+| `days`    | query | No       | `100`   | Number of days of historical data to retrieve.                           |
 
 **Example:**
 
@@ -296,11 +296,14 @@ curl -X POST 'http://localhost:8000/ai/build_portfolio' \
   -d '{"country": "AU", "investor_theme": "growth with moderate risk"}'
 ```
 
+Response `data.analysis` contains the premium AI's generated portfolio. This endpoint does not generate a rebalance plan.
+
 ---
 
 ### `POST /ai/spotlight_portfolio`
 
-Review a portfolio and highlight the top immediate risks and prioritized immediate actions using AI.
+Review a portfolio using AI, rank its top 2-4 risks as `Critical`, `High`, `Medium`, or `Low`, and provide specific,
+actionable responses for `Critical` and `High` risks.
 
 **Request Body (JSON):**
 
@@ -341,15 +344,17 @@ curl -X POST 'http://localhost:8000/ai/spotlight_portfolio' \
 
 ### `POST /ai/analyze_portfolio`
 
-Analyze or build a stock portfolio using AI. If `current_allocation` is provided, reviews the existing portfolio; otherwise builds a new one.
+Analyze or build a stock portfolio using AI. If `current_allocation` is provided, reviews the existing portfolio and can
+optionally generate a rebalance plan; otherwise builds a new one.
 
 **Request Body (JSON):**
 
-| Field                | Type              | Required | Description                                                               |
-|----------------------|-------------------|----------|---------------------------------------------------------------------------|
-| `current_allocation` | `HoldingTicker[]` | No       | List of current holdings. If empty, builds a new portfolio instead.       |
-| `country`            | `string`          | No       | Country context for the analysis (e.g. `AU`, `US`).                       |
-| `investor_theme`     | `string`          | No       | Investor theme/preference for the analysis. Defaults to a built-in theme. |
+| Field                | Type              | Required | Description                                                                                   |
+|----------------------|-------------------|----------|-----------------------------------------------------------------------------------------------|
+| `current_allocation` | `HoldingTicker[]` | No       | List of current holdings. If empty, builds a new portfolio instead.                           |
+| `country`            | `string`          | No       | Country context for the analysis (e.g. `AU`, `US`).                                           |
+| `investor_theme`     | `string`          | No       | Investor theme/preference for the analysis. Defaults to a built-in theme.                     |
+| `rebalance_plan`     | `boolean`         | No       | If `true`, generates a rebalance plan after reviewing existing holdings. Defaults to `false`. |
 
 Each `HoldingTicker` object:
 
@@ -374,9 +379,22 @@ curl -X POST 'http://localhost:8000/ai/analyze_portfolio' \
       {"ticker": "GOOGL", "num_shares": 20, "avg_price": 120.0, "market_price": 175.0, "target_allocation": 0.4}
     ],
     "country": "US",
-    "investor_theme": "growth with moderate risk"
+    "investor_theme": "growth with moderate risk",
+    "rebalance_plan": true
   }'
 ```
+
+**Response `data`:**
+
+| Field               | Type             | Description                                                                                         |
+|---------------------|------------------|-----------------------------------------------------------------------------------------------------|
+| `analysis`          | `string`         | Premium portfolio review, or the generated portfolio when `current_allocation` is empty.            |
+| `rebalance_plan`    | `string`         | Premium rebalance plan when requested for existing holdings; otherwise an empty string.             |
+| `llm_error`         | `boolean`        | Whether an LLM stage failed.                                                                        |
+| `llm_error_msg`     | `string \| null` | Error details when an LLM stage fails.                                                              |
+
+If rebalance generation fails after the portfolio review succeeds, `analysis` retains the completed review while
+`llm_error` and `llm_error_msg` describe the later failure.
 
 ---
 
