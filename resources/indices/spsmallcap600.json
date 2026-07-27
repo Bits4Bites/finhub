@@ -1,5 +1,5 @@
 {
-    "date": "2026-07-18",
+    "date": "2026-07-25",
     "data": [
         {
             "symbol": "NYSE:AAMI",
@@ -647,11 +647,6 @@
             "sector": "Utilities"
         },
         {
-            "symbol": "NASDAQ:CPRX",
-            "company": "Catalyst Pharmaceuticals Partners, Inc.",
-            "sector": "Health Care"
-        },
-        {
             "symbol": "NYSE:CRC",
             "company": "California Resources Corporation",
             "sector": "Energy"
@@ -827,6 +822,11 @@
             "sector": "Industrials"
         },
         {
+            "symbol": "NYSE:DMC",
+            "company": "Del Monte Corporation",
+            "sector": "Consumer Staples"
+        },
+        {
             "symbol": "NYSE:DNOW",
             "company": "NOW Inc",
             "sector": "Industrials"
@@ -843,7 +843,7 @@
         },
         {
             "symbol": "NYSE:DV",
-            "company": "DoubleVerify Holdings, Inc.",
+            "company": "DoubleVerify Holdings Inc.",
             "sector": "Communication Services"
         },
         {
@@ -1010,11 +1010,6 @@
             "symbol": "NYSE:FCPT",
             "company": "Four Corners Property Trust, Inc.",
             "sector": "Real Estate"
-        },
-        {
-            "symbol": "NYSE:DMC",
-            "company": "Del Monte Corporation",
-            "sector": "Consumer Staples"
         },
         {
             "symbol": "NASDAQ:FELE",
@@ -1535,6 +1530,11 @@
             "symbol": "NYSE:LEG",
             "company": "Leggett &amp; Platt",
             "sector": "Consumer Discretionary"
+        },
+        {
+            "symbol": "NYSE:LEU",
+            "company": "Centrus Energy Corp.",
+            "sector": "Energy"
         },
         {
             "symbol": "NASDAQ:LFST",
@@ -2083,7 +2083,7 @@
         },
         {
             "symbol": "NASDAQ:PGNY",
-            "company": "Progyny",
+            "company": "Progyny, Inc.",
             "sector": "Health Care"
         },
         {
@@ -2420,6 +2420,11 @@
             "symbol": "NASDAQ:SEDG",
             "company": "SolarEdge",
             "sector": "Information Technology"
+        },
+        {
+            "symbol": "NYSE:SEI",
+            "company": "Solaris Energy Infrastructure, Inc.",
+            "sector": "Energy"
         },
         {
             "symbol": "NASDAQ:SEZL",
@@ -2960,11 +2965,6 @@
             "symbol": "NASDAQ:WSFS",
             "company": "WSFS Financial Corporation",
             "sector": "Financials"
-        },
-        {
-            "symbol": "NYSE:WSR",
-            "company": "Whitestone REIT",
-            "sector": "Real Estate"
         },
         {
             "symbol": "NASDAQ:WT",
