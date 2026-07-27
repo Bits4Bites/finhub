@@ -1,5 +1,11 @@
 # FinHub release notes
 
+## 2026-07-27 - v0.14.1
+
+### Added/Refactoring/Deprecation
+
+- Feat(review-portfolio): Add optional parameter to build rebalance plans.
+
 ## 2026-07-21 - v0.14.0
 
 ### Added/Refactoring/Deprecation
