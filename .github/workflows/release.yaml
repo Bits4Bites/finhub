@@ -14,6 +14,9 @@ env:
 
 jobs:
   CallCI:
+    permissions:
+      contents: read
+      actions: write
     uses: ./.github/workflows/ci.yaml
     secrets: inherit
 
