@@ -1,5 +1,6 @@
 # This file has been cleaned up post-releasing version 0.14.2.
 # Generate its content quickly using the following command:
 #   git log origin..HEAD | grep "^\s" > .semrelease/this_release
-#!VERSION=0.14.2
+#!VERSION=0.14.3
 - impr(review-portfolio): Generate portfolio rebalance plans only when a major rebalance is needed.
+- feat: Add a public endpoint for cached market index data.

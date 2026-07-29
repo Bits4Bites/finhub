@@ -2,7 +2,7 @@
 
 Base URL: `http://localhost:8000`
 
-All responses follow a standard envelope format:
+Most responses follow a standard envelope format:
 
 ```json
 {
@@ -12,12 +12,14 @@ All responses follow a standard envelope format:
 }
 ```
 
+`GET /market/index/{index_id}` is the exception: it returns the cached static JSON file directly.
+
 ---
 
 ## Authentication
 
 All endpoints under `/stocks`, `/events`, `/ai`, and `/toz` are protected by an API key. The
-root (`/`) and health (`/health`) endpoints are open.
+root (`/`), health (`/health`), and market (`/market`) endpoints are open.
 
 The server-side key is configured via the `FINHUB_API_KEY` environment variable (or the
 `app_config.env` file). When it is left empty, authentication is disabled and all requests are
@@ -38,6 +40,41 @@ is case-insensitive). A missing or incorrect key returns `401`:
 ```bash
 curl -H 'X-API-Key: your-api-key' 'http://localhost:8000/stocks/quotes?symbols=AAPL'
 ```
+
+---
+
+## Market
+
+### `GET /market/index/{index_id}`
+
+Get the cached static JSON file for a market index. This public endpoint does not require an API
+key. The index ID is case-insensitive and must be one of the hardcoded supported values.
+
+| Parameter  | Type | Required | Description                                                                                                                             |
+|------------|------|----------|-----------------------------------------------------------------------------------------------------------------------------------------|
+| `index_id` | path | Yes      | Supported values: `ASX20`, `ASX50`, `ASX100`, `ASX200`, `ASX300`, `NASDAQ100`, `SP500`, `SP400`, `SP600`, `HNX30`, `VN30`, and `VN100`. |
+
+**Example:**
+
+```bash
+curl 'http://localhost:8000/market/index/SP500'
+```
+
+```json
+{
+  "date": "2026-07-28",
+  "data": [
+    {
+      "symbol": "NASDAQ:AAPL",
+      "company": "Apple Inc.",
+      "sector": "Information Technology"
+    }
+  ]
+}
+```
+
+> The response is served from the in-memory static-data cache and may not reflect real-time index
+> constituents. Unsupported or unavailable IDs return HTTP `404`.
 
 ---
 
