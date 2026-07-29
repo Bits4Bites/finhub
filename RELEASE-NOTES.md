@@ -1,5 +1,12 @@
 # FinHub release notes
 
+## 2026-07-29 - v0.14.2
+
+### Fixed/Improvements
+
+- Patch(build-portfolio): minor prompt change.
+- Patch(review-portfolio): simplify prompt to build and execute rebalance plan.
+
 ## 2026-07-27 - v0.14.1
 
 ### Added/Refactoring/Deprecation
