@@ -345,16 +345,16 @@ curl -X POST 'http://localhost:8000/ai/spotlight_portfolio' \
 ### `POST /ai/analyze_portfolio`
 
 Analyze or build a stock portfolio using AI. If `current_allocation` is provided, reviews the existing portfolio and can
-optionally generate a rebalance plan; otherwise builds a new one.
+optionally assess whether a major rebalance is needed, generating a plan only when it is; otherwise builds a new one.
 
 **Request Body (JSON):**
 
-| Field                | Type              | Required | Description                                                                                   |
-|----------------------|-------------------|----------|-----------------------------------------------------------------------------------------------|
-| `current_allocation` | `HoldingTicker[]` | No       | List of current holdings. If empty, builds a new portfolio instead.                           |
-| `country`            | `string`          | No       | Country context for the analysis (e.g. `AU`, `US`).                                           |
-| `investor_theme`     | `string`          | No       | Investor theme/preference for the analysis. Defaults to a built-in theme.                     |
-| `rebalance_plan`     | `boolean`         | No       | If `true`, generates a rebalance plan after reviewing existing holdings. Defaults to `false`. |
+| Field                | Type              | Required | Description                                                                                                                      |
+|----------------------|-------------------|----------|----------------------------------------------------------------------------------------------------------------------------------|
+| `current_allocation` | `HoldingTicker[]` | No       | List of current holdings. If empty, builds a new portfolio instead.                                                              |
+| `country`            | `string`          | No       | Country context for the analysis (e.g. `AU`, `US`).                                                                              |
+| `investor_theme`     | `string`          | No       | Investor theme/preference for the analysis. Defaults to a built-in theme.                                                        |
+| `rebalance_plan`     | `boolean`         | No       | If `true`, assesses whether existing holdings need a major rebalance and generates a plan only when needed. Defaults to `false`. |
 
 Each `HoldingTicker` object:
 
@@ -386,15 +386,15 @@ curl -X POST 'http://localhost:8000/ai/analyze_portfolio' \
 
 **Response `data`:**
 
-| Field               | Type             | Description                                                                                         |
-|---------------------|------------------|-----------------------------------------------------------------------------------------------------|
-| `analysis`          | `string`         | Premium portfolio review, or the generated portfolio when `current_allocation` is empty.            |
-| `rebalance_plan`    | `string`         | Premium rebalance plan when requested for existing holdings; otherwise an empty string.             |
-| `llm_error`         | `boolean`        | Whether an LLM stage failed.                                                                        |
-| `llm_error_msg`     | `string \| null` | Error details when an LLM stage fails.                                                              |
+| Field            | Type             | Description                                                                                                 |
+|------------------|------------------|-------------------------------------------------------------------------------------------------------------|
+| `analysis`       | `string`         | Premium portfolio review, or the generated portfolio when `current_allocation` is empty.                    |
+| `rebalance_plan` | `string`         | Premium rebalance plan when needed; `"No rebalance needed"` when assessed but unnecessary; otherwise empty. |
+| `llm_error`      | `boolean`        | Whether an LLM stage failed.                                                                                |
+| `llm_error_msg`  | `string \| null` | Error details when an LLM stage fails.                                                                      |
 
-If rebalance generation fails after the portfolio review succeeds, `analysis` retains the completed review while
-`llm_error` and `llm_error_msg` describe the later failure.
+If the rebalance decision or any later rebalance stage fails after the portfolio review succeeds, `analysis` retains
+the completed review while `llm_error` and `llm_error_msg` describe the later failure.
 
 ---
 

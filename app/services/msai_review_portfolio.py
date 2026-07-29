@@ -1,3 +1,5 @@
+import re
+
 from ..models import ai as models_ai
 from ..models import finhub as models
 from ..services import ai_helper
@@ -6,6 +8,8 @@ from ..utils import conv
 DEFAULT_INVESTOR_THEME = (
     "- Risk tolerance: moderate\n- Time horizon: 3-5 years\n- Goal: capital growth\n- Rebalance frequency: semi-annual"
 )
+
+NO_REBALANCE_NEEDED = "No rebalance needed"
 
 BUILD_PROMPT_TEMPLATE = (
     "You are an expert financial advisor and prompt engineer.\n"
@@ -36,6 +40,10 @@ BUILD_PROMPT_TEMPLATE = (
     "4. Propose a revised portfolio with concrete allocations - specific tickers with percentages and estimated number of shares\n"
     "5. Justify every recommendation with data (valuation, fundamentals, portfolio fit, growth profile, role in the portfolio)\n"
     "6. Account for relevant tax implications of any suggested exits\n"
+    "7. Decide whether the portfolio requires a major rebalance. A major rebalance means material structural changes "
+    "such as multiple trades, meaningful allocation shifts, urgent exits/replacements, or changes needed to correct "
+    "serious concentration, diversification, or investor-profile misalignment. Routine monitoring, small adjustments, "
+    "or normal periodic maintenance do not count as a major rebalance.\n"
     "\n"
     "## The prompt must instruct the premium model to cover:\n"
     "\n"
@@ -87,6 +95,9 @@ BUILD_PROMPT_TEMPLATE = (
     "The prompt must be self-contained, the premium model will receive it with no other context.\n"
     "The prompt must instruct the premium model to format the response in Markdown, "
     "and use the hyphen character (-) instead of em-dash (\u2014) throughout.\n"
+    "The prompt must instruct the premium model to make the final non-empty line exactly "
+    "REBALANCE_NEEDED: YES when a major rebalance is needed, or exactly REBALANCE_NEEDED: NO otherwise. "
+    "The flag must be plain text with no Markdown formatting.\n"
     "The premium model is NOT to include any suggested follow-up questions."
 )
 
@@ -104,7 +115,7 @@ SUMMARIZE_REVIEW_PROMPT_TEMPLATE = (
     "## Your instructions\n"
     "- Summarize only the supplied review. Do NOT research, perform new analysis, change recommendations, or build a "
     "rebalance plan.\n"
-    "- Preserve every ticker, holding quantity, cost basis, market value, HOLD/TRIM/EXIT recommendation, target "
+    "- Preserve every ticker, holding quantity, cost basis, market value, ADD/HOLD/TRIM/EXIT recommendation, target "
     "allocation, proposed addition, urgency, rationale, tax consideration, execution constraint, uncertainty, and "
     "caveat stated in the review.\n"
     "- Clearly distinguish facts and recommendations from assumptions or missing information.\n"
@@ -160,6 +171,23 @@ BUILD_REBALANCE_PROMPT_TEMPLATE = (
 )
 
 
+def _extract_rebalance_decision(portfolio_review: str) -> tuple[bool | None, str]:
+    lines = [line.strip() for line in portfolio_review.splitlines() if line.strip()]
+    if not lines:
+        return None, portfolio_review
+
+    flag_match = re.fullmatch(
+        r"(?:[`*_]{1,2})?REBALANCE_NEEDED\s*:\s*(YES|NO)(?:[`*_]{1,2})?[.!]?",
+        lines[-1],
+        flags=re.IGNORECASE,
+    )
+    if not flag_match:
+        return None, portfolio_review
+
+    review_without_flag = portfolio_review.rsplit(lines[-1], 1)[0].rstrip()
+    return flag_match.group(1).upper() == "YES", review_without_flag
+
+
 async def ai_review_portfolio(
     *,
     portfolio: list[models.HoldingTicker],
@@ -210,9 +238,21 @@ async def ai_review_portfolio(
     if exec_result.is_error:
         return models_ai.AnalyzePortfolioResult(llm_error=True, llm_error_msg=exec_result.error_msg)
 
-    portfolio_review = exec_result.completion
+    rebalance_needed, portfolio_review = _extract_rebalance_decision(exec_result.completion)
     if not rebalance_plan:
         return models_ai.AnalyzePortfolioResult(analysis=portfolio_review)
+
+    if rebalance_needed is None:
+        return models_ai.AnalyzePortfolioResult(
+            analysis=portfolio_review,
+            llm_error=True,
+            llm_error_msg="Premium portfolio review did not include a valid final REBALANCE_NEEDED flag.",
+        )
+    if not rebalance_needed:
+        return models_ai.AnalyzePortfolioResult(
+            analysis=portfolio_review,
+            rebalance_plan=NO_REBALANCE_NEEDED,
+        )
 
     # Step 4: use the low-cost model to summarize the premium review without adding new analysis
     summarize_prompt = SUMMARIZE_REVIEW_PROMPT_TEMPLATE.format(

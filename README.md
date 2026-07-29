@@ -8,7 +8,7 @@ A developer-first financial API hub for stock market data and AI-assisted invest
 
 - 📈 Stock quotes, detailed info, overviews, and historical data (via Yahoo Finance).
 - 📅 Upcoming market events: dividends, earnings, and new listings (AU, US, VN markets).
-- 🤖 AI-powered ticker and dividend analysis, portfolio construction and review, risk spotlighting, and optional rebalance plans.
+- 🤖 AI-powered ticker and dividend analysis, portfolio construction and review, risk spotlighting, and need-based rebalance plans.
 - 🥇 Precious metals: gold/silver prices and historical data in multiple currencies.
 
 ## 🚀 Usage
