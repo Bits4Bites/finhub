@@ -53,7 +53,7 @@ BUILD_PROMPT_TEMPLATE = (
     "- Suggested rebalancing frequency\n"
     "- A summary table listing every position, with at minimum these columns: ticker, approximate "
     "allocation %, approximate number of shares, approximate cost, and the ticker's role in the portfolio "
-    "(e.g. Yield Booster, Defensive, Growth, Core, Hedge)\n"
+    "(e.g. Yield Booster, Defensive, Growth, Core, Hedge) - start with an emoji for visual reason\n"
     "- A clear next-steps section for the investor to act on the recommendations\n"
     "{existing_holdings_instruction}"
     "\n"

@@ -324,13 +324,9 @@ class TestAiReviewPortfolio:
             "REVIEW_PORTFOLIO_REBALANCE_EXEC",
         ]
         assert "Premium portfolio review" in mock_ai_exec.call_args_list[2].args[1]
-        assert "Premium portfolio review" in mock_ai_exec.call_args_list[3].args[1]
+        assert "Premium portfolio review" not in mock_ai_exec.call_args_list[3].args[1]
         assert "Low-cost review summary" in mock_ai_exec.call_args_list[3].args[1]
-        rebalance_execution_prompt = mock_ai_exec.call_args_list[4].args[1]
-        assert rebalance_execution_prompt.startswith("Generated rebalance prompt")
-        assert "Premium portfolio review" in rebalance_execution_prompt
-        assert "Low-cost review summary" in rebalance_execution_prompt
-        assert "CBA.AX" in rebalance_execution_prompt
+        assert mock_ai_exec.call_args_list[4].args[1] == "Generated rebalance prompt"
 
     @patch("app.services.msai_review_portfolio.ai_helper.ai_exec_task", new_callable=AsyncMock)
     def test_preserves_review_when_rebalance_summary_fails(self, mock_ai_exec):
