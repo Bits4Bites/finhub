@@ -269,7 +269,7 @@ class TestAiReviewPortfolio:
 
         mock_ai_exec.side_effect = [
             LLMResponse(completion="Generated prompt"),
-            LLMResponse(completion="Portfolio review: well diversified..."),
+            LLMResponse(completion="Portfolio review: well diversified...\n\nREBALANCE_NEEDED: NO"),
         ]
         portfolio = [
             HoldingTicker(ticker="CBA.AX", num_shares=100, market_price=120.0),
@@ -289,7 +289,7 @@ class TestAiReviewPortfolio:
 
         mock_ai_exec.side_effect = [
             LLMResponse(completion="Generated review prompt"),
-            LLMResponse(completion="Premium portfolio review"),
+            LLMResponse(completion="Premium portfolio review\n\nREBALANCE_NEEDED: YES"),
             LLMResponse(completion="Low-cost review summary"),
             LLMResponse(completion="Generated rebalance prompt"),
             LLMResponse(completion="Premium rebalance plan"),
@@ -324,9 +324,86 @@ class TestAiReviewPortfolio:
             "REVIEW_PORTFOLIO_REBALANCE_EXEC",
         ]
         assert "Premium portfolio review" in mock_ai_exec.call_args_list[2].args[1]
+        assert "REBALANCE_NEEDED" not in mock_ai_exec.call_args_list[2].args[1]
         assert "Premium portfolio review" not in mock_ai_exec.call_args_list[3].args[1]
         assert "Low-cost review summary" in mock_ai_exec.call_args_list[3].args[1]
         assert mock_ai_exec.call_args_list[4].args[1] == "Generated rebalance prompt"
+
+    @patch("app.services.msai_review_portfolio.ai_helper.ai_exec_task", new_callable=AsyncMock)
+    def test_skips_rebalance_pipeline_when_major_rebalance_is_not_needed(self, mock_ai_exec):
+        from app.services.msai_review_portfolio import ai_review_portfolio
+
+        portfolio_review = "Portfolio is healthy. Continue monitoring.\n\nREBALANCE_NEEDED: NO"
+        mock_ai_exec.side_effect = [
+            LLMResponse(completion="Generated review prompt"),
+            LLMResponse(completion=portfolio_review),
+        ]
+        portfolio = [HoldingTicker(ticker="CBA.AX", num_shares=100, market_price=120.0)]
+
+        result = asyncio.run(
+            ai_review_portfolio(
+                portfolio=portfolio,
+                country="AU",
+                rebalance_plan=True,
+            )
+        )
+
+        assert result is not None
+        assert result.llm_error is False
+        assert result.analysis == "Portfolio is healthy. Continue monitoring."
+        assert result.rebalance_plan == "No rebalance needed"
+        assert mock_ai_exec.call_count == 2
+        assert "REBALANCE_NEEDED: YES" in mock_ai_exec.call_args_list[0].args[1]
+        assert "REBALANCE_NEEDED: NO" in mock_ai_exec.call_args_list[0].args[1]
+
+    @patch("app.services.msai_review_portfolio.ai_helper.ai_exec_task", new_callable=AsyncMock)
+    def test_accepts_markdown_wrapped_rebalance_flag(self, mock_ai_exec):
+        from app.services.msai_review_portfolio import ai_review_portfolio
+
+        mock_ai_exec.side_effect = [
+            LLMResponse(completion="Generated review prompt"),
+            LLMResponse(completion="Portfolio is healthy.\n\n**REBALANCE_NEEDED: NO**"),
+        ]
+        portfolio = [HoldingTicker(ticker="CBA.AX", num_shares=100, market_price=120.0)]
+
+        result = asyncio.run(
+            ai_review_portfolio(
+                portfolio=portfolio,
+                country="AU",
+                rebalance_plan=True,
+            )
+        )
+
+        assert result is not None
+        assert result.analysis == "Portfolio is healthy."
+        assert result.rebalance_plan == "No rebalance needed"
+        assert result.llm_error is False
+        assert mock_ai_exec.call_count == 2
+
+    @patch("app.services.msai_review_portfolio.ai_helper.ai_exec_task", new_callable=AsyncMock)
+    def test_returns_error_when_rebalance_flag_is_missing(self, mock_ai_exec):
+        from app.services.msai_review_portfolio import ai_review_portfolio
+
+        mock_ai_exec.side_effect = [
+            LLMResponse(completion="Generated review prompt"),
+            LLMResponse(completion="Premium portfolio review without the required flag"),
+        ]
+        portfolio = [HoldingTicker(ticker="CBA.AX", num_shares=100, market_price=120.0)]
+
+        result = asyncio.run(
+            ai_review_portfolio(
+                portfolio=portfolio,
+                country="AU",
+                rebalance_plan=True,
+            )
+        )
+
+        assert result is not None
+        assert result.analysis == "Premium portfolio review without the required flag"
+        assert result.rebalance_plan == ""
+        assert result.llm_error is True
+        assert "REBALANCE_NEEDED" in result.llm_error_msg
+        assert mock_ai_exec.call_count == 2
 
     @patch("app.services.msai_review_portfolio.ai_helper.ai_exec_task", new_callable=AsyncMock)
     def test_preserves_review_when_rebalance_summary_fails(self, mock_ai_exec):
@@ -334,7 +411,7 @@ class TestAiReviewPortfolio:
 
         mock_ai_exec.side_effect = [
             LLMResponse(completion="Generated review prompt"),
-            LLMResponse(completion="Premium portfolio review"),
+            LLMResponse(completion="Premium portfolio review\n\nREBALANCE_NEEDED: YES"),
             LLMResponse(is_error=True, error_msg="Summary failed"),
         ]
         portfolio = [HoldingTicker(ticker="CBA.AX", num_shares=100, market_price=120.0)]
@@ -359,7 +436,7 @@ class TestAiReviewPortfolio:
 
         mock_ai_exec.side_effect = [
             LLMResponse(completion="Generated review prompt"),
-            LLMResponse(completion="Premium portfolio review"),
+            LLMResponse(completion="Premium portfolio review\n\nREBALANCE_NEEDED: YES"),
             LLMResponse(completion="Low-cost review summary"),
             LLMResponse(is_error=True, error_msg="Rebalance prompt failed"),
         ]
@@ -385,7 +462,7 @@ class TestAiReviewPortfolio:
 
         mock_ai_exec.side_effect = [
             LLMResponse(completion="Generated review prompt"),
-            LLMResponse(completion="Premium portfolio review"),
+            LLMResponse(completion="Premium portfolio review\n\nREBALANCE_NEEDED: YES"),
             LLMResponse(completion="Low-cost review summary"),
             LLMResponse(completion="Generated rebalance prompt"),
             LLMResponse(is_error=True, error_msg="Rebalance execution failed"),

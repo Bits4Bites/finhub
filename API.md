@@ -2,7 +2,7 @@
 
 Base URL: `http://localhost:8000`
 
-All responses follow a standard envelope format:
+Most responses follow a standard envelope format:
 
 ```json
 {
@@ -12,12 +12,14 @@ All responses follow a standard envelope format:
 }
 ```
 
+`GET /market/index/{index_id}` is the exception: it returns the cached static JSON file directly.
+
 ---
 
 ## Authentication
 
 All endpoints under `/stocks`, `/events`, `/ai`, and `/toz` are protected by an API key. The
-root (`/`) and health (`/health`) endpoints are open.
+root (`/`), health (`/health`), and market (`/market`) endpoints are open.
 
 The server-side key is configured via the `FINHUB_API_KEY` environment variable (or the
 `app_config.env` file). When it is left empty, authentication is disabled and all requests are
@@ -38,6 +40,41 @@ is case-insensitive). A missing or incorrect key returns `401`:
 ```bash
 curl -H 'X-API-Key: your-api-key' 'http://localhost:8000/stocks/quotes?symbols=AAPL'
 ```
+
+---
+
+## Market
+
+### `GET /market/index/{index_id}`
+
+Get the cached static JSON file for a market index. This public endpoint does not require an API
+key. The index ID is case-insensitive and must be one of the hardcoded supported values.
+
+| Parameter  | Type | Required | Description                                                                                                                             |
+|------------|------|----------|-----------------------------------------------------------------------------------------------------------------------------------------|
+| `index_id` | path | Yes      | Supported values: `ASX20`, `ASX50`, `ASX100`, `ASX200`, `ASX300`, `NASDAQ100`, `SP500`, `SP400`, `SP600`, `HNX30`, `VN30`, and `VN100`. |
+
+**Example:**
+
+```bash
+curl 'http://localhost:8000/market/index/SP500'
+```
+
+```json
+{
+  "date": "2026-07-28",
+  "data": [
+    {
+      "symbol": "NASDAQ:AAPL",
+      "company": "Apple Inc.",
+      "sector": "Information Technology"
+    }
+  ]
+}
+```
+
+> The response is served from the in-memory static-data cache and may not reflect real-time index
+> constituents. Unsupported or unavailable IDs return HTTP `404`.
 
 ---
 
@@ -345,16 +382,16 @@ curl -X POST 'http://localhost:8000/ai/spotlight_portfolio' \
 ### `POST /ai/analyze_portfolio`
 
 Analyze or build a stock portfolio using AI. If `current_allocation` is provided, reviews the existing portfolio and can
-optionally generate a rebalance plan; otherwise builds a new one.
+optionally assess whether a major rebalance is needed, generating a plan only when it is; otherwise builds a new one.
 
 **Request Body (JSON):**
 
-| Field                | Type              | Required | Description                                                                                   |
-|----------------------|-------------------|----------|-----------------------------------------------------------------------------------------------|
-| `current_allocation` | `HoldingTicker[]` | No       | List of current holdings. If empty, builds a new portfolio instead.                           |
-| `country`            | `string`          | No       | Country context for the analysis (e.g. `AU`, `US`).                                           |
-| `investor_theme`     | `string`          | No       | Investor theme/preference for the analysis. Defaults to a built-in theme.                     |
-| `rebalance_plan`     | `boolean`         | No       | If `true`, generates a rebalance plan after reviewing existing holdings. Defaults to `false`. |
+| Field                | Type              | Required | Description                                                                                                                      |
+|----------------------|-------------------|----------|----------------------------------------------------------------------------------------------------------------------------------|
+| `current_allocation` | `HoldingTicker[]` | No       | List of current holdings. If empty, builds a new portfolio instead.                                                              |
+| `country`            | `string`          | No       | Country context for the analysis (e.g. `AU`, `US`).                                                                              |
+| `investor_theme`     | `string`          | No       | Investor theme/preference for the analysis. Defaults to a built-in theme.                                                        |
+| `rebalance_plan`     | `boolean`         | No       | If `true`, assesses whether existing holdings need a major rebalance and generates a plan only when needed. Defaults to `false`. |
 
 Each `HoldingTicker` object:
 
@@ -386,15 +423,15 @@ curl -X POST 'http://localhost:8000/ai/analyze_portfolio' \
 
 **Response `data`:**
 
-| Field               | Type             | Description                                                                                         |
-|---------------------|------------------|-----------------------------------------------------------------------------------------------------|
-| `analysis`          | `string`         | Premium portfolio review, or the generated portfolio when `current_allocation` is empty.            |
-| `rebalance_plan`    | `string`         | Premium rebalance plan when requested for existing holdings; otherwise an empty string.             |
-| `llm_error`         | `boolean`        | Whether an LLM stage failed.                                                                        |
-| `llm_error_msg`     | `string \| null` | Error details when an LLM stage fails.                                                              |
+| Field            | Type             | Description                                                                                                 |
+|------------------|------------------|-------------------------------------------------------------------------------------------------------------|
+| `analysis`       | `string`         | Premium portfolio review, or the generated portfolio when `current_allocation` is empty.                    |
+| `rebalance_plan` | `string`         | Premium rebalance plan when needed; `"No rebalance needed"` when assessed but unnecessary; otherwise empty. |
+| `llm_error`      | `boolean`        | Whether an LLM stage failed.                                                                                |
+| `llm_error_msg`  | `string \| null` | Error details when an LLM stage fails.                                                                      |
 
-If rebalance generation fails after the portfolio review succeeds, `analysis` retains the completed review while
-`llm_error` and `llm_error_msg` describe the later failure.
+If the rebalance decision or any later rebalance stage fails after the portfolio review succeeds, `analysis` retains
+the completed review while `llm_error` and `llm_error_msg` describe the later failure.
 
 ---
 
