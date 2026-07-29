@@ -8,7 +8,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from . import config
-from .routers import ai, events, stocks, toz
+from .routers import ai, events, market, stocks, toz
 from .utils import auth
 from .utils import scheduler as scheduler_utils
 
@@ -130,6 +130,7 @@ app.include_router(ai.router, dependencies=[Depends(auth.verify_api_key)])
 app.include_router(events.router, dependencies=[Depends(auth.verify_api_key)])
 app.include_router(stocks.router, dependencies=[Depends(auth.verify_api_key)])
 app.include_router(toz.router, dependencies=[Depends(auth.verify_api_key)])
+app.include_router(market.router)
 
 
 @app.get("/", tags=["root"])

@@ -70,9 +70,7 @@ for task_name, llm_cfg in list(config.settings_llm_task.tasks.items()):
 def read_file_as_single_string(file_path) -> str:
     try:
         with open(file_path, encoding="utf-8") as file:
-            lines = [line.rstrip() for line in file]
-            combined_text = "\n".join(lines)
-        return combined_text
+            return file.read()
     except FileNotFoundError:
         logging.error("Error: File '%s' not found.", file_path)
     except PermissionError:
@@ -101,9 +99,10 @@ for index, from_file in indices_files:
     logging.info("Loading index '%s' data from file '%s'...", index, from_file)
     json_content = read_file_as_single_string(from_file)
     if json_content:
-        config.market_indices.indices[index.upper()] = {}
         # parse json data as a list of objects
         index_data = json.loads(json_content)
+        config.market_indices.raw_json[index.upper()] = json_content
+        config.market_indices.indices[index.upper()] = {}
         for entry in index_data["data"]:
             symbol = entry["symbol"].upper()
             company_info = config.CompanyBriefInfo(

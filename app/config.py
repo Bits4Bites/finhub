@@ -242,6 +242,7 @@ class CompanyBriefInfo(BaseSettings):
 class MarketIndices(BaseSettings):
     # {index -> {symbol -> CompanyBriefInfo}}
     indices: dict[str, dict[str, CompanyBriefInfo]] = Field(default={})
+    raw_json: dict[str, str] = Field(default={})
     model_config = SettingsConfigDict(
         nested_model_default_partial_update=True,
     )
