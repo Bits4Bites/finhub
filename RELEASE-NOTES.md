@@ -1,5 +1,15 @@
 # FinHub release notes
 
+## 2026-07-29 - v0.14.3
+
+### Added/Refactoring/Deprecation
+
+- Feat: Add a public endpoint for cached market index data.
+
+### Fixed/Improvements
+
+- Impr(review-portfolio): Generate portfolio rebalance plans only when a major rebalance is needed.
+
 ## 2026-07-29 - v0.14.2
 
 ### Fixed/Improvements
