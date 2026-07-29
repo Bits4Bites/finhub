@@ -1,110 +1,110 @@
 {
-    "date": "2026-07-25",
+    "date": "2026-07-28",
     "data": [
         {
             "symbol": "HNX:KSF",
             "company": "Sunshine Group JSC",
-            "market_cap": 69280000000000
+            "market_cap": 70000000000000
         },
         {
             "symbol": "HNX:THD",
             "company": "Thaiholdings JSC",
-            "market_cap": 47350000000000
+            "market_cap": 47740000000000
         },
         {
             "symbol": "HNX:KSV",
             "company": "Vinacomin - Minerals Holding Corporation",
-            "market_cap": 28200000000000
+            "market_cap": 28140000000000
         },
         {
             "symbol": "HNX:NVB",
             "company": "National Citizen Commercial Joint Stock Bank",
-            "market_cap": 21560000000000
+            "market_cap": 21360000000000
         },
         {
             "symbol": "HNX:MBS",
             "company": "MB Securities JSC",
-            "market_cap": 18620000000000
+            "market_cap": 17420000000000
         },
         {
             "symbol": "HNX:PVS",
             "company": "PetroVietnam Technical Services Corporation",
-            "market_cap": 17489999999999
+            "market_cap": 17030000000000
         },
         {
             "symbol": "HNX:PVI",
             "company": "PVI Holdings",
-            "market_cap": 16559999999999
+            "market_cap": 16399999999999
         },
         {
             "symbol": "HNX:HUT",
             "company": "Tasco JSC",
-            "market_cap": 15920000000000
+            "market_cap": 15810000000000
         },
         {
             "symbol": "HNX:IDC",
             "company": "IDICO Corporation - JSC",
-            "market_cap": 13900000000000
+            "market_cap": 13150000000000
         },
         {
             "symbol": "HNX:SHS",
             "company": "SaiGon - Hanoi Securities JSC",
-            "market_cap": 13670000000000
+            "market_cap": 12860000000000
         },
         {
             "symbol": "HNX:BAB",
             "company": "Bac A Commercial Joint Stock Bank",
-            "market_cap": 12330000000000
+            "market_cap": 12100000000000
         },
         {
             "symbol": "HNX:NTP",
             "company": "Tien Phong Plastic JSC",
-            "market_cap": 9950000000000
+            "market_cap": 9930000000000
         },
         {
             "symbol": "HNX:DTK",
             "company": "Vinacomin - Power Holding Corporation",
-            "market_cap": 7510000000000
+            "market_cap": 7310000000000
         },
         {
             "symbol": "HNX:CEO",
             "company": "C.E.O Group JSC",
-            "market_cap": 6910000000000
+            "market_cap": 6430000000000
         },
         {
             "symbol": "HNX:DHT",
             "company": "Ha Tay Pharmaceutical JSC",
-            "market_cap": 5460000000000
-        },
-        {
-            "symbol": "HNX:VCS",
-            "company": "Vicostone JSC",
-            "market_cap": 5250000000000
+            "market_cap": 5430000000000
         },
         {
             "symbol": "HNX:VIF",
             "company": "Viet Nam Forestry Corporation - Joint Stock company",
+            "market_cap": 5430000000000
+        },
+        {
+            "symbol": "HNX:VCS",
+            "company": "Vicostone JSC",
             "market_cap": 5220000000000
         },
         {
             "symbol": "HNX:SCG",
             "company": "SCG Construction Group JSC",
-            "market_cap": 5190000000000
+            "market_cap": 5210000000000
         },
         {
             "symbol": "HNX:VNR",
             "company": "Vietnam National Reinsurance Corporation",
-            "market_cap": 3870000000000
+            "market_cap": 3890000000000
         },
         {
             "symbol": "HNX:VC3",
             "company": "Nam Mekong Group JSC",
-            "market_cap": 3490000000000
+            "market_cap": 3500000000000
         },
         {
             "symbol": "HNX:IPA",
             "company": "Ipa Investments Group JSC",
-            "market_cap": 3080000000000
+            "market_cap": 2990000000000
         },
         {
             "symbol": "HNX:DNP",
@@ -112,44 +112,44 @@
             "market_cap": 2960000000000
         },
         {
-            "symbol": "HNX:PRE",
-            "company": "Hanoi Reinsurance JSC",
-            "market_cap": 2860000000000
-        },
-        {
             "symbol": "HNX:PGS",
             "company": "Southern Gas Trading JSC",
-            "market_cap": 2740000000000
+            "market_cap": 2950000000000
         },
         {
-            "symbol": "HNX:PTI",
-            "company": "Post & Telecommunication Joint Stock Insurance Corporation",
-            "market_cap": 2650000000000
+            "symbol": "HNX:PRE",
+            "company": "Hanoi Reinsurance JSC",
+            "market_cap": 2930000000000
         },
         {
             "symbol": "HNX:CDN",
             "company": "Danang Port JSC",
-            "market_cap": 2500000000000
+            "market_cap": 2460000000000
+        },
+        {
+            "symbol": "HNX:PTI",
+            "company": "Post & Telecommunication Joint Stock Insurance Corporation",
+            "market_cap": 2420000000000
         },
         {
             "symbol": "HNX:TNG",
             "company": "TNG Investment and Trading JSC",
-            "market_cap": 2250000000000
+            "market_cap": 2200000000000
         },
         {
             "symbol": "HNX:VIT",
             "company": "Viglacera Tien Son JSC",
-            "market_cap": 2250000000000
-        },
-        {
-            "symbol": "HNX:BVS",
-            "company": "Bao Viet Securities JSC",
-            "market_cap": 1880000000000
+            "market_cap": 2029999999999
         },
         {
             "symbol": "HNX:MVB",
             "company": "Vinacomin - VietBac Mining Industry Holding Corporation",
-            "market_cap": 1740000000000
+            "market_cap": 1830000000000
+        },
+        {
+            "symbol": "HNX:BVS",
+            "company": "Bao Viet Securities JSC",
+            "market_cap": 1750000000000
         }
     ]
 }
