@@ -1,5 +1,12 @@
 # FinHub release notes
 
+## 2026-08-06 - v0.14.4
+
+### Fixed/Improvements
+
+- Patch(review-portfolio): Minor prompt update.
+- Patch(cache): Update cached static market indices.
+
 ## 2026-07-29 - v0.14.3
 
 ### Added/Refactoring/Deprecation
