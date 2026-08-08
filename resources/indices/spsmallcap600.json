@@ -1,5 +1,5 @@
 {
-    "date": "2026-08-01",
+    "date": "2026-08-08",
     "data": [
         {
             "symbol": "NYSE:AAMI",
@@ -1025,6 +1025,11 @@
             "symbol": "NASDAQ:FIBK",
             "company": "First Interstate BancSystem, Inc.",
             "sector": "Financials"
+        },
+        {
+            "symbol": "NASDAQ:FIVN",
+            "company": "Five9, Inc.",
+            "sector": "Information Technology"
         },
         {
             "symbol": "NASDAQ:FIZZ",
@@ -2679,11 +2684,6 @@
         {
             "symbol": "NASDAQ:TRUP",
             "company": "Trupanion",
-            "sector": "Financials"
-        },
-        {
-            "symbol": "NYSE:TWO",
-            "company": "Two Harbors Investment Corp.",
             "sector": "Financials"
         },
         {

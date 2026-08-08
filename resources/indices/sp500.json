@@ -1,5 +1,5 @@
 {
-    "date": "2026-08-01",
+    "date": "2026-08-08",
     "data": [
         {
             "symbol": "NYSE:MMM",
@@ -204,7 +204,7 @@
         {
             "symbol": "NASDAQ:APP",
             "company": "AppLovin",
-            "sector": "Information Technology"
+            "sector": "Communication Services"
         },
         {
             "symbol": "NYSE:APTV",
@@ -837,11 +837,6 @@
             "sector": "Health Care"
         },
         {
-            "symbol": "NASDAQ:EA",
-            "company": "Electronic Arts",
-            "sector": "Communication Services"
-        },
-        {
             "symbol": "NYSE:ELV",
             "company": "Elevance Health",
             "sector": "Health Care"
@@ -979,6 +974,11 @@
         {
             "symbol": "NYSE:FDXF",
             "company": "FedEx Freight",
+            "sector": "Industrials"
+        },
+        {
+            "symbol": "NYSE:FERG",
+            "company": "Ferguson Enterprises",
             "sector": "Industrials"
         },
         {
