@@ -7,12 +7,11 @@ import requests
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 
-from . import config
+from . import config, version
 from .routers import ai, events, market, stocks, toz
 from .utils import auth
 from .utils import scheduler as scheduler_utils
 
-VERSION = "0.14.4"
 APP_NAME = "FinHub API"
 APP_DESCRIPTION = "A developer-first financial API hub for stock market data."
 
@@ -89,7 +88,7 @@ app = FastAPI(
     openapi_tags=openapi_tags_metadata,
     title=APP_NAME,
     description=APP_DESCRIPTION,
-    version=VERSION,
+    version=version.VERSION,
     lifespan=lifespan,
     contact={
         "name": "Thanh Nguyen",

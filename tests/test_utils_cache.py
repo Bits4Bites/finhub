@@ -8,6 +8,24 @@ import pytest
 from app.utils import cache
 
 
+def test_generate_key_is_deterministic_and_order_sensitive():
+    assert cache.generate_key("alpha", "beta") == cache.generate_key("alpha", "beta")
+    assert cache.generate_key("alpha", "beta") != cache.generate_key("beta", "alpha")
+
+
+def test_generate_key_preserves_item_boundaries():
+    assert cache.generate_key("ab", "c") != cache.generate_key("a", "bc")
+
+
+def test_generate_key_includes_application_version():
+    original_key = cache.generate_key("alpha")
+
+    with patch("app.utils.cache.version.VERSION", "next-version"):
+        versioned_key = cache.generate_key("alpha")
+
+    assert versioned_key != original_key
+
+
 def test_cache_entry_expires():
     async def scenario():
         await cache.clear()

@@ -2,12 +2,25 @@
 
 from typing import Any
 
+import xxhash
 from aiocache import SimpleMemoryCache
 
-__all__ = ["clear", "delete", "exists", "get", "set"]
+from .. import version
+
+__all__ = ["clear", "delete", "exists", "generate_key", "get", "set"]
 
 _DEFAULT_TTL = 3600
 _cache = SimpleMemoryCache()
+
+
+def generate_key(*items: str) -> str:
+    """Generate a version-aware XXH3-128 cache key from arbitrary strings."""
+    hasher = xxhash.xxh3_128()
+    for item in (version.VERSION, *items):
+        encoded_item = item.encode()
+        hasher.update(len(encoded_item).to_bytes(8, byteorder="big"))
+        hasher.update(encoded_item)
+    return hasher.hexdigest()
 
 
 async def get(key: str, default: Any = None) -> Any:

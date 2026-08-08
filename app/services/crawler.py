@@ -18,14 +18,10 @@ logger = logging.getLogger(__name__)
 _HTML_CACHE_TTL = 24 * 60 * 60
 
 
-def _html_cache_key(url: str, fetcher: str, after_load_func_async=None) -> str:
-    callback_name = ""
-    if after_load_func_async:
-        callback_name = (
-            f":{getattr(after_load_func_async, '__module__', '')}."
-            f"{getattr(after_load_func_async, '__qualname__', type(after_load_func_async).__qualname__)}"
-        )
-    return f"crawler:{fetcher}{callback_name}:{url}"
+def _callback_name(callback) -> str:
+    if not callback:
+        return ""
+    return f"{getattr(callback, '__module__', '')}.{getattr(callback, '__qualname__', type(callback).__qualname__)}"
 
 
 def extract_data_table_from_html(html_content: str, *, raw_cell_content=False, table_attr_filter=None) -> pd.DataFrame:
@@ -109,7 +105,7 @@ async def fetch_webpage_content(
     Returns:
         str: The content of the webpage if successful, otherwise None.
     """
-    cache_key = _html_cache_key(url, "http")
+    cache_key = cache.generate_key("crawler", "http", url)
     cached_content = await cache.get(cache_key)
     if cached_content is not None:
         logger.info("Using cached content for '%s'.", url)
@@ -169,7 +165,7 @@ async def fetch_webpage_content_playwright(
     Returns:
         str: The content of the webpage if successful, otherwise None.
     """
-    cache_key = _html_cache_key(url, "playwright", after_load_func_async)
+    cache_key = cache.generate_key("crawler", "playwright", _callback_name(after_load_func_async), url)
     cached_content = await cache.get(cache_key)
     if cached_content is not None:
         logger.info("Using cached Playwright content for '%s'.", url)

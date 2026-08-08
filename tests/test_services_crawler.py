@@ -46,7 +46,7 @@ class TestCrawlerFetching:
         assert result == "ok"
         fake_scraper.get.assert_called_once()
         self.mock_cache_set.assert_awaited_once_with(
-            "crawler:http:https://example.test",
+            crawler.cache.generate_key("crawler", "http", "https://example.test"),
             "ok",
             ttl=86400,
         )
@@ -111,7 +111,7 @@ class TestCrawlerFetching:
 
         assert result == "<html>ok</html>"
         self.mock_cache_set.assert_awaited_once_with(
-            "crawler:playwright:https://example.test",
+            crawler.cache.generate_key("crawler", "playwright", "", "https://example.test"),
             "<html>ok</html>",
             ttl=86400,
         )
