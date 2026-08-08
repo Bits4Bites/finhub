@@ -4,3 +4,4 @@
 #!VERSION=0.15.0
 - patch(server): Remove env.NUM_WORKERS, server always runs in single process mode.
 - impr: Add cache utilities.
+- impr(crawler): Cache fetched webpage content for 24 hours.

@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pandas as pd
+import pytest
 
 from app.services import crawler
 
@@ -24,6 +25,16 @@ class TestCrawlerTableExtraction:
 
 
 class TestCrawlerFetching:
+    @pytest.fixture(autouse=True)
+    def mock_html_cache(self):
+        with (
+            patch("app.services.crawler.cache.get", new_callable=AsyncMock, return_value=None) as mock_get,
+            patch("app.services.crawler.cache.set", new_callable=AsyncMock, return_value=True) as mock_set,
+        ):
+            self.mock_cache_get = mock_get
+            self.mock_cache_set = mock_set
+            yield
+
     def test_fetch_webpage_content_returns_text(self):
         fake_response = SimpleNamespace(text="ok", raise_for_status=lambda: None)
         fake_scraper = MagicMock()
@@ -34,6 +45,21 @@ class TestCrawlerFetching:
 
         assert result == "ok"
         fake_scraper.get.assert_called_once()
+        self.mock_cache_set.assert_awaited_once_with(
+            "crawler:http:https://example.test",
+            "ok",
+            ttl=86400,
+        )
+
+    def test_fetch_webpage_content_returns_cached_text(self):
+        self.mock_cache_get.return_value = "cached"
+
+        with patch("app.services.crawler.cloudscraper.create_scraper") as mock_create_scraper:
+            result = asyncio.run(crawler.fetch_webpage_content("https://example.test"))
+
+        assert result == "cached"
+        mock_create_scraper.assert_not_called()
+        self.mock_cache_set.assert_not_awaited()
 
     def test_fetch_webpage_content_forwards_proxies(self):
         fake_response = SimpleNamespace(text="ok", raise_for_status=lambda: None)
@@ -58,6 +84,37 @@ class TestCrawlerFetching:
 
         _, kwargs = fake_scraper.get.call_args
         assert kwargs["proxies"] is None
+
+    def test_fetch_webpage_content_playwright_returns_cached_text(self):
+        self.mock_cache_get.return_value = "cached"
+
+        with patch("app.services.crawler.async_playwright") as mock_async_playwright:
+            result = asyncio.run(crawler.fetch_webpage_content_playwright("https://example.test"))
+
+        assert result == "cached"
+        mock_async_playwright.assert_not_called()
+        self.mock_cache_set.assert_not_awaited()
+
+    def test_fetch_webpage_content_playwright_caches_text(self):
+        fake_page = AsyncMock()
+        fake_page.content.return_value = "<html>ok</html>"
+        fake_browser = AsyncMock()
+        fake_browser.new_page.return_value = fake_page
+        fake_playwright = MagicMock()
+        fake_playwright.webkit.launch = AsyncMock(return_value=fake_browser)
+        fake_context = MagicMock()
+        fake_context.__aenter__ = AsyncMock(return_value=fake_playwright)
+        fake_context.__aexit__ = AsyncMock(return_value=None)
+
+        with patch("app.services.crawler.async_playwright", return_value=fake_context):
+            result = asyncio.run(crawler.fetch_webpage_content_playwright("https://example.test"))
+
+        assert result == "<html>ok</html>"
+        self.mock_cache_set.assert_awaited_once_with(
+            "crawler:playwright:https://example.test",
+            "<html>ok</html>",
+            ttl=86400,
+        )
 
 
 class TestCrawlerScrape:
