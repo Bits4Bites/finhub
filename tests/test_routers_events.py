@@ -219,6 +219,104 @@ class TestUpcomingEarnings:
 
 
 # ===========================================================================
+# Tests for GET /events/upcoming_earnings_async
+# ===========================================================================
+
+
+class TestUpcomingEarningsAsync:
+    def test_starts_task(self):
+        with (
+            patch("app.routers.events.uuid.uuid4", return_value="task-456"),
+            patch("app.routers.events.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
+            patch("app.routers.events._run_upcoming_earnings_event_task", new_callable=AsyncMock) as mock_run_task,
+        ):
+            resp = client.get(
+                "/events/upcoming_earnings_async",
+                params={"country": "US", "index": "SP500"},
+            )
+
+        assert resp.status_code == 202
+        assert resp.json() == {
+            "status": 202,
+            "message": "Task started",
+            "extra": {"task_id": "task-456", "state": async_task.TASK_STATE_RUNNING},
+        }
+        mock_cache_set.assert_awaited_once_with(
+            "task-456",
+            {"task_type": "upcoming_earnings", "state": async_task.TASK_STATE_RUNNING},
+            ttl=3600,
+        )
+        mock_run_task.assert_awaited_once_with("task-456", "US", "SP500")
+
+    def test_poll_returns_running_status(self):
+        task_entry = {"task_type": "upcoming_earnings", "state": async_task.TASK_STATE_RUNNING}
+        with patch("app.routers.events.cache.get", new_callable=AsyncMock, return_value=task_entry) as mock_cache_get:
+            resp = client.get("/events/upcoming_earnings_async", params={"task_id": "task-456"})
+
+        assert resp.status_code == 202
+        assert resp.json()["message"] == "Task is running"
+        assert resp.json()["extra"] == {"task_id": "task-456", "state": async_task.TASK_STATE_RUNNING}
+        mock_cache_get.assert_awaited_once_with("task-456")
+
+    def test_poll_returns_404_for_missing_task(self):
+        with patch("app.routers.events.cache.get", new_callable=AsyncMock, return_value=None):
+            resp = client.get("/events/upcoming_earnings_async", params={"task_id": "missing"})
+
+        assert resp.status_code == 404
+        assert resp.json() == {"status": 404, "message": "Task not found"}
+
+    def test_poll_returns_completed_result(self):
+        task_entry = {
+            "task_type": "upcoming_earnings",
+            "state": async_task.TASK_STATE_COMPLETED,
+            "result": {
+                "status": 200,
+                "message": "ok",
+                "data": [
+                    {
+                        "symbol": "NASDAQ:AAPL",
+                        "company_name": "Apple Inc.",
+                        "date": "2026-08-15",
+                    }
+                ],
+            },
+        }
+        with patch("app.routers.events.cache.get", new_callable=AsyncMock, return_value=task_entry):
+            resp = client.get("/events/upcoming_earnings_async", params={"task_id": "task-456"})
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] == 200
+        assert body["data"][0]["symbol"] == "NASDAQ:AAPL"
+        assert body["extra"] == {"task_id": "task-456", "state": async_task.TASK_STATE_COMPLETED}
+
+    def test_background_task_caches_result(self):
+        from app.routers import events
+        from app.schemas import events as schemas_event
+
+        result = schemas_event.UpcomingEarningsResponse(status=200, message="ok", data=[])
+        with (
+            patch(
+                "app.routers.events._get_upcoming_earnings_event_result",
+                new_callable=AsyncMock,
+                return_value=result,
+            ),
+            patch("app.routers.events.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
+        ):
+            asyncio.run(events._run_upcoming_earnings_event_task("task-456", "US", "SP500"))
+
+        mock_cache_set.assert_awaited_once_with(
+            "task-456",
+            {
+                "task_type": "upcoming_earnings",
+                "state": async_task.TASK_STATE_COMPLETED,
+                "result": {"status": 200, "message": "ok", "data": [], "extra": None},
+            },
+            ttl=3600,
+        )
+
+
+# ===========================================================================
 # Tests for GET /events/new_listings
 # ===========================================================================
 

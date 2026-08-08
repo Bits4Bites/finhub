@@ -269,6 +269,47 @@ Get upcoming earnings events for a market.
 curl 'http://localhost:8000/events/upcoming_earnings?country=US&index=SP500'
 ```
 
+### `GET /events/upcoming_earnings_async`
+
+Run the upcoming-earnings request in the background using the same one-hour task lifecycle as
+`/events/upcoming_dividends_async`.
+
+| Parameter | Type  | Required    | Description                                                        |
+|-----------|-------|-------------|--------------------------------------------------------------------|
+| `country` | query | Conditional | Country code: `AU` or `US`. Required when starting a task.         |
+| `index`   | query | No          | Optional stock-index filter used when starting a task.             |
+| `task_id` | query | Conditional | Task ID returned when starting a task. Required when polling.      |
+
+```bash
+# Start a task
+curl 'http://localhost:8000/events/upcoming_earnings_async?country=US&index=SP500'
+
+# Poll a task
+curl 'http://localhost:8000/events/upcoming_earnings_async?task_id=<TASK_ID>'
+```
+
+Starting a task returns HTTP `202`:
+
+```json
+{
+  "status": 202,
+  "message": "Task started",
+  "extra": {
+    "task_id": "550e8400-e29b-41d4-a716-446655440000",
+    "state": "RUNNING"
+  }
+}
+```
+
+Polling returns:
+
+| HTTP status | Task state  | Result                                             |
+|-------------|-------------|----------------------------------------------------|
+| `202`       | `RUNNING`   | The task is still running.                         |
+| `200`       | `COMPLETED` | The standard upcoming-earnings payload in `data`.  |
+| `500`       | `FAILED`    | The background task failed.                        |
+| `404`       | —           | The task ID is unknown or its cache entry expired. |
+
 ---
 
 ### `GET /events/new_listings`
