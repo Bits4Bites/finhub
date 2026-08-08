@@ -28,3 +28,7 @@ class UpcomingEarningsAsyncResponse(UpcomingEarningsResponse):
 
 class ListingsResponse(BaseResponse):
     data: list[models_event.ListingEvent] | None = None
+
+
+class ListingsAsyncResponse(ListingsResponse):
+    extra: AsyncTaskInfo
