@@ -211,6 +211,47 @@ Events for stocks in major indices (ASX300, NASDAQ100, SP500, SP400, VN100) incl
 curl 'http://localhost:8000/events/upcoming_dividends?country=AU&index=ASX200'
 ```
 
+### `GET /events/upcoming_dividends_async`
+
+Run the upcoming-dividends request in the background. Start a task with the same `country` and
+`index` parameters, then poll using the returned task ID. Task state and results expire after one hour.
+
+| Parameter | Type  | Required    | Description                                                       |
+|-----------|-------|-------------|-------------------------------------------------------------------|
+| `country` | query | Conditional | Country code: `AU`, `US`, or `VN`. Required when starting a task. |
+| `index`   | query | No          | Optional stock-index filter used when starting a task.            |
+| `task_id` | query | Conditional | Task ID returned when starting a task. Required when polling.     |
+
+```bash
+# Start a task
+curl 'http://localhost:8000/events/upcoming_dividends_async?country=AU&index=ASX200'
+
+# Poll a task
+curl 'http://localhost:8000/events/upcoming_dividends_async?task_id=<TASK_ID>'
+```
+
+Starting a task returns HTTP `202`:
+
+```json
+{
+  "status": 202,
+  "message": "Task started",
+  "extra": {
+    "task_id": "550e8400-e29b-41d4-a716-446655440000",
+    "state": "RUNNING"
+  }
+}
+```
+
+Polling returns:
+
+| HTTP status | Task state  | Result                                              |
+|-------------|-------------|-----------------------------------------------------|
+| `202`       | `RUNNING`   | The task is still running.                          |
+| `200`       | `COMPLETED` | The standard upcoming-dividends payload in `data`.  |
+| `500`       | `FAILED`    | The background task failed.                         |
+| `404`       | —           | The task ID is unknown or its cache entry expired.  |
+
 ---
 
 ### `GET /events/upcoming_earnings`

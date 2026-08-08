@@ -1,11 +1,13 @@
 """Unit tests for app.routers.events module."""
 
+import asyncio
 from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 
 from app.main import app
 from app.models.event import ListingEvent, UpcomingDividendEvent, UpcomingEarningsEvent
+from app.schemas import async_task
 
 client = TestClient(app)
 
@@ -68,6 +70,106 @@ class TestUpcomingDividends:
     def test_missing_country_returns_422(self):
         resp = client.get("/events/upcoming_dividends")
         assert resp.status_code == 422
+
+
+# ===========================================================================
+# Tests for GET /events/upcoming_dividends_async
+# ===========================================================================
+
+
+class TestUpcomingDividendsAsync:
+    def test_starts_task(self):
+        with (
+            patch("app.routers.events.uuid.uuid4", return_value="task-123"),
+            patch("app.routers.events.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
+            patch("app.routers.events._run_upcoming_dividends_event_task", new_callable=AsyncMock) as mock_run_task,
+        ):
+            resp = client.get(
+                "/events/upcoming_dividends_async",
+                params={"country": "AU", "index": "ASX200"},
+            )
+
+        assert resp.status_code == 202
+        assert resp.json() == {
+            "status": 202,
+            "message": "Task started",
+            "extra": {"task_id": "task-123", "state": async_task.TASK_STATE_RUNNING},
+        }
+        mock_cache_set.assert_awaited_once_with(
+            "task-123",
+            {"task_type": "upcoming_dividends", "state": async_task.TASK_STATE_RUNNING},
+            ttl=3600,
+        )
+        mock_run_task.assert_awaited_once_with("task-123", "AU", "ASX200")
+
+    def test_poll_returns_running_status(self):
+        task_entry = {"task_type": "upcoming_dividends", "state": async_task.TASK_STATE_RUNNING}
+        with patch("app.routers.events.cache.get", new_callable=AsyncMock, return_value=task_entry) as mock_cache_get:
+            resp = client.get("/events/upcoming_dividends_async", params={"task_id": "task-123"})
+
+        assert resp.status_code == 202
+        assert resp.json()["message"] == "Task is running"
+        assert resp.json()["extra"] == {"task_id": "task-123", "state": async_task.TASK_STATE_RUNNING}
+        mock_cache_get.assert_awaited_once_with("task-123")
+
+    def test_poll_returns_404_for_missing_task(self):
+        with patch("app.routers.events.cache.get", new_callable=AsyncMock, return_value=None):
+            resp = client.get("/events/upcoming_dividends_async", params={"task_id": "missing"})
+
+        assert resp.status_code == 404
+        assert resp.json() == {"status": 404, "message": "Task not found"}
+
+    def test_poll_returns_completed_result(self):
+        task_entry = {
+            "task_type": "upcoming_dividends",
+            "state": async_task.TASK_STATE_COMPLETED,
+            "result": {
+                "status": 200,
+                "message": "ok",
+                "data": [
+                    {
+                        "symbol": "ASX:CBA",
+                        "company_name": "CBA",
+                        "date": "2026-06-10",
+                        "amount": 2.0,
+                        "payment_date": "2026-07-01",
+                    }
+                ],
+            },
+        }
+        with patch("app.routers.events.cache.get", new_callable=AsyncMock, return_value=task_entry):
+            resp = client.get("/events/upcoming_dividends_async", params={"task_id": "task-123"})
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] == 200
+        assert body["data"][0]["symbol"] == "ASX:CBA"
+        assert body["extra"] == {"task_id": "task-123", "state": async_task.TASK_STATE_COMPLETED}
+
+    def test_background_task_caches_result(self):
+        from app.routers import events
+        from app.schemas import events as schemas_event
+
+        result = schemas_event.UpcomingDividendsResponse(status=200, message="ok", data=[])
+        with (
+            patch(
+                "app.routers.events._get_upcoming_dividends_event_result",
+                new_callable=AsyncMock,
+                return_value=result,
+            ),
+            patch("app.routers.events.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
+        ):
+            asyncio.run(events._run_upcoming_dividends_event_task("task-123", "AU", "ASX200"))
+
+        mock_cache_set.assert_awaited_once_with(
+            "task-123",
+            {
+                "task_type": "upcoming_dividends",
+                "state": async_task.TASK_STATE_COMPLETED,
+                "result": {"status": 200, "message": "ok", "data": [], "extra": None},
+            },
+            ttl=3600,
+        )
 
 
 # ===========================================================================

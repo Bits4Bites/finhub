@@ -1,0 +1,8 @@
+from typing import Literal
+
+ASYNC_TASK_TTL = 60 * 60
+
+TaskState = Literal["RUNNING", "COMPLETED", "FAILED"]
+TASK_STATE_RUNNING: TaskState = "RUNNING"
+TASK_STATE_COMPLETED: TaskState = "COMPLETED"
+TASK_STATE_FAILED: TaskState = "FAILED"
