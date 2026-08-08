@@ -71,7 +71,6 @@ jobs:
           CONTAINER=$(docker run -d \
             --name test \
             -p 1234:8000 \
-            -e NUM_WORKERS=1 \
             --platform ${{ matrix.platforms }} \
             test)
           sleep 20 # Wait for the container to start and bootstrap, increase wait time if needed
