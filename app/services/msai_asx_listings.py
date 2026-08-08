@@ -6,9 +6,11 @@ from bs4 import BeautifulSoup
 
 from ..models import event as models_event
 from ..services import crawler as services_crawler
-from ..utils import conv
+from ..utils import cache, conv
 from ..utils import data as data_utils
 from . import ai_helper
+
+_ASX_LISTINGS_CACHE_TTL = 72 * 60 * 60
 
 
 async def ai_get_asx_new_listings() -> list[models_event.ListingEvent]:
@@ -19,11 +21,30 @@ async def ai_get_asx_new_listings() -> list[models_event.ListingEvent]:
         list[models_event.ListingEvent]: A list of new listing events
     """
     events = await _get_asx_new_listings()
+    events.sort(key=lambda event: event.symbol)
+    cache_key = cache.generate_key(
+        "asx-new-listings-analysis",
+        *(
+            value
+            for event in events
+            for value in (
+                event.symbol,
+                event.date or "",
+                str(event.price),
+                event.public_offer_close_date or "",
+            )
+        ),
+    )
+    cached_events = await cache.get(cache_key)
+    if cached_events is not None:
+        return cached_events
+
     events = await _analyze_asx_listings(events)
     tz = ZoneInfo("Australia/Sydney")
     for event in events:
         event.date = conv.yyyymmdd_to_iso(event.date or "", tz)
         event.timestamp = int(datetime.fromisoformat(event.date or "").timestamp())
+    await cache.set(cache_key, events, ttl=_ASX_LISTINGS_CACHE_TTL)
     return events
 
 
