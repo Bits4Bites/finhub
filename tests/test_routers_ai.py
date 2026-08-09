@@ -1,5 +1,6 @@
 """Unit tests for app.routers.ai."""
 
+import asyncio
 from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
@@ -7,6 +8,7 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.models.ai import AnalysisResult, AnalyzePortfolioResult
 from app.models.event import DividendEventAnalysis
+from app.schemas import async_task
 
 client = TestClient(app)
 
@@ -80,6 +82,189 @@ class TestAnalyzeDividendEvent:
     def test_missing_params_returns_422(self):
         resp = client.get("/ai/analyze_dividend_event")
         assert resp.status_code == 422
+
+
+# ===========================================================================
+# GET /ai/analyze_dividend_event_async
+# ===========================================================================
+
+
+class TestAnalyzeDividendEventAsync:
+    """Tests for GET /ai/analyze_dividend_event_async endpoint."""
+
+    def test_starts_task(self):
+        with (
+            patch("app.routers.ai.uuid.uuid4", return_value="task-123"),
+            patch("app.routers.ai.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
+            patch("app.routers.ai._run_analyze_dividend_event_task", new_callable=AsyncMock) as mock_run_task,
+        ):
+            resp = client.get(
+                "/ai/analyze_dividend_event_async",
+                params={
+                    "symbol": "ASX:CBA",
+                    "ex_date": "2025-08-15",
+                    "div_amount": 2.5,
+                    "intent": "Capture income",
+                },
+            )
+
+        assert resp.status_code == 202
+        assert resp.json() == {
+            "status": 202,
+            "message": "Task started",
+            "extra": {"task_id": "task-123", "state": async_task.TASK_STATE_RUNNING},
+        }
+        mock_cache_set.assert_awaited_once_with(
+            "task-123",
+            {"task_type": "analyze_dividend_event", "state": async_task.TASK_STATE_RUNNING},
+            ttl=3600,
+        )
+        mock_run_task.assert_awaited_once_with(
+            "task-123",
+            "ASX:CBA",
+            "2025-08-15",
+            2.5,
+            "Capture income",
+        )
+
+    def test_requires_inputs_when_starting_task(self):
+        resp = client.get("/ai/analyze_dividend_event_async")
+
+        assert resp.status_code == 422
+        assert resp.json() == {
+            "status": 422,
+            "message": "Symbol, ex_date and div_amount are required when starting a task",
+        }
+
+    def test_poll_returns_running_status(self):
+        task_entry = {"task_type": "analyze_dividend_event", "state": async_task.TASK_STATE_RUNNING}
+        with patch("app.routers.ai.cache.get", new_callable=AsyncMock, return_value=task_entry) as mock_cache_get:
+            resp = client.get("/ai/analyze_dividend_event_async", params={"task_id": "task-123"})
+
+        assert resp.status_code == 202
+        assert resp.json()["message"] == "Task is running"
+        assert resp.json()["extra"] == {"task_id": "task-123", "state": async_task.TASK_STATE_RUNNING}
+        mock_cache_get.assert_awaited_once_with("task-123")
+
+    def test_poll_returns_404_for_missing_task(self):
+        with patch("app.routers.ai.cache.get", new_callable=AsyncMock, return_value=None):
+            resp = client.get("/ai/analyze_dividend_event_async", params={"task_id": "missing"})
+
+        assert resp.status_code == 404
+        assert resp.json() == {"status": 404, "message": "Task not found"}
+
+    def test_poll_returns_completed_result(self):
+        task_entry = {
+            "task_type": "analyze_dividend_event",
+            "state": async_task.TASK_STATE_COMPLETED,
+            "result": {
+                "status": 200,
+                "message": "ok",
+                "data": {
+                    "symbol": "CBA.AX",
+                    "price": 120.0,
+                    "div_amount": 2.5,
+                },
+            },
+        }
+        with patch("app.routers.ai.cache.get", new_callable=AsyncMock, return_value=task_entry):
+            resp = client.get("/ai/analyze_dividend_event_async", params={"task_id": "task-123"})
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] == 200
+        assert body["data"]["symbol"] == "CBA.AX"
+        assert body["data"]["div_amount"] == 2.5
+        assert body["extra"] == {"task_id": "task-123", "state": async_task.TASK_STATE_COMPLETED}
+
+    def test_poll_returns_failed_status(self):
+        task_entry = {
+            "task_type": "analyze_dividend_event",
+            "state": async_task.TASK_STATE_FAILED,
+            "message": "Task failed",
+        }
+        with patch("app.routers.ai.cache.get", new_callable=AsyncMock, return_value=task_entry):
+            resp = client.get("/ai/analyze_dividend_event_async", params={"task_id": "task-123"})
+
+        assert resp.status_code == 500
+        assert resp.json() == {
+            "status": 500,
+            "message": "Task failed",
+            "extra": {"task_id": "task-123", "state": async_task.TASK_STATE_FAILED},
+        }
+
+    def test_background_task_caches_result(self):
+        from app.routers import ai
+        from app.schemas import ai as schemas_ai
+
+        result = schemas_ai.AnalyzeDividendEventResponse(
+            status=200,
+            message="ok",
+            data=DividendEventAnalysis(symbol="CBA.AX", price=120.0, div_amount=2.5),
+        )
+        with (
+            patch(
+                "app.routers.ai._get_analyze_dividend_event_result",
+                new_callable=AsyncMock,
+                return_value=result,
+            ),
+            patch("app.routers.ai.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
+        ):
+            asyncio.run(
+                ai._run_analyze_dividend_event_task(
+                    "task-123",
+                    "ASX:CBA",
+                    "2025-08-15",
+                    2.5,
+                    "Capture income",
+                )
+            )
+
+        mock_cache_set.assert_awaited_once_with(
+            "task-123",
+            {
+                "task_type": "analyze_dividend_event",
+                "state": async_task.TASK_STATE_COMPLETED,
+                "result": {
+                    "status": 200,
+                    "message": "ok",
+                    "data": result.data.model_dump(mode="json"),
+                    "extra": None,
+                },
+            },
+            ttl=3600,
+        )
+
+    def test_background_task_caches_failure(self):
+        from app.routers import ai
+
+        with (
+            patch(
+                "app.routers.ai._get_analyze_dividend_event_result",
+                new_callable=AsyncMock,
+                side_effect=RuntimeError("LLM unavailable"),
+            ),
+            patch("app.routers.ai.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
+        ):
+            asyncio.run(
+                ai._run_analyze_dividend_event_task(
+                    "task-123",
+                    "ASX:CBA",
+                    "2025-08-15",
+                    2.5,
+                    "Capture income",
+                )
+            )
+
+        mock_cache_set.assert_awaited_once_with(
+            "task-123",
+            {
+                "task_type": "analyze_dividend_event",
+                "state": async_task.TASK_STATE_FAILED,
+                "message": "Task failed",
+            },
+            ttl=3600,
+        )
 
 
 # ===========================================================================

@@ -1,8 +1,11 @@
+from pydantic import BaseModel
+
 from ..models import ai as models_ai
 from ..models import event as models_event
 from ..models import finhub as models
 from ..services import ai as services_ai
 from ..services import msai_analyze_ticker as service_analyze_ticker
+from . import async_task
 from .base_req_resp import BaseRequest, BaseResponse
 
 
@@ -95,3 +98,12 @@ class AnalyzeDividendEventResponse(BaseResponse):
     """
 
     data: models_event.DividendEventAnalysis | None = None
+
+
+class AsyncTaskInfo(BaseModel):
+    task_id: str
+    state: async_task.TaskState | None = None
+
+
+class AnalyzeDividendEventAsyncResponse(AnalyzeDividendEventResponse):
+    extra: AsyncTaskInfo

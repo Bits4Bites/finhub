@@ -358,12 +358,12 @@ Starting a task returns HTTP `202`:
 
 Polling returns:
 
-| HTTP status | Task state  | Result                                        |
-|-------------|-------------|-----------------------------------------------|
-| `202`       | `RUNNING`   | The task is still running.                    |
-| `200`       | `COMPLETED` | The standard new-listings payload in `data`.  |
-| `500`       | `FAILED`    | The background task failed.                   |
-| `404`       | —           | The task ID is unknown or expired.            |
+| HTTP status | Task state  | Result                                             |
+|-------------|-------------|----------------------------------------------------|
+| `202`       | `RUNNING`   | The task is still running.                         |
+| `200`       | `COMPLETED` | The standard new-listings payload in `data`.       |
+| `500`       | `FAILED`    | The background task failed.                        |
+| `404`       | —           | The task ID is unknown or its cache entry expired. |
 
 ---
 
@@ -399,6 +399,37 @@ Analyze a dividend event using AI.
 ```bash
 curl 'http://localhost:8000/ai/analyze_dividend_event?symbol=AAPL&ex_date=2026-02-09&div_amount=0.26'
 ```
+
+### `GET /ai/analyze_dividend_event_async`
+
+Run dividend-event analysis in the background. Start a task with the analysis inputs, then poll using
+the returned task ID. Task state and results expire after one hour; completed analyses are cached for
+72 hours.
+
+| Parameter    | Type  | Required    | Description                                                                                                  |
+|--------------|-------|-------------|--------------------------------------------------------------------------------------------------------------|
+| `symbol`     | query | Conditional | Stock symbol. Required when starting a task.                                                                 |
+| `ex_date`    | query | Conditional | Ex-dividend date in `YYYY-MM-DD` format. Required when starting a task.                                      |
+| `div_amount` | query | Conditional | Dividend amount as a float. Required when starting a task.                                                   |
+| `intent`     | query | No          | Analysis intent/context. Defaults to `"Looking to capture the dividend or if post-div dip is worth buying"`. |
+| `task_id`    | query | Conditional | Task ID returned when starting a task. Required when polling.                                                |
+
+```bash
+# Start a task
+curl 'http://localhost:8000/ai/analyze_dividend_event_async?symbol=AAPL&ex_date=2026-02-09&div_amount=0.26'
+
+# Poll a task
+curl 'http://localhost:8000/ai/analyze_dividend_event_async?task_id=<TASK_ID>'
+```
+
+Polling returns:
+
+| HTTP status | Task state  | Result                                             |
+|-------------|-------------|----------------------------------------------------|
+| `202`       | `RUNNING`   | The task is still running.                         |
+| `200`       | `COMPLETED` | The standard dividend-analysis payload in `data`.  |
+| `500`       | `FAILED`    | The background task failed.                        |
+| `404`       | —           | The task ID is unknown or its cache entry expired. |
 
 ---
 
