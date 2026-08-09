@@ -510,6 +510,36 @@ class TestAiReviewPortfolio:
 class TestAiAnalyzeDivEvent:
     """Tests for ai_analyze_div_event function."""
 
+    @patch("app.services.msai_analyze_div_event.cache.get", new_callable=AsyncMock)
+    @patch("app.services.msai_analyze_div_event.cache.generate_key", return_value="cache-key")
+    @patch("app.services.msai_analyze_div_event.yf.Ticker")
+    def test_returns_cached_result(self, mock_ticker_cls, mock_generate_key, mock_cache_get):
+        from app.models.event import DividendEventAnalysis
+        from app.services.msai_analyze_div_event import ai_analyze_div_event
+
+        cached_result = DividendEventAnalysis(symbol="CBA.AX", price=120.0, strategy="Dividend Capture")
+        mock_cache_get.return_value = cached_result
+
+        result = asyncio.run(
+            ai_analyze_div_event(
+                symbol="ASX:CBA",
+                ex_date="2025-08-15",
+                div_amount=2.50,
+                intent="Capture income",
+            )
+        )
+
+        assert result is cached_result
+        mock_generate_key.assert_called_once_with(
+            "dividend-event-analysis",
+            "ASX:CBA",
+            "2025-08-15",
+            "2.5",
+            "Capture income",
+        )
+        mock_cache_get.assert_awaited_once_with("cache-key")
+        mock_ticker_cls.assert_not_called()
+
     @patch("app.services.msai_analyze_div_event.services_event.analyse_dividend_event", new_callable=AsyncMock)
     @patch("app.utils.conv.to_yf_symbol_format", return_value="CBA.AX")
     @patch("app.services.msai_analyze_div_event.yf.Ticker")
@@ -625,7 +655,24 @@ class TestAiAnalyzeDivEvent:
             LLMResponse(completion=llm_json),
         ]
 
-        result = asyncio.run(ai_analyze_div_event(symbol="ASX:CBA", ex_date="2025-08-15", div_amount=2.50))
+        with (
+            patch(
+                "app.services.msai_analyze_div_event.cache.get",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
+                "app.services.msai_analyze_div_event.cache.set",
+                new_callable=AsyncMock,
+                return_value=True,
+            ) as mock_cache_set,
+            patch(
+                "app.services.msai_analyze_div_event.cache.generate_key",
+                return_value="cache-key",
+            ),
+        ):
+            result = asyncio.run(ai_analyze_div_event(symbol="ASX:CBA", ex_date="2025-08-15", div_amount=2.50))
+
         assert result is not None
         assert result.llm_error is False
         assert result.strategy == "Dividend Capture"
@@ -636,3 +683,4 @@ class TestAiAnalyzeDivEvent:
         assert result.recovery_days_adj == "3-7"
         assert result.confidence_level == 72
         assert result.risk_level == 35
+        mock_cache_set.assert_awaited_once_with("cache-key", result, ttl=72 * 60 * 60)

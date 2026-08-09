@@ -2,6 +2,8 @@
 
 ## Build, Test, and Lint
 
+This project uses a Python virtual environment. Activate the project's virtual environment before running Python, `pip`, Ruff, pytest, or the development server.
+
 ```bash
 # Install dependencies
 pip install -r requirements.txt

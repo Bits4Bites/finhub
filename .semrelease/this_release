@@ -9,3 +9,4 @@
 - feat(events): Add async endpoint for upcoming dividends event async version.
 - feat(events): Add async endpoint for upcoming earnings event async version.
 - feat(events): Add async endpoint for new listings event async version.
+- impr: Add cache support to service ai_analyze_div_event.
