@@ -1,12 +1,13 @@
 import yfinance as yf
 
 from ..services import ai_helper
-from ..utils import conv, yfutils
+from ..utils import cache, conv, yfutils
 
 DEFAULT_INTENT = (
     "One-page analysis and Stock outlook with trend and price range prediction for the next 2 weeks, 1 month, and 3 months. "
     "Include confidence level (low/medium/high) for each outlook period."
 )
+_TICKER_ANALYSIS_CACHE_TTL = 72 * 60 * 60
 
 BUILD_PROMPT_TEMPLATE = (
     "You are an expert financial analyst and prompt engineer.\n"
@@ -100,6 +101,12 @@ async def ai_analyze_ticker(symbol: str, *, intent: str = DEFAULT_INTENT):
     from .. import config
     from ..models import ai as models_ai
 
+    effective_intent = intent or DEFAULT_INTENT
+    cache_key = cache.generate_key("ticker-analysis", symbol, effective_intent)
+    cached_result = await cache.get(cache_key)
+    if cached_result is not None:
+        return cached_result
+
     # Step 1: check if the ticker is valid
     yf_ticker = conv.to_yf_symbol_format(symbol)
     ticker = yf.Ticker(yf_ticker)
@@ -108,7 +115,7 @@ async def ai_analyze_ticker(symbol: str, *, intent: str = DEFAULT_INTENT):
         return None
 
     # Step 2: use AI to build the ready-to-use prompt to analyze the ticker with the intent
-    build_prompt_input = _build_analysis_prompt(ticker=ticker, intent=intent)
+    build_prompt_input = _build_analysis_prompt(ticker=ticker, intent=effective_intent)
 
     country = conv.country_to_iso2(ticker.info.get("country", ""))
     llm_result = await ai_helper.ai_exec_task("ANALYZE_TICKER_BUILD_PROMPT", build_prompt_input, country)
@@ -122,4 +129,6 @@ async def ai_analyze_ticker(symbol: str, *, intent: str = DEFAULT_INTENT):
     if exec_result.is_error:
         return models_ai.AnalysisResult(llm_error=True, llm_error_msg=exec_result.error_msg)
 
-    return models_ai.AnalysisResult(analysis=exec_result.completion)
+    result = models_ai.AnalysisResult(analysis=exec_result.completion)
+    await cache.set(cache_key, result, ttl=_TICKER_ANALYSIS_CACHE_TTL)
+    return result

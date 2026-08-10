@@ -14,6 +14,27 @@ from app.models.finhub import HoldingTicker
 class TestAiAnalyzeTicker:
     """Tests for ai_analyze_ticker function."""
 
+    @patch("app.services.msai_analyze_ticker.cache.get", new_callable=AsyncMock)
+    @patch("app.services.msai_analyze_ticker.cache.generate_key", return_value="cache-key")
+    @patch("app.services.msai_analyze_ticker.yf.Ticker")
+    def test_returns_cached_result(self, mock_ticker_cls, mock_generate_key, mock_cache_get):
+        from app.models.ai import AnalysisResult
+        from app.services.msai_analyze_ticker import ai_analyze_ticker
+
+        cached_result = AnalysisResult(analysis="Cached analysis")
+        mock_cache_get.return_value = cached_result
+
+        result = asyncio.run(ai_analyze_ticker("NASDAQ:AAPL", intent="Growth outlook"))
+
+        assert result is cached_result
+        mock_generate_key.assert_called_once_with(
+            "ticker-analysis",
+            "NASDAQ:AAPL",
+            "Growth outlook",
+        )
+        mock_cache_get.assert_awaited_once_with("cache-key")
+        mock_ticker_cls.assert_not_called()
+
     @patch("app.utils.conv.to_yf_symbol_format", return_value="AAPL")
     @patch("app.services.msai_analyze_ticker.yf.Ticker")
     def test_returns_none_for_unsupported_quote_type(self, mock_ticker_cls, mock_conv):
@@ -96,10 +117,28 @@ class TestAiAnalyzeTicker:
             LLMResponse(completion="AAPL looks bullish..."),
         ]
 
-        result = asyncio.run(ai_analyze_ticker("AAPL"))
+        with (
+            patch(
+                "app.services.msai_analyze_ticker.cache.get",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
+                "app.services.msai_analyze_ticker.cache.set",
+                new_callable=AsyncMock,
+                return_value=True,
+            ) as mock_cache_set,
+            patch(
+                "app.services.msai_analyze_ticker.cache.generate_key",
+                return_value="cache-key",
+            ),
+        ):
+            result = asyncio.run(ai_analyze_ticker("AAPL"))
+
         assert result is not None
         assert result.llm_error is False
         assert result.analysis == "AAPL looks bullish..."
+        mock_cache_set.assert_awaited_once_with("cache-key", result, ttl=72 * 60 * 60)
 
 
 # ===========================================================================
