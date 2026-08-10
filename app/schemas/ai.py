@@ -115,3 +115,7 @@ class AnalyzeTickerAsyncResponse(AnalysisResponse):
 
 class BuildPortfolioAsyncResponse(ReviewPortfolioResponse):
     extra: AsyncTaskInfo
+
+
+class SpotlightPortfolioAsyncResponse(AnalyzePortfolioResponse):
+    extra: AsyncTaskInfo
