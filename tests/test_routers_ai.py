@@ -130,9 +130,9 @@ class TestAnalyzeDividendEventAsync:
     def test_requires_inputs_when_starting_task(self):
         resp = client.get("/ai/analyze_dividend_event_async")
 
-        assert resp.status_code == 422
+        assert resp.status_code == 400
         assert resp.json() == {
-            "status": 422,
+            "status": 400,
             "message": "Symbol, ex_date and div_amount are required when starting a task",
         }
 
