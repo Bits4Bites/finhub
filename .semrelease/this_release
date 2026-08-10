@@ -6,9 +6,10 @@
 - impr: Add cache utilities.
 - impr(crawler): Cache fetched webpage content for 24 hours.
 - impr: Add cache support to service ai_get_asx_new_listings.
-- feat(events): Add async endpoint for upcoming dividends event async version.
-- feat(events): Add async endpoint for upcoming earnings event async version.
-- feat(events): Add async endpoint for new listings event async version.
+- feat(events): Add async endpoint for upcoming dividends event.
+- feat(events): Add async endpoint for upcoming earnings event.
+- feat(events): Add async endpoint for new listings event.
 - impr: Add cache support to service ai_analyze_div_event.
-- feat(ai): Add async endpoint for analyzing dividend event async version.
+- feat(ai): Add async endpoint for analyzing dividend event.
 - impr: Add cache support to service ai_analyze_ticker.
+- feat(ai): Add async endpoint for analyzing ticker.
