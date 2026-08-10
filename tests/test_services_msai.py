@@ -149,6 +149,60 @@ class TestAiAnalyzeTicker:
 class TestAiBuildPortfolio:
     """Tests for ai_build_portfolio function."""
 
+    @patch("app.services.msai_build_portfolio.cache.get", new_callable=AsyncMock)
+    @patch("app.services.msai_build_portfolio.cache.generate_key", return_value="cache-key")
+    @patch("app.services.msai_build_portfolio.ai_helper.ai_exec_task", new_callable=AsyncMock)
+    def test_returns_cached_result(self, mock_ai_exec, mock_generate_key, mock_cache_get):
+        from app.models.ai import AnalyzePortfolioResult
+        from app.services.msai_build_portfolio import ai_build_portfolio
+
+        positions = [
+            HoldingTicker(
+                ticker="MSFT",
+                num_shares=5,
+                avg_price=300,
+                market_price=450,
+                target_allocation=0.4,
+                tags="technology",
+            ),
+            HoldingTicker(
+                ticker="AAPL",
+                num_shares=10,
+                avg_price=125,
+                market_price=200,
+                target_allocation=0.6,
+                tags="growth",
+            ),
+        ]
+        cached_result = AnalyzePortfolioResult(analysis="Cached portfolio")
+        mock_cache_get.return_value = cached_result
+
+        result = asyncio.run(
+            ai_build_portfolio(
+                existing_positions=positions,
+                country="US",
+                investor_theme="Growth focused",
+            )
+        )
+
+        assert result is cached_result
+        mock_generate_key.assert_called_once_with(
+            "build-portfolio-analysis",
+            "US",
+            "Growth focused",
+            "AAPL",
+            "10.0",
+            "125.0",
+            "0.6",
+            "MSFT",
+            "5.0",
+            "300.0",
+            "0.4",
+        )
+        mock_cache_get.assert_awaited_once_with("cache-key")
+        mock_ai_exec.assert_not_awaited()
+        assert [position.ticker for position in positions] == ["MSFT", "AAPL"]
+
     @patch("app.services.msai_build_portfolio.ai_helper.ai_exec_task", new_callable=AsyncMock)
     def test_returns_error_when_build_prompt_fails(self, mock_ai_exec):
         from app.services.msai_build_portfolio import ai_build_portfolio
@@ -183,10 +237,28 @@ class TestAiBuildPortfolio:
             LLMResponse(completion="Recommended portfolio: ..."),
         ]
 
-        result = asyncio.run(ai_build_portfolio(country="AU"))
+        with (
+            patch(
+                "app.services.msai_build_portfolio.cache.get",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
+                "app.services.msai_build_portfolio.cache.set",
+                new_callable=AsyncMock,
+                return_value=True,
+            ) as mock_cache_set,
+            patch(
+                "app.services.msai_build_portfolio.cache.generate_key",
+                return_value="cache-key",
+            ),
+        ):
+            result = asyncio.run(ai_build_portfolio(country="AU"))
+
         assert result is not None
         assert result.llm_error is False
         assert result.analysis == "Recommended portfolio: ..."
+        mock_cache_set.assert_awaited_once_with("cache-key", result, ttl=72 * 60 * 60)
 
     @patch("app.services.msai_build_portfolio.ai_helper.ai_exec_task", new_callable=AsyncMock)
     def test_includes_existing_positions_in_prompt(self, mock_ai_exec):
