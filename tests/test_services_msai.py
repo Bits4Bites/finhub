@@ -412,6 +412,67 @@ class TestAiSpotlightPortfolio:
 class TestAiReviewPortfolio:
     """Tests for ai_review_portfolio function."""
 
+    def setup_method(self):
+        from app.utils import cache
+
+        asyncio.run(cache.clear())
+
+    @patch("app.services.msai_review_portfolio.cache.get", new_callable=AsyncMock)
+    @patch("app.services.msai_review_portfolio.cache.generate_key", return_value="cache-key")
+    @patch("app.services.msai_review_portfolio.ai_helper.ai_exec_task", new_callable=AsyncMock)
+    def test_returns_cached_result(self, mock_ai_exec, mock_generate_key, mock_cache_get):
+        from app.models.ai import AnalyzePortfolioResult
+        from app.services.msai_review_portfolio import ai_review_portfolio
+
+        portfolio = [
+            HoldingTicker(
+                ticker="MSFT",
+                num_shares=5,
+                avg_price=300,
+                market_price=450,
+                target_allocation=0.4,
+                tags="technology",
+            ),
+            HoldingTicker(
+                ticker="AAPL",
+                num_shares=10,
+                avg_price=125,
+                market_price=200,
+                target_allocation=0.6,
+                tags="growth",
+            ),
+        ]
+        cached_result = AnalyzePortfolioResult(analysis="Cached review")
+        mock_cache_get.return_value = cached_result
+
+        result = asyncio.run(
+            ai_review_portfolio(
+                portfolio=portfolio,
+                country="US",
+                investor_theme="Growth focused",
+                rebalance_plan=True,
+            )
+        )
+
+        assert result is cached_result
+        mock_generate_key.assert_called_once_with(
+            "review-portfolio-analysis",
+            "US",
+            "Growth focused",
+            "True",
+            "AAPL",
+            "10.0",
+            "125.0",
+            "0.6",
+            "MSFT",
+            "5.0",
+            "300.0",
+            "0.4",
+        )
+        mock_cache_get.assert_awaited_once_with("cache-key")
+        mock_ai_exec.assert_not_awaited()
+        assert [position.ticker for position in portfolio] == ["MSFT", "AAPL"]
+
     def test_returns_none_for_empty_portfolio(self):
         from app.services.msai_review_portfolio import ai_review_portfolio
 
@@ -458,12 +519,30 @@ class TestAiReviewPortfolio:
             HoldingTicker(ticker="BHP.AX", num_shares=50, market_price=45.0),
         ]
 
-        result = asyncio.run(ai_review_portfolio(portfolio=portfolio, country="AU"))
+        with (
+            patch(
+                "app.services.msai_review_portfolio.cache.get",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
+                "app.services.msai_review_portfolio.cache.set",
+                new_callable=AsyncMock,
+                return_value=True,
+            ) as mock_cache_set,
+            patch(
+                "app.services.msai_review_portfolio.cache.generate_key",
+                return_value="cache-key",
+            ),
+        ):
+            result = asyncio.run(ai_review_portfolio(portfolio=portfolio, country="AU"))
+
         assert result is not None
         assert result.llm_error is False
         assert result.analysis == "Portfolio review: well diversified..."
         assert result.rebalance_plan == ""
         assert mock_ai_exec.call_count == 2
+        mock_cache_set.assert_awaited_once_with("cache-key", result, ttl=72 * 60 * 60)
 
     @patch("app.services.msai_review_portfolio.ai_helper.ai_exec_task", new_callable=AsyncMock)
     def test_generates_rebalance_plan_with_low_cost_preparation_and_premium_execution(self, mock_ai_exec):
