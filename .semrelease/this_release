@@ -14,3 +14,4 @@
 - impr: Add cache support to service ai_analyze_ticker.
 - feat(ai): Add async endpoint for analyzing ticker.
 - impr: Add cache support to service ai_build_portfolio.
+- feat(ai): Add async endpoint for building portfolio.

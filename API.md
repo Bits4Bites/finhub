@@ -518,6 +518,38 @@ curl -X POST 'http://localhost:8000/ai/build_portfolio' \
 
 Response `data.analysis` contains the premium AI's generated portfolio. This endpoint does not generate a rebalance plan.
 
+### `POST /ai/build_portfolio_async`
+
+Build a portfolio in the background. Start a task with the same JSON request body as
+`/ai/build_portfolio`, then poll by posting to this endpoint with the returned task ID. Task state and
+results expire after one hour; completed portfolio results are cached for 72 hours.
+
+| Parameter            | Location  | Required    | Description                                                   |
+|----------------------|-----------|-------------|---------------------------------------------------------------|
+| `current_allocation` | JSON body | No          | Optional existing holdings used when starting a task.        |
+| `country`            | JSON body | No          | Optional country context used when starting a task.           |
+| `investor_theme`     | JSON body | No          | Optional investor theme used when starting a task.            |
+| `task_id`            | query     | Conditional | Task ID returned when starting a task. Required when polling. |
+
+```bash
+# Start a task
+curl -X POST 'http://localhost:8000/ai/build_portfolio_async' \
+  -H 'Content-Type: application/json' \
+  -d '{"country": "AU", "investor_theme": "growth with moderate risk"}'
+
+# Poll a task
+curl -X POST 'http://localhost:8000/ai/build_portfolio_async?task_id=<TASK_ID>'
+```
+
+Polling returns:
+
+| HTTP status | Task state  | Result                                             |
+|-------------|-------------|----------------------------------------------------|
+| `202`       | `RUNNING`   | The task is still running.                         |
+| `200`       | `COMPLETED` | The standard build-portfolio payload in `data`.    |
+| `500`       | `FAILED`    | The background task failed.                        |
+| `404`       | —           | The task ID is unknown or its cache entry expired. |
+
 ---
 
 ### `POST /ai/spotlight_portfolio`

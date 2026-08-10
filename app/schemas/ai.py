@@ -111,3 +111,7 @@ class AnalyzeDividendEventAsyncResponse(AnalyzeDividendEventResponse):
 
 class AnalyzeTickerAsyncResponse(AnalysisResponse):
     extra: AsyncTaskInfo
+
+
+class BuildPortfolioAsyncResponse(ReviewPortfolioResponse):
+    extra: AsyncTaskInfo
