@@ -198,10 +198,10 @@ curl 'http://localhost:8000/stocks/index/NASDAQ100/companies'
 
 Get upcoming dividend/distribution events for a market.
 
-| Parameter | Type  | Required | Description                                                                                                               |
-|-----------|-------|----------|---------------------------------------------------------------------------------------------------------------------------|
-| `country` | query | Yes      | Country code: `AU`, `US`, or `VN`.                                                                                        |
-| `index`   | query | No       | Filter by index: `ASX20`, `ASX50`, `ASX100`, `ASX200`, `ASX300`, `NASDAQ100`, `SP500`, `SP400`, `SP600`, `VN30`, `VN100`. |
+| Parameter | Type  | Required | Description                                                                                                                        |
+|-----------|-------|----------|------------------------------------------------------------------------------------------------------------------------------------|
+| `country` | query | Yes      | Country code: `AU`, `US`, or `VN`.                                                                                                 |
+| `index`   | query | No       | Filter by index: `ASX20`, `ASX50`, `ASX100`, `ASX200`, `ASX300`, `NASDAQ100`, `SP500`, `SP400`, `SP600`, `VN30`, `VN100`, `HNX30`. |
 
 Events for stocks in major indices (ASX300, NASDAQ100, SP500, SP400, VN100) include AI-generated dividend analysis.
 
@@ -216,11 +216,11 @@ curl 'http://localhost:8000/events/upcoming_dividends?country=AU&index=ASX200'
 Run the upcoming-dividends request in the background. Start a task with the same `country` and
 `index` parameters, then poll using the returned task ID. Task state and results expire after one hour.
 
-| Parameter | Type  | Required    | Description                                                       |
-|-----------|-------|-------------|-------------------------------------------------------------------|
-| `country` | query | Conditional | Country code: `AU`, `US`, or `VN`. Required when starting a task. |
-| `index`   | query | No          | Optional stock-index filter used when starting a task.            |
-| `task_id` | query | Conditional | Task ID returned when starting a task. Required when polling.     |
+| Parameter | Type  | Required    | Description                                                                                                   |
+|-----------|-------|-------------|---------------------------------------------------------------------------------------------------------------|
+| `country` | query | Conditional | Country code: `AU`, `US`, or `VN`. Required when starting a task.                                             |
+| `index`   | query | No          | Optional stock-index filter used when starting a task; supports the same indices as the synchronous endpoint. |
+| `task_id` | query | Conditional | Task ID returned when starting a task. Required when polling.                                                 |
 
 ```bash
 # Start a task

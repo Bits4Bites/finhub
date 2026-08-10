@@ -59,7 +59,7 @@ async def get_upcoming_dividends_event(
     country: str = Query(description="Country code to filter events by (only 'AU', 'US' and 'VN' are supported)."),
     index: str = Query(
         "",
-        description="Optional stock index to filter events by (support 'ASX20', 'ASX50', 'ASX100', 'ASX200', 'ASX300', 'NASDAQ100', 'SP500', 'SP400', 'SP600', 'VN30', 'VN100').",
+        description="Optional stock index to filter events by (support 'ASX20', 'ASX50', 'ASX100', 'ASX200', 'ASX300', 'NASDAQ100', 'SP500', 'SP400', 'SP600', 'VN30', 'VN100', 'HNX30').",
     ),
 ) -> schemas_event.UpcomingDividendsResponse | RedirectResponse:
     """
@@ -119,7 +119,7 @@ async def get_upcoming_dividends_event_async(
     ),
     index: str = Query(
         "",
-        description="Optional stock index to filter events by (support 'ASX20', 'ASX50', 'ASX100', 'ASX200', 'ASX300', 'NASDAQ100', 'SP500', 'SP400', 'SP600', 'VN30', 'VN100').",
+        description="Optional stock index to filter events by (support 'ASX20', 'ASX50', 'ASX100', 'ASX200', 'ASX300', 'NASDAQ100', 'SP500', 'SP400', 'SP600', 'VN30', 'VN100', 'HNX30').",
     ),
     task_id: str = Query("", description="Task ID returned by a previous call to this endpoint."),
 ) -> schemas_event.UpcomingDividendsAsyncResponse | RedirectResponse:
