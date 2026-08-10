@@ -107,3 +107,7 @@ class AsyncTaskInfo(BaseModel):
 
 class AnalyzeDividendEventAsyncResponse(AnalyzeDividendEventResponse):
     extra: AsyncTaskInfo
+
+
+class AnalyzeTickerAsyncResponse(AnalysisResponse):
+    extra: AsyncTaskInfo

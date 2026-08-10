@@ -452,6 +452,37 @@ curl -X POST 'http://localhost:8000/ai/analyze_ticker' \
   -d '{"symbol": "CBA.AX", "intent": "dividend capture strategy"}'
 ```
 
+### `POST /ai/analyze_ticker_async`
+
+Run ticker analysis in the background. Start a task with the same JSON request body as
+`/ai/analyze_ticker`, then poll by posting to this endpoint with the returned task ID. Task state and
+results expire after one hour; completed analyses are cached for 72 hours.
+
+| Parameter | Location  | Required    | Description                                                   |
+|-----------|-----------|-------------|---------------------------------------------------------------|
+| `symbol`  | JSON body | Conditional | Stock symbol. Required when starting a task.                  |
+| `intent`  | JSON body | No          | Optional analysis intent used when starting a task.           |
+| `task_id` | query     | Conditional | Task ID returned when starting a task. Required when polling. |
+
+```bash
+# Start a task
+curl -X POST 'http://localhost:8000/ai/analyze_ticker_async' \
+  -H 'Content-Type: application/json' \
+  -d '{"symbol": "CBA.AX", "intent": "dividend capture strategy"}'
+
+# Poll a task
+curl -X POST 'http://localhost:8000/ai/analyze_ticker_async?task_id=<TASK_ID>'
+```
+
+Polling returns:
+
+| HTTP status | Task state  | Result                                             |
+|-------------|-------------|----------------------------------------------------|
+| `202`       | `RUNNING`   | The task is still running.                         |
+| `200`       | `COMPLETED` | The standard ticker-analysis payload in `data`.    |
+| `500`       | `FAILED`    | The background task failed.                        |
+| `404`       | —           | The task ID is unknown or its cache entry expired. |
+
 ---
 
 ### `POST /ai/build_portfolio`
