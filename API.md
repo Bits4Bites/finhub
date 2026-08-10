@@ -330,10 +330,10 @@ curl 'http://localhost:8000/events/new_listings?country=AU'
 
 Run the new-listings request in the background. Task state and results expire after one hour.
 
-| Parameter | Type  | Required    | Description                                                   |
-|-----------|-------|-------------|---------------------------------------------------------------|
-| `country` | query | Conditional | Country code. Currently only `AU` is supported.               |
-| `task_id` | query | Conditional | Task ID returned when starting a task. Required when polling. |
+| Parameter | Type  | Required    | Description                                                                     |
+|-----------|-------|-------------|---------------------------------------------------------------------------------|
+| `country` | query | Conditional | Country code. Currently only `AU` is supported. Required when starting a task. |
+| `task_id` | query | Conditional | Task ID returned when starting a task. Required when polling.                   |
 
 ```bash
 # Start a task
@@ -494,8 +494,9 @@ Build a new portfolio using AI assistance.
 | Field                | Type              | Required | Description                                                               |
 |----------------------|-------------------|----------|---------------------------------------------------------------------------|
 | `current_allocation` | `HoldingTicker[]` | No       | List of existing holdings (see fields below).                             |
-| `country`            | `string`          | No       | Country context for the portfolio (e.g. `AU`, `US`).                      |
+| `country`            | `string`          | Yes      | Required country context for the portfolio (e.g. `AU`, `US`).             |
 | `investor_theme`     | `string`          | No       | Investor theme/preference for the analysis. Defaults to a built-in theme. |
+| `rebalance_plan`     | `boolean`         | No       | Ignored; this endpoint only builds a portfolio.                           |
 
 Each `HoldingTicker` object:
 
@@ -526,9 +527,10 @@ results expire after one hour; completed portfolio results are cached for 72 hou
 
 | Parameter            | Location  | Required    | Description                                                   |
 |----------------------|-----------|-------------|---------------------------------------------------------------|
-| `current_allocation` | JSON body | No          | Optional existing holdings used when starting a task.        |
-| `country`            | JSON body | No          | Optional country context used when starting a task.           |
+| `current_allocation` | JSON body | No          | Optional existing holdings used when starting a task.         |
+| `country`            | JSON body | Conditional | Country context. Required when starting a task.               |
 | `investor_theme`     | JSON body | No          | Optional investor theme used when starting a task.            |
+| `rebalance_plan`     | JSON body | No          | Ignored; this endpoint only builds a portfolio.               |
 | `task_id`            | query     | Conditional | Task ID returned when starting a task. Required when polling. |
 
 ```bash
@@ -561,9 +563,10 @@ actionable responses for `Critical` and `High` risks.
 
 | Field                | Type              | Required | Description                                                               |
 |----------------------|-------------------|----------|---------------------------------------------------------------------------|
-| `current_allocation` | `HoldingTicker[]` | No       | List of current holdings to review.                                       |
-| `country`            | `string`          | No       | Country context for the analysis (e.g. `AU`, `US`).                       |
+| `current_allocation` | `HoldingTicker[]` | Yes      | Non-empty list of current holdings to review.                             |
+| `country`            | `string`          | Yes      | Required country context for the analysis (e.g. `AU`, `US`).              |
 | `investor_theme`     | `string`          | No       | Investor theme/preference for the analysis. Defaults to a built-in theme. |
+| `rebalance_plan`     | `boolean`         | No       | Ignored; use `/ai/analyze_portfolio` to request a rebalance plan.         |
 
 Each `HoldingTicker` object:
 
@@ -601,8 +604,9 @@ Task state and results expire after one hour; completed spotlight analyses are c
 | Parameter            | Location  | Required    | Description                                                   |
 |----------------------|-----------|-------------|---------------------------------------------------------------|
 | `current_allocation` | JSON body | Conditional | Current holdings. Required when starting a task.              |
-| `country`            | JSON body | No          | Optional country context used when starting a task.           |
+| `country`            | JSON body | Conditional | Country context. Required when starting a task.               |
 | `investor_theme`     | JSON body | No          | Optional investor theme used when starting a task.            |
+| `rebalance_plan`     | JSON body | No          | Ignored; this endpoint only spotlights immediate risks.       |
 | `task_id`            | query     | Conditional | Task ID returned when starting a task. Required when polling. |
 
 ```bash
@@ -641,7 +645,7 @@ optionally assess whether a major rebalance is needed, generating a plan only wh
 | Field                | Type              | Required | Description                                                                                                                      |
 |----------------------|-------------------|----------|----------------------------------------------------------------------------------------------------------------------------------|
 | `current_allocation` | `HoldingTicker[]` | No       | List of current holdings. If empty, builds a new portfolio instead.                                                              |
-| `country`            | `string`          | No       | Country context for the analysis (e.g. `AU`, `US`).                                                                              |
+| `country`            | `string`          | Yes      | Required country context for the analysis (e.g. `AU`, `US`).                                                                     |
 | `investor_theme`     | `string`          | No       | Investor theme/preference for the analysis. Defaults to a built-in theme.                                                        |
 | `rebalance_plan`     | `boolean`         | No       | If `true`, assesses whether existing holdings need a major rebalance and generates a plan only when needed. Defaults to `false`. |
 
@@ -684,6 +688,46 @@ curl -X POST 'http://localhost:8000/ai/analyze_portfolio' \
 
 If the rebalance decision or any later rebalance stage fails after the portfolio review succeeds, `analysis` retains
 the completed review while `llm_error` and `llm_error_msg` describe the later failure.
+
+### `POST /ai/analyze_portfolio_async`
+
+Analyze or build a portfolio in the background using the same review-or-build behavior and JSON
+request body as `/ai/analyze_portfolio`. Poll by posting to this endpoint with the returned task ID.
+Task state and results expire after one hour; completed analyses retain the underlying 72-hour
+build/review service cache.
+
+| Parameter            | Location  | Required    | Description                                                   |
+|----------------------|-----------|-------------|---------------------------------------------------------------|
+| `current_allocation` | JSON body | No          | Holdings to review; when empty, a new portfolio is built.     |
+| `country`            | JSON body | Conditional | Country context. Required when starting a task.               |
+| `investor_theme`     | JSON body | No          | Optional investor theme used when starting a task.            |
+| `rebalance_plan`     | JSON body | No          | Whether to generate a major-rebalance plan when needed.       |
+| `task_id`            | query     | Conditional | Task ID returned when starting a task. Required when polling. |
+
+```bash
+# Start a task
+curl -X POST 'http://localhost:8000/ai/analyze_portfolio_async' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "country": "US",
+    "current_allocation": [
+      {"ticker": "AAPL", "num_shares": 50, "avg_price": 150.0, "target_allocation": 1.0}
+    ],
+    "rebalance_plan": true
+  }'
+
+# Poll a task
+curl -X POST 'http://localhost:8000/ai/analyze_portfolio_async?task_id=<TASK_ID>'
+```
+
+Polling returns:
+
+| HTTP status | Task state  | Result                                             |
+|-------------|-------------|----------------------------------------------------|
+| `202`       | `RUNNING`   | The task is still running.                         |
+| `200`       | `COMPLETED` | The standard analyze-portfolio payload in `data`.  |
+| `500`       | `FAILED`    | The background task failed.                        |
+| `404`       | —           | The task ID is unknown or its cache entry expired. |
 
 ---
 

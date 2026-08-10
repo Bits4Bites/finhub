@@ -18,3 +18,4 @@
 - impr: Add cache support to service ai_spotlight_portfolio.
 - feat(ai): Add async endpoint for spotlighting portfolio.
 - impr: Add cache support to service ai_review_portfolio.
+- feat(ai): Add async endpoint for analyzing portfolio.

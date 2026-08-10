@@ -18,6 +18,7 @@ _ANALYZE_DIVIDEND_EVENT_TASK_TYPE = "analyze_dividend_event"
 _ANALYZE_TICKER_TASK_TYPE = "analyze_ticker"
 _BUILD_PORTFOLIO_TASK_TYPE = "build_portfolio"
 _SPOTLIGHT_PORTFOLIO_TASK_TYPE = "spotlight_portfolio"
+_ANALYZE_PORTFOLIO_TASK_TYPE = "analyze_portfolio"
 
 
 @router.get(
@@ -635,18 +636,9 @@ async def spotlight_portfolio_async(
 # ----------------------------------------------------------------------
 
 
-@router.post(
-    "/analyze_portfolio",
-    response_model=schemas_ai.ReviewPortfolioResponse,
-    response_model_exclude_none=True,
-)
-async def analyze_portfolio(
-    req: schemas_ai.AnalyzePortfolioRequest = Body(description="The analyze portfolio request."),
+async def _get_analyze_portfolio_result(
+    req: schemas_ai.AnalyzePortfolioRequest,
 ) -> schemas_ai.ReviewPortfolioResponse:
-    """
-    Analyzes a portfolio using AI assistance: review and give recommendations if current holding positions is supplied;
-    otherwise build a new portfolio.
-    """
     if req.current_allocation:
         result = await service_review_portfolio.ai_review_portfolio(
             portfolio=req.current_allocation,
@@ -663,3 +655,129 @@ async def analyze_portfolio(
     if not result:
         return schemas_ai.ReviewPortfolioResponse(status=400, message="Invalid input or execution failed")
     return schemas_ai.ReviewPortfolioResponse(status=200, message="ok", data=result)
+
+
+@router.post(
+    "/analyze_portfolio",
+    response_model=schemas_ai.ReviewPortfolioResponse,
+    response_model_exclude_none=True,
+)
+async def analyze_portfolio(
+    req: schemas_ai.AnalyzePortfolioRequest = Body(description="The analyze portfolio request."),
+) -> schemas_ai.ReviewPortfolioResponse:
+    """
+    Analyzes a portfolio using AI assistance: review and give recommendations if current holding positions is supplied;
+    otherwise build a new portfolio.
+    """
+    return await _get_analyze_portfolio_result(req)
+
+
+async def _run_analyze_portfolio_task(
+    task_id: str,
+    req: schemas_ai.AnalyzePortfolioRequest,
+) -> None:
+    try:
+        result = await _get_analyze_portfolio_result(req)
+    except Exception:
+        logging.exception("Analyze portfolio task '%s' failed.", task_id)
+        await cache.set(
+            task_id,
+            {
+                "task_type": _ANALYZE_PORTFOLIO_TASK_TYPE,
+                "state": async_task.TASK_STATE_FAILED,
+                "message": "Task failed",
+            },
+            ttl=async_task.ASYNC_TASK_TTL,
+        )
+        return
+
+    await cache.set(
+        task_id,
+        {
+            "task_type": _ANALYZE_PORTFOLIO_TASK_TYPE,
+            "state": async_task.TASK_STATE_COMPLETED,
+            "result": result.model_dump(mode="json"),
+        },
+        ttl=async_task.ASYNC_TASK_TTL,
+    )
+
+
+@router.post(
+    "/analyze_portfolio_async",
+    response_model=schemas_ai.AnalyzePortfolioAsyncResponse,
+    response_model_exclude_none=True,
+)
+async def analyze_portfolio_async(
+    background_tasks: BackgroundTasks,
+    response: Response,
+    req: schemas_ai.AnalyzePortfolioRequest | None = Body(
+        None,
+        description="The analyze portfolio request. Required when starting a task; not required when polling.",
+    ),
+    task_id: str = Query("", description="Task ID returned by a previous call to this endpoint."),
+) -> schemas_ai.AnalyzePortfolioAsyncResponse:
+    """
+    Start an analyze-portfolio task or poll a previously started task.
+    """
+    task_id = task_id.strip()
+    if task_id:
+        task_entry = await cache.get(task_id)
+        if not isinstance(task_entry, dict) or task_entry.get("task_type") != _ANALYZE_PORTFOLIO_TASK_TYPE:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+
+        task_state = task_entry.get("state")
+        if task_state not in {
+            async_task.TASK_STATE_RUNNING,
+            async_task.TASK_STATE_COMPLETED,
+            async_task.TASK_STATE_FAILED,
+        }:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Invalid task state")
+
+        task_info = schemas_ai.AsyncTaskInfo(task_id=task_id, state=task_state)
+        if task_state == async_task.TASK_STATE_RUNNING:
+            response.status_code = status.HTTP_202_ACCEPTED
+            return schemas_ai.AnalyzePortfolioAsyncResponse(
+                status=status.HTTP_202_ACCEPTED,
+                message="Task is running",
+                extra=task_info,
+            )
+        if task_state == async_task.TASK_STATE_FAILED:
+            response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+            return schemas_ai.AnalyzePortfolioAsyncResponse(
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                message=task_entry.get("message", "Task failed"),
+                extra=task_info,
+            )
+        if not isinstance(task_entry.get("result"), dict):
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Invalid task state")
+
+        result = schemas_ai.ReviewPortfolioResponse.model_validate(task_entry["result"])
+        return schemas_ai.AnalyzePortfolioAsyncResponse(
+            status=result.status,
+            message=result.message,
+            data=result.data,
+            extra=task_info,
+        )
+
+    if req is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Request body is required when starting a task",
+        )
+
+    task_id = str(uuid.uuid4())
+    await cache.set(
+        task_id,
+        {
+            "task_type": _ANALYZE_PORTFOLIO_TASK_TYPE,
+            "state": async_task.TASK_STATE_RUNNING,
+        },
+        ttl=async_task.ASYNC_TASK_TTL,
+    )
+    background_tasks.add_task(_run_analyze_portfolio_task, task_id, req)
+    response.status_code = status.HTTP_202_ACCEPTED
+    return schemas_ai.AnalyzePortfolioAsyncResponse(
+        status=status.HTTP_202_ACCEPTED,
+        message="Task started",
+        extra=schemas_ai.AsyncTaskInfo(task_id=task_id, state=async_task.TASK_STATE_RUNNING),
+    )

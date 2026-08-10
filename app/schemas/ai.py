@@ -50,8 +50,8 @@ class AnalyzePortfolioRequest(BaseRequest):
         rebalance_plan (bool): (optional) Whether to assess the need for a major rebalance and generate a plan when needed.
     """
 
+    country: str
     current_allocation: list[models.HoldingTicker] = []
-    country: str = ""
     investor_theme: str = services_ai.DEFAULT_INVESTOR_THEME
     rebalance_plan: bool = False
 
@@ -118,4 +118,8 @@ class BuildPortfolioAsyncResponse(ReviewPortfolioResponse):
 
 
 class SpotlightPortfolioAsyncResponse(AnalyzePortfolioResponse):
+    extra: AsyncTaskInfo
+
+
+class AnalyzePortfolioAsyncResponse(ReviewPortfolioResponse):
     extra: AsyncTaskInfo
