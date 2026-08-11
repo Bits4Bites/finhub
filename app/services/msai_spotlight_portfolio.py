@@ -76,8 +76,8 @@ async def ai_spotlight_portfolio(
     Returns:
         models_ai.AnalysisResult | None: AI analysis result containing the recommended spotlight review.
     """
-    if not portfolio:
-        return None
+    if not portfolio or ([pos for pos in portfolio if pos.num_shares > 0] == 0):
+        return models_ai.AnalysisResult(analysis="SUMMARY: No holdings, spotlight analysis skipped.")
 
     cache_key_items = ["spotlight-portfolio-analysis", country, investor_theme]
     for position in sorted(portfolio, key=lambda item: item.ticker):

@@ -609,7 +609,7 @@ async def spotlight_portfolio_async(
             extra=task_info,
         )
 
-    if req is None or not req.current_allocation:
+    if req is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Current allocation is required when starting a task",
