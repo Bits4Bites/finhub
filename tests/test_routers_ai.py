@@ -794,14 +794,28 @@ class TestSpotlightPortfolioAsync:
         assert task_req.investor_theme == "Growth focused"
         assert task_req.current_allocation[0].ticker == "CBA.AX"
 
-    def test_requires_current_allocation_when_starting_task(self):
-        resp = client.post("/ai/spotlight_portfolio_async", json={"country": "AU"})
+    def test_starts_task_without_current_allocation(self):
+        with (
+            patch("app.routers.ai.uuid.uuid4", return_value="task-spotlight"),
+            patch("app.routers.ai.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
+            patch("app.routers.ai._run_spotlight_portfolio_task", new_callable=AsyncMock) as mock_run_task,
+        ):
+            resp = client.post("/ai/spotlight_portfolio_async", json={"country": "AU"})
 
-        assert resp.status_code == 400
+        assert resp.status_code == 202
         assert resp.json() == {
-            "status": 400,
-            "message": "Current allocation is required when starting a task",
+            "status": 202,
+            "message": "Task started",
+            "extra": {"task_id": "task-spotlight", "state": async_task.TASK_STATE_RUNNING},
         }
+        mock_cache_set.assert_awaited_once_with(
+            "task-spotlight",
+            {"task_type": "spotlight_portfolio", "state": async_task.TASK_STATE_RUNNING},
+            ttl=3600,
+        )
+        mock_run_task.assert_awaited_once()
+        _, task_req = mock_run_task.await_args.args
+        assert task_req.current_allocation == []
 
     def test_requires_country_when_starting_task(self):
         resp = client.post(

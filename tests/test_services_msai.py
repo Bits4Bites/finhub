@@ -366,11 +366,11 @@ class TestAiSpotlightPortfolio:
         mock_ai_exec.assert_not_awaited()
         assert [position.ticker for position in portfolio] == ["MSFT", "AAPL"]
 
-    def test_returns_none_for_empty_portfolio(self):
+    def test_returns_skipped_analysis_for_empty_portfolio(self):
         from app.services.msai_spotlight_portfolio import ai_spotlight_portfolio
 
         result = asyncio.run(ai_spotlight_portfolio(portfolio=[], country="AU"))
-        assert result is None
+        assert result.analysis == "SUMMARY: No holdings, spotlight analysis skipped."
 
     @patch("app.services.msai_spotlight_portfolio.ai_helper.ai_exec_task", new_callable=AsyncMock)
     def test_uses_two_step_prompt_flow(self, mock_ai_exec):
