@@ -20,3 +20,4 @@
 - impr: Add cache support to service ai_review_portfolio.
 - feat(ai): Add async endpoint for analyzing portfolio.
 - impr(spotlight portfolio): Skip spotlight analysis if portfolio has no holdings.
+- impr(analyze portfolio): Switch to portfolio building if portfolio has no holdings.

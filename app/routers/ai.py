@@ -639,18 +639,19 @@ async def spotlight_portfolio_async(
 async def _get_analyze_portfolio_result(
     req: schemas_ai.AnalyzePortfolioRequest,
 ) -> schemas_ai.ReviewPortfolioResponse:
-    if req.current_allocation:
+    has_no_holdings = not req.current_allocation or all(pos.num_shares == 0 for pos in req.current_allocation)
+    if has_no_holdings:
+        result = await service_build_portfolio.ai_build_portfolio(
+            existing_positions=None,
+            country=req.country,
+            investor_theme=req.investor_theme,
+        )
+    else:
         result = await service_review_portfolio.ai_review_portfolio(
             portfolio=req.current_allocation,
             country=req.country,
             investor_theme=req.investor_theme,
             rebalance_plan=req.rebalance_plan,
-        )
-    else:
-        result = await service_build_portfolio.ai_build_portfolio(
-            existing_positions=None,
-            country=req.country,
-            investor_theme=req.investor_theme,
         )
     if not result:
         return schemas_ai.ReviewPortfolioResponse(status=400, message="Invalid input or execution failed")
