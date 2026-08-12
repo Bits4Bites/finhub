@@ -57,7 +57,6 @@ Configuration is provided via environment variables, conventionally grouped into
 | Variable         | Default | Description                                                                |
 |------------------|---------|----------------------------------------------------------------------------|
 | `LISTEN_PORT`    | `8000`  | Port the server listens on.                                                |
-| `NUM_WORKERS`    | `2`     | Number of server worker processes (forced to 1 / disabled on Windows).     |
 | `RELOAD`         | `false` | Enable auto-reload on code changes (development only).                     |
 | `FINHUB_API_KEY` | _empty_ | API key protecting all endpoints. If empty, no authentication is required. |
 

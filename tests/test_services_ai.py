@@ -3,6 +3,8 @@
 import asyncio
 from unittest.mock import AsyncMock, patch
 
+import pytest
+
 # ===========================================================================
 # Tests for get_symbol_info_raw
 # ===========================================================================
@@ -53,6 +55,16 @@ class TestGetSymbolInfoRaw:
 class TestAiGetAsxNewListings:
     """Tests for ai_get_asx_new_listings function."""
 
+    @pytest.fixture(autouse=True)
+    def mock_cache(self):
+        with (
+            patch("app.services.msai_asx_listings.cache.get", new_callable=AsyncMock, return_value=None) as mock_get,
+            patch("app.services.msai_asx_listings.cache.set", new_callable=AsyncMock, return_value=True) as mock_set,
+        ):
+            self.mock_cache_get = mock_get
+            self.mock_cache_set = mock_set
+            yield
+
     @patch("app.services.msai_asx_listings._analyze_asx_listings", new_callable=AsyncMock)
     @patch("app.services.msai_asx_listings._get_asx_new_listings", new_callable=AsyncMock)
     def test_returns_empty_list_when_no_listings(self, mock_get, mock_analyze):
@@ -83,6 +95,8 @@ class TestAiGetAsxNewListings:
         assert len(result) == 1
         assert result[0].date.startswith("2026-06-15")
         assert result[0].timestamp > 0
+        self.mock_cache_set.assert_awaited_once()
+        assert self.mock_cache_set.await_args.kwargs["ttl"] == 259200
 
     @patch("app.services.msai_asx_listings._analyze_asx_listings", new_callable=AsyncMock)
     @patch("app.services.msai_asx_listings._get_asx_new_listings", new_callable=AsyncMock)
@@ -95,6 +109,63 @@ class TestAiGetAsxNewListings:
         asyncio.run(ai_get_asx_new_listings())
         mock_get.assert_called_once()
         mock_analyze.assert_called_once()
+
+    @patch("app.services.msai_asx_listings._analyze_asx_listings", new_callable=AsyncMock)
+    @patch("app.services.msai_asx_listings._get_asx_new_listings", new_callable=AsyncMock)
+    def test_returns_cached_analysis(self, mock_get, mock_analyze):
+        from app.models.event import ListingEvent
+        from app.services.msai_asx_listings import ai_get_asx_new_listings
+
+        extracted_event = ListingEvent(symbol="ASX:XYZ", date="2026-06-15", price=2.5)
+        cached_events = [ListingEvent(symbol="ASX:XYZ", date="2026-06-15T00:00:00+10:00", price=2.5)]
+        mock_get.return_value = [extracted_event]
+        self.mock_cache_get.return_value = cached_events
+
+        result = asyncio.run(ai_get_asx_new_listings())
+
+        assert result is cached_events
+        mock_analyze.assert_not_awaited()
+        self.mock_cache_set.assert_not_awaited()
+
+    @patch("app.services.msai_asx_listings.cache.generate_key", return_value="cache-key")
+    @patch("app.services.msai_asx_listings._analyze_asx_listings", new_callable=AsyncMock)
+    @patch("app.services.msai_asx_listings._get_asx_new_listings", new_callable=AsyncMock)
+    def test_cache_key_uses_sorted_listing_fields(self, mock_get, mock_analyze, mock_generate_key):
+        from app.models.event import ListingEvent
+        from app.services.msai_asx_listings import ai_get_asx_new_listings
+
+        events = [
+            ListingEvent(
+                symbol="ASX:ZZZ",
+                date="2026-08-02",
+                price=2.5,
+                public_offer_close_date="2026-07-28",
+            ),
+            ListingEvent(
+                symbol="ASX:AAA",
+                date="2026-08-01",
+                price=1.25,
+                public_offer_close_date=None,
+            ),
+        ]
+        mock_get.return_value = events
+        mock_analyze.return_value = events
+
+        asyncio.run(ai_get_asx_new_listings())
+
+        mock_generate_key.assert_called_once_with(
+            "asx-new-listings-analysis",
+            "ASX:AAA",
+            "2026-08-01",
+            "1.25",
+            "",
+            "ASX:ZZZ",
+            "2026-08-02",
+            "2.5",
+            "2026-07-28",
+        )
+        assert [event.symbol for event in mock_analyze.await_args.args[0]] == ["ASX:AAA", "ASX:ZZZ"]
+        self.mock_cache_set.assert_awaited_once_with("cache-key", events, ttl=259200)
 
 
 # ===========================================================================

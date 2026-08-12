@@ -3,13 +3,14 @@ import re
 from ..models import ai as models_ai
 from ..models import finhub as models
 from ..services import ai_helper
-from ..utils import conv
+from ..utils import cache, conv
 
 DEFAULT_INVESTOR_THEME = (
     "- Risk tolerance: moderate\n- Time horizon: 3-5 years\n- Goal: capital growth\n- Rebalance frequency: semi-annual"
 )
 
 NO_REBALANCE_NEEDED = "No rebalance needed"
+_REVIEW_PORTFOLIO_CACHE_TTL = 72 * 60 * 60
 
 BUILD_PROMPT_TEMPLATE = (
     "You are an expert financial advisor and prompt engineer.\n"
@@ -210,6 +211,21 @@ async def ai_review_portfolio(
     if not portfolio:
         return None
 
+    cache_key_items = ["review-portfolio-analysis", country, investor_theme, str(rebalance_plan)]
+    for position in sorted(portfolio, key=lambda item: item.ticker):
+        cache_key_items.extend(
+            (
+                position.ticker,
+                str(position.num_shares),
+                str(position.avg_price),
+                str(position.target_allocation),
+            )
+        )
+    cache_key = cache.generate_key(*cache_key_items)
+    cached_result = await cache.get(cache_key)
+    if cached_result is not None:
+        return cached_result
+
     # Step 1: build {investor_profile} from investor_theme + existing holdings
     currency = conv.country_to_currency_symbol(country) or "$"
     holdings_lines = []
@@ -240,7 +256,9 @@ async def ai_review_portfolio(
 
     rebalance_needed, portfolio_review = _extract_rebalance_decision(exec_result.completion)
     if not rebalance_plan:
-        return models_ai.AnalyzePortfolioResult(analysis=portfolio_review)
+        result = models_ai.AnalyzePortfolioResult(analysis=portfolio_review)
+        await cache.set(cache_key, result, ttl=_REVIEW_PORTFOLIO_CACHE_TTL)
+        return result
 
     if rebalance_needed is None:
         return models_ai.AnalyzePortfolioResult(
@@ -249,10 +267,12 @@ async def ai_review_portfolio(
             llm_error_msg="Premium portfolio review did not include a valid final REBALANCE_NEEDED flag.",
         )
     if not rebalance_needed:
-        return models_ai.AnalyzePortfolioResult(
+        result = models_ai.AnalyzePortfolioResult(
             analysis=portfolio_review,
             rebalance_plan=NO_REBALANCE_NEEDED,
         )
+        await cache.set(cache_key, result, ttl=_REVIEW_PORTFOLIO_CACHE_TTL)
+        return result
 
     # Step 4: use the low-cost model to summarize the premium review without adding new analysis
     summarize_prompt = SUMMARIZE_REVIEW_PROMPT_TEMPLATE.format(
@@ -297,7 +317,9 @@ async def ai_review_portfolio(
             llm_error_msg=rebalance_result.error_msg,
         )
 
-    return models_ai.AnalyzePortfolioResult(
+    result = models_ai.AnalyzePortfolioResult(
         analysis=portfolio_review,
         rebalance_plan=rebalance_result.completion,
     )
+    await cache.set(cache_key, result, ttl=_REVIEW_PORTFOLIO_CACHE_TTL)
+    return result

@@ -6,9 +6,10 @@ from ..models import event as models_event
 from ..models import types
 from ..services import ai_helper
 from ..services import event as services_event
-from ..utils import conv, yfutils
+from ..utils import cache, conv, yfutils
 
 DEFAULT_INTENT = "Looking to capture the dividend or if post-div dip is worth buying"
+_DIV_EVENT_ANALYSIS_CACHE_TTL = 72 * 60 * 60
 
 BUILD_PROMPT_TEMPLATE = (
     "You are an expert financial analyst and prompt engineer specialising in dividend strategies.\n"
@@ -189,6 +190,18 @@ async def ai_analyze_div_event(
     Returns:
         models_ai.AnalysisResult | None: A models_ai.AnalysisResult object containing the analysis, or None.
     """
+    effective_intent = intent or DEFAULT_INTENT
+    cache_key = cache.generate_key(
+        "dividend-event-analysis",
+        symbol,
+        ex_date,
+        str(div_amount),
+        effective_intent,
+    )
+    cached_result = await cache.get(cache_key)
+    if cached_result is not None:
+        return cached_result
+
     # Step 1: ticker validation & analysis based on historical data
     yf_ticker = conv.to_yf_symbol_format(symbol)
     ticker = yf.Ticker(yf_ticker)
@@ -199,7 +212,7 @@ async def ai_analyze_div_event(
         return None
 
     # Step 2: use AI to build the ready-to-use prompt
-    build_prompt_input = _build_analysis_prompt(ticker=ticker, pre_result=result, intent=intent)
+    build_prompt_input = _build_analysis_prompt(ticker=ticker, pre_result=result, intent=effective_intent)
 
     country = conv.country_to_iso2(ticker.info.get("country", ""))
     build_result = await ai_helper.ai_exec_task("ANALYZE_DIV_EVENT_BUILD_PROMPT", build_prompt_input, country)
@@ -237,4 +250,5 @@ async def ai_analyze_div_event(
     result.risk_level = llm_result_obj.get("risk")
     # result.risk_level = float(result.risk_level) if result.risk_level is not None else None
 
+    await cache.set(cache_key, result, ttl=_DIV_EVENT_ANALYSIS_CACHE_TTL)
     return result

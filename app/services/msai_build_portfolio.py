@@ -1,11 +1,12 @@
 from ..models import ai as models_ai
 from ..models import finhub as models
 from ..services import ai_helper
-from ..utils import conv
+from ..utils import cache, conv
 
 DEFAULT_INVESTOR_THEME = (
     "- Risk tolerance: moderate\n- Time horizon: 3-5 years\n- Goal: capital growth\n- Rebalance frequency: semi-annual"
 )
+_BUILD_PORTFOLIO_CACHE_TTL = 72 * 60 * 60
 
 BUILD_PROMPT_TEMPLATE = (
     "You are an expert financial advisor and prompt engineer.\n"
@@ -83,6 +84,21 @@ async def ai_build_portfolio(
     Returns:
         models_ai.AnalyzePortfolioResult | None: A models_ai.AnalyzePortfolioResult object containing the analysis, or None.
     """
+    cache_key_items = ["build-portfolio-analysis", country, investor_theme]
+    for position in sorted(existing_positions or [], key=lambda item: item.ticker):
+        cache_key_items.extend(
+            (
+                position.ticker,
+                str(position.num_shares),
+                str(position.avg_price),
+                str(position.target_allocation),
+            )
+        )
+    cache_key = cache.generate_key(*cache_key_items)
+    cached_result = await cache.get(cache_key)
+    if cached_result is not None:
+        return cached_result
+
     # Step 1: build {investor_profile} from investor_theme + existing holdings
     existing_holdings = ""
     existing_holdings_instruction = ""
@@ -117,4 +133,6 @@ async def ai_build_portfolio(
     if exec_result.is_error:
         return models_ai.AnalyzePortfolioResult(llm_error=True, llm_error_msg=exec_result.error_msg)
 
-    return models_ai.AnalyzePortfolioResult(analysis=exec_result.completion)
+    result = models_ai.AnalyzePortfolioResult(analysis=exec_result.completion)
+    await cache.set(cache_key, result, ttl=_BUILD_PORTFOLIO_CACHE_TTL)
+    return result

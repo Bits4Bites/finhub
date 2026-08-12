@@ -1,8 +1,11 @@
+from pydantic import BaseModel
+
 from ..models import ai as models_ai
 from ..models import event as models_event
 from ..models import finhub as models
 from ..services import ai as services_ai
 from ..services import msai_analyze_ticker as service_analyze_ticker
+from . import async_task
 from .base_req_resp import BaseRequest, BaseResponse
 
 
@@ -47,8 +50,8 @@ class AnalyzePortfolioRequest(BaseRequest):
         rebalance_plan (bool): (optional) Whether to assess the need for a major rebalance and generate a plan when needed.
     """
 
+    country: str
     current_allocation: list[models.HoldingTicker] = []
-    country: str = ""
     investor_theme: str = services_ai.DEFAULT_INVESTOR_THEME
     rebalance_plan: bool = False
 
@@ -95,3 +98,28 @@ class AnalyzeDividendEventResponse(BaseResponse):
     """
 
     data: models_event.DividendEventAnalysis | None = None
+
+
+class AsyncTaskInfo(BaseModel):
+    task_id: str
+    state: async_task.TaskState | None = None
+
+
+class AnalyzeDividendEventAsyncResponse(AnalyzeDividendEventResponse):
+    extra: AsyncTaskInfo
+
+
+class AnalyzeTickerAsyncResponse(AnalysisResponse):
+    extra: AsyncTaskInfo
+
+
+class BuildPortfolioAsyncResponse(ReviewPortfolioResponse):
+    extra: AsyncTaskInfo
+
+
+class SpotlightPortfolioAsyncResponse(AnalyzePortfolioResponse):
+    extra: AsyncTaskInfo
+
+
+class AnalyzePortfolioAsyncResponse(ReviewPortfolioResponse):
+    extra: AsyncTaskInfo
