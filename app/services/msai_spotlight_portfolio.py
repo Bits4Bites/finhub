@@ -1,11 +1,12 @@
 from ..models import ai as models_ai
 from ..models import finhub as models
 from ..services import ai_helper
-from ..utils import conv
+from ..utils import cache, conv
 
 DEFAULT_INVESTOR_THEME = (
     "- Risk tolerance: moderate\n- Time horizon: 3-5 years\n- Goal: capital growth\n- Rebalance frequency: semi-annual"
 )
+_SPOTLIGHT_PORTFOLIO_CACHE_TTL = 72 * 60 * 60
 
 BUILD_PROMPT_TEMPLATE = (
     "You are an expert financial advisor and prompt engineer.\n"
@@ -75,8 +76,24 @@ async def ai_spotlight_portfolio(
     Returns:
         models_ai.AnalysisResult | None: AI analysis result containing the recommended spotlight review.
     """
-    if not portfolio:
-        return None
+    has_no_holdings = not portfolio or all(pos.num_shares == 0 for pos in portfolio)
+    if has_no_holdings:
+        return models_ai.AnalysisResult(analysis="SUMMARY: No holdings, spotlight analysis skipped.")
+
+    cache_key_items = ["spotlight-portfolio-analysis", country, investor_theme]
+    for position in sorted(portfolio, key=lambda item: item.ticker):
+        cache_key_items.extend(
+            (
+                position.ticker,
+                str(position.num_shares),
+                str(position.avg_price),
+                str(position.target_allocation),
+            )
+        )
+    cache_key = cache.generate_key(*cache_key_items)
+    cached_result = await cache.get(cache_key)
+    if cached_result is not None:
+        return cached_result
 
     # Step 1: build {investor_profile} from investor_theme + existing holdings
     currency = conv.country_to_currency_symbol(country) or "$"
@@ -105,4 +122,6 @@ async def ai_spotlight_portfolio(
     if exec_result.is_error:
         return models_ai.AnalysisResult(llm_error=True, llm_error_msg=exec_result.error_msg)
 
-    return models_ai.AnalysisResult(analysis=exec_result.completion)
+    result = models_ai.AnalysisResult(analysis=exec_result.completion)
+    await cache.set(cache_key, result, ttl=_SPOTLIGHT_PORTFOLIO_CACHE_TTL)
+    return result

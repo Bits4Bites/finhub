@@ -1,5 +1,6 @@
 """Unit tests for app.routers.ai."""
 
+import asyncio
 from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
@@ -7,6 +8,7 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.models.ai import AnalysisResult, AnalyzePortfolioResult
 from app.models.event import DividendEventAnalysis
+from app.schemas import async_task
 
 client = TestClient(app)
 
@@ -83,6 +85,189 @@ class TestAnalyzeDividendEvent:
 
 
 # ===========================================================================
+# GET /ai/analyze_dividend_event_async
+# ===========================================================================
+
+
+class TestAnalyzeDividendEventAsync:
+    """Tests for GET /ai/analyze_dividend_event_async endpoint."""
+
+    def test_starts_task(self):
+        with (
+            patch("app.routers.ai.uuid.uuid4", return_value="task-123"),
+            patch("app.routers.ai.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
+            patch("app.routers.ai._run_analyze_dividend_event_task", new_callable=AsyncMock) as mock_run_task,
+        ):
+            resp = client.get(
+                "/ai/analyze_dividend_event_async",
+                params={
+                    "symbol": "ASX:CBA",
+                    "ex_date": "2025-08-15",
+                    "div_amount": 2.5,
+                    "intent": "Capture income",
+                },
+            )
+
+        assert resp.status_code == 202
+        assert resp.json() == {
+            "status": 202,
+            "message": "Task started",
+            "extra": {"task_id": "task-123", "state": async_task.TASK_STATE_RUNNING},
+        }
+        mock_cache_set.assert_awaited_once_with(
+            "task-123",
+            {"task_type": "analyze_dividend_event", "state": async_task.TASK_STATE_RUNNING},
+            ttl=3600,
+        )
+        mock_run_task.assert_awaited_once_with(
+            "task-123",
+            "ASX:CBA",
+            "2025-08-15",
+            2.5,
+            "Capture income",
+        )
+
+    def test_requires_inputs_when_starting_task(self):
+        resp = client.get("/ai/analyze_dividend_event_async")
+
+        assert resp.status_code == 400
+        assert resp.json() == {
+            "status": 400,
+            "message": "Symbol, ex_date and div_amount are required when starting a task",
+        }
+
+    def test_poll_returns_running_status(self):
+        task_entry = {"task_type": "analyze_dividend_event", "state": async_task.TASK_STATE_RUNNING}
+        with patch("app.routers.ai.cache.get", new_callable=AsyncMock, return_value=task_entry) as mock_cache_get:
+            resp = client.get("/ai/analyze_dividend_event_async", params={"task_id": "task-123"})
+
+        assert resp.status_code == 202
+        assert resp.json()["message"] == "Task is running"
+        assert resp.json()["extra"] == {"task_id": "task-123", "state": async_task.TASK_STATE_RUNNING}
+        mock_cache_get.assert_awaited_once_with("task-123")
+
+    def test_poll_returns_404_for_missing_task(self):
+        with patch("app.routers.ai.cache.get", new_callable=AsyncMock, return_value=None):
+            resp = client.get("/ai/analyze_dividend_event_async", params={"task_id": "missing"})
+
+        assert resp.status_code == 404
+        assert resp.json() == {"status": 404, "message": "Task not found"}
+
+    def test_poll_returns_completed_result(self):
+        task_entry = {
+            "task_type": "analyze_dividend_event",
+            "state": async_task.TASK_STATE_COMPLETED,
+            "result": {
+                "status": 200,
+                "message": "ok",
+                "data": {
+                    "symbol": "CBA.AX",
+                    "price": 120.0,
+                    "div_amount": 2.5,
+                },
+            },
+        }
+        with patch("app.routers.ai.cache.get", new_callable=AsyncMock, return_value=task_entry):
+            resp = client.get("/ai/analyze_dividend_event_async", params={"task_id": "task-123"})
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] == 200
+        assert body["data"]["symbol"] == "CBA.AX"
+        assert body["data"]["div_amount"] == 2.5
+        assert body["extra"] == {"task_id": "task-123", "state": async_task.TASK_STATE_COMPLETED}
+
+    def test_poll_returns_failed_status(self):
+        task_entry = {
+            "task_type": "analyze_dividend_event",
+            "state": async_task.TASK_STATE_FAILED,
+            "message": "Task failed",
+        }
+        with patch("app.routers.ai.cache.get", new_callable=AsyncMock, return_value=task_entry):
+            resp = client.get("/ai/analyze_dividend_event_async", params={"task_id": "task-123"})
+
+        assert resp.status_code == 500
+        assert resp.json() == {
+            "status": 500,
+            "message": "Task failed",
+            "extra": {"task_id": "task-123", "state": async_task.TASK_STATE_FAILED},
+        }
+
+    def test_background_task_caches_result(self):
+        from app.routers import ai
+        from app.schemas import ai as schemas_ai
+
+        result = schemas_ai.AnalyzeDividendEventResponse(
+            status=200,
+            message="ok",
+            data=DividendEventAnalysis(symbol="CBA.AX", price=120.0, div_amount=2.5),
+        )
+        with (
+            patch(
+                "app.routers.ai._get_analyze_dividend_event_result",
+                new_callable=AsyncMock,
+                return_value=result,
+            ),
+            patch("app.routers.ai.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
+        ):
+            asyncio.run(
+                ai._run_analyze_dividend_event_task(
+                    "task-123",
+                    "ASX:CBA",
+                    "2025-08-15",
+                    2.5,
+                    "Capture income",
+                )
+            )
+
+        mock_cache_set.assert_awaited_once_with(
+            "task-123",
+            {
+                "task_type": "analyze_dividend_event",
+                "state": async_task.TASK_STATE_COMPLETED,
+                "result": {
+                    "status": 200,
+                    "message": "ok",
+                    "data": result.data.model_dump(mode="json"),
+                    "extra": None,
+                },
+            },
+            ttl=3600,
+        )
+
+    def test_background_task_caches_failure(self):
+        from app.routers import ai
+
+        with (
+            patch(
+                "app.routers.ai._get_analyze_dividend_event_result",
+                new_callable=AsyncMock,
+                side_effect=RuntimeError("LLM unavailable"),
+            ),
+            patch("app.routers.ai.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
+        ):
+            asyncio.run(
+                ai._run_analyze_dividend_event_task(
+                    "task-123",
+                    "ASX:CBA",
+                    "2025-08-15",
+                    2.5,
+                    "Capture income",
+                )
+            )
+
+        mock_cache_set.assert_awaited_once_with(
+            "task-123",
+            {
+                "task_type": "analyze_dividend_event",
+                "state": async_task.TASK_STATE_FAILED,
+                "message": "Task failed",
+            },
+            ttl=3600,
+        )
+
+
+# ===========================================================================
 # POST /ai/analyze_ticker
 # ===========================================================================
 
@@ -134,6 +319,164 @@ class TestAnalyzeTicker:
 
 
 # ===========================================================================
+# POST /ai/analyze_ticker_async
+# ===========================================================================
+
+
+class TestAnalyzeTickerAsync:
+    """Tests for POST /ai/analyze_ticker_async endpoint."""
+
+    def test_starts_task(self):
+        with (
+            patch("app.routers.ai.uuid.uuid4", return_value="task-456"),
+            patch("app.routers.ai.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
+            patch("app.routers.ai._run_analyze_ticker_task", new_callable=AsyncMock) as mock_run_task,
+        ):
+            resp = client.post(
+                "/ai/analyze_ticker_async",
+                json={"symbol": "NASDAQ:AAPL", "intent": "Growth outlook"},
+            )
+
+        assert resp.status_code == 202
+        assert resp.json() == {
+            "status": 202,
+            "message": "Task started",
+            "extra": {"task_id": "task-456", "state": async_task.TASK_STATE_RUNNING},
+        }
+        mock_cache_set.assert_awaited_once_with(
+            "task-456",
+            {"task_type": "analyze_ticker", "state": async_task.TASK_STATE_RUNNING},
+            ttl=3600,
+        )
+        mock_run_task.assert_awaited_once_with(
+            "task-456",
+            "NASDAQ:AAPL",
+            "Growth outlook",
+        )
+
+    def test_requires_symbol_when_starting_task(self):
+        resp = client.post("/ai/analyze_ticker_async", json={})
+
+        assert resp.status_code == 400
+        assert resp.json() == {
+            "status": 400,
+            "message": "Symbol is required when starting a task",
+        }
+
+    def test_poll_returns_running_status(self):
+        task_entry = {"task_type": "analyze_ticker", "state": async_task.TASK_STATE_RUNNING}
+        with patch("app.routers.ai.cache.get", new_callable=AsyncMock, return_value=task_entry) as mock_cache_get:
+            resp = client.post("/ai/analyze_ticker_async", params={"task_id": "task-456"})
+
+        assert resp.status_code == 202
+        assert resp.json()["message"] == "Task is running"
+        assert resp.json()["extra"] == {"task_id": "task-456", "state": async_task.TASK_STATE_RUNNING}
+        mock_cache_get.assert_awaited_once_with("task-456")
+
+    def test_poll_returns_404_for_missing_task(self):
+        with patch("app.routers.ai.cache.get", new_callable=AsyncMock, return_value=None):
+            resp = client.post("/ai/analyze_ticker_async", params={"task_id": "missing"})
+
+        assert resp.status_code == 404
+        assert resp.json() == {"status": 404, "message": "Task not found"}
+
+    def test_poll_returns_completed_result(self):
+        task_entry = {
+            "task_type": "analyze_ticker",
+            "state": async_task.TASK_STATE_COMPLETED,
+            "result": {
+                "status": 200,
+                "message": "ok",
+                "data": {
+                    "llm_error": False,
+                    "analysis": "AAPL looks bullish",
+                },
+            },
+        }
+        with patch("app.routers.ai.cache.get", new_callable=AsyncMock, return_value=task_entry):
+            resp = client.post("/ai/analyze_ticker_async", params={"task_id": "task-456"})
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] == 200
+        assert body["data"]["analysis"] == "AAPL looks bullish"
+        assert body["extra"] == {"task_id": "task-456", "state": async_task.TASK_STATE_COMPLETED}
+
+    def test_poll_returns_failed_status(self):
+        task_entry = {
+            "task_type": "analyze_ticker",
+            "state": async_task.TASK_STATE_FAILED,
+            "message": "Task failed",
+        }
+        with patch("app.routers.ai.cache.get", new_callable=AsyncMock, return_value=task_entry):
+            resp = client.post("/ai/analyze_ticker_async", params={"task_id": "task-456"})
+
+        assert resp.status_code == 500
+        assert resp.json() == {
+            "status": 500,
+            "message": "Task failed",
+            "extra": {"task_id": "task-456", "state": async_task.TASK_STATE_FAILED},
+        }
+
+    def test_background_task_caches_result(self):
+        from app.routers import ai
+        from app.schemas import ai as schemas_ai
+
+        result = schemas_ai.AnalysisResponse(
+            status=200,
+            message="ok",
+            data=AnalysisResult(llm_error=False, analysis="AAPL looks bullish"),
+        )
+        with (
+            patch(
+                "app.routers.ai._get_analyze_ticker_result",
+                new_callable=AsyncMock,
+                return_value=result,
+            ),
+            patch("app.routers.ai.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
+        ):
+            asyncio.run(ai._run_analyze_ticker_task("task-456", "NASDAQ:AAPL", "Growth outlook"))
+
+        mock_cache_set.assert_awaited_once_with(
+            "task-456",
+            {
+                "task_type": "analyze_ticker",
+                "state": async_task.TASK_STATE_COMPLETED,
+                "result": {
+                    "status": 200,
+                    "message": "ok",
+                    "data": result.data.model_dump(mode="json"),
+                    "extra": None,
+                },
+            },
+            ttl=3600,
+        )
+
+    def test_background_task_caches_failure(self):
+        from app.routers import ai
+
+        with (
+            patch(
+                "app.routers.ai._get_analyze_ticker_result",
+                new_callable=AsyncMock,
+                side_effect=RuntimeError("LLM unavailable"),
+            ),
+            patch("app.routers.ai.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
+        ):
+            asyncio.run(ai._run_analyze_ticker_task("task-456", "NASDAQ:AAPL", "Growth outlook"))
+
+        mock_cache_set.assert_awaited_once_with(
+            "task-456",
+            {
+                "task_type": "analyze_ticker",
+                "state": async_task.TASK_STATE_FAILED,
+                "message": "Task failed",
+            },
+            ttl=3600,
+        )
+
+
+# ===========================================================================
 # POST /ai/build_portfolio
 # ===========================================================================
 
@@ -180,6 +523,190 @@ class TestBuildPortfolio:
         assert len(call_kwargs["existing_positions"]) == 1
         assert call_kwargs["existing_positions"][0].ticker == "AAPL"
 
+    def test_requires_country(self):
+        resp = client.post("/ai/build_portfolio", json={})
+
+        assert resp.status_code == 422
+
+
+# ===========================================================================
+# POST /ai/build_portfolio_async
+# ===========================================================================
+
+
+class TestBuildPortfolioAsync:
+    """Tests for POST /ai/build_portfolio_async endpoint."""
+
+    def test_starts_task(self):
+        with (
+            patch("app.routers.ai.uuid.uuid4", return_value="task-789"),
+            patch("app.routers.ai.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
+            patch("app.routers.ai._run_build_portfolio_task", new_callable=AsyncMock) as mock_run_task,
+        ):
+            resp = client.post(
+                "/ai/build_portfolio_async",
+                json={
+                    "country": "US",
+                    "investor_theme": "Growth focused",
+                    "current_allocation": [
+                        {
+                            "ticker": "AAPL",
+                            "num_shares": 10,
+                            "avg_price": 150.0,
+                            "target_allocation": 0.5,
+                        }
+                    ],
+                },
+            )
+
+        assert resp.status_code == 202
+        assert resp.json() == {
+            "status": 202,
+            "message": "Task started",
+            "extra": {"task_id": "task-789", "state": async_task.TASK_STATE_RUNNING},
+        }
+        mock_cache_set.assert_awaited_once_with(
+            "task-789",
+            {"task_type": "build_portfolio", "state": async_task.TASK_STATE_RUNNING},
+            ttl=3600,
+        )
+        mock_run_task.assert_awaited_once()
+        task_id, task_req = mock_run_task.await_args.args
+        assert task_id == "task-789"
+        assert task_req.country == "US"
+        assert task_req.investor_theme == "Growth focused"
+        assert task_req.current_allocation[0].ticker == "AAPL"
+
+    def test_requires_body_when_starting_task(self):
+        resp = client.post("/ai/build_portfolio_async")
+
+        assert resp.status_code == 400
+        assert resp.json() == {
+            "status": 400,
+            "message": "Request body is required when starting a task",
+        }
+
+    def test_requires_country_when_starting_task(self):
+        resp = client.post("/ai/build_portfolio_async", json={})
+
+        assert resp.status_code == 422
+
+    def test_poll_returns_running_status(self):
+        task_entry = {"task_type": "build_portfolio", "state": async_task.TASK_STATE_RUNNING}
+        with patch("app.routers.ai.cache.get", new_callable=AsyncMock, return_value=task_entry) as mock_cache_get:
+            resp = client.post("/ai/build_portfolio_async", params={"task_id": "task-789"})
+
+        assert resp.status_code == 202
+        assert resp.json()["message"] == "Task is running"
+        assert resp.json()["extra"] == {"task_id": "task-789", "state": async_task.TASK_STATE_RUNNING}
+        mock_cache_get.assert_awaited_once_with("task-789")
+
+    def test_poll_returns_404_for_missing_task(self):
+        with patch("app.routers.ai.cache.get", new_callable=AsyncMock, return_value=None):
+            resp = client.post("/ai/build_portfolio_async", params={"task_id": "missing"})
+
+        assert resp.status_code == 404
+        assert resp.json() == {"status": 404, "message": "Task not found"}
+
+    def test_poll_returns_completed_result(self):
+        task_entry = {
+            "task_type": "build_portfolio",
+            "state": async_task.TASK_STATE_COMPLETED,
+            "result": {
+                "status": 200,
+                "message": "ok",
+                "data": {
+                    "llm_error": False,
+                    "analysis": "Recommended portfolio",
+                    "rebalance_plan": "",
+                },
+            },
+        }
+        with patch("app.routers.ai.cache.get", new_callable=AsyncMock, return_value=task_entry):
+            resp = client.post("/ai/build_portfolio_async", params={"task_id": "task-789"})
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] == 200
+        assert body["data"]["analysis"] == "Recommended portfolio"
+        assert body["extra"] == {"task_id": "task-789", "state": async_task.TASK_STATE_COMPLETED}
+
+    def test_poll_returns_failed_status(self):
+        task_entry = {
+            "task_type": "build_portfolio",
+            "state": async_task.TASK_STATE_FAILED,
+            "message": "Task failed",
+        }
+        with patch("app.routers.ai.cache.get", new_callable=AsyncMock, return_value=task_entry):
+            resp = client.post("/ai/build_portfolio_async", params={"task_id": "task-789"})
+
+        assert resp.status_code == 500
+        assert resp.json() == {
+            "status": 500,
+            "message": "Task failed",
+            "extra": {"task_id": "task-789", "state": async_task.TASK_STATE_FAILED},
+        }
+
+    def test_background_task_caches_result(self):
+        from app.routers import ai
+        from app.schemas import ai as schemas_ai
+
+        req = schemas_ai.AnalyzePortfolioRequest(country="AU", investor_theme="Growth focused")
+        result = schemas_ai.ReviewPortfolioResponse(
+            status=200,
+            message="ok",
+            data=AnalyzePortfolioResult(llm_error=False, analysis="Recommended portfolio"),
+        )
+        with (
+            patch(
+                "app.routers.ai._get_build_portfolio_result",
+                new_callable=AsyncMock,
+                return_value=result,
+            ),
+            patch("app.routers.ai.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
+        ):
+            asyncio.run(ai._run_build_portfolio_task("task-789", req))
+
+        mock_cache_set.assert_awaited_once_with(
+            "task-789",
+            {
+                "task_type": "build_portfolio",
+                "state": async_task.TASK_STATE_COMPLETED,
+                "result": {
+                    "status": 200,
+                    "message": "ok",
+                    "data": result.data.model_dump(mode="json"),
+                    "extra": None,
+                },
+            },
+            ttl=3600,
+        )
+
+    def test_background_task_caches_failure(self):
+        from app.routers import ai
+        from app.schemas import ai as schemas_ai
+
+        req = schemas_ai.AnalyzePortfolioRequest(country="AU")
+        with (
+            patch(
+                "app.routers.ai._get_build_portfolio_result",
+                new_callable=AsyncMock,
+                side_effect=RuntimeError("LLM unavailable"),
+            ),
+            patch("app.routers.ai.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
+        ):
+            asyncio.run(ai._run_build_portfolio_task("task-789", req))
+
+        mock_cache_set.assert_awaited_once_with(
+            "task-789",
+            {
+                "task_type": "build_portfolio",
+                "state": async_task.TASK_STATE_FAILED,
+                "message": "Task failed",
+            },
+            ttl=3600,
+        )
+
 
 # ===========================================================================
 # POST /ai/analyze_portfolio
@@ -209,6 +736,215 @@ class TestSpotlightPortfolio:
         assert body["status"] == 200
         assert body["data"]["analysis"] == "Immediate risks and actions"
         mock_spotlight.assert_called_once()
+
+    def test_requires_country(self):
+        resp = client.post(
+            "/ai/spotlight_portfolio",
+            json={"current_allocation": [{"ticker": "CBA.AX", "num_shares": 100}]},
+        )
+
+        assert resp.status_code == 422
+
+
+# ===========================================================================
+# POST /ai/spotlight_portfolio_async
+# ===========================================================================
+
+
+class TestSpotlightPortfolioAsync:
+    """Tests for POST /ai/spotlight_portfolio_async endpoint."""
+
+    def test_starts_task(self):
+        with (
+            patch("app.routers.ai.uuid.uuid4", return_value="task-spotlight"),
+            patch("app.routers.ai.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
+            patch("app.routers.ai._run_spotlight_portfolio_task", new_callable=AsyncMock) as mock_run_task,
+        ):
+            resp = client.post(
+                "/ai/spotlight_portfolio_async",
+                json={
+                    "country": "AU",
+                    "investor_theme": "Growth focused",
+                    "current_allocation": [
+                        {
+                            "ticker": "CBA.AX",
+                            "num_shares": 10,
+                            "avg_price": 150.0,
+                            "target_allocation": 0.5,
+                        }
+                    ],
+                },
+            )
+
+        assert resp.status_code == 202
+        assert resp.json() == {
+            "status": 202,
+            "message": "Task started",
+            "extra": {"task_id": "task-spotlight", "state": async_task.TASK_STATE_RUNNING},
+        }
+        mock_cache_set.assert_awaited_once_with(
+            "task-spotlight",
+            {"task_type": "spotlight_portfolio", "state": async_task.TASK_STATE_RUNNING},
+            ttl=3600,
+        )
+        mock_run_task.assert_awaited_once()
+        task_id, task_req = mock_run_task.await_args.args
+        assert task_id == "task-spotlight"
+        assert task_req.country == "AU"
+        assert task_req.investor_theme == "Growth focused"
+        assert task_req.current_allocation[0].ticker == "CBA.AX"
+
+    def test_starts_task_without_current_allocation(self):
+        with (
+            patch("app.routers.ai.uuid.uuid4", return_value="task-spotlight"),
+            patch("app.routers.ai.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
+            patch("app.routers.ai._run_spotlight_portfolio_task", new_callable=AsyncMock) as mock_run_task,
+        ):
+            resp = client.post("/ai/spotlight_portfolio_async", json={"country": "AU"})
+
+        assert resp.status_code == 202
+        assert resp.json() == {
+            "status": 202,
+            "message": "Task started",
+            "extra": {"task_id": "task-spotlight", "state": async_task.TASK_STATE_RUNNING},
+        }
+        mock_cache_set.assert_awaited_once_with(
+            "task-spotlight",
+            {"task_type": "spotlight_portfolio", "state": async_task.TASK_STATE_RUNNING},
+            ttl=3600,
+        )
+        mock_run_task.assert_awaited_once()
+        _, task_req = mock_run_task.await_args.args
+        assert task_req.current_allocation == []
+
+    def test_requires_country_when_starting_task(self):
+        resp = client.post(
+            "/ai/spotlight_portfolio_async",
+            json={"current_allocation": [{"ticker": "CBA.AX", "num_shares": 10}]},
+        )
+
+        assert resp.status_code == 422
+
+    def test_poll_returns_running_status(self):
+        task_entry = {"task_type": "spotlight_portfolio", "state": async_task.TASK_STATE_RUNNING}
+        with patch("app.routers.ai.cache.get", new_callable=AsyncMock, return_value=task_entry) as mock_cache_get:
+            resp = client.post("/ai/spotlight_portfolio_async", params={"task_id": "task-spotlight"})
+
+        assert resp.status_code == 202
+        assert resp.json()["message"] == "Task is running"
+        assert resp.json()["extra"] == {"task_id": "task-spotlight", "state": async_task.TASK_STATE_RUNNING}
+        mock_cache_get.assert_awaited_once_with("task-spotlight")
+
+    def test_poll_returns_404_for_missing_task(self):
+        with patch("app.routers.ai.cache.get", new_callable=AsyncMock, return_value=None):
+            resp = client.post("/ai/spotlight_portfolio_async", params={"task_id": "missing"})
+
+        assert resp.status_code == 404
+        assert resp.json() == {"status": 404, "message": "Task not found"}
+
+    def test_poll_returns_completed_result(self):
+        task_entry = {
+            "task_type": "spotlight_portfolio",
+            "state": async_task.TASK_STATE_COMPLETED,
+            "result": {
+                "status": 200,
+                "message": "ok",
+                "data": {
+                    "llm_error": False,
+                    "analysis": "Immediate risks and actions",
+                },
+            },
+        }
+        with patch("app.routers.ai.cache.get", new_callable=AsyncMock, return_value=task_entry):
+            resp = client.post("/ai/spotlight_portfolio_async", params={"task_id": "task-spotlight"})
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] == 200
+        assert body["data"]["analysis"] == "Immediate risks and actions"
+        assert body["extra"] == {"task_id": "task-spotlight", "state": async_task.TASK_STATE_COMPLETED}
+
+    def test_poll_returns_failed_status(self):
+        task_entry = {
+            "task_type": "spotlight_portfolio",
+            "state": async_task.TASK_STATE_FAILED,
+            "message": "Task failed",
+        }
+        with patch("app.routers.ai.cache.get", new_callable=AsyncMock, return_value=task_entry):
+            resp = client.post("/ai/spotlight_portfolio_async", params={"task_id": "task-spotlight"})
+
+        assert resp.status_code == 500
+        assert resp.json() == {
+            "status": 500,
+            "message": "Task failed",
+            "extra": {"task_id": "task-spotlight", "state": async_task.TASK_STATE_FAILED},
+        }
+
+    def test_background_task_caches_result(self):
+        from app.routers import ai
+        from app.schemas import ai as schemas_ai
+
+        req = schemas_ai.AnalyzePortfolioRequest(
+            country="AU",
+            current_allocation=[{"ticker": "CBA.AX", "num_shares": 10}],
+        )
+        result = schemas_ai.AnalyzePortfolioResponse(
+            status=200,
+            message="ok",
+            data=AnalysisResult(llm_error=False, analysis="Immediate risks and actions"),
+        )
+        with (
+            patch(
+                "app.routers.ai._get_spotlight_portfolio_result",
+                new_callable=AsyncMock,
+                return_value=result,
+            ),
+            patch("app.routers.ai.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
+        ):
+            asyncio.run(ai._run_spotlight_portfolio_task("task-spotlight", req))
+
+        mock_cache_set.assert_awaited_once_with(
+            "task-spotlight",
+            {
+                "task_type": "spotlight_portfolio",
+                "state": async_task.TASK_STATE_COMPLETED,
+                "result": {
+                    "status": 200,
+                    "message": "ok",
+                    "data": result.data.model_dump(mode="json"),
+                    "extra": None,
+                },
+            },
+            ttl=3600,
+        )
+
+    def test_background_task_caches_failure(self):
+        from app.routers import ai
+        from app.schemas import ai as schemas_ai
+
+        req = schemas_ai.AnalyzePortfolioRequest(
+            country="AU",
+            current_allocation=[{"ticker": "CBA.AX", "num_shares": 10}],
+        )
+        with (
+            patch(
+                "app.routers.ai._get_spotlight_portfolio_result",
+                new_callable=AsyncMock,
+                side_effect=RuntimeError("LLM unavailable"),
+            ),
+            patch("app.routers.ai.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
+        ):
+            asyncio.run(ai._run_spotlight_portfolio_task("task-spotlight", req))
+
+        mock_cache_set.assert_awaited_once_with(
+            "task-spotlight",
+            {
+                "task_type": "spotlight_portfolio",
+                "state": async_task.TASK_STATE_FAILED,
+                "message": "Task failed",
+            },
+            ttl=3600,
+        )
 
 
 class TestAnalyzePortfolio:
@@ -287,3 +1023,190 @@ class TestAnalyzePortfolio:
         )
         assert resp.status_code == 200
         assert mock_review.call_args.kwargs["investor_theme"] == "Growth focused"
+
+    def test_requires_country(self):
+        resp = client.post("/ai/analyze_portfolio", json={})
+
+        assert resp.status_code == 422
+
+
+# ===========================================================================
+# POST /ai/analyze_portfolio_async
+# ===========================================================================
+
+
+class TestAnalyzePortfolioAsync:
+    """Tests for POST /ai/analyze_portfolio_async endpoint."""
+
+    def test_starts_task(self):
+        with (
+            patch("app.routers.ai.uuid.uuid4", return_value="task-analyze"),
+            patch("app.routers.ai.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
+            patch("app.routers.ai._run_analyze_portfolio_task", new_callable=AsyncMock) as mock_run_task,
+        ):
+            resp = client.post(
+                "/ai/analyze_portfolio_async",
+                json={
+                    "country": "AU",
+                    "investor_theme": "Growth focused",
+                    "rebalance_plan": True,
+                    "current_allocation": [
+                        {
+                            "ticker": "CBA.AX",
+                            "num_shares": 10,
+                            "avg_price": 150.0,
+                            "target_allocation": 0.5,
+                        }
+                    ],
+                },
+            )
+
+        assert resp.status_code == 202
+        assert resp.json() == {
+            "status": 202,
+            "message": "Task started",
+            "extra": {"task_id": "task-analyze", "state": async_task.TASK_STATE_RUNNING},
+        }
+        mock_cache_set.assert_awaited_once_with(
+            "task-analyze",
+            {"task_type": "analyze_portfolio", "state": async_task.TASK_STATE_RUNNING},
+            ttl=3600,
+        )
+        mock_run_task.assert_awaited_once()
+        task_id, task_req = mock_run_task.await_args.args
+        assert task_id == "task-analyze"
+        assert task_req.country == "AU"
+        assert task_req.investor_theme == "Growth focused"
+        assert task_req.rebalance_plan is True
+        assert task_req.current_allocation[0].ticker == "CBA.AX"
+
+    def test_requires_body_when_starting_task(self):
+        resp = client.post("/ai/analyze_portfolio_async")
+
+        assert resp.status_code == 400
+        assert resp.json() == {
+            "status": 400,
+            "message": "Request body is required when starting a task",
+        }
+
+    def test_requires_country_when_starting_task(self):
+        resp = client.post("/ai/analyze_portfolio_async", json={})
+
+        assert resp.status_code == 422
+
+    def test_poll_returns_running_status(self):
+        task_entry = {"task_type": "analyze_portfolio", "state": async_task.TASK_STATE_RUNNING}
+        with patch("app.routers.ai.cache.get", new_callable=AsyncMock, return_value=task_entry) as mock_cache_get:
+            resp = client.post("/ai/analyze_portfolio_async", params={"task_id": "task-analyze"})
+
+        assert resp.status_code == 202
+        assert resp.json()["message"] == "Task is running"
+        assert resp.json()["extra"] == {"task_id": "task-analyze", "state": async_task.TASK_STATE_RUNNING}
+        mock_cache_get.assert_awaited_once_with("task-analyze")
+
+    def test_poll_returns_404_for_missing_task(self):
+        with patch("app.routers.ai.cache.get", new_callable=AsyncMock, return_value=None):
+            resp = client.post("/ai/analyze_portfolio_async", params={"task_id": "missing"})
+
+        assert resp.status_code == 404
+        assert resp.json() == {"status": 404, "message": "Task not found"}
+
+    def test_poll_returns_completed_result(self):
+        task_entry = {
+            "task_type": "analyze_portfolio",
+            "state": async_task.TASK_STATE_COMPLETED,
+            "result": {
+                "status": 200,
+                "message": "ok",
+                "data": {
+                    "llm_error": False,
+                    "analysis": "Well diversified",
+                    "rebalance_plan": "No rebalance needed",
+                },
+            },
+        }
+        with patch("app.routers.ai.cache.get", new_callable=AsyncMock, return_value=task_entry):
+            resp = client.post("/ai/analyze_portfolio_async", params={"task_id": "task-analyze"})
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] == 200
+        assert body["data"]["analysis"] == "Well diversified"
+        assert body["data"]["rebalance_plan"] == "No rebalance needed"
+        assert body["extra"] == {"task_id": "task-analyze", "state": async_task.TASK_STATE_COMPLETED}
+
+    def test_poll_returns_failed_status(self):
+        task_entry = {
+            "task_type": "analyze_portfolio",
+            "state": async_task.TASK_STATE_FAILED,
+            "message": "Task failed",
+        }
+        with patch("app.routers.ai.cache.get", new_callable=AsyncMock, return_value=task_entry):
+            resp = client.post("/ai/analyze_portfolio_async", params={"task_id": "task-analyze"})
+
+        assert resp.status_code == 500
+        assert resp.json() == {
+            "status": 500,
+            "message": "Task failed",
+            "extra": {"task_id": "task-analyze", "state": async_task.TASK_STATE_FAILED},
+        }
+
+    def test_background_task_caches_result(self):
+        from app.routers import ai
+        from app.schemas import ai as schemas_ai
+
+        req = schemas_ai.AnalyzePortfolioRequest(country="AU")
+        result = schemas_ai.ReviewPortfolioResponse(
+            status=200,
+            message="ok",
+            data=AnalyzePortfolioResult(llm_error=False, analysis="New portfolio"),
+        )
+        with (
+            patch(
+                "app.routers.ai._get_analyze_portfolio_result",
+                new_callable=AsyncMock,
+                return_value=result,
+            ),
+            patch("app.routers.ai.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
+        ):
+            asyncio.run(ai._run_analyze_portfolio_task("task-analyze", req))
+
+        mock_cache_set.assert_awaited_once_with(
+            "task-analyze",
+            {
+                "task_type": "analyze_portfolio",
+                "state": async_task.TASK_STATE_COMPLETED,
+                "result": {
+                    "status": 200,
+                    "message": "ok",
+                    "data": result.data.model_dump(mode="json"),
+                    "extra": None,
+                },
+            },
+            ttl=3600,
+        )
+
+    def test_background_task_caches_failure(self):
+        from app.routers import ai
+        from app.schemas import ai as schemas_ai
+
+        req = schemas_ai.AnalyzePortfolioRequest(country="AU")
+        with (
+            patch(
+                "app.routers.ai._get_analyze_portfolio_result",
+                new_callable=AsyncMock,
+                side_effect=RuntimeError("LLM unavailable"),
+            ),
+            patch("app.routers.ai.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
+        ):
+            asyncio.run(ai._run_analyze_portfolio_task("task-analyze", req))
+
+        mock_cache_set.assert_awaited_once_with(
+            "task-analyze",
+            {
+                "task_type": "analyze_portfolio",
+                "state": async_task.TASK_STATE_FAILED,
+                "message": "Task failed",
+            },
+            ttl=3600,
+        )

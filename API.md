@@ -198,10 +198,10 @@ curl 'http://localhost:8000/stocks/index/NASDAQ100/companies'
 
 Get upcoming dividend/distribution events for a market.
 
-| Parameter | Type  | Required | Description                                                                                                               |
-|-----------|-------|----------|---------------------------------------------------------------------------------------------------------------------------|
-| `country` | query | Yes      | Country code: `AU`, `US`, or `VN`.                                                                                        |
-| `index`   | query | No       | Filter by index: `ASX20`, `ASX50`, `ASX100`, `ASX200`, `ASX300`, `NASDAQ100`, `SP500`, `SP400`, `SP600`, `VN30`, `VN100`. |
+| Parameter | Type  | Required | Description                                                                                                                        |
+|-----------|-------|----------|------------------------------------------------------------------------------------------------------------------------------------|
+| `country` | query | Yes      | Country code: `AU`, `US`, or `VN`.                                                                                                 |
+| `index`   | query | No       | Filter by index: `ASX20`, `ASX50`, `ASX100`, `ASX200`, `ASX300`, `NASDAQ100`, `SP500`, `SP400`, `SP600`, `VN30`, `VN100`, `HNX30`. |
 
 Events for stocks in major indices (ASX300, NASDAQ100, SP500, SP400, VN100) include AI-generated dividend analysis.
 
@@ -210,6 +210,47 @@ Events for stocks in major indices (ASX300, NASDAQ100, SP500, SP400, VN100) incl
 ```bash
 curl 'http://localhost:8000/events/upcoming_dividends?country=AU&index=ASX200'
 ```
+
+### `GET /events/upcoming_dividends_async`
+
+Run the upcoming-dividends request in the background. Start a task with the same `country` and
+`index` parameters, then poll using the returned task ID. Task state and results expire after one hour.
+
+| Parameter | Type  | Required    | Description                                                                                                   |
+|-----------|-------|-------------|---------------------------------------------------------------------------------------------------------------|
+| `country` | query | Conditional | Country code: `AU`, `US`, or `VN`. Required when starting a task.                                             |
+| `index`   | query | No          | Optional stock-index filter used when starting a task; supports the same indices as the synchronous endpoint. |
+| `task_id` | query | Conditional | Task ID returned when starting a task. Required when polling.                                                 |
+
+```bash
+# Start a task
+curl 'http://localhost:8000/events/upcoming_dividends_async?country=AU&index=ASX200'
+
+# Poll a task
+curl 'http://localhost:8000/events/upcoming_dividends_async?task_id=<TASK_ID>'
+```
+
+Starting a task returns HTTP `202`:
+
+```json
+{
+  "status": 202,
+  "message": "Task started",
+  "extra": {
+    "task_id": "550e8400-e29b-41d4-a716-446655440000",
+    "state": "RUNNING"
+  }
+}
+```
+
+Polling returns:
+
+| HTTP status | Task state  | Result                                              |
+|-------------|-------------|-----------------------------------------------------|
+| `202`       | `RUNNING`   | The task is still running.                          |
+| `200`       | `COMPLETED` | The standard upcoming-dividends payload in `data`.  |
+| `500`       | `FAILED`    | The background task failed.                         |
+| `404`       | —           | The task ID is unknown or its cache entry expired.  |
 
 ---
 
@@ -228,6 +269,47 @@ Get upcoming earnings events for a market.
 curl 'http://localhost:8000/events/upcoming_earnings?country=US&index=SP500'
 ```
 
+### `GET /events/upcoming_earnings_async`
+
+Run the upcoming-earnings request in the background using the same one-hour task lifecycle as
+`/events/upcoming_dividends_async`.
+
+| Parameter | Type  | Required    | Description                                                        |
+|-----------|-------|-------------|--------------------------------------------------------------------|
+| `country` | query | Conditional | Country code: `AU` or `US`. Required when starting a task.         |
+| `index`   | query | No          | Optional stock-index filter used when starting a task.             |
+| `task_id` | query | Conditional | Task ID returned when starting a task. Required when polling.      |
+
+```bash
+# Start a task
+curl 'http://localhost:8000/events/upcoming_earnings_async?country=US&index=SP500'
+
+# Poll a task
+curl 'http://localhost:8000/events/upcoming_earnings_async?task_id=<TASK_ID>'
+```
+
+Starting a task returns HTTP `202`:
+
+```json
+{
+  "status": 202,
+  "message": "Task started",
+  "extra": {
+    "task_id": "550e8400-e29b-41d4-a716-446655440000",
+    "state": "RUNNING"
+  }
+}
+```
+
+Polling returns:
+
+| HTTP status | Task state  | Result                                             |
+|-------------|-------------|----------------------------------------------------|
+| `202`       | `RUNNING`   | The task is still running.                         |
+| `200`       | `COMPLETED` | The standard upcoming-earnings payload in `data`.  |
+| `500`       | `FAILED`    | The background task failed.                        |
+| `404`       | —           | The task ID is unknown or its cache entry expired. |
+
 ---
 
 ### `GET /events/new_listings`
@@ -236,13 +318,52 @@ Get new listing events for a market (AI-assisted).
 
 | Parameter | Type  | Required | Description                                     |
 |-----------|-------|----------|-------------------------------------------------|
-| `country` | query | No       | Country code. Currently only `AU` is supported. |
+| `country` | query | Yes      | Country code. Currently only `AU` is supported. |
 
 **Example:**
 
 ```bash
 curl 'http://localhost:8000/events/new_listings?country=AU'
 ```
+
+### `GET /events/new_listings_async`
+
+Run the new-listings request in the background. Task state and results expire after one hour.
+
+| Parameter | Type  | Required    | Description                                                                     |
+|-----------|-------|-------------|---------------------------------------------------------------------------------|
+| `country` | query | Conditional | Country code. Currently only `AU` is supported. Required when starting a task. |
+| `task_id` | query | Conditional | Task ID returned when starting a task. Required when polling.                   |
+
+```bash
+# Start a task
+curl 'http://localhost:8000/events/new_listings_async?country=AU'
+
+# Poll a task
+curl 'http://localhost:8000/events/new_listings_async?task_id=<TASK_ID>'
+```
+
+Starting a task returns HTTP `202`:
+
+```json
+{
+  "status": 202,
+  "message": "Task started",
+  "extra": {
+    "task_id": "550e8400-e29b-41d4-a716-446655440000",
+    "state": "RUNNING"
+  }
+}
+```
+
+Polling returns:
+
+| HTTP status | Task state  | Result                                             |
+|-------------|-------------|----------------------------------------------------|
+| `202`       | `RUNNING`   | The task is still running.                         |
+| `200`       | `COMPLETED` | The standard new-listings payload in `data`.       |
+| `500`       | `FAILED`    | The background task failed.                        |
+| `404`       | —           | The task ID is unknown or its cache entry expired. |
 
 ---
 
@@ -279,6 +400,37 @@ Analyze a dividend event using AI.
 curl 'http://localhost:8000/ai/analyze_dividend_event?symbol=AAPL&ex_date=2026-02-09&div_amount=0.26'
 ```
 
+### `GET /ai/analyze_dividend_event_async`
+
+Run dividend-event analysis in the background. Start a task with the analysis inputs, then poll using
+the returned task ID. Task state and results expire after one hour; completed analyses are cached for
+72 hours.
+
+| Parameter    | Type  | Required    | Description                                                                                                  |
+|--------------|-------|-------------|--------------------------------------------------------------------------------------------------------------|
+| `symbol`     | query | Conditional | Stock symbol. Required when starting a task.                                                                 |
+| `ex_date`    | query | Conditional | Ex-dividend date in `YYYY-MM-DD` format. Required when starting a task.                                      |
+| `div_amount` | query | Conditional | Dividend amount as a float. Required when starting a task.                                                   |
+| `intent`     | query | No          | Analysis intent/context. Defaults to `"Looking to capture the dividend or if post-div dip is worth buying"`. |
+| `task_id`    | query | Conditional | Task ID returned when starting a task. Required when polling.                                                |
+
+```bash
+# Start a task
+curl 'http://localhost:8000/ai/analyze_dividend_event_async?symbol=AAPL&ex_date=2026-02-09&div_amount=0.26'
+
+# Poll a task
+curl 'http://localhost:8000/ai/analyze_dividend_event_async?task_id=<TASK_ID>'
+```
+
+Polling returns:
+
+| HTTP status | Task state  | Result                                             |
+|-------------|-------------|----------------------------------------------------|
+| `202`       | `RUNNING`   | The task is still running.                         |
+| `200`       | `COMPLETED` | The standard dividend-analysis payload in `data`.  |
+| `500`       | `FAILED`    | The background task failed.                        |
+| `404`       | —           | The task ID is unknown or its cache entry expired. |
+
 ---
 
 ### `POST /ai/analyze_ticker`
@@ -300,6 +452,37 @@ curl -X POST 'http://localhost:8000/ai/analyze_ticker' \
   -d '{"symbol": "CBA.AX", "intent": "dividend capture strategy"}'
 ```
 
+### `POST /ai/analyze_ticker_async`
+
+Run ticker analysis in the background. Start a task with the same JSON request body as
+`/ai/analyze_ticker`, then poll by posting to this endpoint with the returned task ID. Task state and
+results expire after one hour; completed analyses are cached for 72 hours.
+
+| Parameter | Location  | Required    | Description                                                   |
+|-----------|-----------|-------------|---------------------------------------------------------------|
+| `symbol`  | JSON body | Conditional | Stock symbol. Required when starting a task.                  |
+| `intent`  | JSON body | No          | Optional analysis intent used when starting a task.           |
+| `task_id` | query     | Conditional | Task ID returned when starting a task. Required when polling. |
+
+```bash
+# Start a task
+curl -X POST 'http://localhost:8000/ai/analyze_ticker_async' \
+  -H 'Content-Type: application/json' \
+  -d '{"symbol": "CBA.AX", "intent": "dividend capture strategy"}'
+
+# Poll a task
+curl -X POST 'http://localhost:8000/ai/analyze_ticker_async?task_id=<TASK_ID>'
+```
+
+Polling returns:
+
+| HTTP status | Task state  | Result                                             |
+|-------------|-------------|----------------------------------------------------|
+| `202`       | `RUNNING`   | The task is still running.                         |
+| `200`       | `COMPLETED` | The standard ticker-analysis payload in `data`.    |
+| `500`       | `FAILED`    | The background task failed.                        |
+| `404`       | —           | The task ID is unknown or its cache entry expired. |
+
 ---
 
 ### `POST /ai/build_portfolio`
@@ -311,8 +494,9 @@ Build a new portfolio using AI assistance.
 | Field                | Type              | Required | Description                                                               |
 |----------------------|-------------------|----------|---------------------------------------------------------------------------|
 | `current_allocation` | `HoldingTicker[]` | No       | List of existing holdings (see fields below).                             |
-| `country`            | `string`          | No       | Country context for the portfolio (e.g. `AU`, `US`).                      |
+| `country`            | `string`          | Yes      | Required country context for the portfolio (e.g. `AU`, `US`).             |
 | `investor_theme`     | `string`          | No       | Investor theme/preference for the analysis. Defaults to a built-in theme. |
+| `rebalance_plan`     | `boolean`         | No       | Ignored; this endpoint only builds a portfolio.                           |
 
 Each `HoldingTicker` object:
 
@@ -335,6 +519,39 @@ curl -X POST 'http://localhost:8000/ai/build_portfolio' \
 
 Response `data.analysis` contains the premium AI's generated portfolio. This endpoint does not generate a rebalance plan.
 
+### `POST /ai/build_portfolio_async`
+
+Build a portfolio in the background. Start a task with the same JSON request body as
+`/ai/build_portfolio`, then poll by posting to this endpoint with the returned task ID. Task state and
+results expire after one hour; completed portfolio results are cached for 72 hours.
+
+| Parameter            | Location  | Required    | Description                                                   |
+|----------------------|-----------|-------------|---------------------------------------------------------------|
+| `current_allocation` | JSON body | No          | Optional existing holdings used when starting a task.         |
+| `country`            | JSON body | Conditional | Country context. Required when starting a task.               |
+| `investor_theme`     | JSON body | No          | Optional investor theme used when starting a task.            |
+| `rebalance_plan`     | JSON body | No          | Ignored; this endpoint only builds a portfolio.               |
+| `task_id`            | query     | Conditional | Task ID returned when starting a task. Required when polling. |
+
+```bash
+# Start a task
+curl -X POST 'http://localhost:8000/ai/build_portfolio_async' \
+  -H 'Content-Type: application/json' \
+  -d '{"country": "AU", "investor_theme": "growth with moderate risk"}'
+
+# Poll a task
+curl -X POST 'http://localhost:8000/ai/build_portfolio_async?task_id=<TASK_ID>'
+```
+
+Polling returns:
+
+| HTTP status | Task state  | Result                                             |
+|-------------|-------------|----------------------------------------------------|
+| `202`       | `RUNNING`   | The task is still running.                         |
+| `200`       | `COMPLETED` | The standard build-portfolio payload in `data`.    |
+| `500`       | `FAILED`    | The background task failed.                        |
+| `404`       | —           | The task ID is unknown or its cache entry expired. |
+
 ---
 
 ### `POST /ai/spotlight_portfolio`
@@ -346,9 +563,10 @@ actionable responses for `Critical` and `High` risks.
 
 | Field                | Type              | Required | Description                                                               |
 |----------------------|-------------------|----------|---------------------------------------------------------------------------|
-| `current_allocation` | `HoldingTicker[]` | No       | List of current holdings to review.                                       |
-| `country`            | `string`          | No       | Country context for the analysis (e.g. `AU`, `US`).                       |
+| `current_allocation` | `HoldingTicker[]` | Yes      | Non-empty list of current holdings to review.                             |
+| `country`            | `string`          | Yes      | Required country context for the analysis (e.g. `AU`, `US`).              |
 | `investor_theme`     | `string`          | No       | Investor theme/preference for the analysis. Defaults to a built-in theme. |
+| `rebalance_plan`     | `boolean`         | No       | Ignored; use `/ai/analyze_portfolio` to request a rebalance plan.         |
 
 Each `HoldingTicker` object:
 
@@ -377,6 +595,44 @@ curl -X POST 'http://localhost:8000/ai/spotlight_portfolio' \
   }'
 ```
 
+### `POST /ai/spotlight_portfolio_async`
+
+Review a portfolio for immediate risks in the background. Start a task with the same JSON request
+body as `/ai/spotlight_portfolio`, then poll by posting to this endpoint with the returned task ID.
+Task state and results expire after one hour; completed spotlight analyses are cached for 72 hours.
+
+| Parameter            | Location  | Required    | Description                                                   |
+|----------------------|-----------|-------------|---------------------------------------------------------------|
+| `current_allocation` | JSON body | Conditional | Current holdings. Required when starting a task.              |
+| `country`            | JSON body | Conditional | Country context. Required when starting a task.               |
+| `investor_theme`     | JSON body | No          | Optional investor theme used when starting a task.            |
+| `rebalance_plan`     | JSON body | No          | Ignored; this endpoint only spotlights immediate risks.       |
+| `task_id`            | query     | Conditional | Task ID returned when starting a task. Required when polling. |
+
+```bash
+# Start a task
+curl -X POST 'http://localhost:8000/ai/spotlight_portfolio_async' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "country": "AU",
+    "current_allocation": [
+      {"ticker": "CBA.AX", "num_shares": 10, "avg_price": 150.0, "target_allocation": 1.0}
+    ]
+  }'
+
+# Poll a task
+curl -X POST 'http://localhost:8000/ai/spotlight_portfolio_async?task_id=<TASK_ID>'
+```
+
+Polling returns:
+
+| HTTP status | Task state  | Result                                             |
+|-------------|-------------|----------------------------------------------------|
+| `202`       | `RUNNING`   | The task is still running.                         |
+| `200`       | `COMPLETED` | The standard spotlight-portfolio payload in `data`. |
+| `500`       | `FAILED`    | The background task failed.                        |
+| `404`       | —           | The task ID is unknown or its cache entry expired. |
+
 ---
 
 ### `POST /ai/analyze_portfolio`
@@ -389,7 +645,7 @@ optionally assess whether a major rebalance is needed, generating a plan only wh
 | Field                | Type              | Required | Description                                                                                                                      |
 |----------------------|-------------------|----------|----------------------------------------------------------------------------------------------------------------------------------|
 | `current_allocation` | `HoldingTicker[]` | No       | List of current holdings. If empty, builds a new portfolio instead.                                                              |
-| `country`            | `string`          | No       | Country context for the analysis (e.g. `AU`, `US`).                                                                              |
+| `country`            | `string`          | Yes      | Required country context for the analysis (e.g. `AU`, `US`).                                                                     |
 | `investor_theme`     | `string`          | No       | Investor theme/preference for the analysis. Defaults to a built-in theme.                                                        |
 | `rebalance_plan`     | `boolean`         | No       | If `true`, assesses whether existing holdings need a major rebalance and generates a plan only when needed. Defaults to `false`. |
 
@@ -432,6 +688,46 @@ curl -X POST 'http://localhost:8000/ai/analyze_portfolio' \
 
 If the rebalance decision or any later rebalance stage fails after the portfolio review succeeds, `analysis` retains
 the completed review while `llm_error` and `llm_error_msg` describe the later failure.
+
+### `POST /ai/analyze_portfolio_async`
+
+Analyze or build a portfolio in the background using the same review-or-build behavior and JSON
+request body as `/ai/analyze_portfolio`. Poll by posting to this endpoint with the returned task ID.
+Task state and results expire after one hour; completed analyses retain the underlying 72-hour
+build/review service cache.
+
+| Parameter            | Location  | Required    | Description                                                   |
+|----------------------|-----------|-------------|---------------------------------------------------------------|
+| `current_allocation` | JSON body | No          | Holdings to review; when empty, a new portfolio is built.     |
+| `country`            | JSON body | Conditional | Country context. Required when starting a task.               |
+| `investor_theme`     | JSON body | No          | Optional investor theme used when starting a task.            |
+| `rebalance_plan`     | JSON body | No          | Whether to generate a major-rebalance plan when needed.       |
+| `task_id`            | query     | Conditional | Task ID returned when starting a task. Required when polling. |
+
+```bash
+# Start a task
+curl -X POST 'http://localhost:8000/ai/analyze_portfolio_async' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "country": "US",
+    "current_allocation": [
+      {"ticker": "AAPL", "num_shares": 50, "avg_price": 150.0, "target_allocation": 1.0}
+    ],
+    "rebalance_plan": true
+  }'
+
+# Poll a task
+curl -X POST 'http://localhost:8000/ai/analyze_portfolio_async?task_id=<TASK_ID>'
+```
+
+Polling returns:
+
+| HTTP status | Task state  | Result                                             |
+|-------------|-------------|----------------------------------------------------|
+| `202`       | `RUNNING`   | The task is still running.                         |
+| `200`       | `COMPLETED` | The standard analyze-portfolio payload in `data`.  |
+| `500`       | `FAILED`    | The background task failed.                        |
+| `404`       | —           | The task ID is unknown or its cache entry expired. |
 
 ---
 

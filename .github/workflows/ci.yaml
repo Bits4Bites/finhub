@@ -71,7 +71,6 @@ jobs:
           CONTAINER=$(docker run -d \
             --name test \
             -p 1234:8000 \
-            -e NUM_WORKERS=1 \
             --platform ${{ matrix.platforms }} \
             test)
           sleep 20 # Wait for the container to start and bootstrap, increase wait time if needed
@@ -161,7 +160,7 @@ jobs:
       - name: Update version metadata
         run: |
           DATE=`date +%Y%m%d%H%M%S`
-          sed -i -E "s/VERSION\s*=.*/VERSION = \"${{ env.VERSION }}-${DATE}\"/" app/main.py
+          sed -i -E "s/VERSION\s*=.*/VERSION = \"${{ env.VERSION }}-${DATE}\"/" app/version.py
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
       - name: Login to Docker Hub

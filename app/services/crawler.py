@@ -11,8 +11,17 @@ from bs4 import BeautifulSoup
 from playwright.async_api import Page, ProxySettings, ViewportSize, async_playwright
 
 from .. import config
+from ..utils import cache
 
 logger = logging.getLogger(__name__)
+
+_HTML_CACHE_TTL = 24 * 60 * 60
+
+
+def _callback_name(callback) -> str:
+    if not callback:
+        return ""
+    return f"{getattr(callback, '__module__', '')}.{getattr(callback, '__qualname__', type(callback).__qualname__)}"
 
 
 def extract_data_table_from_html(html_content: str, *, raw_cell_content=False, table_attr_filter=None) -> pd.DataFrame:
@@ -96,6 +105,12 @@ async def fetch_webpage_content(
     Returns:
         str: The content of the webpage if successful, otherwise None.
     """
+    cache_key = cache.generate_key("crawler", "http", url)
+    cached_content = await cache.get(cache_key)
+    if cached_content is not None:
+        logger.info("Using cached content for '%s'.", url)
+        return cached_content
+
     proxies = [] if not proxies else proxies
     unverified_ssl_context = ssl.create_default_context()
     unverified_ssl_context.check_hostname = False
@@ -121,6 +136,7 @@ async def fetch_webpage_content(
                 else None,
             )
             response.raise_for_status()  # Raise an exception for HTTP errors
+            await cache.set(cache_key, response.text, ttl=_HTML_CACHE_TTL)
             logger.info("Fetched content from '%s' in %.2f seconds.", url, time.monotonic() - start_time)
             return response.text
         except Exception as e:
@@ -149,6 +165,12 @@ async def fetch_webpage_content_playwright(
     Returns:
         str: The content of the webpage if successful, otherwise None.
     """
+    cache_key = cache.generate_key("crawler", "playwright", _callback_name(after_load_func_async), url)
+    cached_content = await cache.get(cache_key)
+    if cached_content is not None:
+        logger.info("Using cached Playwright content for '%s'.", url)
+        return cached_content
+
     proxies = [] if not proxies else proxies
     start_time = time.monotonic()
     for attempt in range(retries):
@@ -171,6 +193,7 @@ async def fetch_webpage_content_playwright(
                     await after_load_func_async(page)
                 page_content = await page.content()
                 await browser.close()
+                await cache.set(cache_key, page_content, ttl=_HTML_CACHE_TTL)
                 logger.info("Fetched content from '%s' in %.2f seconds.", url, time.monotonic() - start_time)
                 return page_content
         except Exception as e:

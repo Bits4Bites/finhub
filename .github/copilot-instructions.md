@@ -2,6 +2,8 @@
 
 ## Build, Test, and Lint
 
+This project uses a Python virtual environment. Activate the project's virtual environment before running Python, `pip`, Ruff, pytest, or the development server.
+
 ```bash
 # Install dependencies
 pip install -r requirements.txt
@@ -65,6 +67,7 @@ Routers parse/validate input → call service functions → services fetch data 
 
 ## Conventions
 
+- **Questions are not implementation requests**: When the user asks a question, answer it and explain the reasoning. Do not make code changes or take implementation action unless the user explicitly asks for implementation.
 - **Symbol format**: The API accepts stock symbols in Yahoo Finance format (`CBA.AX`) or `EXCHANGE:CODE` format (`NASDAQ:AAPL`). Symbols are uppercased at the router level.
 - **Response envelope**: All API responses use `BaseResponse` schema with `status`, `message`, and optional `data`/`extra` fields.
 - **Async for AI, sync for data**: AI/LLM service functions are `async`. Stock data fetching functions are synchronous.

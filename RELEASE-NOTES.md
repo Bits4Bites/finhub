@@ -1,5 +1,32 @@
 # FinHub release notes
 
+## 2026-08-12 - v0.15.0
+
+### Added/Refactoring/Deprecation
+
+- Feat(events): Add async endpoint for upcoming dividends event.
+- Feat(events): Add async endpoint for upcoming earnings event.
+- Feat(events): Add async endpoint for new listings event.
+- Feat(ai): Add async endpoint for analyzing dividend event.
+- Feat(ai): Add async endpoint for analyzing ticker.
+- Feat(ai): Add async endpoint for building portfolio.
+- Feat(ai): Add async endpoint for spotlighting portfolio.
+- Feat(ai): Add async endpoint for analyzing portfolio.
+
+### Fixed/Improvements
+
+- Patch(server): Remove env.NUM_WORKERS, server always runs in single process mode.
+- Impr: Add cache utilities.
+- Impr(crawler): Cache fetched webpage content for 24 hours.
+- Impr: Add cache support to service ai_get_asx_new_listings.
+- Impr: Add cache support to service ai_analyze_div_event.
+- Impr: Add cache support to service ai_analyze_ticker.
+- Impr: Add cache support to service ai_build_portfolio.
+- Impr: Add cache support to service ai_spotlight_portfolio.
+- Impr: Add cache support to service ai_review_portfolio.
+- Impr(spotlight portfolio): Skip spotlight analysis if portfolio has no holdings.
+- Impr(analyze portfolio): Switch to portfolio building if portfolio has no holdings.
+
 ## 2026-08-06 - v0.14.4
 
 ### Fixed/Improvements
