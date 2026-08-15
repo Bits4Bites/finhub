@@ -1,5 +1,5 @@
 {
-    "date": "2026-08-08",
+    "date": "2026-08-15",
     "data": [
         {
             "symbol": "ASX:360",
@@ -1229,7 +1229,7 @@
         {
             "symbol": "ASX:SKG",
             "company": "STORAGE KING GROUP",
-            "sector": ""
+            "sector": "REITs"
         },
         {
             "symbol": "ASX:SLC",
