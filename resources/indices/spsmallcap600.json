@@ -1,5 +1,5 @@
 {
-    "date": "2026-08-08",
+    "date": "2026-08-15",
     "data": [
         {
             "symbol": "NYSE:AAMI",
@@ -79,6 +79,11 @@
         {
             "symbol": "NASDAQ:ADEA",
             "company": "Adeia, Inc.",
+            "sector": "Information Technology"
+        },
+        {
+            "symbol": "NYSE:ADIG",
+            "company": "ADI Global Distribution",
             "sector": "Information Technology"
         },
         {
@@ -1280,11 +1285,6 @@
             "symbol": "NASDAQ:HTO",
             "company": "H2O America",
             "sector": "Utilities"
-        },
-        {
-            "symbol": "NASDAQ:HTZ",
-            "company": "Hertz",
-            "sector": "Industrials"
         },
         {
             "symbol": "NASDAQ:HUBG",
