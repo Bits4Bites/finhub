@@ -122,14 +122,14 @@ async def ai_build_portfolio(
         investor_profile=investor_profile,
         existing_holdings_instruction=existing_holdings_instruction,
     )
-    build_result = await ai_helper.ai_exec_task("BUILD_PORTFOLIO_BUILD_PROMPT", build_prompt, country)
+    build_result = await ai_helper.ai_exec_task("BUILD_PORTFOLIO_BUILD_PROMPT", build_prompt, country=country)
     if build_result.is_error:
         return models_ai.AnalyzePortfolioResult(llm_error=True, llm_error_msg=build_result.error_msg)
 
     analysis_prompt = build_result.completion
 
     # Step 3: execute the prompt built from previous step
-    exec_result = await ai_helper.ai_exec_task("BUILD_PORTFOLIO_EXEC", analysis_prompt, country)
+    exec_result = await ai_helper.ai_exec_task("BUILD_PORTFOLIO_EXEC", analysis_prompt, country=country)
     if exec_result.is_error:
         return models_ai.AnalyzePortfolioResult(llm_error=True, llm_error_msg=exec_result.error_msg)
 

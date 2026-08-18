@@ -118,14 +118,18 @@ async def ai_analyze_ticker(symbol: str, *, intent: str = DEFAULT_INTENT):
     build_prompt_input = _build_analysis_prompt(ticker=ticker, intent=effective_intent)
 
     country = conv.country_to_iso2(ticker.info.get("country", ""))
-    llm_result = await ai_helper.ai_exec_task("ANALYZE_TICKER_BUILD_PROMPT", build_prompt_input, country)
+    llm_result = await ai_helper.ai_exec_task(
+        "ANALYZE_TICKER_BUILD_PROMPT",
+        build_prompt_input,
+        country=country,
+    )
     if llm_result.is_error:
         return models_ai.AnalysisResult(llm_error=True, llm_error_msg=llm_result.error_msg)
 
     analysis_prompt = llm_result.completion
 
     # Step 3: execute the prompt built from previous step
-    exec_result = await ai_helper.ai_exec_task("ANALYZE_TICKER_EXEC", analysis_prompt, country)
+    exec_result = await ai_helper.ai_exec_task("ANALYZE_TICKER_EXEC", analysis_prompt, country=country)
     if exec_result.is_error:
         return models_ai.AnalysisResult(llm_error=True, llm_error_msg=exec_result.error_msg)
 

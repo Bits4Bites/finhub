@@ -243,14 +243,14 @@ async def ai_review_portfolio(
 
     # Step 2: use AI to build the ready-to-use prompt to review the portfolio
     build_prompt = BUILD_PROMPT_TEMPLATE.format(investor_profile=investor_profile)
-    build_result = await ai_helper.ai_exec_task("REVIEW_PORTFOLIO_BUILD_PROMPT", build_prompt, country)
+    build_result = await ai_helper.ai_exec_task("REVIEW_PORTFOLIO_BUILD_PROMPT", build_prompt, country=country)
     if build_result.is_error:
         return models_ai.AnalyzePortfolioResult(llm_error=True, llm_error_msg=build_result.error_msg)
 
     analysis_prompt = build_result.completion
 
     # Step 3: execute the prompt built from previous step
-    exec_result = await ai_helper.ai_exec_task("REVIEW_PORTFOLIO_EXEC", analysis_prompt, country)
+    exec_result = await ai_helper.ai_exec_task("REVIEW_PORTFOLIO_EXEC", analysis_prompt, country=country)
     if exec_result.is_error:
         return models_ai.AnalyzePortfolioResult(llm_error=True, llm_error_msg=exec_result.error_msg)
 
@@ -279,7 +279,7 @@ async def ai_review_portfolio(
         investor_profile=investor_profile,
         portfolio_review=portfolio_review,
     )
-    summary_result = await ai_helper.ai_exec_task("REVIEW_PORTFOLIO_SUMMARIZE", summarize_prompt, country)
+    summary_result = await ai_helper.ai_exec_task("REVIEW_PORTFOLIO_SUMMARIZE", summarize_prompt, country=country)
     if summary_result.is_error:
         return models_ai.AnalyzePortfolioResult(
             analysis=portfolio_review,
@@ -295,7 +295,7 @@ async def ai_review_portfolio(
     rebalance_build_result = await ai_helper.ai_exec_task(
         "REVIEW_PORTFOLIO_REBALANCE_BUILD_PROMPT",
         rebalance_build_prompt,
-        country,
+        country=country,
     )
     if rebalance_build_result.is_error:
         return models_ai.AnalyzePortfolioResult(
@@ -308,7 +308,7 @@ async def ai_review_portfolio(
     rebalance_result = await ai_helper.ai_exec_task(
         "REVIEW_PORTFOLIO_REBALANCE_EXEC",
         rebalance_build_result.completion,
-        country,
+        country=country,
     )
     if rebalance_result.is_error:
         return models_ai.AnalyzePortfolioResult(

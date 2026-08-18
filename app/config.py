@@ -10,6 +10,7 @@ from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ALLOWED_QUOTE_TYPES = {"EQUITY", "ETF", "MUTUALFUND"}
+ReasoningEffort = Literal["High", "Medium", "Low"]
 
 # ----------------------------------------------------------------------#
 
@@ -96,23 +97,21 @@ class LLMConfig(BaseSettings):
 
 
 class LLMTaskConfig(BaseSettings):
-    """
-    LLM configurations for a task. Supply an instance of LLMTaskConfigOverride to override the default LLM configurations for a task.
-    """
+    """LLM configurations for a task."""
 
     task_name: str = ""
     vendor: str = ""
     tier: str = ""
     model: str = ""
-    temperature: float = 0.2
+    reasoning_effort: ReasoningEffort | None = None
+    use_web_search: bool = False
 
-
-class LLMTaskConfigOverride(LLMTaskConfig):
-    """
-    Supply an instance of LLMTaskConfigOverride to override the default LLM configurations for a task.
-    """
-
-    pass
+    @field_validator("reasoning_effort", mode="before")
+    @classmethod
+    def normalize_reasoning_effort(cls, v: str | None) -> str | None:
+        if isinstance(v, str):
+            return v.strip().title() or None
+        return v
 
 
 class LLMVendorSettings(BaseSettings):
@@ -169,13 +168,6 @@ class LLMTaskSettings(BaseSettings):
         nested_model_default_partial_update=True,
         extra="ignore",
     )
-
-    # def get_llm_client(self, task_id, timeout_sec: float = 180) -> genai.Client | openai.AsyncOpenAI | None:
-    #     t_id = task_id.upper()
-    #     task_config = self.tasks.get(t_id)
-    #     return settings_llm_vendor.get_llm_client(task_config.vendor, task_config.tier, timeout_sec) \
-    #     if task_config
-    #     else None
 
 
 settings_llm_vendor = LLMVendorSettings()

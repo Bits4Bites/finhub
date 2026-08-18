@@ -3,8 +3,8 @@
 import asyncio
 from unittest.mock import AsyncMock, patch
 
-from app.models.ai import LLMResponse
 from app.models.finhub import HoldingTicker
+from app.services import ai_helper
 
 # ===========================================================================
 # Tests for msai_analyze_ticker
@@ -61,7 +61,7 @@ class TestAiAnalyzeTicker:
             "symbol": "AAPL",
             "marketCap": 3_000_000_000_000,
         }
-        mock_ai_exec.return_value = LLMResponse(is_error=True, error_msg="LLM timeout")
+        mock_ai_exec.return_value = ai_helper.LLMResponse(is_error=True, error_msg="LLM timeout")
 
         result = asyncio.run(ai_analyze_ticker("AAPL"))
         assert result is not None
@@ -86,8 +86,8 @@ class TestAiAnalyzeTicker:
             "marketCap": 3_000_000_000_000,
         }
         mock_ai_exec.side_effect = [
-            LLMResponse(completion="Generated prompt"),
-            LLMResponse(is_error=True, error_msg="Exec failed"),
+            ai_helper.LLMResponse(completion="Generated prompt"),
+            ai_helper.LLMResponse(is_error=True, error_msg="Exec failed"),
         ]
 
         result = asyncio.run(ai_analyze_ticker("AAPL"))
@@ -113,8 +113,8 @@ class TestAiAnalyzeTicker:
             "marketCap": 3_000_000_000_000,
         }
         mock_ai_exec.side_effect = [
-            LLMResponse(completion="Generated prompt"),
-            LLMResponse(completion="AAPL looks bullish..."),
+            ai_helper.LLMResponse(completion="Generated prompt"),
+            ai_helper.LLMResponse(completion="AAPL looks bullish..."),
         ]
 
         with (
@@ -207,7 +207,7 @@ class TestAiBuildPortfolio:
     def test_returns_error_when_build_prompt_fails(self, mock_ai_exec):
         from app.services.msai_build_portfolio import ai_build_portfolio
 
-        mock_ai_exec.return_value = LLMResponse(is_error=True, error_msg="Build failed")
+        mock_ai_exec.return_value = ai_helper.LLMResponse(is_error=True, error_msg="Build failed")
 
         result = asyncio.run(ai_build_portfolio(country="AU"))
         assert result is not None
@@ -219,8 +219,8 @@ class TestAiBuildPortfolio:
         from app.services.msai_build_portfolio import ai_build_portfolio
 
         mock_ai_exec.side_effect = [
-            LLMResponse(completion="Generated prompt"),
-            LLMResponse(is_error=True, error_msg="Exec failed"),
+            ai_helper.LLMResponse(completion="Generated prompt"),
+            ai_helper.LLMResponse(is_error=True, error_msg="Exec failed"),
         ]
 
         result = asyncio.run(ai_build_portfolio(country="US"))
@@ -233,8 +233,8 @@ class TestAiBuildPortfolio:
         from app.services.msai_build_portfolio import ai_build_portfolio
 
         mock_ai_exec.side_effect = [
-            LLMResponse(completion="Generated prompt"),
-            LLMResponse(completion="Recommended portfolio: ..."),
+            ai_helper.LLMResponse(completion="Generated prompt"),
+            ai_helper.LLMResponse(completion="Recommended portfolio: ..."),
         ]
 
         with (
@@ -265,8 +265,8 @@ class TestAiBuildPortfolio:
         from app.services.msai_build_portfolio import ai_build_portfolio
 
         mock_ai_exec.side_effect = [
-            LLMResponse(completion="Generated prompt"),
-            LLMResponse(completion="Portfolio result"),
+            ai_helper.LLMResponse(completion="Generated prompt"),
+            ai_helper.LLMResponse(completion="Portfolio result"),
         ]
 
         positions = [
@@ -290,8 +290,8 @@ class TestAiBuildPortfolio:
         from app.services.msai_build_portfolio import ai_build_portfolio
 
         mock_ai_exec.side_effect = [
-            LLMResponse(completion="Generated prompt"),
-            LLMResponse(completion="Portfolio result"),
+            ai_helper.LLMResponse(completion="Generated prompt"),
+            ai_helper.LLMResponse(completion="Portfolio result"),
         ]
 
         result = asyncio.run(ai_build_portfolio(country="AU", existing_positions=[]))
@@ -377,8 +377,8 @@ class TestAiSpotlightPortfolio:
         from app.services.msai_spotlight_portfolio import ai_spotlight_portfolio
 
         mock_ai_exec.side_effect = [
-            LLMResponse(completion="Generated spotlight prompt"),
-            LLMResponse(completion="Immediate risks and actions"),
+            ai_helper.LLMResponse(completion="Generated spotlight prompt"),
+            ai_helper.LLMResponse(completion="Immediate risks and actions"),
         ]
         portfolio = [HoldingTicker(ticker="AAPL", num_shares=20, avg_price=150.0, market_price=190.0, tags="growth")]
 
@@ -483,7 +483,7 @@ class TestAiReviewPortfolio:
     def test_returns_error_when_build_prompt_fails(self, mock_ai_exec):
         from app.services.msai_review_portfolio import ai_review_portfolio
 
-        mock_ai_exec.return_value = LLMResponse(is_error=True, error_msg="Build failed")
+        mock_ai_exec.return_value = ai_helper.LLMResponse(is_error=True, error_msg="Build failed")
         portfolio = [HoldingTicker(ticker="CBA.AX", num_shares=100, market_price=120.0)]
 
         result = asyncio.run(ai_review_portfolio(portfolio=portfolio, country="AU"))
@@ -496,8 +496,8 @@ class TestAiReviewPortfolio:
         from app.services.msai_review_portfolio import ai_review_portfolio
 
         mock_ai_exec.side_effect = [
-            LLMResponse(completion="Generated prompt"),
-            LLMResponse(is_error=True, error_msg="Exec failed"),
+            ai_helper.LLMResponse(completion="Generated prompt"),
+            ai_helper.LLMResponse(is_error=True, error_msg="Exec failed"),
         ]
         portfolio = [HoldingTicker(ticker="CBA.AX", num_shares=100, market_price=120.0)]
 
@@ -511,8 +511,8 @@ class TestAiReviewPortfolio:
         from app.services.msai_review_portfolio import ai_review_portfolio
 
         mock_ai_exec.side_effect = [
-            LLMResponse(completion="Generated prompt"),
-            LLMResponse(completion="Portfolio review: well diversified...\n\nREBALANCE_NEEDED: NO"),
+            ai_helper.LLMResponse(completion="Generated prompt"),
+            ai_helper.LLMResponse(completion="Portfolio review: well diversified...\n\nREBALANCE_NEEDED: NO"),
         ]
         portfolio = [
             HoldingTicker(ticker="CBA.AX", num_shares=100, market_price=120.0),
@@ -549,11 +549,11 @@ class TestAiReviewPortfolio:
         from app.services.msai_review_portfolio import ai_review_portfolio
 
         mock_ai_exec.side_effect = [
-            LLMResponse(completion="Generated review prompt"),
-            LLMResponse(completion="Premium portfolio review\n\nREBALANCE_NEEDED: YES"),
-            LLMResponse(completion="Low-cost review summary"),
-            LLMResponse(completion="Generated rebalance prompt"),
-            LLMResponse(completion="Premium rebalance plan"),
+            ai_helper.LLMResponse(completion="Generated review prompt"),
+            ai_helper.LLMResponse(completion="Premium portfolio review\n\nREBALANCE_NEEDED: YES"),
+            ai_helper.LLMResponse(completion="Low-cost review summary"),
+            ai_helper.LLMResponse(completion="Generated rebalance prompt"),
+            ai_helper.LLMResponse(completion="Premium rebalance plan"),
         ]
         portfolio = [
             HoldingTicker(
@@ -596,8 +596,8 @@ class TestAiReviewPortfolio:
 
         portfolio_review = "Portfolio is healthy. Continue monitoring.\n\nREBALANCE_NEEDED: NO"
         mock_ai_exec.side_effect = [
-            LLMResponse(completion="Generated review prompt"),
-            LLMResponse(completion=portfolio_review),
+            ai_helper.LLMResponse(completion="Generated review prompt"),
+            ai_helper.LLMResponse(completion=portfolio_review),
         ]
         portfolio = [HoldingTicker(ticker="CBA.AX", num_shares=100, market_price=120.0)]
 
@@ -622,8 +622,8 @@ class TestAiReviewPortfolio:
         from app.services.msai_review_portfolio import ai_review_portfolio
 
         mock_ai_exec.side_effect = [
-            LLMResponse(completion="Generated review prompt"),
-            LLMResponse(completion="Portfolio is healthy.\n\n**REBALANCE_NEEDED: NO**"),
+            ai_helper.LLMResponse(completion="Generated review prompt"),
+            ai_helper.LLMResponse(completion="Portfolio is healthy.\n\n**REBALANCE_NEEDED: NO**"),
         ]
         portfolio = [HoldingTicker(ticker="CBA.AX", num_shares=100, market_price=120.0)]
 
@@ -646,8 +646,8 @@ class TestAiReviewPortfolio:
         from app.services.msai_review_portfolio import ai_review_portfolio
 
         mock_ai_exec.side_effect = [
-            LLMResponse(completion="Generated review prompt"),
-            LLMResponse(completion="Premium portfolio review without the required flag"),
+            ai_helper.LLMResponse(completion="Generated review prompt"),
+            ai_helper.LLMResponse(completion="Premium portfolio review without the required flag"),
         ]
         portfolio = [HoldingTicker(ticker="CBA.AX", num_shares=100, market_price=120.0)]
 
@@ -671,9 +671,9 @@ class TestAiReviewPortfolio:
         from app.services.msai_review_portfolio import ai_review_portfolio
 
         mock_ai_exec.side_effect = [
-            LLMResponse(completion="Generated review prompt"),
-            LLMResponse(completion="Premium portfolio review\n\nREBALANCE_NEEDED: YES"),
-            LLMResponse(is_error=True, error_msg="Summary failed"),
+            ai_helper.LLMResponse(completion="Generated review prompt"),
+            ai_helper.LLMResponse(completion="Premium portfolio review\n\nREBALANCE_NEEDED: YES"),
+            ai_helper.LLMResponse(is_error=True, error_msg="Summary failed"),
         ]
         portfolio = [HoldingTicker(ticker="CBA.AX", num_shares=100, market_price=120.0)]
 
@@ -696,10 +696,10 @@ class TestAiReviewPortfolio:
         from app.services.msai_review_portfolio import ai_review_portfolio
 
         mock_ai_exec.side_effect = [
-            LLMResponse(completion="Generated review prompt"),
-            LLMResponse(completion="Premium portfolio review\n\nREBALANCE_NEEDED: YES"),
-            LLMResponse(completion="Low-cost review summary"),
-            LLMResponse(is_error=True, error_msg="Rebalance prompt failed"),
+            ai_helper.LLMResponse(completion="Generated review prompt"),
+            ai_helper.LLMResponse(completion="Premium portfolio review\n\nREBALANCE_NEEDED: YES"),
+            ai_helper.LLMResponse(completion="Low-cost review summary"),
+            ai_helper.LLMResponse(is_error=True, error_msg="Rebalance prompt failed"),
         ]
         portfolio = [HoldingTicker(ticker="CBA.AX", num_shares=100, market_price=120.0)]
 
@@ -722,11 +722,11 @@ class TestAiReviewPortfolio:
         from app.services.msai_review_portfolio import ai_review_portfolio
 
         mock_ai_exec.side_effect = [
-            LLMResponse(completion="Generated review prompt"),
-            LLMResponse(completion="Premium portfolio review\n\nREBALANCE_NEEDED: YES"),
-            LLMResponse(completion="Low-cost review summary"),
-            LLMResponse(completion="Generated rebalance prompt"),
-            LLMResponse(is_error=True, error_msg="Rebalance execution failed"),
+            ai_helper.LLMResponse(completion="Generated review prompt"),
+            ai_helper.LLMResponse(completion="Premium portfolio review\n\nREBALANCE_NEEDED: YES"),
+            ai_helper.LLMResponse(completion="Low-cost review summary"),
+            ai_helper.LLMResponse(completion="Generated rebalance prompt"),
+            ai_helper.LLMResponse(is_error=True, error_msg="Rebalance execution failed"),
         ]
         portfolio = [HoldingTicker(ticker="CBA.AX", num_shares=100, market_price=120.0)]
 
@@ -749,8 +749,8 @@ class TestAiReviewPortfolio:
         from app.services.msai_review_portfolio import ai_review_portfolio
 
         mock_ai_exec.side_effect = [
-            LLMResponse(completion="Generated prompt"),
-            LLMResponse(completion="Review result"),
+            ai_helper.LLMResponse(completion="Generated prompt"),
+            ai_helper.LLMResponse(completion="Review result"),
         ]
         portfolio = [HoldingTicker(ticker="AAPL", num_shares=20, market_price=190.0, tags="growth")]
 
@@ -833,7 +833,7 @@ class TestAiAnalyzeDivEvent:
             "marketCap": 200_000_000_000,
         }
         mock_analyse.return_value = DividendEventAnalysis(symbol="CBA.AX", price=120.0)
-        mock_ai_exec.return_value = LLMResponse(is_error=True, error_msg="Build timeout")
+        mock_ai_exec.return_value = ai_helper.LLMResponse(is_error=True, error_msg="Build timeout")
 
         result = asyncio.run(ai_analyze_div_event(symbol="ASX:CBA", ex_date="2025-08-15", div_amount=2.50))
         assert result is not None
@@ -861,8 +861,8 @@ class TestAiAnalyzeDivEvent:
         }
         mock_analyse.return_value = DividendEventAnalysis(symbol="CBA.AX", price=120.0)
         mock_ai_exec.side_effect = [
-            LLMResponse(completion="Generated prompt"),
-            LLMResponse(is_error=True, error_msg="Exec timeout"),
+            ai_helper.LLMResponse(completion="Generated prompt"),
+            ai_helper.LLMResponse(is_error=True, error_msg="Exec timeout"),
         ]
 
         result = asyncio.run(ai_analyze_div_event(symbol="ASX:CBA", ex_date="2025-08-15", div_amount=2.50))
@@ -912,8 +912,8 @@ class TestAiAnalyzeDivEvent:
         )
 
         mock_ai_exec.side_effect = [
-            LLMResponse(completion="Generated prompt"),
-            LLMResponse(completion=llm_json),
+            ai_helper.LLMResponse(completion="Generated prompt"),
+            ai_helper.LLMResponse(completion=llm_json),
         ]
 
         with (

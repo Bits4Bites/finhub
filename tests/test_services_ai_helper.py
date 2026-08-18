@@ -1,9 +1,56 @@
 import asyncio
+import inspect
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from google.genai import types as genai_types
+
 from app import config
 from app.services import ai_helper
+
+
+def _make_openai_response():
+    return SimpleNamespace(
+        output_text="ok",
+        status="completed",
+        usage=SimpleNamespace(
+            input_tokens=10,
+            output_tokens=5,
+            total_tokens=17,
+            input_tokens_details=SimpleNamespace(cached_tokens=3),
+            output_tokens_details=SimpleNamespace(reasoning_tokens=2),
+        ),
+    )
+
+
+def _make_gemini_response():
+    return SimpleNamespace(
+        text="ok",
+        usage_metadata=SimpleNamespace(
+            prompt_token_count=10,
+            candidates_token_count=5,
+            thoughts_token_count=2,
+            tool_use_prompt_token_count=1,
+            cached_content_token_count=3,
+            total_token_count=17,
+        ),
+        prompt_feedback=None,
+        candidates=[SimpleNamespace()],
+    )
+
+
+class TestLlmTaskConfig:
+    def test_reasoning_and_web_search_defaults(self):
+        task_cfg = config.LLMTaskConfig()
+
+        assert task_cfg.reasoning_effort is None
+        assert task_cfg.use_web_search is False
+        assert not hasattr(task_cfg, "temperature")
+
+    def test_reasoning_effort_is_case_insensitive(self):
+        task_cfg = config.LLMTaskConfig(reasoning_effort="High")
+
+        assert task_cfg.reasoning_effort == "High"
 
 
 class TestAiExecPrompt:
@@ -17,7 +64,13 @@ class TestAiExecPrompt:
             result = asyncio.run(ai_helper.ai_exec_prompt(task_cfg, "hello world"))
 
         assert result is expected
-        mock_exec.assert_awaited_once_with(task_cfg, "hello world", None, 0.2)
+        mock_exec.assert_awaited_once_with(
+            task_cfg,
+            "hello world",
+            country="",
+            response_json_schema=None,
+            schema_name="json_responses",
+        )
 
     def test_ai_exec_prompt_raises_for_unknown_vendor(self):
         task_cfg = config.LLMTaskConfig(task_name="demo", vendor="UNKNOWN", tier="cheap", model="x")
@@ -32,7 +85,14 @@ class TestAiExecPrompt:
 
 class TestAiExecTask:
     def test_ai_exec_task_builds_prompt_config_and_uses_task(self):
-        task_cfg = config.LLMTaskConfig(task_name="demo", vendor="OPENAI", tier="cheap", model="gpt-5-mini")
+        task_cfg = config.LLMTaskConfig(
+            task_name="demo",
+            vendor="OPENAI",
+            tier="cheap",
+            model="gpt-5-mini",
+            reasoning_effort="HIGH",
+            use_web_search=True,
+        )
         fake_settings = MagicMock()
         fake_settings.tasks = {"DEMO": task_cfg}
 
@@ -46,9 +106,160 @@ class TestAiExecTask:
 
         assert result == "ok"
         mock_exec_prompt.assert_awaited_once()
-        called_task_cfg, called_prompt, called_cfg = mock_exec_prompt.await_args.args
+        called_task_cfg, called_prompt = mock_exec_prompt.await_args.args
         assert called_task_cfg is task_cfg
         assert called_prompt == "prompt"
-        assert called_cfg.use_web_search is True
-        assert called_cfg.country == "AU"
-        assert mock_exec_prompt.await_args.kwargs["llm_config_override"] is None
+        assert called_task_cfg.reasoning_effort == "High"
+        assert called_task_cfg.use_web_search is True
+        assert mock_exec_prompt.await_args.kwargs == {
+            "country": "AU",
+            "response_json_schema": None,
+            "schema_name": "json_responses",
+        }
+
+    def test_country_is_keyword_only(self):
+        country_param = inspect.signature(ai_helper.ai_exec_task).parameters["country"]
+
+        assert country_param.kind is inspect.Parameter.KEYWORD_ONLY
+
+
+class TestExecPromptOpenAiClient:
+    def test_responses_uses_model_defaults_when_reasoning_effort_is_missing(self):
+        task_cfg = config.LLMTaskConfig(vendor="OPENAI", model="gpt-5-mini")
+        client = MagicMock()
+        client.responses.create = AsyncMock(return_value=_make_openai_response())
+
+        result = asyncio.run(
+            ai_helper._exec_prompt_openai_client(
+                client,
+                task_cfg,
+                "prompt",
+                schema_name="json_responses",
+            )
+        )
+
+        assert result.completion == "ok"
+        assert result.tokens_thought == 2
+        assert result.tokens_cache == 3
+        request_kwargs = client.responses.create.await_args.kwargs
+        assert "reasoning" not in request_kwargs
+        assert "temperature" not in request_kwargs
+
+    def test_responses_uses_configured_reasoning_effort(self):
+        task_cfg = config.LLMTaskConfig(vendor="OPENAI", model="gpt-5-mini", reasoning_effort="Medium")
+        client = MagicMock()
+        client.responses.create = AsyncMock(return_value=_make_openai_response())
+
+        asyncio.run(
+            ai_helper._exec_prompt_openai_client(
+                client,
+                task_cfg,
+                "prompt",
+                schema_name="json_responses",
+            )
+        )
+
+        request_kwargs = client.responses.create.await_args.kwargs
+        assert request_kwargs["reasoning"] == {"effort": "medium"}
+        assert "temperature" not in request_kwargs
+
+    def test_web_search_uses_task_config_and_country(self):
+        task_cfg = config.LLMTaskConfig(
+            vendor="OPENAI",
+            model="gpt-5",
+            reasoning_effort="High",
+            use_web_search=True,
+        )
+        client = MagicMock()
+        client.responses.create = AsyncMock(return_value=_make_openai_response())
+
+        result = asyncio.run(
+            ai_helper._exec_prompt_openai_client(
+                client,
+                task_cfg,
+                "prompt",
+                country="AU",
+                schema_name="json_responses",
+            )
+        )
+
+        assert result.completion == "ok"
+        request_kwargs = client.responses.create.await_args.kwargs
+        assert request_kwargs["reasoning"] == {"effort": "high"}
+        assert request_kwargs["tools"][0]["user_location"] == {"type": "approximate", "country": "AU"}
+        assert "temperature" not in request_kwargs
+        client.chat.completions.create.assert_not_called()
+
+    def test_web_search_omits_reasoning_when_missing(self):
+        task_cfg = config.LLMTaskConfig(vendor="OPENAI", model="gpt-5", use_web_search=True)
+        client = MagicMock()
+        client.responses.create = AsyncMock(return_value=_make_openai_response())
+
+        asyncio.run(
+            ai_helper._exec_prompt_openai_client(
+                client,
+                task_cfg,
+                "prompt",
+                schema_name="json_responses",
+            )
+        )
+
+        request_kwargs = client.responses.create.await_args.kwargs
+        assert "reasoning" not in request_kwargs
+        assert request_kwargs["tools"][0]["user_location"] is None
+        assert "temperature" not in request_kwargs
+
+    def test_structured_response_uses_schema_name(self):
+        task_cfg = config.LLMTaskConfig(vendor="OPENAI", model="gpt-5-mini")
+        client = MagicMock()
+        client.responses.create = AsyncMock(return_value=_make_openai_response())
+        response_schema = {"type": "object", "properties": {"answer": {"type": "string"}}}
+
+        asyncio.run(
+            ai_helper._exec_prompt_openai_client(
+                client,
+                task_cfg,
+                "prompt",
+                response_json_schema=response_schema,
+                schema_name="json_responses",
+            )
+        )
+
+        response_format = client.responses.create.await_args.kwargs["text"]["format"]
+        assert response_format["name"] == "json_responses"
+        assert response_format["schema"] == response_schema
+
+
+class TestExecPromptGemini:
+    def test_uses_model_defaults_when_optional_config_is_missing(self):
+        task_cfg = config.LLMTaskConfig(vendor="GEMINI", tier="cheap", model="gemini-3-flash")
+        client = MagicMock()
+        client.aio.models.generate_content = AsyncMock(return_value=_make_gemini_response())
+
+        with patch.object(ai_helper.config.LLMVendorSettings, "get_llm_client", return_value=client):
+            result = asyncio.run(ai_helper._exec_prompt_gemini(task_cfg, "prompt"))
+
+        assert result.completion == "ok"
+        request_kwargs = client.aio.models.generate_content.await_args.kwargs
+        generation_cfg = request_kwargs["config"]
+        assert generation_cfg.thinking_config is None
+        assert generation_cfg.tools is None
+
+    def test_uses_configured_reasoning_and_web_search(self):
+        task_cfg = config.LLMTaskConfig(
+            vendor="GEMINI",
+            tier="cheap",
+            model="gemini-3-flash",
+            reasoning_effort="LOW",
+            use_web_search=True,
+        )
+        client = MagicMock()
+        client.aio.models.generate_content = AsyncMock(return_value=_make_gemini_response())
+
+        with patch.object(ai_helper.config.LLMVendorSettings, "get_llm_client", return_value=client):
+            asyncio.run(ai_helper._exec_prompt_gemini(task_cfg, "prompt"))
+
+        generation_cfg = client.aio.models.generate_content.await_args.kwargs["config"]
+        assert generation_cfg.thinking_config.thinking_level == genai_types.ThinkingLevel.LOW
+        assert generation_cfg.tools[0].google_search is not None
+        assert generation_cfg.temperature is None

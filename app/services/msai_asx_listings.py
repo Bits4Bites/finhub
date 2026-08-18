@@ -100,7 +100,7 @@ async def _get_asx_new_listings() -> list[models_event.ListingEvent]:
     )
     sectors_list = ",".join(data_utils.asx_sector_yf_static_tickers.keys())
     extract_prompt = extract_prompt.format(SECTORS=sectors_list, RAW_INPUT_DATA=raw_input)
-    extract_result = await ai_helper.ai_exec_task("ASX_LISTTINGS_EXTRACT", extract_prompt, "AU")
+    extract_result = await ai_helper.ai_exec_task("ASX_LISTTINGS_EXTRACT", extract_prompt, country="AU")
     if extract_result.is_error:
         raise RuntimeError(
             f"[ASX Listings] LLM failed to generate response for new listing events: {extract_result.error_msg}"
@@ -185,14 +185,14 @@ async def _analyze_asx_listings(events: list[models_event.ListingEvent]) -> list
         "The prompt must instruct the premium model to use the hyphen character (-) instead of em-dash (\u2014).\n"
     )
 
-    build_result = await ai_helper.ai_exec_task("ASX_LISTTINGS_BUILD_PROMPT", build_prompt, "AU")
+    build_result = await ai_helper.ai_exec_task("ASX_LISTTINGS_BUILD_PROMPT", build_prompt, country="AU")
     if build_result.is_error:
         logging.error("[ASX Listings] LLM failed to build analysis prompt: %s", build_result.error_msg)
         return events
 
     # Step 2: execute the prompt built from previous step using the premium AI model
     analysis_prompt = build_result.completion
-    analysis_result = await ai_helper.ai_exec_task("ASX_LISTTINGS_ANALYZE", analysis_prompt, "AU")
+    analysis_result = await ai_helper.ai_exec_task("ASX_LISTTINGS_ANALYZE", analysis_prompt, country="AU")
     if analysis_result.is_error:
         return events
 

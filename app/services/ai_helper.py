@@ -1,119 +1,130 @@
 import logging
 import os
 import time
-from typing import Literal
+from collections.abc import Mapping
 
-from openai import AsyncOpenAI
+import openai
 from pydantic import BaseModel
 
 from .. import config
-from ..models import ai as models_ai
-
-ThinkingLevel = Literal["LOW", "MEDIUM", "HIGH"]
 
 # ----------------------------------------------------------------------#
 
 
-class PromptConfig(BaseModel):
-    use_web_search: bool = False
-    country: str | None = None  # for web search location context
-    thinking_level: ThinkingLevel | None = None
+class LLMResponse(BaseModel):
+    """
+    Normalized result returned by an AI provider.
+
+    Attributes:
+        is_error: Whether the provider request completed successfully.
+        completion: Generated response text. Empty when the request fails.
+        error_msg: Error message for a failed request. Empty on success.
+        time_taken_ms: Time taken to complete the request in milliseconds.
+        tokens_prompt: Number of input or prompt tokens reported by the provider.
+        tokens_completion: Number of generated tokens reported by the provider.
+        tokens_thought: Number of thought or reasoning tokens reported by the provider.
+        tokens_tool: Number of tool usage tokens reported by the provider.
+        tokens_cache: Number of cached tokens reported by the provider.
+        tokens_total: Total tokens reported by the provider.
+    """
+
+    is_error: bool = False
+    error_msg: str | None = None
+    completion: str = ""
+    time_taken_ms: int = 0
+    tokens_prompt: int = 0
+    tokens_completion: int = 0
+    tokens_thought: int = 0
+    tokens_tool: int = 0
+    tokens_cache: int = 0
+    tokens_total: int = 0
 
 
-async def _exec_prompt_openai_client(
-    client: AsyncOpenAI,
+def _is_debug_mode() -> bool:
+    return os.getenv("LLM_DEBUG_MODE", "").lower() in ("1", "true", "yes")
+
+
+# ----------------------------------------------------------------------#
+
+
+async def ai_exec_task(
+    task_id: str,
+    prompt: str,
+    *,
+    country: str = "",
+    response_json_schema: Mapping[str, object] | None = None,
+    schema_name: str = "json_responses",
+) -> LLMResponse:
+    """
+    Executes a task using the appropriate LLM based on the task configuration.
+    """
+    task_cfg = config.settings_llm_task.tasks.get(task_id)
+    if not task_cfg:
+        raise ValueError(f"LLM task configuration for task_id '{task_id}' not found.")
+    return await ai_exec_prompt(
+        task_cfg,
+        prompt,
+        country=country,
+        response_json_schema=response_json_schema,
+        schema_name=schema_name,
+    )
+
+
+async def ai_exec_prompt(
     task_cfg: config.LLMTaskConfig,
     prompt: str,
-    prompt_cfg: PromptConfig = None,
-    temperature: float = 0.2,
-) -> models_ai.LLMResponse:
+    *,
+    country: str = "",
+    response_json_schema: Mapping[str, object] | None = None,
+    schema_name: str = "json_responses",
+) -> LLMResponse:
     """
-    Execute a prompt using OpenAI client and return the response.
+    Executes a prompt using the specified LLM task configuration.
     """
-    from openai.types.chat import ChatCompletionUserMessageParam
-    from openai.types.responses import WebSearchPreviewToolParam
-    from openai.types.responses.web_search_preview_tool_param import UserLocation
-
-    start = time.perf_counter()
-    logging.info(
-        "_exec_prompt_openai_client('%s') - Using vendor/tier/model: %s/%s/%s - Prompt:",
-        task_cfg.task_name,
-        task_cfg.vendor,
-        task_cfg.tier,
-        task_cfg.model,
-    )
-    if os.environ.get("LLM_DEBUG_MODE", "FALSE").upper() == "TRUE":
-        print(prompt)
-    else:
-        print("<prompt omitted>")
-
-    if prompt_cfg and prompt_cfg.use_web_search:
-        # use response API with web search tool
-        ai_response = await client.responses.create(
-            model=task_cfg.model,
-            temperature=temperature,
-            tools=[
-                WebSearchPreviewToolParam(
-                    type="web_search_preview",
-                    user_location=UserLocation(type="approximate", country=prompt_cfg.country)
-                    if prompt_cfg.country
-                    else None,
-                ),
-            ],
-            input=prompt,
-        )
-        end = time.perf_counter()
-        result = models_ai.LLMResponse(
-            completion=ai_response.output_text,
-            time_taken_ms=int((end - start) * 1000),
-            tokens_prompt=ai_response.usage.input_tokens if ai_response.usage else 0,
-            tokens_completion=ai_response.usage.output_tokens if ai_response.usage else 0,
-            tokens_thought=0,
-            is_error=not ai_response or ai_response.status != "completed",
-        )
-    else:
-        # use standard chat completion API for non web search tasks
-        completion = await client.chat.completions.create(
-            # extra_headers={"X-OpenRouter-Title": "FinHub"},
-            model=task_cfg.model,
-            temperature=temperature,
-            messages=[ChatCompletionUserMessageParam(content=prompt, role="user")],
-        )
-        end = time.perf_counter()
-        result = models_ai.LLMResponse(
-            completion=completion.choices[0].message.content or "" if len(completion.choices) > 0 else "",
-            time_taken_ms=int((end - start) * 1000),
-            tokens_prompt=completion.usage.prompt_tokens if completion.usage else 0,
-            tokens_completion=completion.usage.completion_tokens if completion.usage else 0,
-            tokens_thought=0,
-            is_error=len(completion.choices) == 0,
-        )
-
-    logging.info(
-        "_exec_prompt_openai_client('%s') - Time taken: %d ms / Tokens used: %d/%d/%d / Is error: %s - Response:",
-        task_cfg.task_name,
-        result.time_taken_ms,
-        result.tokens_prompt,
-        result.tokens_thought,
-        result.tokens_completion,
-        result.is_error,
-    )
-    if result.is_error:
-        result.error_msg = result.completion
-    if os.environ.get("LLM_DEBUG_MODE", "FALSE").upper() == "TRUE":
-        print(result.completion)
-    else:
-        print("<response omitted>")
-
-    return result
+    used_vendor = task_cfg.vendor.upper()
+    match used_vendor:
+        case "AZUREOPENAI" | "AZURE OPENAI" | "AZURE_OPENAI" | "AZURE-OPENAI":
+            return await _exec_prompt_azure_openai(
+                task_cfg,
+                prompt,
+                country=country,
+                response_json_schema=response_json_schema,
+                schema_name=schema_name,
+            )
+        case "OPENAI":
+            return await _exec_prompt_openai(
+                task_cfg,
+                prompt,
+                country=country,
+                response_json_schema=response_json_schema,
+                schema_name=schema_name,
+            )
+        case "OPENROUTER" | "OPEN ROUTER" | "OPEN_ROUTER" | "OPEN-ROUTER":
+            return await _exec_prompt_openrouter(
+                task_cfg,
+                prompt,
+                country=country,
+                response_json_schema=response_json_schema,
+                schema_name=schema_name,
+            )
+        case "GEMINI":
+            return await _exec_prompt_gemini(
+                task_cfg,
+                prompt,
+                response_json_schema=response_json_schema,
+            )
+        case _:
+            raise ValueError(f"Unsupported LLM vendor: {task_cfg.vendor}")
 
 
 async def _exec_prompt_azure_openai(
     task_cfg: config.LLMTaskConfig,
     prompt: str,
-    prompt_cfg: PromptConfig = None,
-    temperature: float = 0.2,
-) -> models_ai.LLMResponse:
+    *,
+    country: str = "",
+    response_json_schema: Mapping[str, object] | None = None,
+    schema_name: str,
+) -> LLMResponse:
     """
     Execute a prompt using Azure OpenAI and return the response.
     """
@@ -124,17 +135,20 @@ async def _exec_prompt_azure_openai(
         client,
         task_cfg,
         prompt,
-        prompt_cfg,
-        temperature,
+        country=country,
+        response_json_schema=response_json_schema,
+        schema_name=schema_name,
     )
 
 
 async def _exec_prompt_openrouter(
     task_cfg: config.LLMTaskConfig,
     prompt: str,
-    prompt_cfg: PromptConfig = None,
-    temperature: float = 0.2,
-) -> models_ai.LLMResponse:
+    *,
+    country: str = "",
+    response_json_schema: Mapping[str, object] | None = None,
+    schema_name: str,
+) -> LLMResponse:
     """
     Execute a prompt using OpenRouter and return the response.
     """
@@ -145,17 +159,21 @@ async def _exec_prompt_openrouter(
         client,
         task_cfg,
         prompt,
-        prompt_cfg,
-        temperature,
+        is_openrouter=True,
+        country=country,
+        response_json_schema=response_json_schema,
+        schema_name=schema_name,
     )
 
 
 async def _exec_prompt_openai(
     task_cfg: config.LLMTaskConfig,
     prompt: str,
-    prompt_cfg: PromptConfig = None,
-    temperature: float = 0.2,
-) -> models_ai.LLMResponse:
+    *,
+    country: str = "",
+    response_json_schema: Mapping[str, object] | None = None,
+    schema_name: str,
+) -> LLMResponse:
     """
     Execute a prompt using OpenAI and return the response.
     """
@@ -166,23 +184,198 @@ async def _exec_prompt_openai(
         client,
         task_cfg,
         prompt,
-        prompt_cfg,
-        temperature,
+        country=country,
+        response_json_schema=response_json_schema,
+        schema_name=schema_name,
     )
+
+
+_MAX_TOOL_CALLS_BY_REASONING: dict[config.ReasoningEffort | None, int] = {
+    None: 7,
+    "Low": 4,
+    "Medium": 7,
+    "High": 13,
+}
+
+_SEARCH_CONTEXT_SIZE_BY_REASONING: dict[config.ReasoningEffort | None, str] = {
+    None: "medium",
+    "Low": "low",
+    "Medium": "medium",
+    "High": "high",
+}
+
+
+async def _exec_prompt_openai_client(
+    client: openai.AsyncOpenAI,
+    task_cfg: config.LLMTaskConfig,
+    prompt: str,
+    *,
+    is_openrouter: bool = False,
+    country: str = "",
+    response_json_schema: Mapping[str, object] | None = None,
+    schema_name: str,
+) -> LLMResponse:
+    """
+    Execute a prompt using OpenAI client and return the response.
+    """
+    timer_start = time.perf_counter()
+    logging.info(
+        "_exec_prompt_openai_client('%s') - Using vendor/tier/model: %s/%s/%s - Prompt:",
+        task_cfg.task_name,
+        task_cfg.vendor,
+        task_cfg.tier,
+        task_cfg.model,
+    )
+    print(prompt if _is_debug_mode() else "<prompt omitted>")
+
+    model = task_cfg.model
+    reasoning_effort = task_cfg.reasoning_effort
+    use_web_search = task_cfg.use_web_search
+
+    if is_openrouter:
+        request_kwargs: dict[str, object] = {
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+        }
+        extra_body: dict[str, object] = {}
+        if use_web_search:
+            extra_body["plugins"] = [{"id": "web"}]
+        if reasoning_effort is not None:
+            extra_body["reasoning"] = {"effort": reasoning_effort.lower()}
+        if extra_body:
+            request_kwargs["extra_body"] = extra_body
+        if response_json_schema is not None:
+            request_kwargs["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": schema_name,
+                    "strict": True,
+                    "schema": dict(response_json_schema),
+                },
+            }
+        ai_resp = await client.chat.completions.create(**request_kwargs)
+    else:
+        request_kwargs: dict[str, object] = {
+            "model": model,
+            "input": prompt,
+        }
+        if use_web_search:
+            request_kwargs["max_tool_calls"] = _MAX_TOOL_CALLS_BY_REASONING[reasoning_effort]
+            request_kwargs["tools"] = [
+                {
+                    "type": "web_search",
+                    "search_context_size": _SEARCH_CONTEXT_SIZE_BY_REASONING[reasoning_effort],
+                    "user_location": {
+                        "type": "approximate",
+                        "country": country,
+                    }
+                    if country
+                    else None,
+                }
+            ]
+        if reasoning_effort is not None:
+            request_kwargs["reasoning"] = {"effort": reasoning_effort.lower()}
+        if response_json_schema is not None:
+            request_kwargs["text"] = {
+                "format": {
+                    "type": "json_schema",
+                    "name": schema_name,
+                    "strict": True,
+                    "schema": dict(response_json_schema),
+                }
+            }
+        ai_resp = await client.responses.create(**request_kwargs)
+
+    timer_end = time.perf_counter()
+    token_usage_input = 0
+    token_usage_output = 0
+    token_usage_thought = 0
+    token_usage_tool = 0
+    token_usage_cache = 0
+    token_usage_total = 0
+    completion = ""
+
+    if is_openrouter:
+        from openai.types.chat import ChatCompletion
+
+        chat_resp: ChatCompletion = ai_resp
+        is_error = (not chat_resp.choices) or (not chat_resp.choices[0].message)
+        if chat_resp.choices and chat_resp.choices[0].message:
+            completion = chat_resp.choices[0].message.content or ""
+        if chat_resp.usage:
+            token_usage_input = chat_resp.usage.prompt_tokens or 0
+            token_usage_output = chat_resp.usage.completion_tokens or 0
+            token_usage_thought = (
+                chat_resp.usage.completion_tokens_details.reasoning_tokens or 0
+                if chat_resp.usage.completion_tokens_details
+                else 0
+            )
+            token_usage_cache = (
+                chat_resp.usage.prompt_tokens_details.cached_tokens or 0 if chat_resp.usage.prompt_tokens_details else 0
+            )
+            token_usage_total = chat_resp.usage.total_tokens or 0
+    else:
+        from openai.types.responses import Response
+
+        response_resp: Response = ai_resp
+        is_error = str(response_resp.status).lower() != "completed"
+        completion = response_resp.output_text or ""
+        if response_resp.usage:
+            token_usage_input = response_resp.usage.input_tokens or 0
+            token_usage_output = response_resp.usage.output_tokens or 0
+            token_usage_thought = (
+                response_resp.usage.output_tokens_details.reasoning_tokens or 0
+                if response_resp.usage.output_tokens_details
+                else 0
+            )
+            token_usage_cache = (
+                response_resp.usage.input_tokens_details.cached_tokens or 0
+                if response_resp.usage.input_tokens_details
+                else 0
+            )
+            token_usage_total = response_resp.usage.total_tokens or 0
+
+    result = LLMResponse(
+        is_error=is_error,
+        completion=completion,
+        time_taken_ms=int((timer_end - timer_start) * 1000),
+        tokens_prompt=token_usage_input,
+        tokens_completion=token_usage_output,
+        tokens_thought=token_usage_thought,
+        tokens_tool=token_usage_tool,
+        tokens_cache=token_usage_cache,
+        tokens_total=token_usage_total,
+    )
+
+    logging.info(
+        "_exec_prompt_openai_client('%s') - Time taken: %d ms | Tokens used: {prompt: %d, completion: %d, thought: %d, tool: %d, cache: %d, total: %d} / Is error: %s - Response:",
+        task_cfg.task_name,
+        result.time_taken_ms,
+        result.tokens_prompt,
+        result.tokens_completion,
+        result.tokens_thought,
+        result.tokens_tool,
+        result.tokens_cache,
+        result.tokens_total,
+        result.is_error,
+    )
+    if result.is_error:
+        result.error_msg = result.completion
+    print(result.completion if _is_debug_mode() else "<response omitted>")
+
+    return result
 
 
 async def _exec_prompt_gemini(
     task_cfg: config.LLMTaskConfig,
     prompt: str,
-    prompt_cfg: PromptConfig = None,
-    temperature: float = 0.2,
-) -> models_ai.LLMResponse:
+    *,
+    response_json_schema: Mapping[str, object] | None = None,
+) -> LLMResponse:
     """
     Execute a prompt using Google Gemini and return the response.
     """
-    from google.genai import types
-
-    start = time.perf_counter()
+    timer_start = time.perf_counter()
     client = config.settings_llm_vendor.get_llm_client("GEMINI", task_cfg.tier)
     if client is None:
         raise OSError(f"Gemini client for tier '{task_cfg.tier}' is not configured.")
@@ -193,117 +386,89 @@ async def _exec_prompt_gemini(
         task_cfg.tier,
         task_cfg.model,
     )
-    if os.environ.get("LLM_DEBUG_MODE", "FALSE").upper() == "TRUE":
-        print(prompt)
-    else:
-        print("<prompt omitted>")
+    print(prompt if _is_debug_mode() else "<prompt omitted>")
 
-    thinking_config = None
-    if prompt_cfg and prompt_cfg.thinking_level and task_cfg.model.startswith("gemini-3"):
-        thinking_config = types.ThinkingConfig(thinking_level=types.ThinkingLevel(prompt_cfg.thinking_level))
-    ai_response = client.models.generate_content(
-        model=task_cfg.model,
+    """Execute prompt using Google Gemini client with grounding (web search)."""
+    from google.genai.types import GenerateContentConfig, GoogleSearch, ThinkingConfig, ThinkingLevel, Tool
+
+    model = task_cfg.model
+    config_kwargs: dict[str, object] = {}
+    if task_cfg.use_web_search:
+        config_kwargs["tools"] = [Tool(google_search=GoogleSearch())]
+    if task_cfg.reasoning_effort is not None:
+        model_name = model.rsplit("/", maxsplit=1)[-1].lower()
+        if model_name.startswith("gemini-2.5-"):
+            max_budget = 32768 if model_name.startswith("gemini-2.5-pro") else 24576
+            config_kwargs["thinking_config"] = ThinkingConfig(
+                thinking_budget={
+                    "low": 1024,
+                    "medium": 8192,
+                    "high": max_budget,
+                }[task_cfg.reasoning_effort.lower()]
+            )
+        else:
+            config_kwargs["thinking_config"] = ThinkingConfig(
+                thinking_level={
+                    "low": ThinkingLevel.LOW,
+                    "medium": ThinkingLevel.MEDIUM,
+                    "high": ThinkingLevel.HIGH,
+                }[task_cfg.reasoning_effort.lower()]
+            )
+    if response_json_schema is not None:
+        config_kwargs["response_mime_type"] = "application/json"
+        config_kwargs["response_json_schema"] = dict(response_json_schema)
+    gemini_cfg = GenerateContentConfig(**config_kwargs)
+
+    ai_resp = await client.aio.models.generate_content(
+        model=model,
         contents=prompt,
-        config=types.GenerateContentConfig(temperature=temperature, thinking_config=thinking_config),
+        config=gemini_cfg,
     )
-    end = time.perf_counter()
-    result = models_ai.LLMResponse(
-        completion=ai_response.text or "",
-        time_taken_ms=int((end - start) * 1000),
-        tokens_prompt=ai_response.usage_metadata.prompt_token_count or 0 if ai_response.usage_metadata else 0,
-        tokens_completion=ai_response.usage_metadata.candidates_token_count or 0 if ai_response.usage_metadata else 0,
-        tokens_thought=ai_response.usage_metadata.thoughts_token_count or 0 if ai_response.usage_metadata else 0,
-        tokens_total=ai_response.usage_metadata.total_token_count or 0 if ai_response.usage_metadata else 0,
+
+    timer_end = time.perf_counter()
+    token_usage_input = 0
+    token_usage_output = 0
+    token_usage_thought = 0
+    token_usage_tool = 0
+    token_usage_cache = 0
+    token_usage_total = 0
+    if ai_resp.usage_metadata:
+        token_usage_input = ai_resp.usage_metadata.prompt_token_count or 0
+        token_usage_output = ai_resp.usage_metadata.candidates_token_count or 0
+        token_usage_thought = ai_resp.usage_metadata.thoughts_token_count or 0
+        token_usage_tool = ai_resp.usage_metadata.tool_use_prompt_token_count or 0
+        token_usage_cache = ai_resp.usage_metadata.cached_content_token_count or 0
+        token_usage_total = ai_resp.usage_metadata.total_token_count or 0
+
+    result = LLMResponse(
+        completion=ai_resp.text or "",
+        time_taken_ms=int((timer_end - timer_start) * 1000),
+        tokens_prompt=token_usage_input,
+        tokens_completion=token_usage_output,
+        tokens_thought=token_usage_thought,
+        tokens_tool=token_usage_tool,
+        tokens_cache=token_usage_cache,
+        tokens_total=token_usage_total,
         is_error=(
-            (ai_response.prompt_feedback is not None and ai_response.prompt_feedback.block_reason is not None)
-            or len(ai_response.candidates or []) == 0
+            (ai_resp.prompt_feedback is not None and ai_resp.prompt_feedback.block_reason is not None)
+            or len(ai_resp.candidates or []) == 0
         ),
     )
 
     logging.info(
-        "_exec_prompt_gemini('%s') - Time taken: %d ms / Tokens used: %d/%d/%d / Is error: %s - Response:",
+        "_exec_prompt_gemini('%s') - Time taken: %d ms | Tokens used: {prompt: %d, completion: %d, thought: %d, tool: %d, cache: %d, total: %d} / Is error: %s - Response:",
         task_cfg.task_name,
         result.time_taken_ms,
         result.tokens_prompt,
-        result.tokens_thought,
         result.tokens_completion,
+        result.tokens_thought,
+        result.tokens_tool,
+        result.tokens_cache,
+        result.tokens_total,
         result.is_error,
     )
     if result.is_error:
         result.error_msg = result.completion
-    if os.environ.get("LLM_DEBUG_MODE", "FALSE").upper() == "TRUE":
-        print(result.completion)
-    else:
-        print("<response omitted>")
+    print(result.completion if _is_debug_mode() else "<response omitted>")
 
     return result
-
-
-async def ai_exec_prompt(
-    task_cfg: config.LLMTaskConfig,
-    prompt: str,
-    prompt_cfg: PromptConfig = None,
-    *,
-    temperature: float = 0.2,
-    llm_config_override: config.LLMTaskConfigOverride = None,
-) -> models_ai.LLMResponse:
-    """
-    Executes a prompt using the specified LLM task configuration.
-    """
-    used_vendor = (llm_config_override.vendor if llm_config_override else task_cfg.vendor).upper()
-    match used_vendor:
-        case "AZUREOPENAI" | "AZURE OPENAI" | "AZURE_OPENAI":
-            return await _exec_prompt_azure_openai(
-                llm_config_override if llm_config_override else task_cfg,
-                prompt,
-                prompt_cfg,
-                temperature,
-            )
-        case "OPENAI":
-            return await _exec_prompt_openai(
-                llm_config_override if llm_config_override else task_cfg,
-                prompt,
-                prompt_cfg,
-                temperature,
-            )
-        case "OPENROUTER" | "OPEN ROUTER" | "OPEN_ROUTER":
-            return await _exec_prompt_openrouter(
-                llm_config_override if llm_config_override else task_cfg,
-                prompt,
-                prompt_cfg,
-                temperature,
-            )
-        case "GEMINI":
-            return await _exec_prompt_gemini(
-                llm_config_override if llm_config_override else task_cfg,
-                prompt,
-                prompt_cfg,
-                temperature,
-            )
-        case _:
-            raise ValueError(f"Unsupported LLM vendor: {task_cfg.vendor}")
-
-
-async def ai_exec_task(
-    task_id: str,
-    prompt: str,
-    country: str = "",
-    *,
-    thinking_level: ThinkingLevel = None,
-    llm_config_override: config.LLMTaskConfigOverride = None,
-) -> models_ai.LLMResponse:
-    """
-    Executes a task using the appropriate LLM based on the task configuration.
-    """
-    task_cfg = config.settings_llm_task.tasks.get(task_id)
-    if not task_cfg:
-        raise ValueError(f"LLM task configuration for task_id '{task_id}' not found.")
-    prompt_cfg = PromptConfig(
-        use_web_search=task_cfg.model.startswith("gpt-5"),
-        country=country,
-        thinking_level=thinking_level,
-    )
-    temperature = llm_config_override.temperature if llm_config_override else task_cfg.temperature
-    return await ai_exec_prompt(
-        task_cfg, prompt, prompt_cfg, temperature=temperature, llm_config_override=llm_config_override
-    )

@@ -111,14 +111,14 @@ async def ai_spotlight_portfolio(
 
     # Step 2: use AI to build the ready-to-use prompt to spotlight the portfolio
     build_prompt = BUILD_PROMPT_TEMPLATE.format(investor_profile=investor_profile)
-    build_result = await ai_helper.ai_exec_task("SPOTLIGHT_PORTFOLIO_BUILD_PROMPT", build_prompt, country)
+    build_result = await ai_helper.ai_exec_task("SPOTLIGHT_PORTFOLIO_BUILD_PROMPT", build_prompt, country=country)
     if build_result.is_error:
         return models_ai.AnalysisResult(llm_error=True, llm_error_msg=build_result.error_msg)
 
     analysis_prompt = build_result.completion
 
     # Step 3: execute the prompt built from previous step
-    exec_result = await ai_helper.ai_exec_task("SPOTLIGHT_PORTFOLIO_EXEC", analysis_prompt, country)
+    exec_result = await ai_helper.ai_exec_task("SPOTLIGHT_PORTFOLIO_EXEC", analysis_prompt, country=country)
     if exec_result.is_error:
         return models_ai.AnalysisResult(llm_error=True, llm_error_msg=exec_result.error_msg)
 

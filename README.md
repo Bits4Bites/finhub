@@ -80,8 +80,9 @@ FINHUB_LLM__AZURE_OPENAI__PREMIUM__MODELS="gpt-5.4, gpt-5.5"
 #### AI task routing (`ai_tasks.env`)
 
 Map each AI task to a vendor/tier/model using the pattern
-`FINHUB_LLM_TASK__<TASK>__<SETTING>`, where `<SETTING>` is `VENDOR`, `TIER`, `MODEL`, or `TEMPERATURE`
-(`TEMPERATURE` is optional and defaults to `0.2`).
+`FINHUB_LLM_TASK__<TASK>__<SETTING>`, where `<SETTING>` is `VENDOR`, `TIER`, `MODEL`,
+`REASONING_EFFORT`, or `USE_WEB_SEARCH`. `REASONING_EFFORT` is optional (`High`, `Medium`, or
+`Low`) and uses the model default when omitted. `USE_WEB_SEARCH` is optional and defaults to `false`.
 Tasks include `ANALYZE_TICKER_*`, `BUILD_PORTFOLIO_*`, `REVIEW_PORTFOLIO_*`,
 `SPOTLIGHT_PORTFOLIO_*`, `ANALYZE_DIV_EVENT_*`, and `ASX_LISTTINGS_*`. Example:
 
@@ -89,7 +90,8 @@ Tasks include `ANALYZE_TICKER_*`, `BUILD_PORTFOLIO_*`, `REVIEW_PORTFOLIO_*`,
 FINHUB_LLM_TASK__ANALYZE_TICKER_EXEC__VENDOR="Azure OpenAI"
 FINHUB_LLM_TASK__ANALYZE_TICKER_EXEC__TIER="Premium"
 FINHUB_LLM_TASK__ANALYZE_TICKER_EXEC__MODEL="gpt-5.4"
-FINHUB_LLM_TASK__ANALYZE_TICKER_EXEC__TEMPERATURE=0.3
+FINHUB_LLM_TASK__ANALYZE_TICKER_EXEC__REASONING_EFFORT="High"
+FINHUB_LLM_TASK__ANALYZE_TICKER_EXEC__USE_WEB_SEARCH=True
 ```
 
 #### Node chaining (`finhub_proxy_config.env`)

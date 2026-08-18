@@ -215,7 +215,11 @@ async def ai_analyze_div_event(
     build_prompt_input = _build_analysis_prompt(ticker=ticker, pre_result=result, intent=effective_intent)
 
     country = conv.country_to_iso2(ticker.info.get("country", ""))
-    build_result = await ai_helper.ai_exec_task("ANALYZE_DIV_EVENT_BUILD_PROMPT", build_prompt_input, country)
+    build_result = await ai_helper.ai_exec_task(
+        "ANALYZE_DIV_EVENT_BUILD_PROMPT",
+        build_prompt_input,
+        country=country,
+    )
     if build_result.is_error:
         result.llm_error = True
         result.llm_error_msg = f"LLM failed to build prompt for analyzing dividend event: {build_result.error_msg}"
@@ -224,7 +228,7 @@ async def ai_analyze_div_event(
     analysis_prompt = build_result.completion
 
     # Step 3: execute the prompt built from previous step
-    exec_result = await ai_helper.ai_exec_task("ANALYZE_DIV_EVENT_EXEC", analysis_prompt, country)
+    exec_result = await ai_helper.ai_exec_task("ANALYZE_DIV_EVENT_EXEC", analysis_prompt, country=country)
     if exec_result.is_error:
         result.llm_error = True
         result.llm_error_msg = f"LLM failed to generate response for analyzing dividend event: {exec_result.error_msg}"
