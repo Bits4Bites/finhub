@@ -92,18 +92,14 @@ FINHUB_LLM_TASK__ANALYZE_TICKER_EXEC__MODEL="gpt-5.4"
 FINHUB_LLM_TASK__ANALYZE_TICKER_EXEC__TEMPERATURE=0.3
 ```
 
-#### Proxy (`finhub_proxy_config.env`)
+#### Node chaining (`finhub_proxy_config.env`)
 
-FinHub distinguishes between two independent proxying concepts:
+When `FINHUB_PROXY_MODE` is not `None`, API calls to this FinHub node are redirected or forwarded to the next FinHub node configured by `FINHUB_URL_WEB_CRAWL_NODE`.
 
-- **Node chaining** (`FINHUB_PROXY_MODE` + `FINHUB_URL_WEB_CRAWL_NODE`): when `FINHUB_PROXY_MODE` is set (i.e. not `None`), API calls to this FinHub node are redirected or forwarded to the next FinHub node in the chain, which is pointed to by `FINHUB_URL_WEB_CRAWL_NODE`.
-- **External fetching via proxy** (`FINHUB_FETCH_WEBSITE_VIA_PROXY`): when this FinHub node makes requests to external websites, setting `FINHUB_FETCH_WEBSITE_VIA_PROXY` causes those outbound requests to be made through the configured HTTP proxies.
-
-| Variable                         | Default | Description                                                                                                                                                      |
-|----------------------------------|---------|------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `FINHUB_PROXY_MODE`              | `None`  | Node-chaining mode: `None`, `Redirect`, or `Forward`. If set (not `None`), API calls to this node are redirected/forwarded to the next FinHub node in the chain. |
-| `FINHUB_URL_WEB_CRAWL_NODE`      | _empty_ | URL of the next FinHub node in the chain (used when `FINHUB_PROXY_MODE` is set).                                                                                 |
-| `FINHUB_FETCH_WEBSITE_VIA_PROXY` | `false` | If `true`, this node's requests to external websites are made through the configured HTTP proxies.                                                               |
+| Variable                    | Default | Description                                                                                                                                                      |
+|-----------------------------|---------|------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `FINHUB_PROXY_MODE`         | `None`  | Node-chaining mode: `None`, `Redirect`, or `Forward`. If set (not `None`), API calls to this node are redirected/forwarded to the next FinHub node in the chain. |
+| `FINHUB_URL_WEB_CRAWL_NODE` | _empty_ | URL of the next FinHub node in the chain (used when `FINHUB_PROXY_MODE` is set).                                                                                 |
 
 ## 📚 API
 
