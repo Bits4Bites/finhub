@@ -1,4 +1,4 @@
-from app.models import event as models_event
+from app.models import events_listings as models_events_listings
 
 
 class TestParseNewListingEventsFromJson:
@@ -9,7 +9,7 @@ class TestParseNewListingEventsFromJson:
             '"public_offer_close_date": "2026-07-05"}]'
         )
 
-        result = models_event.parse_new_listing_events_from_json(json_str, {"exchange": "ASX"})
+        result = models_events_listings.parse_new_listing_events_from_json(json_str, {"exchange": "ASX"})
 
         assert len(result) == 1
         assert result[0].public_offer_close_date == "2026-07-05"
@@ -20,7 +20,7 @@ class TestParseNewListingEventsFromJson:
             '"price": 2.0, "sector": "TECHNOLOGY", "capital": 500000}]'
         )
 
-        result = models_event.parse_new_listing_events_from_json(json_str, {"exchange": "ASX"})
+        result = models_events_listings.parse_new_listing_events_from_json(json_str, {"exchange": "ASX"})
 
         assert len(result) == 1
         assert result[0].public_offer_close_date is None
@@ -37,7 +37,7 @@ class TestParseListingAnalysisFromJson:
             '"m1": {"dir": "↑", "reason": "momentum", "confidence": 60}}}}'
         )
 
-        result = models_event.parse_listing_analysis_from_json(json_str, {})
+        result = models_events_listings.parse_listing_analysis_from_json(json_str, {})
 
         analysis = result["ASX:ABC"]
         assert analysis.outlook["d1"].direction == "↑"

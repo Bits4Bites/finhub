@@ -4,3 +4,4 @@
 #!VERSION=0.16.0
 - feat(ai): Add task-level reasoning and web search.
 - refactor(ai): Standardize prompt execution execution with reasoning, web search and response JSON schema.
+- refactor(ai): Introduce shared ReferenceSource model for source identity.

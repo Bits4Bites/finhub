@@ -4,7 +4,7 @@ from zoneinfo import ZoneInfo
 
 from bs4 import BeautifulSoup
 
-from ..models import event as models_event
+from ..models import events_listings as models_events_listings
 from ..services import crawler as services_crawler
 from ..utils import cache, conv
 from ..utils import data as data_utils
@@ -13,12 +13,12 @@ from . import ai_helper
 _ASX_LISTINGS_CACHE_TTL = 72 * 60 * 60
 
 
-async def ai_get_asx_new_listings() -> list[models_event.ListingEvent]:
+async def ai_get_asx_new_listings() -> list[models_events_listings.ListingEvent]:
     """
     Check for new listings for ASX, using AI assistance.
 
     Returns:
-        list[models_event.ListingEvent]: A list of new listing events
+        list[models_events_listings.ListingEvent]: A list of new listing events
     """
     events = await _get_asx_new_listings()
     events.sort(key=lambda event: event.symbol)
@@ -48,7 +48,7 @@ async def ai_get_asx_new_listings() -> list[models_event.ListingEvent]:
     return events
 
 
-async def _get_asx_new_listings() -> list[models_event.ListingEvent]:
+async def _get_asx_new_listings() -> list[models_events_listings.ListingEvent]:
     # Step 1: fetch new listings from ASX website as raw text.
     url = "https://www.asx.com.au/listings/upcoming-floats-and-listings"
     html_content = await services_crawler.fetch_webpage_content(url)
@@ -114,10 +114,12 @@ async def _get_asx_new_listings() -> list[models_event.ListingEvent]:
         "link": "https://www.asx.com.au/listings/upcoming-floats-and-listings",
     }
 
-    return models_event.parse_new_listing_events_from_json(extract_result.completion, default_vals)
+    return models_events_listings.parse_new_listing_events_from_json(extract_result.completion, default_vals)
 
 
-async def _analyze_asx_listings(events: list[models_event.ListingEvent]) -> list[models_event.ListingEvent]:
+async def _analyze_asx_listings(
+    events: list[models_events_listings.ListingEvent],
+) -> list[models_events_listings.ListingEvent]:
     if len(events) == 0:
         return events
 
@@ -197,7 +199,7 @@ async def _analyze_asx_listings(events: list[models_event.ListingEvent]) -> list
         return events
 
     # Step 3: parse the JSON and attach analysis to events
-    analysis = models_event.parse_listing_analysis_from_json(analysis_result.completion, {})
+    analysis = models_events_listings.parse_listing_analysis_from_json(analysis_result.completion, {})
     for e in events:
         if e.symbol in analysis:
             e.analysis = analysis[e.symbol]

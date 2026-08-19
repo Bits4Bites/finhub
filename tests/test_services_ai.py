@@ -5,6 +5,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from app.models import events_listings as models_events_listings
+
 # ===========================================================================
 # Tests for get_symbol_info_raw
 # ===========================================================================
@@ -79,10 +81,9 @@ class TestAiGetAsxNewListings:
     @patch("app.services.msai_asx_listings._analyze_asx_listings", new_callable=AsyncMock)
     @patch("app.services.msai_asx_listings._get_asx_new_listings", new_callable=AsyncMock)
     def test_converts_dates_and_timestamps(self, mock_get, mock_analyze):
-        from app.models.event import ListingEvent
         from app.services.msai_asx_listings import ai_get_asx_new_listings
 
-        event = ListingEvent(
+        event = models_events_listings.ListingEvent(
             symbol="ASX:XYZ",
             company_name="XYZ Corp",
             date="2026-06-15",
@@ -113,11 +114,16 @@ class TestAiGetAsxNewListings:
     @patch("app.services.msai_asx_listings._analyze_asx_listings", new_callable=AsyncMock)
     @patch("app.services.msai_asx_listings._get_asx_new_listings", new_callable=AsyncMock)
     def test_returns_cached_analysis(self, mock_get, mock_analyze):
-        from app.models.event import ListingEvent
         from app.services.msai_asx_listings import ai_get_asx_new_listings
 
-        extracted_event = ListingEvent(symbol="ASX:XYZ", date="2026-06-15", price=2.5)
-        cached_events = [ListingEvent(symbol="ASX:XYZ", date="2026-06-15T00:00:00+10:00", price=2.5)]
+        extracted_event = models_events_listings.ListingEvent(symbol="ASX:XYZ", date="2026-06-15", price=2.5)
+        cached_events = [
+            models_events_listings.ListingEvent(
+                symbol="ASX:XYZ",
+                date="2026-06-15T00:00:00+10:00",
+                price=2.5,
+            )
+        ]
         mock_get.return_value = [extracted_event]
         self.mock_cache_get.return_value = cached_events
 
@@ -131,17 +137,16 @@ class TestAiGetAsxNewListings:
     @patch("app.services.msai_asx_listings._analyze_asx_listings", new_callable=AsyncMock)
     @patch("app.services.msai_asx_listings._get_asx_new_listings", new_callable=AsyncMock)
     def test_cache_key_uses_sorted_listing_fields(self, mock_get, mock_analyze, mock_generate_key):
-        from app.models.event import ListingEvent
         from app.services.msai_asx_listings import ai_get_asx_new_listings
 
         events = [
-            ListingEvent(
+            models_events_listings.ListingEvent(
                 symbol="ASX:ZZZ",
                 date="2026-08-02",
                 price=2.5,
                 public_offer_close_date="2026-07-28",
             ),
-            ListingEvent(
+            models_events_listings.ListingEvent(
                 symbol="ASX:AAA",
                 date="2026-08-01",
                 price=1.25,

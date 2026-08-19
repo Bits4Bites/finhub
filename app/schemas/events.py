@@ -24,11 +24,3 @@ class UpcomingDividendsAsyncResponse(UpcomingDividendsResponse):
 
 class UpcomingEarningsAsyncResponse(UpcomingEarningsResponse):
     extra: AsyncTaskInfo
-
-
-class ListingsResponse(BaseResponse):
-    data: list[models_event.ListingEvent] | None = None
-
-
-class ListingsAsyncResponse(ListingsResponse):
-    extra: AsyncTaskInfo

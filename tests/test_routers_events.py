@@ -1,4 +1,4 @@
-"""Unit tests for app.routers.events module."""
+"""Unit tests for the event routers."""
 
 import asyncio
 from unittest.mock import AsyncMock, patch
@@ -6,8 +6,11 @@ from unittest.mock import AsyncMock, patch
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.models.event import ListingEvent, UpcomingDividendEvent, UpcomingEarningsEvent
+from app.models import events_listings as models_events_listings
+from app.models.event import UpcomingDividendEvent, UpcomingEarningsEvent
+from app.routers import events_listings as router_events_listings
 from app.schemas import async_task
+from app.schemas import events_listings as schemas_events_listings
 
 client = TestClient(app)
 
@@ -322,9 +325,9 @@ class TestUpcomingEarningsAsync:
 
 
 class TestNewListings:
-    @patch("app.routers.events.services_asx_listings.ai_get_asx_new_listings", new_callable=AsyncMock)
+    @patch("app.routers.events_listings.services_asx_listings.ai_get_asx_new_listings", new_callable=AsyncMock)
     def test_au_returns_listings(self, mock_get):
-        event = ListingEvent.model_construct(
+        event = models_events_listings.ListingEvent.model_construct(
             symbol="ASX:XYZ",
             company_name="XYZ Corp",
             date="2026-06-20",
@@ -348,7 +351,7 @@ class TestNewListings:
         assert body["status"] == 501
         assert "Unsupported" in body["message"]
 
-    @patch("app.routers.events.services_asx_listings.ai_get_asx_new_listings", new_callable=AsyncMock)
+    @patch("app.routers.events_listings.services_asx_listings.ai_get_asx_new_listings", new_callable=AsyncMock)
     def test_empty_country_defaults_unsupported(self, mock_get):
         resp = client.get("/events/new_listings", params={"country": ""})
         assert resp.status_code == 200
@@ -364,9 +367,9 @@ class TestNewListings:
 class TestNewListingsAsync:
     def test_starts_task(self):
         with (
-            patch("app.routers.events.uuid.uuid4", return_value="task-789"),
-            patch("app.routers.events.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
-            patch("app.routers.events._run_new_listings_task", new_callable=AsyncMock) as mock_run_task,
+            patch("app.routers.events_listings.uuid.uuid4", return_value="task-789"),
+            patch("app.routers.events_listings.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
+            patch("app.routers.events_listings._run_new_listings_task", new_callable=AsyncMock) as mock_run_task,
         ):
             resp = client.get("/events/new_listings_async", params={"country": "AU"})
 
@@ -385,7 +388,11 @@ class TestNewListingsAsync:
 
     def test_poll_returns_running_status(self):
         task_entry = {"task_type": "new_listings", "state": async_task.TASK_STATE_RUNNING}
-        with patch("app.routers.events.cache.get", new_callable=AsyncMock, return_value=task_entry) as mock_cache_get:
+        with patch(
+            "app.routers.events_listings.cache.get",
+            new_callable=AsyncMock,
+            return_value=task_entry,
+        ) as mock_cache_get:
             resp = client.get("/events/new_listings_async", params={"task_id": "task-789"})
 
         assert resp.status_code == 202
@@ -394,7 +401,7 @@ class TestNewListingsAsync:
         mock_cache_get.assert_awaited_once_with("task-789")
 
     def test_poll_returns_404_for_missing_task(self):
-        with patch("app.routers.events.cache.get", new_callable=AsyncMock, return_value=None):
+        with patch("app.routers.events_listings.cache.get", new_callable=AsyncMock, return_value=None):
             resp = client.get("/events/new_listings_async", params={"task_id": "missing"})
 
         assert resp.status_code == 404
@@ -417,7 +424,7 @@ class TestNewListingsAsync:
                 ],
             },
         }
-        with patch("app.routers.events.cache.get", new_callable=AsyncMock, return_value=task_entry):
+        with patch("app.routers.events_listings.cache.get", new_callable=AsyncMock, return_value=task_entry):
             resp = client.get("/events/new_listings_async", params={"task_id": "task-789"})
 
         assert resp.status_code == 200
@@ -427,19 +434,20 @@ class TestNewListingsAsync:
         assert body["extra"] == {"task_id": "task-789", "state": async_task.TASK_STATE_COMPLETED}
 
     def test_background_task_caches_result(self):
-        from app.routers import events
-        from app.schemas import events as schemas_event
-
-        result = schemas_event.ListingsResponse(status=200, message="ok", data=[])
+        result = schemas_events_listings.ListingsResponse(status=200, message="ok", data=[])
         with (
             patch(
-                "app.routers.events._get_new_listings_result",
+                "app.routers.events_listings._get_new_listings_result",
                 new_callable=AsyncMock,
                 return_value=result,
             ),
-            patch("app.routers.events.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
+            patch(
+                "app.routers.events_listings.cache.set",
+                new_callable=AsyncMock,
+                return_value=True,
+            ) as mock_cache_set,
         ):
-            asyncio.run(events._run_new_listings_task("task-789", "AU"))
+            asyncio.run(router_events_listings._run_new_listings_task("task-789", "AU"))
 
         mock_cache_set.assert_awaited_once_with(
             "task-789",

@@ -176,14 +176,15 @@ Task IDs below use their current code spelling, including `ASX_LISTTINGS`.
 
 - **API or flow name:** `GET /events/new_listings` and `GET /events/new_listings_async` for country `AU`
 - **AI tasks involved:** `ASX_LISTTINGS_EXTRACT`, `ASX_LISTTINGS_BUILD_PROMPT`, `ASX_LISTTINGS_ANALYZE`
-- **Primary code:** `app\routers\events.py`, `app\services\msai_asx_listings.py`,
-  `app\services\crawler.py`
+- **Primary code:** `app\routers\events_listings.py`, `app\schemas\events_listings.py`,
+  `app\models\events_listings.py`, `app\services\msai_asx_listings.py`, `app\services\crawler.py`
 - **Summary of process flow:** Fetch and parse the ASX upcoming-listings page; send selected page text to an extraction
   task and parse its JSON array into listing models; build a second prompt containing the extracted companies; pass
   that model-generated prompt to a research-enabled listings-analysis task; parse the returned JSON and attach each
   analysis to its listing; cache the final event list for 72 hours. The async API runs the same flow as a background
   task and exposes start/poll states.
-- **Status:** Reviewed: **No** | Implemented: **No** | Done: **No**
+- **Detailed review plan:** `.github\detailed_review_plan\10-asx-new-listings-model-and-analysis.md`
+- **Status:** Reviewed: **Yes** | Implemented: **No** | Done: **No**
 
 ### 11. Shared asynchronous AI task start and polling
 
