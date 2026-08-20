@@ -6,3 +6,4 @@
 - refactor(AI): Standardize prompt execution execution with reasoning, web search and response JSON schema.
 - refactor(AI): Introduce shared ReferenceSource model for source identity.
 - impr(AI-asx-new-listings): Improve ASX new listings flow with deep research and analysis.
+- feat(client/dotnet): add new listings API contracts
