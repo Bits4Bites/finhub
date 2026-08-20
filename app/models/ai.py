@@ -1,24 +1,17 @@
 from datetime import UTC, date, datetime, time
 from typing import Literal
 
-from pydantic import BaseModel, Field, HttpUrl, field_validator
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
 
 ReferenceSourceType = Literal["Regulatory", "Exchange", "Issuer", "MarketData", "Research", "News", "Other"]
 
 
-class ReferenceSource(BaseModel):
-    """
-    A verifiable source referenced by an AI-generated response.
+class StrictAIModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
 
-    Attributes:
-        id: Stable source identifier, unique within the containing API response.
-        title: Human-readable title of the source or document.
-        publisher: Publisher or organization responsible for the source.
-        source_type: Generic category used to evaluate and group the source.
-        published_at: Publication date or datetime normalized to UTC, or None when unavailable.
-        accessed_at: Retrieval date or datetime normalized to UTC.
-        url: Canonical HTTPS URL for the source.
-    """
+
+class ReferenceSourceMetadata(StrictAIModel):
+    """Structured metadata describing a source cited by an AI response."""
 
     id: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
     title: str = Field(min_length=1, max_length=500)
@@ -62,6 +55,24 @@ class ReferenceSource(BaseModel):
         if value.scheme != "https":
             raise ValueError("url must use HTTPS")
         return value
+
+
+class ReferenceSource(ReferenceSourceMetadata):
+    """
+    A source referenced by a returned AI-generated response.
+
+    Attributes:
+        id: Stable source identifier, unique within the containing API response.
+        title: Human-readable title of the source or document.
+        publisher: Publisher or organization responsible for the source.
+        source_type: Generic category used to evaluate and group the source.
+        published_at: Publication date or datetime normalized to UTC, or None when unavailable.
+        accessed_at: Retrieval date or datetime normalized to UTC.
+        url: Canonical HTTPS URL for the source.
+        is_verified: Whether the application verified the source attribution.
+    """
+
+    is_verified: bool
 
 
 class AIVendorInfo(BaseModel):

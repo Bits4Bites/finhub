@@ -4,7 +4,7 @@ import time
 from collections.abc import Mapping
 
 import openai
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .. import config
 
@@ -26,6 +26,7 @@ class LLMResponse(BaseModel):
         tokens_tool: Number of tool usage tokens reported by the provider.
         tokens_cache: Number of cached tokens reported by the provider.
         tokens_total: Total tokens reported by the provider.
+        citation_urls: Provider-issued URL citations attached to the generated response.
     """
 
     is_error: bool = False
@@ -38,10 +39,70 @@ class LLMResponse(BaseModel):
     tokens_tool: int = 0
     tokens_cache: int = 0
     tokens_total: int = 0
+    citation_urls: list[str] = Field(default_factory=list)
 
 
 def _is_debug_mode() -> bool:
     return os.getenv("LLM_DEBUG_MODE", "").lower() in ("1", "true", "yes")
+
+
+def _extract_url_citations(response: object) -> list[str]:
+    output = getattr(response, "output", None)
+    if output is None:
+        return []
+
+    citation_urls: list[str] = []
+
+    def collect(value: object) -> None:
+        if isinstance(value, BaseModel):
+            collect(value.model_dump(mode="python"))
+            return
+        if isinstance(value, Mapping):
+            if value.get("type") == "url_citation" and isinstance(value.get("url"), str):
+                citation_urls.append(value["url"])
+            for nested_value in value.values():
+                collect(nested_value)
+            return
+        if isinstance(value, list | tuple):
+            for nested_value in value:
+                collect(nested_value)
+            return
+        if hasattr(value, "__dict__"):
+            collect(vars(value))
+
+    collect(output)
+    return list(dict.fromkeys(citation_urls))
+
+
+_OPENAI_SUPPORTED_STRING_FORMATS = frozenset(
+    {
+        "date-time",
+        "time",
+        "date",
+        "duration",
+        "email",
+        "hostname",
+        "ipv4",
+        "ipv6",
+        "uuid",
+    }
+)
+
+
+def _openai_compatible_json_schema(schema: Mapping[str, object]) -> dict[str, object]:
+    return {
+        key: _openai_compatible_json_schema_value(value)
+        for key, value in schema.items()
+        if not (key == "format" and isinstance(value, str) and value not in _OPENAI_SUPPORTED_STRING_FORMATS)
+    }
+
+
+def _openai_compatible_json_schema_value(value: object) -> object:
+    if isinstance(value, Mapping):
+        return _openai_compatible_json_schema(value)
+    if isinstance(value, list | tuple):
+        return [_openai_compatible_json_schema_value(item) for item in value]
+    return value
 
 
 # ----------------------------------------------------------------------#
@@ -220,17 +281,22 @@ async def _exec_prompt_openai_client(
     """
     timer_start = time.perf_counter()
     logging.info(
-        "_exec_prompt_openai_client('%s') - Using vendor/tier/model: %s/%s/%s - Prompt:",
+        "_exec_prompt_openai_client('%s') - Using {%s - %s - %s} | Web search: %s | Reasoning: %s | Prompt:",
         task_cfg.task_name,
         task_cfg.vendor,
         task_cfg.tier,
         task_cfg.model,
+        task_cfg.use_web_search,
+        task_cfg.reasoning_effort,
     )
     print(prompt if _is_debug_mode() else "<prompt omitted>")
 
     model = task_cfg.model
     reasoning_effort = task_cfg.reasoning_effort
     use_web_search = task_cfg.use_web_search
+    openai_json_schema = (
+        _openai_compatible_json_schema(response_json_schema) if response_json_schema is not None else None
+    )
 
     if is_openrouter:
         request_kwargs: dict[str, object] = {
@@ -244,13 +310,13 @@ async def _exec_prompt_openai_client(
             extra_body["reasoning"] = {"effort": reasoning_effort.lower()}
         if extra_body:
             request_kwargs["extra_body"] = extra_body
-        if response_json_schema is not None:
+        if openai_json_schema is not None:
             request_kwargs["response_format"] = {
                 "type": "json_schema",
                 "json_schema": {
                     "name": schema_name,
                     "strict": True,
-                    "schema": dict(response_json_schema),
+                    "schema": openai_json_schema,
                 },
             }
         ai_resp = await client.chat.completions.create(**request_kwargs)
@@ -275,13 +341,13 @@ async def _exec_prompt_openai_client(
             ]
         if reasoning_effort is not None:
             request_kwargs["reasoning"] = {"effort": reasoning_effort.lower()}
-        if response_json_schema is not None:
+        if openai_json_schema is not None:
             request_kwargs["text"] = {
                 "format": {
                     "type": "json_schema",
                     "name": schema_name,
                     "strict": True,
-                    "schema": dict(response_json_schema),
+                    "schema": openai_json_schema,
                 }
             }
         ai_resp = await client.responses.create(**request_kwargs)
@@ -294,6 +360,7 @@ async def _exec_prompt_openai_client(
     token_usage_cache = 0
     token_usage_total = 0
     completion = ""
+    citation_urls: list[str] = []
 
     if is_openrouter:
         from openai.types.chat import ChatCompletion
@@ -320,6 +387,7 @@ async def _exec_prompt_openai_client(
         response_resp: Response = ai_resp
         is_error = str(response_resp.status).lower() != "completed"
         completion = response_resp.output_text or ""
+        citation_urls = _extract_url_citations(response_resp)
         if response_resp.usage:
             token_usage_input = response_resp.usage.input_tokens or 0
             token_usage_output = response_resp.usage.output_tokens or 0
@@ -345,10 +413,11 @@ async def _exec_prompt_openai_client(
         tokens_tool=token_usage_tool,
         tokens_cache=token_usage_cache,
         tokens_total=token_usage_total,
+        citation_urls=citation_urls,
     )
 
     logging.info(
-        "_exec_prompt_openai_client('%s') - Time taken: %d ms | Tokens used: {prompt: %d, completion: %d, thought: %d, tool: %d, cache: %d, total: %d} / Is error: %s - Response:",
+        "_exec_prompt_openai_client('%s') - Time taken: %d ms | Tokens used: {prompt: %d, completion: %d, thought: %d, tool: %d, cache: %d, total: %d} | Is error: %s | Response:",
         task_cfg.task_name,
         result.time_taken_ms,
         result.tokens_prompt,
@@ -380,11 +449,13 @@ async def _exec_prompt_gemini(
     if client is None:
         raise OSError(f"Gemini client for tier '{task_cfg.tier}' is not configured.")
     logging.info(
-        "_exec_prompt_gemini('%s') - Using vendor/tier/model: %s/%s/%s - Prompt:",
+        "_exec_prompt_gemini('%s') - Using {%s - %s - %s} | Web search: %s | Reasoning: %s | Prompt:",
         task_cfg.task_name,
         task_cfg.vendor,
         task_cfg.tier,
         task_cfg.model,
+        task_cfg.use_web_search,
+        task_cfg.reasoning_effort,
     )
     print(prompt if _is_debug_mode() else "<prompt omitted>")
 
@@ -456,7 +527,7 @@ async def _exec_prompt_gemini(
     )
 
     logging.info(
-        "_exec_prompt_gemini('%s') - Time taken: %d ms | Tokens used: {prompt: %d, completion: %d, thought: %d, tool: %d, cache: %d, total: %d} / Is error: %s - Response:",
+        "_exec_prompt_gemini('%s') - Time taken: %d ms | Tokens used: {prompt: %d, completion: %d, thought: %d, tool: %d, cache: %d, total: %d} | Is error: %s | Response:",
         task_cfg.task_name,
         result.time_taken_ms,
         result.tokens_prompt,

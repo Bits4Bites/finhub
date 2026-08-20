@@ -1,6 +1,7 @@
 """Unit tests for app.services module."""
 
 import asyncio
+from datetime import date
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -54,6 +55,25 @@ class TestGetSymbolInfoRaw:
 # ===========================================================================
 
 
+def _make_listing_event(
+    symbol: str = "ASX:XYZ",
+    date: str = "2026-06-15",
+    *,
+    issue_price: float | None = 2.5,
+    capital_to_raise: float | None = 5_000_000,
+    analysis_status: str = "NotStarted",
+) -> models_events_listings.ListingEvent:
+    return models_events_listings.ListingEvent(
+        symbol=symbol,
+        exchange="ASX",
+        date=date,
+        issue_price=issue_price,
+        currency="AUD",
+        capital_to_raise=capital_to_raise,
+        analysis_status=analysis_status,
+    )
+
+
 class TestAiGetAsxNewListings:
     """Tests for ai_get_asx_new_listings function."""
 
@@ -62,6 +82,7 @@ class TestAiGetAsxNewListings:
         with (
             patch("app.services.msai_asx_listings.cache.get", new_callable=AsyncMock, return_value=None) as mock_get,
             patch("app.services.msai_asx_listings.cache.set", new_callable=AsyncMock, return_value=True) as mock_set,
+            patch("app.services.msai_asx_listings._current_asx_date", return_value=date(2026, 6, 15)),
         ):
             self.mock_cache_get = mock_get
             self.mock_cache_set = mock_set
@@ -83,12 +104,8 @@ class TestAiGetAsxNewListings:
     def test_converts_dates_and_timestamps(self, mock_get, mock_analyze):
         from app.services.msai_asx_listings import ai_get_asx_new_listings
 
-        event = models_events_listings.ListingEvent(
-            symbol="ASX:XYZ",
-            company_name="XYZ Corp",
-            date="2026-06-15",
-            price=2.5,
-        )
+        event = _make_listing_event(analysis_status="Completed")
+        event.company_name = "XYZ Corp"
         mock_get.return_value = [event]
         mock_analyze.return_value = [event]
 
@@ -116,12 +133,11 @@ class TestAiGetAsxNewListings:
     def test_returns_cached_analysis(self, mock_get, mock_analyze):
         from app.services.msai_asx_listings import ai_get_asx_new_listings
 
-        extracted_event = models_events_listings.ListingEvent(symbol="ASX:XYZ", date="2026-06-15", price=2.5)
+        extracted_event = _make_listing_event()
         cached_events = [
-            models_events_listings.ListingEvent(
-                symbol="ASX:XYZ",
+            _make_listing_event(
                 date="2026-06-15T00:00:00+10:00",
-                price=2.5,
+                analysis_status="Completed",
             )
         ]
         mock_get.return_value = [extracted_event]
@@ -140,19 +156,24 @@ class TestAiGetAsxNewListings:
         from app.services.msai_asx_listings import ai_get_asx_new_listings
 
         events = [
-            models_events_listings.ListingEvent(
+            _make_listing_event(
                 symbol="ASX:ZZZ",
                 date="2026-08-02",
-                price=2.5,
-                public_offer_close_date="2026-07-28",
+                issue_price=2.5,
+                capital_to_raise=10_000_000,
+                analysis_status="Completed",
             ),
-            models_events_listings.ListingEvent(
+            _make_listing_event(
                 symbol="ASX:AAA",
                 date="2026-08-01",
-                price=1.25,
-                public_offer_close_date=None,
+                issue_price=1.25,
+                capital_to_raise=5_000_000,
+                analysis_status="Completed",
             ),
         ]
+        events[0].public_offer_close_date = "2026-07-28"
+        events[0].is_underwritten = None
+        events[1].is_underwritten = False
         mock_get.return_value = events
         mock_analyze.return_value = events
 
@@ -161,16 +182,84 @@ class TestAiGetAsxNewListings:
         mock_generate_key.assert_called_once_with(
             "asx-new-listings-analysis",
             "ASX:AAA",
+            "",
             "2026-08-01",
             "1.25",
             "",
+            "5000000.0",
+            "False",
+            "",
+            "",
+            "",
+            "",
+            "",
             "ASX:ZZZ",
+            "",
             "2026-08-02",
             "2.5",
+            "",
+            "10000000.0",
+            "None",
+            "",
+            "",
+            "",
+            "",
             "2026-07-28",
         )
         assert [event.symbol for event in mock_analyze.await_args.args[0]] == ["ASX:AAA", "ASX:ZZZ"]
         self.mock_cache_set.assert_awaited_once_with("cache-key", events, ttl=259200)
+
+    @patch("app.services.msai_asx_listings._analyze_asx_listings", new_callable=AsyncMock)
+    @patch("app.services.msai_asx_listings._get_asx_new_listings", new_callable=AsyncMock)
+    def test_analyzes_only_five_soonest_listings(self, mock_get, mock_analyze):
+        from app.services.msai_asx_listings import ai_get_asx_new_listings
+
+        events = [
+            _make_listing_event(symbol=f"ASX:A{day}", date=f"2026-09-0{day}", analysis_status="Completed")
+            for day in range(6, 0, -1)
+        ]
+        mock_get.return_value = events
+        mock_analyze.side_effect = lambda selected: selected
+
+        result = asyncio.run(ai_get_asx_new_listings())
+
+        assert [event.symbol for event in result] == ["ASX:A1", "ASX:A2", "ASX:A3", "ASX:A4", "ASX:A5"]
+        assert [event.symbol for event in mock_analyze.await_args.args[0]] == [
+            "ASX:A1",
+            "ASX:A2",
+            "ASX:A3",
+            "ASX:A4",
+            "ASX:A5",
+        ]
+
+    @patch("app.services.msai_asx_listings._analyze_asx_listings", new_callable=AsyncMock)
+    @patch("app.services.msai_asx_listings._get_asx_new_listings", new_callable=AsyncMock)
+    def test_filters_by_date_before_applying_listing_cap(self, mock_get, mock_analyze):
+        from app.services.msai_asx_listings import ai_get_asx_new_listings
+
+        events = [
+            _make_listing_event(symbol="ASX:F5", date="2026-06-20", analysis_status="Completed"),
+            _make_listing_event(symbol="ASX:F1", date="2026-06-16", analysis_status="Completed"),
+            _make_listing_event(symbol="ASX:PAST", date="2026-06-14", analysis_status="Completed"),
+            _make_listing_event(
+                symbol="ASX:EF2",
+                date="2026-06-15",
+                issue_price=None,
+                capital_to_raise=None,
+                analysis_status="Completed",
+            ),
+            _make_listing_event(symbol="ASX:F4", date="2026-06-19", analysis_status="Completed"),
+            _make_listing_event(symbol="ASX:F3", date="2026-06-18", analysis_status="Completed"),
+            _make_listing_event(symbol="ASX:F2", date="2026-06-17", analysis_status="Completed"),
+        ]
+        mock_get.return_value = events
+        mock_analyze.side_effect = lambda selected: selected
+
+        result = asyncio.run(ai_get_asx_new_listings())
+
+        expected_symbols = ["ASX:EF2", "ASX:F1", "ASX:F2", "ASX:F3", "ASX:F4"]
+        assert [event.symbol for event in result] == expected_symbols
+        assert [event.symbol for event in mock_analyze.await_args.args[0]] == expected_symbols
 
 
 # ===========================================================================

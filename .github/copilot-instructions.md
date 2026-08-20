@@ -61,6 +61,15 @@ resources/
 - Task-to-model mapping is configured via `FINHUB_LLM_TASK` settings
 - Prompt templates live in `resources/prompts/`
 
+### AI review and implementation rules
+
+- **Universal AI scoring**: Apply the same scoring to every AI-related review and future AI feature: expected output quality 50%, structured-output reliability 20%, task depth 15%, cost efficiency 15%, latency efficiency 0%. Apply quality, safety, source-verification, and reliability gates before scoring. Break close scores by quality, then structured-output reliability.
+- **Shared reference processing**: Use `app\utils\ai_reference.py` for URL normalization, deterministic source-ID generation, provider-citation verification, recursive reference-ID remapping, and registry validation. Do not duplicate this logic in individual AI flows.
+- **Application-owned reference identity**: Treat AI-generated source IDs as temporary and untrusted. Generate final IDs from normalized source URLs, remap every nested `reference_ids` field, and reject duplicate IDs/URLs plus unknown or unused registry entries.
+- **Bounded orphan-reference repair**: Unknown or unused reference IDs must never reach downstream stages. A flow may deterministically remove orphan links and unsupported claims, record explicit data gaps, prune unused sources, and then rerun strict registry validation. Never guess which source an orphan ID intended to reference.
+- **Non-fatal source verification**: Retain structurally valid sources when provider citations are empty or unmatched. Set application-owned `is_verified=False` instead of failing the entire flow; set it to `True` only when attribution is verified.
+- **Private drafts, public final models**: Keep provider-generated, incomplete, or flow-specific schemas private and close to the owning service. Keep final validated caller-facing models in `app\models`, make them domain-generic where appropriate, and place provider, exchange, or country constraints in the service.
+
 ### Data flow pattern
 
 Routers parse/validate input → call service functions → services fetch data (yfinance, web crawling, LLM calls) → construct model objects → routers wrap in response schemas.

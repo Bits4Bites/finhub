@@ -13,6 +13,7 @@ def _make_openai_response():
     return SimpleNamespace(
         output_text="ok",
         status="completed",
+        output=[],
         usage=SimpleNamespace(
             input_tokens=10,
             output_tokens=5,
@@ -124,6 +125,41 @@ class TestAiExecTask:
 
 
 class TestExecPromptOpenAiClient:
+    def test_responses_collects_provider_url_citations(self):
+        task_cfg = config.LLMTaskConfig(vendor="OPENAI", model="gpt-5", use_web_search=True)
+        client = MagicMock()
+        response = _make_openai_response()
+        response.output = [
+            SimpleNamespace(
+                content=[
+                    SimpleNamespace(
+                        annotations=[
+                            SimpleNamespace(
+                                type="url_citation",
+                                url="https://www.asx.com.au/source",
+                            ),
+                            SimpleNamespace(
+                                type="url_citation",
+                                url="https://www.asx.com.au/source",
+                            ),
+                        ]
+                    )
+                ]
+            )
+        ]
+        client.responses.create = AsyncMock(return_value=response)
+
+        result = asyncio.run(
+            ai_helper._exec_prompt_openai_client(
+                client,
+                task_cfg,
+                "prompt",
+                schema_name="json_responses",
+            )
+        )
+
+        assert result.citation_urls == ["https://www.asx.com.au/source"]
+
     def test_responses_uses_model_defaults_when_reasoning_effort_is_missing(self):
         task_cfg = config.LLMTaskConfig(vendor="OPENAI", model="gpt-5-mini")
         client = MagicMock()
@@ -228,6 +264,47 @@ class TestExecPromptOpenAiClient:
         response_format = client.responses.create.await_args.kwargs["text"]["format"]
         assert response_format["name"] == "json_responses"
         assert response_format["schema"] == response_schema
+
+    def test_structured_response_removes_only_unsupported_string_formats(self):
+        task_cfg = config.LLMTaskConfig(vendor="OPENAI", model="gpt-5-mini")
+        client = MagicMock()
+        client.responses.create = AsyncMock(return_value=_make_openai_response())
+        response_schema = {
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "format": "uri",
+                    "minLength": 1,
+                },
+                "accessed_at": {
+                    "type": "string",
+                    "format": "date-time",
+                },
+                "format": {
+                    "type": "string",
+                },
+            },
+        }
+
+        asyncio.run(
+            ai_helper._exec_prompt_openai_client(
+                client,
+                task_cfg,
+                "prompt",
+                response_json_schema=response_schema,
+                schema_name="json_responses",
+            )
+        )
+
+        sent_schema = client.responses.create.await_args.kwargs["text"]["format"]["schema"]
+        assert sent_schema["properties"]["url"] == {
+            "type": "string",
+            "minLength": 1,
+        }
+        assert sent_schema["properties"]["accessed_at"]["format"] == "date-time"
+        assert "format" in sent_schema["properties"]
+        assert response_schema["properties"]["url"]["format"] == "uri"
 
 
 class TestExecPromptGemini:

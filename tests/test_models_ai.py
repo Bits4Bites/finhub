@@ -15,7 +15,16 @@ def _valid_source_data() -> dict:
         "published_at": None,
         "accessed_at": datetime(2026, 8, 19, 1, 0, tzinfo=UTC),
         "url": "https://www.asx.com.au/listings/upcoming-floats-and-listings",
+        "is_verified": True,
     }
+
+
+def test_strict_ai_model_rejects_extra_fields():
+    class ExampleStrictModel(models_ai.StrictAIModel):
+        value: int
+
+    with pytest.raises(ValidationError):
+        ExampleStrictModel(value=1, unexpected=True)
 
 
 def test_reference_source_accepts_valid_data_and_strips_text():
@@ -34,6 +43,23 @@ def test_reference_source_accepts_valid_data_and_strips_text():
     assert source.title == "Upcoming floats and listings"
     assert source.publisher == "ASX"
     assert source.published_at is None
+    assert source.is_verified is True
+
+
+def test_reference_source_requires_verification_flag():
+    data = _valid_source_data()
+    del data["is_verified"]
+
+    with pytest.raises(ValidationError, match="is_verified"):
+        models_ai.ReferenceSource.model_validate(data)
+
+
+def test_reference_source_rejects_url_as_final_id():
+    data = _valid_source_data()
+    data["id"] = "https://www.asx.com.au/announcement"
+
+    with pytest.raises(ValidationError, match="string_pattern_mismatch"):
+        models_ai.ReferenceSource.model_validate(data)
 
 
 @pytest.mark.parametrize("field", ["id", "title", "publisher"])

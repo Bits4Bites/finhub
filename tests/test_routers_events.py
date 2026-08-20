@@ -331,7 +331,8 @@ class TestNewListings:
             symbol="ASX:XYZ",
             company_name="XYZ Corp",
             date="2026-06-20",
-            price=2.5,
+            issue_price=2.5,
+            capital_to_raise=5_000_000,
         )
         mock_get.return_value = [event]
 
@@ -419,7 +420,9 @@ class TestNewListingsAsync:
                         "symbol": "ASX:XYZ",
                         "company_name": "XYZ Corp",
                         "date": "2026-06-20",
-                        "price": 2.5,
+                        "issue_price": 2.5,
+                        "currency": "AUD",
+                        "capital_to_raise": 5_000_000,
                     }
                 ],
             },

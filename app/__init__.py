@@ -31,6 +31,9 @@ for vendor_name, api_tiers in list(config.settings_llm_vendor.vendors.items()):
         # remove any entries that have empty api_key and empty endpoint
         # or empty models list
         if (not llm_cfg.api_key and not llm_cfg.endpoint) or llm_cfg.models is None or not llm_cfg.models:
+            logging.warning(
+                f"Removing LLM config for vendor '{vendor_name}', tier '{api_tier}' due to missing API key, endpoint, or models."
+            )
             del api_tiers[api_tier]
         else:
             config.settings_llm_vendor.vendors[vendor_name.upper()][api_tier.upper()] = llm_cfg.model_copy()
@@ -41,10 +44,14 @@ for vendor_name, api_tiers in list(config.settings_llm_vendor.vendors.items()):
     # final cleanup
     for api_tier, llm_cfg in list(api_tiers.items()):
         if not llm_cfg.vendor_name or not llm_cfg.api_tier:
+            logging.warning(
+                f"Removing LLM config for vendor '{vendor_name}', tier '{api_tier}' due to missing vendor name or API tier."
+            )
             del api_tiers[api_tier]
 
     # delete the whole vendor if it has no api_tiers left
     if not api_tiers:
+        logging.warning(f"Removing vendor '{vendor_name}' as it has no valid API tiers left.")
         del config.settings_llm_vendor.vendors[vendor_name]
 
 # config.settings.llm_task_config is in the following format:
@@ -64,6 +71,9 @@ for task_name, llm_task_config in list(config.settings_llm_task.tasks.items()):
 for task_name, llm_cfg in list(config.settings_llm_task.tasks.items()):
     # remove any entries that have empty vendor or empty tier or empty model
     if not llm_cfg.task_name or not llm_cfg.vendor or not llm_cfg.tier or not llm_cfg.model:
+        logging.warning(
+            f"Removing LLM task config for task '{task_name}' due to missing task name, vendor, tier, or model."
+        )
         del config.settings_llm_task.tasks[task_name]
 
 
@@ -76,7 +86,7 @@ def read_file_as_single_string(file_path) -> str:
     except PermissionError:
         logging.error("Error: Permission denied for file '%s'.", file_path)
     except Exception as e:
-        logging.exception("An unexpected error occurred while reading file '%s': '%e'", file_path, e)
+        logging.exception("An unexpected error occurred while reading file '%s': '%s'", file_path, e)
     return ""
 
 

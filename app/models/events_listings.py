@@ -1,91 +1,186 @@
 from __future__ import annotations
 
-import json
-from datetime import datetime
-from typing import Any
+from datetime import date, datetime
+from typing import Annotated, Literal, Self
 
-from pydantic import BaseModel
+from pydantic import ConfigDict, Field, model_validator
 
-from ..utils import json as json_utils
+from ..utils import ai_reference as ai_reference_utils
+from . import ai as models_ai
 from . import event
 
-
-class ListingOutlook(BaseModel):
-    direction: str | None = None
-    reason: str | None = None
-    confidence: int = 0
-
-
-class ListingAnalysis(BaseModel):
-    status: str | None = None
-    data_quality: str | None = None
-    search_findings: str | None = None
-    stance: str | None = None
-    catalyst: str | None = None
-    risks: list[str] | None = None
-    outlook: dict[str, ListingOutlook] | None = None
+NonEmptyString = Annotated[str, Field(min_length=1)]
+ListingDataQuality = Literal["High", "Medium", "Low", "Insufficient"]
+ListingStatus = Literal["Upcoming", "Listed"]
+ListingStance = Literal["Bullish", "Neutral", "Bearish", "InsufficientData"]
+ListingAnalysisStatus = Literal["NotStarted", "Completed", "Failed"]
+ListingOutlookAssessmentType = Literal["Forecast", "Observed", "InsufficientData"]
+ListingOutlookDirection = Literal["Up", "Flat", "Down", "InsufficientData"]
+ListingRiskSeverity = Literal["Critical", "High", "Medium", "Low"]
+ListingLikelihood = Literal["High", "Medium", "Low"]
+ListingHorizon = Literal["IPO Day", "First Week", "First Two Weeks", "First Month", "Longer Term"]
 
 
-def parse_listing_analysis_from_json(json_str: str, default_vals: dict[str, Any] = None) -> dict[str, ListingAnalysis]:
-    default_vals = default_vals or {}
-    json_str = json_utils.normalize_json_str(json_str)
-    analysis = json.loads(json_str)
-    result = {}
-    for k, v in analysis.items():
-        result[k] = ListingAnalysis(
-            status=v.get("status", default_vals.get("status")),
-            data_quality=v.get("data_quality", default_vals.get("data_quality")),
-            search_findings=v.get("search_findings", default_vals.get("search_findings")),
-            stance=v.get("stance", default_vals.get("stance")),
-            catalyst=v.get("catalyst", default_vals.get("catalyst")),
-            risks=v.get("risks", default_vals.get("risks")),
-        )
-        if "outlook" in v:
-            result[k].outlook = {}
-            for period in ("d1", "w1", "w2", "m1"):
-                if period in v["outlook"]:
-                    result[k].outlook[period] = ListingOutlook(
-                        direction=v["outlook"][period].get("dir"),
-                        reason=v["outlook"][period].get("reason"),
-                        confidence=v["outlook"][period].get("confidence"),
-                    )
+class ListingEvidenceClaim(models_ai.StrictAIModel):
+    text: NonEmptyString
+    reference_ids: list[NonEmptyString] = Field(min_length=1)
 
-    return result
+
+class ListingEvidenceSection(models_ai.StrictAIModel):
+    facts: list[ListingEvidenceClaim]
+    data_gaps: list[str]
+    reference_ids: list[NonEmptyString] = Field(min_length=1)
+
+
+class ListingAnalysisSection(ListingEvidenceSection):
+    summary: NonEmptyString
+    data_quality: ListingDataQuality
+    assumptions: list[str]
+
+
+class ListingOfferAnalysis(ListingAnalysisSection):
+    issue_price_assessment: NonEmptyString
+    capital_raise_assessment: NonEmptyString
+    underwriting_assessment: NonEmptyString
+    use_of_funds: list[str]
+    dilution_and_escrow: str | None
+
+
+class ListingBusinessAnalysis(ListingAnalysisSection):
+    business_model: NonEmptyString
+    revenue_sources: list[str]
+    competitive_position: NonEmptyString
+    sector_context: NonEmptyString
+
+
+class ListingFinancialAnalysis(ListingAnalysisSection):
+    historical_performance: NonEmptyString
+    profitability_and_cash_flow: NonEmptyString
+    balance_sheet_and_funding: NonEmptyString
+    forecast_quality: NonEmptyString
+
+
+class ListingValuationAnalysis(ListingAnalysisSection):
+    valuation_view: NonEmptyString
+    implied_market_cap: float | None
+    peer_comparison: NonEmptyString
+    sensitivity: NonEmptyString
+
+
+class ListingGovernanceAnalysis(ListingAnalysisSection):
+    board_and_management: NonEmptyString
+    ownership_and_escrow: NonEmptyString
+    governance_concerns: list[str]
+
+
+class ListingDriver(models_ai.StrictAIModel):
+    title: NonEmptyString
+    description: NonEmptyString
+    likelihood: ListingLikelihood
+    horizon: ListingHorizon
+    reference_ids: list[NonEmptyString] = Field(min_length=1)
+
+
+class ListingRisk(ListingDriver):
+    severity: ListingRiskSeverity
+
+
+class ListingCatalyst(ListingDriver):
+    pass
+
+
+class ListingRiskCatalystAnalysis(ListingAnalysisSection):
+    risks: list[ListingRisk]
+    catalysts: list[ListingCatalyst]
+
+
+class ListingPeriodOutlook(models_ai.StrictAIModel):
+    assessment_type: ListingOutlookAssessmentType
+    period_end: date | None
+    direction: ListingOutlookDirection
+    expected_price_min: float | None
+    expected_price_max: float | None
+    expected_return_min_pct: float | None
+    expected_return_max_pct: float | None
+    confidence: int = Field(ge=0, le=100)
+    rationale: NonEmptyString
+    key_drivers: list[str]
+    risk_factors: list[str]
+    assumptions: list[str]
+    data_gaps: list[str]
+    reference_ids: list[NonEmptyString] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_ranges(self) -> Self:
+        if (
+            self.expected_price_min is not None
+            and self.expected_price_max is not None
+            and self.expected_price_min > self.expected_price_max
+        ):
+            raise ValueError("expected_price_min must not exceed expected_price_max")
+        if (
+            self.expected_return_min_pct is not None
+            and self.expected_return_max_pct is not None
+            and self.expected_return_min_pct > self.expected_return_max_pct
+        ):
+            raise ValueError("expected_return_min_pct must not exceed expected_return_max_pct")
+        if self.assessment_type == "InsufficientData" and self.direction != "InsufficientData":
+            raise ValueError("InsufficientData assessment must use InsufficientData direction")
+        return self
+
+
+class ListingOutlook(models_ai.StrictAIModel):
+    ipo_day: ListingPeriodOutlook
+    first_week: ListingPeriodOutlook
+    first_two_weeks: ListingPeriodOutlook
+    first_month: ListingPeriodOutlook
+
+
+class ListingAnalysisBase(models_ai.StrictAIModel):
+    symbol: NonEmptyString
+    as_of: datetime
+    listing_status: ListingStatus
+    overall_data_quality: ListingDataQuality
+    executive_summary: ListingAnalysisSection
+    overall_stance: ListingStance
+    overall_confidence: int = Field(ge=0, le=100)
+    offer: ListingOfferAnalysis
+    business: ListingBusinessAnalysis
+    financials: ListingFinancialAnalysis
+    valuation: ListingValuationAnalysis
+    governance: ListingGovernanceAnalysis
+    risks_and_catalysts: ListingRiskCatalystAnalysis
+    outlook: ListingOutlook
+
+    def referenced_source_ids(self) -> set[str]:
+        return ai_reference_utils.collect_reference_ids(self)
+
+
+class ListingAnalysis(ListingAnalysisBase):
+    references: list[models_ai.ReferenceSource] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_references(self) -> Self:
+        ai_reference_utils.validate_reference_registry(self.references, self)
+        return self
 
 
 class ListingEvent(event.EventBase):
+    model_config = ConfigDict(extra="forbid")
+
+    symbol: NonEmptyString
+    date: str
+    issue_price: float | None = Field(gt=0)
+    issue_type: str | None = None
     sector: str | None = None
     industry: str | None = None
     principal_activities: str | None = None
-    price: float = 0.0
-    currency: str = ""
-    capital: int = 0
+    currency: NonEmptyString
+    capital_to_raise: float | None = Field(gt=0)
     public_offer_close_date: str | None = None
+    is_underwritten: bool | None = None
+    underwriters: list[str] = Field(default_factory=list)
+    lead_managers: list[str] = Field(default_factory=list)
+    analysis_status: ListingAnalysisStatus = "NotStarted"
+    analysis_error: str | None = None
     analysis: ListingAnalysis | None = None
-
-
-def parse_new_listing_events_from_json(json_str: str, default_vals: dict[str, Any] = None) -> list[ListingEvent]:
-    default_vals = default_vals or {}
-    json_str = json_utils.normalize_json_str(json_str)
-    events = json.loads(json_str)
-    result = []
-    for item in events:
-        event_obj = ListingEvent(
-            symbol=item.get("symbol", default_vals.get("symbol")),
-            exchange=item.get("exchange", default_vals.get("exchange")),
-            company_name=item.get("company", default_vals.get("company")),
-            date=item.get("date", default_vals.get("date")),
-            event_category="listing",
-            source_name=item.get("src", default_vals.get("src")),
-            link=item.get("link", default_vals.get("link")),
-            sector=item.get("sector", default_vals.get("sector")),
-            principal_activities=item.get("principal_activities", default_vals.get("principal_activities")),
-            price=item.get("price", default_vals.get("price", 0.0)),
-            currency=item.get("currency", default_vals.get("currency", "")),
-            capital=int(item.get("capital", default_vals.get("capital", 0))),
-            public_offer_close_date=item.get("public_offer_close_date", default_vals.get("public_offer_close_date")),
-        )
-        event_obj.timestamp = int(datetime.strptime(event_obj.date or "", "%Y-%m-%d").timestamp())
-        result.append(event_obj)
-
-    return result

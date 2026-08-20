@@ -2,6 +2,7 @@
 # Generate its content quickly using the following command:
 #   git log origin..HEAD | grep "^\s" > .semrelease/this_release
 #!VERSION=0.16.0
-- feat(ai): Add task-level reasoning and web search.
-- refactor(ai): Standardize prompt execution execution with reasoning, web search and response JSON schema.
-- refactor(ai): Introduce shared ReferenceSource model for source identity.
+- feat(AI): Add task-level reasoning and web search.
+- refactor(AI): Standardize prompt execution execution with reasoning, web search and response JSON schema.
+- refactor(AI): Introduce shared ReferenceSource model for source identity.
+- impr(AI-asx-new-listings): Improve ASX new listings flow with deep research and analysis.

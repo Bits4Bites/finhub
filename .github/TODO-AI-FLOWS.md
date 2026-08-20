@@ -30,10 +30,37 @@ For each flow, assess:
 - Caching, retries, timeouts, cancellation, idempotency, and cleanup
 - Test coverage and observability across stage boundaries
 
+### AI task configuration scoring
+
+Score each candidate model and reasoning configuration from 0 through 100 in every category:
+
+| Category | Weight | Meaning |
+| --- | ---: | --- |
+| Expected output quality | 50% | Correctness, relevance, completeness, factual accuracy, and fitness for the API's intended use |
+| Structured-output reliability | 20% | Schema adherence, consistency, completeness of required fields, and resistance to malformed output |
+| Task depth | 15% | Research/source coverage for web-enabled tasks, or analytical/reasoning depth for non-web tasks |
+| Cost efficiency | 15% | Relative expected token, reasoning, and tool-use cost for materially equivalent work |
+| Latency efficiency | 0% | Record for operational context when useful, but do not include it in the weighted score |
+
+Use this formula:
+
+`weighted score = quality * 0.50 + structure * 0.20 + task depth * 0.15 + cost efficiency * 0.15`
+
+The score is a decision aid, not a substitute for quality gates:
+
+1. Exclude any option expected to miss required output quality, safety, source-verification, or reliability thresholds.
+2. Score the remaining viable options using evidence from representative fixtures where available.
+3. Treat unbenchmarked scores as provisional engineering estimates.
+4. For web-enabled tasks, include search-context size, tool-call allowance, evidence breadth, and citation quality in
+   task depth.
+5. For non-web tasks, include reasoning complexity, synthesis quality, and difficult-case performance in task depth.
+6. Break close scores by expected output quality first, then structured-output reliability.
+
 ## Agreed cross-cutting requirements
 
 - Treat all user inputs and all AI-model outputs as untrusted data.
 - Validate AI outputs before using them as input to another model or application stage.
+- Apply the shared 50/20/15/15/0 AI scoring and its quality gates to every AI-related review and future AI feature.
 - Quality over cost is the governing rule for AI-flow architecture and model selection.
 - Do not treat fewer AI calls as an optimization goal. Introduce, retain, or split AI stages when focused tasks are
   expected to materially improve output quality, safety, or reliability.
@@ -44,6 +71,15 @@ For each flow, assess:
 - Use POST rather than query-string GET requests for AI streaming flows.
 - Keep the current reasoning-based search-context and tool-call limits unless a later review explicitly changes them.
 - Prefer focused improvements over broad technical infrastructure changes during this review cycle.
+- Use `app\utils\ai_reference.py` for source URL normalization, canonical IDs, citation verification, recursive ID
+  remapping, and registry validation in every sourced AI flow.
+- Treat model-authored source IDs as temporary. Final IDs and `is_verified` are application-owned; empty or unmatched
+  provider citations produce `is_verified=False`, not whole-flow failure.
+- Never pass orphan or unused source IDs downstream. Bounded repair may remove orphan links and unsupported claims,
+  add explicit data gaps, prune unused sources, and then rerun strict registry validation; it must never guess a
+  replacement source.
+- Keep temporary provider-output models private to their flow and keep final caller-facing validated models in
+  `app\models`. Put provider, market, and country constraints in the owning service rather than generic models.
 
 ## Current AI task inventory
 
@@ -65,8 +101,8 @@ Task IDs below use their current code spelling, including `ASX_LISTTINGS`.
 | `ANALYZE_DIV_EVENT_BUILD_PROMPT`          | `gpt-5.6-luna`  | Medium    | No (default) | Build a dividend-event analysis prompt              |
 | `ANALYZE_DIV_EVENT_EXEC`                  | `gpt-5.6-sol`   | High      | Yes          | Research and evaluate a dividend strategy           |
 | `ASX_LISTTINGS_EXTRACT`                   | `gpt-5.6-luna`  | Low       | No (default) | Extract structured listings from scraped ASX text   |
-| `ASX_LISTTINGS_BUILD_PROMPT`              | `gpt-5.6-luna`  | Medium    | No (default) | Build an ASX-listings analysis prompt               |
-| `ASX_LISTTINGS_ANALYZE`                   | `gpt-5.6-terra` | High      | Yes          | Research and analyze new ASX listings               |
+| `ASX_LISTTINGS_RESEARCH` | `gpt-5.6-terra` | Medium | Yes | Run bounded first-pass research for one ASX listing |
+| `ASX_LISTTINGS_ANALYZE` | `gpt-5.6-terra` | Medium | No (default) | Produce a quick screening assessment from validated research |
 
 ## Flow review backlog
 
@@ -175,14 +211,20 @@ Task IDs below use their current code spelling, including `ASX_LISTTINGS`.
 ### 10. ASX new-listings extraction and analysis
 
 - **API or flow name:** `GET /events/new_listings` and `GET /events/new_listings_async` for country `AU`
-- **AI tasks involved:** `ASX_LISTTINGS_EXTRACT`, `ASX_LISTTINGS_BUILD_PROMPT`, `ASX_LISTTINGS_ANALYZE`
+- **AI tasks involved:** `ASX_LISTTINGS_EXTRACT`, `ASX_LISTTINGS_RESEARCH`, `ASX_LISTTINGS_ANALYZE`
 - **Primary code:** `app\routers\events_listings.py`, `app\schemas\events_listings.py`,
-  `app\models\events_listings.py`, `app\services\msai_asx_listings.py`, `app\services\crawler.py`
-- **Summary of process flow:** Fetch and parse the ASX upcoming-listings page; send selected page text to an extraction
-  task and parse its JSON array into listing models; build a second prompt containing the extracted companies; pass
-  that model-generated prompt to a research-enabled listings-analysis task; parse the returned JSON and attach each
-  analysis to its listing; cache the final event list for 72 hours. The async API runs the same flow as a background
-  task and exposes start/poll states.
+  `app\models\events_listings.py`, `app\services\msai_asx_listings.py`, `app\services\crawler.py`,
+  `app\utils\ai_reference.py`
+- **Summary of process flow:** Fetch the ASX upcoming-listings page; extract candidates through a strict structured
+  low-cost task; reject candidates without confirmed dates or with supplied non-positive monetary values while
+  retaining unavailable offer values as null; exclude listings before the current Sydney date; include listings
+  occurring today; sort current/future listings by the soonest date and keep five; then run isolated, screening-level
+  structured research and assessment stages per stock.
+  Research is capped at five high-value sources and avoids exhaustive diligence. Research sources are
+  retained and flagged as verified only when their URLs match provider-issued citations; empty or unmatched citation
+  lists produce unverified sources rather than failing the stock pipeline. Assessment receives those verification
+  flags with the validated research. The async API runs the same service flow as a background task and exposes
+  start/poll states.
 - **Detailed review plan:** `.github\detailed_review_plan\10-asx-new-listings-model-and-analysis.md`
 - **Status:** Reviewed: **Yes** | Implemented: **No** | Done: **No**
 
