@@ -16,10 +16,15 @@ from ..utils import data as data_utils
 from . import ai_helper
 
 _ASX_LISTINGS_CACHE_TTL = 72 * 60 * 60
+_ASX_LISTINGS_CACHE_NAMESPACE = "asx-new-listings-analysis-v2"
 _ASX_LISTINGS_URL = "https://www.asx.com.au/listings/upcoming-floats-and-listings"
 _ASX_COUNTRY = "AU"
 _ASX_CURRENCY = "AUD"
 _ASX_EXCHANGE = "ASX"
+_ASX_LISTINGS_RESEARCH_TASK = "ASX_LISTTINGS_RESEARCH"
+_ASX_LISTINGS_ANALYZE_TASK = "ASX_LISTTINGS_ANALYZE"
+_ASX_UNDERWRITTEN_LISTINGS_RESEARCH_TASK = "ASX_LISTTINGS_UNDERWRITTEN_RESEARCH"
+_ASX_UNDERWRITTEN_LISTINGS_ANALYZE_TASK = "ASX_LISTTINGS_UNDERWRITTEN_ANALYZE"
 _ASX_SYMBOL_PATTERN = r"^ASX:[A-Z0-9]+$"
 _ASX_SYMBOL_REGEX = re.compile(_ASX_SYMBOL_PATTERN)
 _MAX_LISTINGS_TO_ANALYZE = 5
@@ -144,7 +149,7 @@ def _select_current_and_future_listings(
 
 def _generate_analysis_cache_key(events: list[models_events_listings.ListingEvent]) -> str:
     return cache.generate_key(
-        "asx-new-listings-analysis",
+        _ASX_LISTINGS_CACHE_NAMESPACE,
         *(
             value
             for event in events
@@ -305,6 +310,14 @@ async def _analyze_asx_listings(
 async def _research_asx_listing(
     event: models_events_listings.ListingEvent,
 ) -> _ListingResearch:
+    task_id = _ASX_UNDERWRITTEN_LISTINGS_RESEARCH_TASK if event.is_underwritten is True else _ASX_LISTINGS_RESEARCH_TASK
+    underwriting_instruction = (
+        "- The listing is explicitly underwritten. Give additional scrutiny to the underwriters, commitment scope, "
+        "material conditions or termination rights, fees, residual funding risk, and whether underwriting meaningfully "
+        "reduces execution risk. Record unavailable terms in data_gaps."
+        if event.is_underwritten is True
+        else ""
+    )
     event_json = event.model_dump_json(
         exclude={"analysis", "analysis_error", "analysis_status"},
         exclude_none=False,
@@ -322,6 +335,7 @@ Quick-research scope:
   material governance issues; market context; key risks and catalysts; and observed trading for elapsed horizons.
 - Limit each section to at most three material facts. Record unavailable details in data_gaps rather than searching
   exhaustively.
+{underwriting_instruction}
 - Do not perform exhaustive due diligence, reconstruct detailed forecasts, or build a broad peer set.
 - Return factual evidence only. Do not give a stance, recommendation, or price outlook.
 - Set each temporary source ID to that source's exact cited HTTPS URL and use the same URL in reference_ids. The
@@ -337,7 +351,7 @@ END_VALIDATED_UNTRUSTED_LISTING_EVENT
 """.strip()
 
     research_result = await ai_helper.ai_exec_task(
-        "ASX_LISTTINGS_RESEARCH",
+        task_id,
         research_prompt,
         country=_ASX_COUNTRY,
         response_json_schema=_ListingResearchDraft.model_json_schema(),
@@ -445,6 +459,14 @@ async def _assess_asx_listing(
     event: models_events_listings.ListingEvent,
     research: _ListingResearch,
 ) -> models_events_listings.ListingAnalysis:
+    task_id = _ASX_UNDERWRITTEN_LISTINGS_ANALYZE_TASK if event.is_underwritten is True else _ASX_LISTINGS_ANALYZE_TASK
+    underwriting_instruction = (
+        "- The listing is explicitly underwritten. Assess the quality and limitations of that support, including "
+        "conditions, termination exposure, underwriter quality, and residual execution risk. Do not treat "
+        "underwriting as proof of investor demand or listing success."
+        if event.is_underwritten is True
+        else ""
+    )
     today = datetime.now(_SYDNEY_TZ).date()
     listing_date = datetime.fromisoformat(event.date).date()
     expected_status = "Listed" if listing_date < today else "Upcoming"
@@ -466,6 +488,7 @@ Requirements:
 - Treat references with is_verified=false as unverified evidence and reflect that limitation in data quality and confidence.
 - Keep narrative fields concise and focus on the most material evidence.
 - Include at most three risks and three catalysts.
+{underwriting_instruction}
 - Produce offer, business, financial, valuation, governance, risk, catalyst, and outlook analysis.
 - Outlook must include ipo_day, first_week, first_two_weeks, and first_month.
 - Use Observed for elapsed periods, Forecast for future periods, and InsufficientData when evidence is inadequate.
@@ -481,7 +504,7 @@ END_VALIDATED_RESEARCH
 """.strip()
 
     analysis_result = await ai_helper.ai_exec_task(
-        "ASX_LISTTINGS_ANALYZE",
+        task_id,
         analysis_prompt,
         country=_ASX_COUNTRY,
         response_json_schema=_ListingAnalysisDraft.model_json_schema(),

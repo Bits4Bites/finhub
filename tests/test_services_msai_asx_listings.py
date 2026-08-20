@@ -30,7 +30,11 @@ def _candidate_data(**overrides) -> dict[str, object]:
     return data
 
 
-def _event(symbol: str = "ASX:ABC") -> models_events_listings.ListingEvent:
+def _event(
+    symbol: str = "ASX:ABC",
+    *,
+    is_underwritten: bool | None = False,
+) -> models_events_listings.ListingEvent:
     return models_events_listings.ListingEvent(
         symbol=symbol,
         exchange="ASX",
@@ -40,7 +44,7 @@ def _event(symbol: str = "ASX:ABC") -> models_events_listings.ListingEvent:
         issue_type="Ordinary fully paid shares",
         currency="AUD",
         capital_to_raise=10_000_000,
-        is_underwritten=False,
+        is_underwritten=is_underwritten,
     )
 
 
@@ -333,7 +337,7 @@ def test_research_marks_provider_verified_sources():
         new_callable=AsyncMock,
         return_value=llm_response,
     ) as mock_ai_exec:
-        research = asyncio.run(msai_asx_listings._research_asx_listing(_event()))
+        research = asyncio.run(msai_asx_listings._research_asx_listing(_event(is_underwritten=None)))
 
     expected_source_id = ai_reference_utils.generate_source_id("https://www.asx.com.au/announcement")
     assert research.references[0].id == expected_source_id
@@ -345,10 +349,30 @@ def test_research_marks_provider_verified_sources():
     assert "no more than five high-value sources" in mock_ai_exec.await_args.args[1]
     assert "Do not perform exhaustive due diligence" in mock_ai_exec.await_args.args[1]
     assert "exact cited HTTPS URL" in mock_ai_exec.await_args.args[1]
+    assert "explicitly underwritten" not in mock_ai_exec.await_args.args[1]
     assert mock_ai_exec.await_args.kwargs["schema_name"] == "asx_listing_research"
     assert mock_ai_exec.await_args.kwargs["response_json_schema"] == (
         msai_asx_listings._ListingResearchDraft.model_json_schema()
     )
+
+
+def test_underwritten_listing_uses_dedicated_research_task():
+    llm_response = ai_helper.LLMResponse(
+        completion=json.dumps(_research_data()),
+        citation_urls=["https://www.asx.com.au/announcement"],
+    )
+
+    with patch.object(
+        msai_asx_listings.ai_helper,
+        "ai_exec_task",
+        new_callable=AsyncMock,
+        return_value=llm_response,
+    ) as mock_ai_exec:
+        asyncio.run(msai_asx_listings._research_asx_listing(_event(is_underwritten=True)))
+
+    assert mock_ai_exec.await_args.args[0] == "ASX_LISTTINGS_UNDERWRITTEN_RESEARCH"
+    assert "explicitly underwritten" in mock_ai_exec.await_args.args[1]
+    assert "termination rights" in mock_ai_exec.await_args.args[1]
 
 
 def test_research_accepts_empty_provider_citations_and_marks_source_unverified():
@@ -483,10 +507,32 @@ def test_assessment_uses_structured_response_and_preserves_source_verification(i
     assert "quick, first-pass assessment" in mock_ai_exec.await_args.args[1]
     assert "not deep investment research" in mock_ai_exec.await_args.args[1]
     assert "at most three risks and three catalysts" in mock_ai_exec.await_args.args[1]
+    assert "explicitly underwritten" not in mock_ai_exec.await_args.args[1]
     assert mock_ai_exec.await_args.kwargs["schema_name"] == "asx_listing_analysis"
     assert mock_ai_exec.await_args.kwargs["response_json_schema"] == (
         msai_asx_listings._ListingAnalysisDraft.model_json_schema()
     )
+
+
+def test_underwritten_listing_uses_dedicated_analysis_task():
+    llm_response = ai_helper.LLMResponse(completion=json.dumps(_analysis_draft_data()))
+
+    with patch.object(
+        msai_asx_listings.ai_helper,
+        "ai_exec_task",
+        new_callable=AsyncMock,
+        return_value=llm_response,
+    ) as mock_ai_exec:
+        asyncio.run(
+            msai_asx_listings._assess_asx_listing(
+                _event(is_underwritten=True),
+                _research_model(),
+            )
+        )
+
+    assert mock_ai_exec.await_args.args[0] == "ASX_LISTTINGS_UNDERWRITTEN_ANALYZE"
+    assert "explicitly underwritten" in mock_ai_exec.await_args.args[1]
+    assert "proof of investor demand" in mock_ai_exec.await_args.args[1]
 
 
 def test_per_stock_pipeline_reports_partial_failures_explicitly():

@@ -53,6 +53,22 @@ class TestLlmTaskConfig:
 
         assert task_cfg.reasoning_effort == "High"
 
+    def test_underwritten_listing_tasks_use_terra_with_high_reasoning(self):
+        settings = config.LLMTaskSettings()
+        research_task = settings.tasks["asx_listtings_underwritten_research"]
+        analysis_task = settings.tasks["asx_listtings_underwritten_analyze"]
+
+        assert (research_task.model, research_task.reasoning_effort, research_task.use_web_search) == (
+            "gpt-5.6-terra",
+            "High",
+            True,
+        )
+        assert (analysis_task.model, analysis_task.reasoning_effort, analysis_task.use_web_search) == (
+            "gpt-5.6-terra",
+            "High",
+            False,
+        )
+
 
 class TestAiExecPrompt:
     def test_ai_exec_prompt_uses_openai_path(self):

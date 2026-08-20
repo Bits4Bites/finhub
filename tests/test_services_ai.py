@@ -180,7 +180,7 @@ class TestAiGetAsxNewListings:
         asyncio.run(ai_get_asx_new_listings())
 
         mock_generate_key.assert_called_once_with(
-            "asx-new-listings-analysis",
+            "asx-new-listings-analysis-v2",
             "ASX:AAA",
             "",
             "2026-08-01",

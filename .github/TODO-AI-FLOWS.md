@@ -103,6 +103,8 @@ Task IDs below use their current code spelling, including `ASX_LISTTINGS`.
 | `ASX_LISTTINGS_EXTRACT`                   | `gpt-5.6-luna`  | Low       | No (default) | Extract structured listings from scraped ASX text   |
 | `ASX_LISTTINGS_RESEARCH` | `gpt-5.6-terra` | Medium | Yes | Run bounded first-pass research for one ASX listing |
 | `ASX_LISTTINGS_ANALYZE` | `gpt-5.6-terra` | Medium | No (default) | Produce a quick screening assessment from validated research |
+| `ASX_LISTTINGS_UNDERWRITTEN_RESEARCH` | `gpt-5.6-terra` | High | Yes | Research an explicitly underwritten listing with additional underwriting scrutiny |
+| `ASX_LISTTINGS_UNDERWRITTEN_ANALYZE` | `gpt-5.6-terra` | High | No (default) | Assess an explicitly underwritten listing and residual execution risk |
 
 ## Flow review backlog
 
@@ -211,7 +213,8 @@ Task IDs below use their current code spelling, including `ASX_LISTTINGS`.
 ### 10. ASX new-listings extraction and analysis
 
 - **API or flow name:** `GET /events/new_listings` and `GET /events/new_listings_async` for country `AU`
-- **AI tasks involved:** `ASX_LISTTINGS_EXTRACT`, `ASX_LISTTINGS_RESEARCH`, `ASX_LISTTINGS_ANALYZE`
+- **AI tasks involved:** `ASX_LISTTINGS_EXTRACT`, `ASX_LISTTINGS_RESEARCH`, `ASX_LISTTINGS_ANALYZE`,
+  `ASX_LISTTINGS_UNDERWRITTEN_RESEARCH`, `ASX_LISTTINGS_UNDERWRITTEN_ANALYZE`
 - **Primary code:** `app\routers\events_listings.py`, `app\schemas\events_listings.py`,
   `app\models\events_listings.py`, `app\services\msai_asx_listings.py`, `app\services\crawler.py`,
   `app\utils\ai_reference.py`
@@ -219,14 +222,15 @@ Task IDs below use their current code spelling, including `ASX_LISTTINGS`.
   low-cost task; reject candidates without confirmed dates or with supplied non-positive monetary values while
   retaining unavailable offer values as null; exclude listings before the current Sydney date; include listings
   occurring today; sort current/future listings by the soonest date and keep five; then run isolated, screening-level
-  structured research and assessment stages per stock.
+  structured research and assessment stages per stock. Explicitly underwritten listings use dedicated Terra/High
+  research and assessment tasks with additional underwriting scrutiny; false or unknown underwriting states retain
+  the Terra/Medium path.
   Research is capped at five high-value sources and avoids exhaustive diligence. Research sources are
   retained and flagged as verified only when their URLs match provider-issued citations; empty or unmatched citation
   lists produce unverified sources rather than failing the stock pipeline. Assessment receives those verification
   flags with the validated research. The async API runs the same service flow as a background task and exposes
   start/poll states.
-- **Detailed review plan:** `.github\detailed_review_plan\10-asx-new-listings-model-and-analysis.md`
-- **Status:** Reviewed: **Yes** | Implemented: **No** | Done: **No**
+- **Status:** Reviewed: **Yes** | Implemented: **Yes** | Done: **Yes**
 
 ### 11. Shared asynchronous AI task start and polling
 
