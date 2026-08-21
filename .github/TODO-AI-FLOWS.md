@@ -238,8 +238,10 @@ Task IDs below use their current code spelling, including `ASX_LISTTINGS`.
   Research is capped at five high-value sources and avoids exhaustive diligence. Research sources are
   retained and flagged as verified only when their URLs match provider-issued citations; empty or unmatched citation
   lists produce unverified sources rather than failing the stock pipeline. Assessment receives those verification
-  flags with the validated research. The async API runs the same service flow as a background task and exposes
-  start/poll states.
+  flags with the validated research. Page extraction, per-listing research, per-listing assessment, and final aggregate
+  results are cached independently, so retries resume from the last successful stage. Cache identities include stage
+  inputs and task configuration; research, assessment, and aggregate TTLs shorten as the listing date approaches. The
+  async API runs the same service flow as a background task and exposes start/poll states.
 - **Status:** Reviewed: **Yes** | Implemented: **Yes** | Done: **Yes**
 
 ### 11. Shared asynchronous AI task start and polling

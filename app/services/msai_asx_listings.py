@@ -1,3 +1,4 @@
+import json
 import logging
 import re
 from datetime import UTC, date, datetime, time
@@ -7,6 +8,7 @@ from zoneinfo import ZoneInfo
 from bs4 import BeautifulSoup
 from pydantic import Field, ValidationError, model_validator
 
+from .. import config
 from ..models import ai as models_ai
 from ..models import events_listings as models_events_listings
 from ..services import crawler as services_crawler
@@ -15,12 +17,16 @@ from ..utils import cache, conv
 from ..utils import data as data_utils
 from . import ai_helper
 
-_ASX_LISTINGS_CACHE_TTL = 72 * 60 * 60
-_ASX_LISTINGS_CACHE_NAMESPACE = "asx-new-listings-analysis-v2"
+_ASX_LISTINGS_CACHE_NAMESPACE = "asx-new-listings-analysis-v3"
+_ASX_LISTINGS_EXTRACTION_CACHE_NAMESPACE = "asx-new-listings-extraction-v1"
+_ASX_LISTINGS_RESEARCH_CACHE_NAMESPACE = "asx-new-listings-research-v1"
+_ASX_LISTINGS_ASSESSMENT_CACHE_NAMESPACE = "asx-new-listings-assessment-v1"
+_ASX_LISTINGS_EXTRACTION_CACHE_TTL = 24 * 60 * 60
 _ASX_LISTINGS_URL = "https://www.asx.com.au/listings/upcoming-floats-and-listings"
 _ASX_COUNTRY = "AU"
 _ASX_CURRENCY = "AUD"
 _ASX_EXCHANGE = "ASX"
+_ASX_LISTINGS_EXTRACT_TASK = "ASX_LISTTINGS_EXTRACT"
 _ASX_LISTINGS_RESEARCH_TASK = "ASX_LISTTINGS_RESEARCH"
 _ASX_LISTINGS_ANALYZE_TASK = "ASX_LISTTINGS_ANALYZE"
 _ASX_UNDERWRITTEN_LISTINGS_RESEARCH_TASK = "ASX_LISTTINGS_UNDERWRITTEN_RESEARCH"
@@ -112,15 +118,16 @@ async def ai_get_asx_new_listings() -> list[models_events_listings.ListingEvent]
     without a confirmed date or with supplied non-positive monetary values are
     excluded. Unavailable issue prices and capital amounts are retained as null.
     """
+    today = _current_asx_date()
     events = _select_current_and_future_listings(
         await _get_asx_new_listings(),
-        today=_current_asx_date(),
+        today=today,
     )
     events = events[:_MAX_LISTINGS_TO_ANALYZE]
-    cache_key = _generate_analysis_cache_key(events)
+    cache_key = _generate_analysis_cache_key(events, today=today)
     cached_events = await cache.get(cache_key)
     if cached_events is not None:
-        return cached_events
+        return _validate_cached_events(cached_events)
 
     events = await _analyze_asx_listings(events)
     for event in events:
@@ -128,7 +135,11 @@ async def ai_get_asx_new_listings() -> list[models_events_listings.ListingEvent]
         event.timestamp = int(datetime.fromisoformat(event.date).timestamp())
 
     if all(event.analysis_status == "Completed" for event in events):
-        await cache.set(cache_key, events, ttl=_ASX_LISTINGS_CACHE_TTL)
+        await cache.set(
+            cache_key,
+            [event.model_dump(mode="json") for event in events],
+            ttl=_analysis_cache_ttl(events, today=today),
+        )
     return events
 
 
@@ -147,28 +158,85 @@ def _select_current_and_future_listings(
     )
 
 
-def _generate_analysis_cache_key(events: list[models_events_listings.ListingEvent]) -> str:
+def _generate_analysis_cache_key(
+    events: list[models_events_listings.ListingEvent],
+    *,
+    today: date,
+) -> str:
     return cache.generate_key(
         _ASX_LISTINGS_CACHE_NAMESPACE,
+        today.isoformat(),
         *(
-            value
-            for event in events
-            for value in (
-                event.symbol,
-                event.company_name or "",
-                event.date,
-                str(event.issue_price),
-                event.issue_type or "",
-                str(event.capital_to_raise),
-                str(event.is_underwritten),
-                ",".join(event.underwriters),
-                ",".join(event.lead_managers),
-                event.sector or "",
-                event.principal_activities or "",
-                event.public_offer_close_date or "",
+            _task_cache_identity(task_id)
+            for task_id in (
+                _ASX_LISTINGS_EXTRACT_TASK,
+                _ASX_LISTINGS_RESEARCH_TASK,
+                _ASX_LISTINGS_ANALYZE_TASK,
+                _ASX_UNDERWRITTEN_LISTINGS_RESEARCH_TASK,
+                _ASX_UNDERWRITTEN_LISTINGS_ANALYZE_TASK,
             )
         ),
+        *(_event_input_json(event) for event in events),
     )
+
+
+def _event_input_json(event: models_events_listings.ListingEvent) -> str:
+    return event.model_dump_json(
+        exclude={"analysis", "analysis_error", "analysis_status", "timestamp"},
+        exclude_none=False,
+    )
+
+
+def _task_cache_identity(task_id: str) -> str:
+    task_config = config.settings_llm_task.tasks.get(task_id)
+    if task_config is None:
+        return task_id
+    return json.dumps(
+        {
+            "task": task_id,
+            "vendor": task_config.vendor,
+            "tier": task_config.tier,
+            "model": task_config.model,
+            "reasoning_effort": task_config.reasoning_effort,
+            "use_web_search": task_config.use_web_search,
+        },
+        sort_keys=True,
+    )
+
+
+def _listing_cache_ttl(
+    event: models_events_listings.ListingEvent,
+    *,
+    today: date,
+) -> int:
+    days_until_listing = (datetime.fromisoformat(event.date).date() - today).days
+    if days_until_listing <= 1:
+        return 60 * 60
+    if days_until_listing <= 7:
+        return 6 * 60 * 60
+    return 24 * 60 * 60
+
+
+def _analysis_cache_ttl(
+    events: list[models_events_listings.ListingEvent],
+    *,
+    today: date,
+) -> int:
+    return min((_listing_cache_ttl(event, today=today) for event in events), default=60 * 60)
+
+
+def _validate_cached_events(cached_events: object) -> list[models_events_listings.ListingEvent]:
+    if not isinstance(cached_events, list):
+        raise RuntimeError("ASX listings analysis cache contains an invalid value")
+    try:
+        return [
+            event.model_copy(deep=True)
+            if isinstance(event, models_events_listings.ListingEvent)
+            else models_events_listings.ListingEvent.model_validate(event)
+            for event in cached_events
+        ]
+    except (TypeError, ValidationError) as exc:
+        raise RuntimeError("ASX listings analysis cache contains an invalid value") from exc
 
 
 async def _get_asx_new_listings() -> list[models_events_listings.ListingEvent]:
@@ -209,20 +277,42 @@ BEGIN_UNTRUSTED_ASX_DATA
 END_UNTRUSTED_ASX_DATA
 """.strip()
 
-    extract_result = await ai_helper.ai_exec_task(
-        "ASX_LISTTINGS_EXTRACT",
+    cache_key = cache.generate_key(
+        _ASX_LISTINGS_EXTRACTION_CACHE_NAMESPACE,
         extract_prompt,
-        country=_ASX_COUNTRY,
-        response_json_schema=_ExtractedListingsResponse.model_json_schema(),
-        schema_name="asx_listing_extraction",
+        json.dumps(_ExtractedListingsResponse.model_json_schema(), sort_keys=True),
+        _task_cache_identity(_ASX_LISTINGS_EXTRACT_TASK),
     )
-    if extract_result.is_error:
-        raise RuntimeError(f"[ASX Listings] AI extraction failed: {extract_result.error_msg}")
+    cached_extraction = await cache.get(cache_key)
+    if cached_extraction is not None:
+        try:
+            extracted = (
+                cached_extraction.model_copy(deep=True)
+                if isinstance(cached_extraction, _ExtractedListingsResponse)
+                else _ExtractedListingsResponse.model_validate(cached_extraction)
+            )
+        except (TypeError, ValidationError) as exc:
+            raise RuntimeError("ASX listings extraction cache contains an invalid value") from exc
+    else:
+        extract_result = await ai_helper.ai_exec_task(
+            _ASX_LISTINGS_EXTRACT_TASK,
+            extract_prompt,
+            country=_ASX_COUNTRY,
+            response_json_schema=_ExtractedListingsResponse.model_json_schema(),
+            schema_name="asx_listing_extraction",
+        )
+        if extract_result.is_error:
+            raise RuntimeError(f"[ASX Listings] AI extraction failed: {extract_result.error_msg}")
 
-    try:
-        extracted = _ExtractedListingsResponse.model_validate_json(extract_result.completion)
-    except ValidationError as exc:
-        raise ValueError("[ASX Listings] AI extraction returned an invalid structured response.") from exc
+        try:
+            extracted = _ExtractedListingsResponse.model_validate_json(extract_result.completion)
+        except ValidationError as exc:
+            raise ValueError("[ASX Listings] AI extraction returned an invalid structured response.") from exc
+        await cache.set(
+            cache_key,
+            extracted.model_dump(mode="json"),
+            ttl=_ASX_LISTINGS_EXTRACTION_CACHE_TTL,
+        )
 
     events: list[models_events_listings.ListingEvent] = []
     seen_symbols: set[str] = set()
@@ -350,6 +440,25 @@ BEGIN_VALIDATED_UNTRUSTED_LISTING_EVENT
 END_VALIDATED_UNTRUSTED_LISTING_EVENT
 """.strip()
 
+    today = _current_asx_date()
+    cache_key = cache.generate_key(
+        _ASX_LISTINGS_RESEARCH_CACHE_NAMESPACE,
+        today.isoformat(),
+        research_prompt,
+        json.dumps(_ListingResearchDraft.model_json_schema(), sort_keys=True),
+        _task_cache_identity(task_id),
+    )
+    cached_research = await cache.get(cache_key)
+    if cached_research is not None:
+        try:
+            return (
+                cached_research.model_copy(deep=True)
+                if isinstance(cached_research, _ListingResearch)
+                else _ListingResearch.model_validate(cached_research)
+            )
+        except (TypeError, ValidationError) as exc:
+            raise RuntimeError("ASX listing research cache contains an invalid value") from exc
+
     research_result = await ai_helper.ai_exec_task(
         task_id,
         research_prompt,
@@ -368,11 +477,17 @@ END_VALIDATED_UNTRUSTED_LISTING_EVENT
     if research.symbol != event.symbol:
         raise ValueError("AI research returned a different symbol.")
 
-    return _finalize_research_sources(
+    finalized_research = _finalize_research_sources(
         research,
         research_result.citation_urls,
         accessed_at=datetime.now(UTC),
     )
+    await cache.set(
+        cache_key,
+        finalized_research.model_dump(mode="json"),
+        ttl=_listing_cache_ttl(event, today=today),
+    )
+    return finalized_research
 
 
 def _repair_research_reference_links(
@@ -467,7 +582,7 @@ async def _assess_asx_listing(
         if event.is_underwritten is True
         else ""
     )
-    today = datetime.now(_SYDNEY_TZ).date()
+    today = _current_asx_date()
     listing_date = datetime.fromisoformat(event.date).date()
     expected_status = "Listed" if listing_date < today else "Upcoming"
     event_json = event.model_dump_json(
@@ -503,6 +618,24 @@ BEGIN_VALIDATED_RESEARCH
 END_VALIDATED_RESEARCH
 """.strip()
 
+    cache_key = cache.generate_key(
+        _ASX_LISTINGS_ASSESSMENT_CACHE_NAMESPACE,
+        today.isoformat(),
+        analysis_prompt,
+        json.dumps(_ListingAnalysisDraft.model_json_schema(), sort_keys=True),
+        _task_cache_identity(task_id),
+    )
+    cached_analysis = await cache.get(cache_key)
+    if cached_analysis is not None:
+        try:
+            return (
+                cached_analysis.model_copy(deep=True)
+                if isinstance(cached_analysis, models_events_listings.ListingAnalysis)
+                else models_events_listings.ListingAnalysis.model_validate(cached_analysis)
+            )
+        except (TypeError, ValidationError) as exc:
+            raise RuntimeError("ASX listing assessment cache contains an invalid value") from exc
+
     analysis_result = await ai_helper.ai_exec_task(
         task_id,
         analysis_prompt,
@@ -526,4 +659,10 @@ END_VALIDATED_RESEARCH
     references = [reference for reference in research.references if reference.id in used_reference_ids]
     analysis_data = draft.model_dump()
     analysis_data["references"] = [reference.model_dump() for reference in references]
-    return models_events_listings.ListingAnalysis.model_validate(analysis_data)
+    analysis = models_events_listings.ListingAnalysis.model_validate(analysis_data)
+    await cache.set(
+        cache_key,
+        analysis.model_dump(mode="json"),
+        ttl=_listing_cache_ttl(event, today=today),
+    )
+    return analysis

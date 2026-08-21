@@ -78,6 +78,10 @@ docs/_build/
 .pybuilder/
 target/
 
+# .NET build output
+clients/dotnet/bin/
+clients/dotnet/obj/
+
 # Jupyter Notebook
 .ipynb_checkpoints
 

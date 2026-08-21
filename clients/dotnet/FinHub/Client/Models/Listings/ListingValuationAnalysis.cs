@@ -8,7 +8,7 @@ public sealed record ListingValuationAnalysis : ListingAnalysisSection
     public required string ValuationView { get; init; }
 
     [JsonPropertyName("implied_market_cap")]
-    public double? ImpliedMarketCap { get; init; }
+    public required double? ImpliedMarketCap { get; init; }
 
     [JsonPropertyName("peer_comparison")]
     public required string PeerComparison { get; init; }

@@ -9,7 +9,7 @@ public sealed record ListingEvent : EventBase
     public required string Date { get; init; }
 
     [JsonPropertyName("issue_price")]
-    public double? IssuePrice { get; init; }
+    public required double? IssuePrice { get; init; }
 
     [JsonPropertyName("issue_type")]
     public string? IssueType { get; init; }
@@ -27,7 +27,7 @@ public sealed record ListingEvent : EventBase
     public required string Currency { get; init; }
 
     [JsonPropertyName("capital_to_raise")]
-    public double? CapitalToRaise { get; init; }
+    public required double? CapitalToRaise { get; init; }
 
     [JsonPropertyName("public_offer_close_date")]
     public string? PublicOfferCloseDate { get; init; }

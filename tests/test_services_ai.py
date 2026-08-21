@@ -114,7 +114,7 @@ class TestAiGetAsxNewListings:
         assert result[0].date.startswith("2026-06-15")
         assert result[0].timestamp > 0
         self.mock_cache_set.assert_awaited_once()
-        assert self.mock_cache_set.await_args.kwargs["ttl"] == 259200
+        assert self.mock_cache_set.await_args.kwargs["ttl"] == 3600
 
     @patch("app.services.msai_asx_listings._analyze_asx_listings", new_callable=AsyncMock)
     @patch("app.services.msai_asx_listings._get_asx_new_listings", new_callable=AsyncMock)
@@ -145,7 +145,8 @@ class TestAiGetAsxNewListings:
 
         result = asyncio.run(ai_get_asx_new_listings())
 
-        assert result is cached_events
+        assert result == cached_events
+        assert result is not cached_events
         mock_analyze.assert_not_awaited()
         self.mock_cache_set.assert_not_awaited()
 
@@ -175,39 +176,35 @@ class TestAiGetAsxNewListings:
         events[0].is_underwritten = None
         events[1].is_underwritten = False
         mock_get.return_value = events
-        mock_analyze.return_value = events
+        mock_analyze.side_effect = lambda selected: selected
 
-        asyncio.run(ai_get_asx_new_listings())
+        with (
+            patch(
+                "app.services.msai_asx_listings._task_cache_identity",
+                side_effect=lambda task_id: f"task:{task_id}",
+            ),
+            patch(
+                "app.services.msai_asx_listings._event_input_json",
+                side_effect=lambda event: f"event:{event.symbol}",
+            ),
+        ):
+            asyncio.run(ai_get_asx_new_listings())
 
         mock_generate_key.assert_called_once_with(
-            "asx-new-listings-analysis-v2",
-            "ASX:AAA",
-            "",
-            "2026-08-01",
-            "1.25",
-            "",
-            "5000000.0",
-            "False",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "ASX:ZZZ",
-            "",
-            "2026-08-02",
-            "2.5",
-            "",
-            "10000000.0",
-            "None",
-            "",
-            "",
-            "",
-            "",
-            "2026-07-28",
+            "asx-new-listings-analysis-v3",
+            "2026-06-15",
+            "task:ASX_LISTTINGS_EXTRACT",
+            "task:ASX_LISTTINGS_RESEARCH",
+            "task:ASX_LISTTINGS_ANALYZE",
+            "task:ASX_LISTTINGS_UNDERWRITTEN_RESEARCH",
+            "task:ASX_LISTTINGS_UNDERWRITTEN_ANALYZE",
+            "event:ASX:AAA",
+            "event:ASX:ZZZ",
         )
         assert [event.symbol for event in mock_analyze.await_args.args[0]] == ["ASX:AAA", "ASX:ZZZ"]
-        self.mock_cache_set.assert_awaited_once_with("cache-key", events, ttl=259200)
+        cached_events = self.mock_cache_set.await_args.args[1]
+        assert [event["symbol"] for event in cached_events] == ["ASX:AAA", "ASX:ZZZ"]
+        assert self.mock_cache_set.await_args.kwargs["ttl"] == 86400
 
     @patch("app.services.msai_asx_listings._analyze_asx_listings", new_callable=AsyncMock)
     @patch("app.services.msai_asx_listings._get_asx_new_listings", new_callable=AsyncMock)

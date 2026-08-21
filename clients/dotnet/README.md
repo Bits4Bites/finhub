@@ -2,20 +2,32 @@
 
 This .NET 8 class library contains models and response schemas only. It does not implement HTTP transport.
 
+## New listings
+
+The new-listings contracts cover:
+
 ```http
 GET /events/new_listings
+GET /events/new_listings_async
 ```
 
-Deserialize a new-listings response with `System.Text.Json`:
+Deserialize synchronous and async start/poll responses with `System.Text.Json`:
 
 ```csharp
 using System.Text.Json;
 using FinHub.Client.Schemas.NewListings;
 
 var response = JsonSerializer.Deserialize<GetNewListingsResponse>(json);
+var asyncResponse = JsonSerializer.Deserialize<GetNewListingsAsyncResponse>(asyncJson);
 ```
 
-Nullable response properties may be absent because the API excludes `null` values. `ListingEvent.Date` and
+Call `GET /events/new_listings_async?country=AU` to start a task and poll the same endpoint with
+`task_id=<TASK_ID>`. Both operations deserialize as `GetNewListingsAsyncResponse`; its required `Extra` property uses
+the shared `AsyncTaskInfo` and `TaskState` contracts. Completed polls can include the standard listing collection in
+`Data`.
+
+Nullable response properties may be absent because the API excludes `null` values. OpenAPI marks
+`ListingEvent.IssuePrice` and `ListingEvent.CapitalToRaise` as required but nullable. `ListingEvent.Date` and
 `ListingEvent.PublicOfferCloseDate` remain strings to match the current OpenAPI contract; formatted analysis dates use
 `DateOnly` or `DateTimeOffset`.
 

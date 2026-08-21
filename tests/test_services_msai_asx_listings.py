@@ -11,6 +11,15 @@ from app.services import ai_helper, msai_asx_listings
 from app.utils import ai_reference as ai_reference_utils
 
 
+@pytest.fixture(autouse=True)
+def mock_listings_cache():
+    with (
+        patch.object(msai_asx_listings.cache, "get", new_callable=AsyncMock, return_value=None) as mock_get,
+        patch.object(msai_asx_listings.cache, "set", new_callable=AsyncMock, return_value=True) as mock_set,
+    ):
+        yield mock_get, mock_set
+
+
 def _candidate_data(**overrides) -> dict[str, object]:
     data: dict[str, object] = {
         "symbol": "ASX:ABC",
@@ -276,7 +285,7 @@ def test_quick_analysis_schema_limits_risks_and_catalysts():
         msai_asx_listings._ListingAnalysisDraft.model_validate(data)
 
 
-def test_extracts_structured_listings_and_retains_unavailable_offer_values():
+def test_extracts_structured_listings_and_retains_unavailable_offer_values(mock_listings_cache):
     response_data = {
         "listings": [
             _candidate_data(symbol="ASX:LATE", listing_date="2099-09-03"),
@@ -323,9 +332,33 @@ def test_extracts_structured_listings_and_retains_unavailable_offer_values():
     assert mock_ai_exec.await_args.kwargs["response_json_schema"] == (
         msai_asx_listings._ExtractedListingsResponse.model_json_schema()
     )
+    _, mock_cache_set = mock_listings_cache
+    mock_cache_set.assert_awaited_once()
+    assert mock_cache_set.await_args.kwargs["ttl"] == 24 * 60 * 60
 
 
-def test_research_marks_provider_verified_sources():
+def test_extraction_reuses_cached_structured_result(mock_listings_cache):
+    mock_cache_get, mock_cache_set = mock_listings_cache
+    mock_cache_get.return_value = {"listings": [_candidate_data()]}
+    html = '<div class="multi-column-height">Listing date: details</div>'
+
+    with (
+        patch.object(
+            msai_asx_listings.services_crawler,
+            "fetch_webpage_content",
+            new_callable=AsyncMock,
+            return_value=html,
+        ),
+        patch.object(msai_asx_listings.ai_helper, "ai_exec_task", new_callable=AsyncMock) as mock_ai_exec,
+    ):
+        events = asyncio.run(msai_asx_listings._get_asx_new_listings())
+
+    assert [event.symbol for event in events] == ["ASX:ABC"]
+    mock_ai_exec.assert_not_awaited()
+    mock_cache_set.assert_not_awaited()
+
+
+def test_research_marks_provider_verified_sources(mock_listings_cache):
     llm_response = ai_helper.LLMResponse(
         completion=json.dumps(_research_data()),
         citation_urls=["https://www.asx.com.au/announcement"],
@@ -354,6 +387,23 @@ def test_research_marks_provider_verified_sources():
     assert mock_ai_exec.await_args.kwargs["response_json_schema"] == (
         msai_asx_listings._ListingResearchDraft.model_json_schema()
     )
+    _, mock_cache_set = mock_listings_cache
+    mock_cache_set.assert_awaited_once()
+    assert mock_cache_set.await_args.kwargs["ttl"] == 24 * 60 * 60
+
+
+def test_research_reuses_cached_validated_result(mock_listings_cache):
+    mock_cache_get, mock_cache_set = mock_listings_cache
+    expected = _research_model()
+    mock_cache_get.return_value = expected.model_dump(mode="json")
+
+    with patch.object(msai_asx_listings.ai_helper, "ai_exec_task", new_callable=AsyncMock) as mock_ai_exec:
+        research = asyncio.run(msai_asx_listings._research_asx_listing(_event()))
+
+    assert research == expected
+    assert research is not expected
+    mock_ai_exec.assert_not_awaited()
+    mock_cache_set.assert_not_awaited()
 
 
 def test_underwritten_listing_uses_dedicated_research_task():
@@ -478,7 +528,10 @@ def test_research_marks_mismatched_source_urls_unverified():
 
 
 @pytest.mark.parametrize("is_verified", [True, False])
-def test_assessment_uses_structured_response_and_preserves_source_verification(is_verified):
+def test_assessment_uses_structured_response_and_preserves_source_verification(
+    is_verified,
+    mock_listings_cache,
+):
     llm_response = ai_helper.LLMResponse(completion=json.dumps(_analysis_draft_data()))
 
     with patch.object(
@@ -512,6 +565,44 @@ def test_assessment_uses_structured_response_and_preserves_source_verification(i
     assert mock_ai_exec.await_args.kwargs["response_json_schema"] == (
         msai_asx_listings._ListingAnalysisDraft.model_json_schema()
     )
+    _, mock_cache_set = mock_listings_cache
+    mock_cache_set.assert_awaited_once()
+    assert mock_cache_set.await_args.kwargs["ttl"] == 24 * 60 * 60
+
+
+def test_assessment_reuses_cached_validated_result(mock_listings_cache):
+    mock_cache_get, mock_cache_set = mock_listings_cache
+    expected = _analysis_model()
+    mock_cache_get.return_value = expected.model_dump(mode="json")
+
+    with patch.object(msai_asx_listings.ai_helper, "ai_exec_task", new_callable=AsyncMock) as mock_ai_exec:
+        analysis = asyncio.run(
+            msai_asx_listings._assess_asx_listing(
+                _event(),
+                _research_model(),
+            )
+        )
+
+    assert analysis == expected
+    assert analysis is not expected
+    mock_ai_exec.assert_not_awaited()
+    mock_cache_set.assert_not_awaited()
+
+
+@pytest.mark.parametrize(
+    ("listing_date", "expected_ttl"),
+    [
+        ("2026-06-15", 60 * 60),
+        ("2026-06-16", 60 * 60),
+        ("2026-06-22", 6 * 60 * 60),
+        ("2026-06-23", 24 * 60 * 60),
+    ],
+)
+def test_listing_cache_ttl_shortens_near_listing_date(listing_date, expected_ttl):
+    event = _event()
+    event.date = listing_date
+
+    assert msai_asx_listings._listing_cache_ttl(event, today=date(2026, 6, 15)) == expected_ttl
 
 
 def test_underwritten_listing_uses_dedicated_analysis_task():
