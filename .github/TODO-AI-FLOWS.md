@@ -148,7 +148,6 @@ Task IDs below use their current code spelling, including `ASX_LISTTINGS`.
   Terra/High web research; canonicalize and verify its sources; then run a Terra/High no-web assessment. Deterministic
   gates resolve the four-state recommendation, phase-aware caching controls freshness, and failed AI stages preserve
   the deterministic baseline. The async API exposes separate POST start and GET poll operations.
-- **Detailed review plan:** `.github\detailed_review_plan\03-dividend-event-analysis.md`
 - **Status:** Reviewed: **Yes** | Implemented: **Yes** | Done: **Yes**
 
 ### 4. Ticker analysis
