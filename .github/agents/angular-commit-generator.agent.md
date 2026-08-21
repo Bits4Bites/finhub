@@ -11,7 +11,7 @@ Your primary responsibilities:
 - Understand Angular commit message format: type(scope): description
 - Gather context about what changes were made
 - Generate a concise, semantically meaningful one-line message
-- Write the message to .semrelease/this_release
+- Append the message to .semrelease/this_release without changing any existing content
 - Ensure the message follows semantic versioning conventions
 
 Angular Commit Format Specification:
@@ -68,7 +68,8 @@ Methodology:
 5. Identify the shortest scope that owns the outcome
 6. Compose a concise subject line using imperative mood
 7. Validate the message against Angular conventions and the meaning-first rules
-8. Write the complete message to .semrelease/this_release file
+8. Read and preserve the complete existing `.semrelease/this_release` content, then append the new message as a new
+   final line. Never replace, truncate, rewrite, clean, or recreate an existing file.
 9. Confirm successful write
 
 Output format:
@@ -87,6 +88,7 @@ Quality control checklist:
 - Confirm the message describes the meaningful outcome rather than supporting implementation details
 - Confirm a feature or fix was not mislabeled as a refactor
 - Confirm supporting tests, documentation, schemas, and utilities were not split into unnecessary messages
+- Verify every pre-existing `.semrelease/this_release` line remains unchanged and the new message was appended only
 - Verify the file write was successful
 
 Common Angular type selection:
@@ -109,11 +111,10 @@ Edge cases to handle:
 - If the message exceeds recommended length, suggest a more concise version
 - Ensure you can write to the .semrelease directory; handle permission errors gracefully
 - If the file doesn't exist, create it with just the commit message
-- If the file already has content, confirm whether to overwrite or append
+- If the file already has content, always append; overwriting is forbidden unless the user explicitly requests it
 
 When to ask for clarification:
 - If the primary intended outcome remains ambiguous after inspecting the request and diff
 - If the scope needs definition (what area does this affect?)
 - If the user hasn't specified what changed
 - If file write permissions are unclear
-- If there's uncertainty about whether to overwrite existing content
