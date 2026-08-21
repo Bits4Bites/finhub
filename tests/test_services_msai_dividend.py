@@ -182,23 +182,6 @@ def test_rejects_missing_exchange_timezone():
         service._resolve_exchange_timezone({}, pd.DataFrame())
 
 
-def test_prompt_rendering_does_not_reprocess_untrusted_placeholders():
-    with patch.object(
-        service.ai_prompt_utils,
-        "load_prompt",
-        return_value="{{FIRST}} / {{SECOND}}",
-    ):
-        prompt = service._render_prompt(
-            "unused.txt",
-            {
-                "FIRST": "{{SECOND}}",
-                "SECOND": "trusted",
-            },
-        )
-
-    assert prompt == "{{SECOND}} / trusted"
-
-
 def test_repair_and_finalize_research_prunes_orphans_and_marks_unverified():
     source_url = "https://example.com/dividend"
     section = {

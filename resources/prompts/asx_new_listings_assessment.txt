@@ -1,0 +1,25 @@
+Produce a quick, first-pass assessment of one ASX listing using only the validated event and research supplied below.
+Return only the supplied structured JSON schema. Do not use external knowledge or perform new research.
+
+Requirements:
+- This is a screening-level assessment, not deep investment research, exhaustive due diligence, or a recommendation.
+- symbol must be {{SYMBOL}}.
+- listing_status must be {{EXPECTED_STATUS}}.
+- Separate facts, assumptions, and data gaps.
+- Use only reference IDs present in the research.
+- Treat references with is_verified=false as unverified evidence and reflect that limitation in data quality and confidence.
+- Keep narrative fields concise and focus on the most material evidence.
+- Include at most three risks and three catalysts.
+{{UNDERWRITING_INSTRUCTION}}
+- Produce offer, business, financial, valuation, governance, risk, catalyst, and outlook analysis.
+- Outlook must include ipo_day, first_week, first_two_weeks, and first_month.
+- Use Observed for elapsed periods, Forecast for future periods, and InsufficientData when evidence is inadequate.
+- Do not provide unsupported precision. Price and return ranges are null when no defensible basis exists.
+
+BEGIN_VALIDATED_LISTING_EVENT
+{{EVENT_JSON}}
+END_VALIDATED_LISTING_EVENT
+
+BEGIN_VALIDATED_RESEARCH
+{{RESEARCH_JSON}}
+END_VALIDATED_RESEARCH

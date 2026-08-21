@@ -3,8 +3,6 @@ from __future__ import annotations
 import json
 import logging
 import math
-import re
-from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from typing import Self
@@ -38,7 +36,6 @@ _ASSESS_TASK = "ANALYZE_DIV_EVENT_ASSESS"
 _RESEARCH_SCHEMA_NAME = "dividend_event_research"
 _ASSESSMENT_SCHEMA_NAME = "dividend_event_assessment"
 _RESEARCH_SECTION_NAMES = ("dividend_terms", "issuer_outlook", "event_risks", "market_context")
-_PROMPT_PLACEHOLDER_PATTERN = re.compile(r"\{\{([A-Z0-9_]+)\}\}")
 
 
 class DividendEventInputError(ValueError):
@@ -686,7 +683,7 @@ async def _research_dividend_event(
     *,
     country: str,
 ) -> _DividendResearch:
-    prompt = _render_prompt(
+    prompt = ai_prompt_utils.render_prompt(
         "dividend_event_research.txt",
         {
             "EVENT_JSON": context.model_dump_json(),
@@ -808,7 +805,7 @@ async def _assess_dividend_event(
     *,
     country: str,
 ) -> _DividendAssessmentResult:
-    prompt = _render_prompt(
+    prompt = ai_prompt_utils.render_prompt(
         "dividend_event_assessment.txt",
         {
             "EVENT_JSON": context.model_dump_json(),
@@ -1389,17 +1386,3 @@ def _cache_ttl(context: models_events_dividends.DividendEventContext) -> int:
     if context.phase == "PostExDate":
         return 6 * 60 * 60
     return 72 * 60 * 60
-
-
-def _render_prompt(
-    file_name: str,
-    replacements: Mapping[str, str],
-) -> str:
-    prompt = ai_prompt_utils.load_prompt(file_name)
-    placeholders = set(_PROMPT_PLACEHOLDER_PATTERN.findall(prompt))
-    if placeholders != set(replacements):
-        raise RuntimeError(f"Dividend prompt '{file_name}' placeholders do not match supplied values")
-    return _PROMPT_PLACEHOLDER_PATTERN.sub(
-        lambda match: replacements[match.group(1)],
-        prompt,
-    )

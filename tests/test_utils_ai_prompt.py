@@ -53,3 +53,35 @@ def test_load_prompt_rejects_empty_content_without_caching_failure():
                 ai_prompt_utils.load_prompt("empty-prompt.txt")
 
     assert mock_read.call_count == 2
+
+
+def test_render_prompt_does_not_reprocess_replacement_placeholders():
+    with patch.object(
+        ai_prompt_utils,
+        "load_prompt",
+        return_value="{{FIRST}} / {{SECOND}}",
+    ):
+        prompt = ai_prompt_utils.render_prompt(
+            "unused.txt",
+            {
+                "FIRST": "{{SECOND}}",
+                "SECOND": "trusted",
+            },
+        )
+
+    assert prompt == "{{SECOND}} / trusted"
+
+
+@pytest.mark.parametrize(
+    "replacements",
+    [
+        {},
+        {"FIRST": "value", "UNEXPECTED": "value"},
+    ],
+)
+def test_render_prompt_rejects_placeholder_mismatch(replacements):
+    with (
+        patch.object(ai_prompt_utils, "load_prompt", return_value="{{FIRST}}"),
+        pytest.raises(ai_prompt_utils.PromptLoadError, match="placeholders do not match"),
+    ):
+        ai_prompt_utils.render_prompt("unused.txt", replacements)

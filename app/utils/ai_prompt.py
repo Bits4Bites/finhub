@@ -1,11 +1,14 @@
 """Shared loading for source-controlled AI prompt templates."""
 
 import functools
+import re
+from collections.abc import Mapping
 from pathlib import Path
 
-__all__ = ["PromptLoadError", "load_prompt"]
+__all__ = ["PromptLoadError", "load_prompt", "render_prompt"]
 
 _PROMPT_DIRECTORY = (Path(__file__).resolve().parents[2] / "resources" / "prompts").resolve()
+_PROMPT_PLACEHOLDER_PATTERN = re.compile(r"\{\{([A-Z0-9_]+)\}\}")
 
 
 class PromptLoadError(RuntimeError):
@@ -24,6 +27,27 @@ def load_prompt(file_name: str) -> str:
     except ValueError as exc:
         raise PromptLoadError(f"Prompt path '{file_name}' is outside the prompt directory") from exc
     return _load_prompt_content(prompt_path)
+
+
+def render_prompt(
+    file_name: str,
+    replacements: Mapping[str, str],
+) -> str:
+    """Load a cached prompt template and replace its declared placeholders once."""
+    prompt = load_prompt(file_name)
+    placeholders = set(_PROMPT_PLACEHOLDER_PATTERN.findall(prompt))
+    replacement_names = set(replacements)
+    if placeholders != replacement_names:
+        missing = ", ".join(sorted(placeholders - replacement_names)) or "none"
+        unexpected = ", ".join(sorted(replacement_names - placeholders)) or "none"
+        raise PromptLoadError(
+            f"Prompt '{file_name}' placeholders do not match replacements "
+            f"(missing: {missing}; unexpected: {unexpected})"
+        )
+    return _PROMPT_PLACEHOLDER_PATTERN.sub(
+        lambda match: replacements[match.group(1)],
+        prompt,
+    )
 
 
 @functools.cache
