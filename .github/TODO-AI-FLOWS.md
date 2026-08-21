@@ -35,13 +35,13 @@ For each flow, assess:
 
 Score each candidate model and reasoning configuration from 0 through 100 in every category:
 
-| Category | Weight | Meaning |
-| --- | ---: | --- |
-| Expected output quality | 50% | Correctness, relevance, completeness, factual accuracy, and fitness for the API's intended use |
-| Structured-output reliability | 20% | Schema adherence, consistency, completeness of required fields, and resistance to malformed output |
-| Task depth | 15% | Research/source coverage for web-enabled tasks, or analytical/reasoning depth for non-web tasks |
-| Cost efficiency | 15% | Relative expected token, reasoning, and tool-use cost for materially equivalent work |
-| Latency efficiency | 0% | Record for operational context when useful, but do not include it in the weighted score |
+| Category                      | Weight | Meaning                                                                                            |
+|-------------------------------|-------:|----------------------------------------------------------------------------------------------------|
+| Expected output quality       |    50% | Correctness, relevance, completeness, factual accuracy, and fitness for the API's intended use     |
+| Structured-output reliability |    20% | Schema adherence, consistency, completeness of required fields, and resistance to malformed output |
+| Task depth                    |    15% | Research/source coverage for web-enabled tasks, or analytical/reasoning depth for non-web tasks    |
+| Cost efficiency               |    15% | Relative expected token, reasoning, and tool-use cost for materially equivalent work               |
+| Latency efficiency            |     0% | Record for operational context when useful, but do not include it in the weighted score            |
 
 Use this formula:
 
@@ -93,64 +93,30 @@ The score is a decision aid, not a substitute for quality gates:
 
 Task IDs below use their current code spelling, including `ASX_LISTTINGS`.
 
-| AI task                                   | Current model   | Reasoning | Web search   | Current objective                                   |
-|-------------------------------------------|-----------------|-----------|--------------|-----------------------------------------------------|
-| `ANALYZE_TICKER_BUILD_PROMPT`             | `gpt-5.6-luna`  | Medium    | No (default) | Build a ticker-specific analysis prompt             |
-| `ANALYZE_TICKER_EXEC`                     | `gpt-5.6-terra` | High      | Yes          | Research and analyze a ticker                       |
-| `BUILD_PORTFOLIO_BUILD_PROMPT`            | `gpt-5.6-luna`  | Medium    | No (default) | Build a portfolio-construction prompt               |
-| `BUILD_PORTFOLIO_EXEC`                    | `gpt-5.6-sol`   | High      | Yes          | Research and construct a portfolio                  |
-| `REVIEW_PORTFOLIO_BUILD_PROMPT`           | `gpt-5.6-luna`  | Medium    | No (default) | Build a portfolio-review prompt                     |
-| `REVIEW_PORTFOLIO_EXEC`                   | `gpt-5.6-sol`   | High      | Yes          | Research and review an existing portfolio           |
-| `REVIEW_PORTFOLIO_SUMMARIZE`              | `gpt-5.6-luna`  | Medium    | No (default) | Summarize a portfolio review for rebalance planning |
-| `REVIEW_PORTFOLIO_REBALANCE_BUILD_PROMPT` | `gpt-5.6-luna`  | Medium    | No (default) | Build a rebalance-planning prompt                   |
-| `REVIEW_PORTFOLIO_REBALANCE_EXEC`         | `gpt-5.6-sol`   | High      | Yes          | Research and produce an actionable rebalance plan   |
-| `SPOTLIGHT_PORTFOLIO_BUILD_PROMPT`        | `gpt-5.6-luna`  | Medium    | No (default) | Build a concise portfolio-risk prompt               |
-| `SPOTLIGHT_PORTFOLIO_EXEC`                | `gpt-5.6-terra` | High      | Yes          | Research and identify urgent portfolio risks        |
-| `ANALYZE_DIV_EVENT_RESEARCH`              | `gpt-5.6-terra` | High      | Yes          | Research sourced dividend-event evidence            |
-| `ANALYZE_DIV_EVENT_ASSESS`                | `gpt-5.6-terra` | High      | No           | Compare dividend strategies from validated evidence |
-| `ASX_LISTTINGS_EXTRACT`                   | `gpt-5.6-luna`  | Low       | No (default) | Extract structured listings from scraped ASX text   |
-| `ASX_LISTTINGS_RESEARCH` | `gpt-5.6-terra` | Medium | Yes | Run bounded first-pass research for one ASX listing |
-| `ASX_LISTTINGS_ANALYZE` | `gpt-5.6-terra` | Medium | No (default) | Produce a quick screening assessment from validated research |
-| `ASX_LISTTINGS_UNDERWRITTEN_RESEARCH` | `gpt-5.6-terra` | High | Yes | Research an explicitly underwritten listing with additional underwriting scrutiny |
-| `ASX_LISTTINGS_UNDERWRITTEN_ANALYZE` | `gpt-5.6-terra` | High | No (default) | Assess an explicitly underwritten listing and residual execution risk |
+| AI task                                   | Current model   | Reasoning | Web search   | Current objective                                                                 |
+|-------------------------------------------|-----------------|-----------|--------------|-----------------------------------------------------------------------------------|
+| `ANALYZE_TICKER_BUILD_PROMPT`             | `gpt-5.6-luna`  | Medium    | No (default) | Build a ticker-specific analysis prompt                                           |
+| `ANALYZE_TICKER_EXEC`                     | `gpt-5.6-terra` | High      | Yes          | Research and analyze a ticker                                                     |
+| `BUILD_PORTFOLIO_BUILD_PROMPT`            | `gpt-5.6-luna`  | Medium    | No (default) | Build a portfolio-construction prompt                                             |
+| `BUILD_PORTFOLIO_EXEC`                    | `gpt-5.6-sol`   | High      | Yes          | Research and construct a portfolio                                                |
+| `REVIEW_PORTFOLIO_BUILD_PROMPT`           | `gpt-5.6-luna`  | Medium    | No (default) | Build a portfolio-review prompt                                                   |
+| `REVIEW_PORTFOLIO_EXEC`                   | `gpt-5.6-sol`   | High      | Yes          | Research and review an existing portfolio                                         |
+| `REVIEW_PORTFOLIO_SUMMARIZE`              | `gpt-5.6-luna`  | Medium    | No (default) | Summarize a portfolio review for rebalance planning                               |
+| `REVIEW_PORTFOLIO_REBALANCE_BUILD_PROMPT` | `gpt-5.6-luna`  | Medium    | No (default) | Build a rebalance-planning prompt                                                 |
+| `REVIEW_PORTFOLIO_REBALANCE_EXEC`         | `gpt-5.6-sol`   | High      | Yes          | Research and produce an actionable rebalance plan                                 |
+| `SPOTLIGHT_PORTFOLIO_BUILD_PROMPT`        | `gpt-5.6-luna`  | Medium    | No (default) | Build a concise portfolio-risk prompt                                             |
+| `SPOTLIGHT_PORTFOLIO_EXEC`                | `gpt-5.6-terra` | High      | Yes          | Research and identify urgent portfolio risks                                      |
+| `ANALYZE_DIV_EVENT_RESEARCH`              | `gpt-5.6-terra` | High      | Yes          | Research sourced dividend-event evidence                                          |
+| `ANALYZE_DIV_EVENT_ASSESS`                | `gpt-5.6-terra` | High      | No           | Compare dividend strategies from validated evidence                               |
+| `ASX_LISTTINGS_EXTRACT`                   | `gpt-5.6-luna`  | Low       | No (default) | Extract structured listings from scraped ASX text                                 |
+| `ASX_LISTTINGS_RESEARCH`                  | `gpt-5.6-terra` | Medium    | Yes          | Run bounded first-pass research for one ASX listing                               |
+| `ASX_LISTTINGS_ANALYZE`                   | `gpt-5.6-terra` | Medium    | No (default) | Produce a quick screening assessment from validated research                      |
+| `ASX_LISTTINGS_UNDERWRITTEN_RESEARCH`     | `gpt-5.6-terra` | High      | Yes          | Research an explicitly underwritten listing with additional underwriting scrutiny |
+| `ASX_LISTTINGS_UNDERWRITTEN_ANALYZE`      | `gpt-5.6-terra` | High      | No (default) | Assess an explicitly underwritten listing and residual execution risk             |
 
 ## Flow review backlog
 
-### 1. Shared AI task execution and provider dispatch
-
-- **API or flow name:** Shared AI task execution and provider dispatch
-- **AI tasks involved:** All configured AI tasks
-- **Primary code:** `app\services\ai_helper.py`, `app\config.py`, `ai_tasks.env`, `ai_vendors.env`
-- **Summary of process flow:** Resolve a task ID to its configured vendor, tier, model, reasoning effort, and web-search
-  policy; dispatch the prompt to Azure OpenAI, OpenAI, OpenRouter, or Gemini; optionally configure web search and
-  structured JSON output; normalize completion, error, timing, and token-usage data into `LLMResponse`. OpenAI search
-  context and maximum tool calls are selected from the configured reasoning effort.
-- **Status:** Reviewed: **No** | Implemented: **No** | Done: **No**
-
-### 2. AI vendor and model discovery API
-
-- **API or flow name:** `GET /ai/vendors`
-- **AI tasks involved:** None; this is configuration discovery only
-- **Primary code:** `app\routers\ai.py`, `app\config.py`
-- **Summary of process flow:** Read initialized vendor, tier, and model configuration and return the available model
-  catalog. The endpoint does not invoke a model, but it exposes the models from which AI task configurations select.
-- **Status:** Reviewed: **No** | Implemented: **No** | Done: **No**
-
-### 3. Dividend-event analysis
-
-- **API or flow name:** `POST /ai/analyze_dividend_event`, `POST /ai/analyze_dividend_event_async`, and
-  `GET /ai/analyze_dividend_event_async/{task_id}`
-- **AI tasks involved:** `ANALYZE_DIV_EVENT_RESEARCH`, `ANALYZE_DIV_EVENT_ASSESS`
-- **Primary code:** `app\routers\ai_dividend.py`, `app\schemas\ai_dividend.py`,
-  `app\models\events_dividends.py`, `app\services\msai_analyze_div_event.py`
-- **Summary of process flow:** Validate typed event inputs and derive exchange-local phase; calculate distinct ex-date
-  open, close, intraday-low, later drawdown, pre-ex-close recovery, and per-strategy break-even metrics; run
-  Terra/High web research; canonicalize and verify its sources; then run a Terra/High no-web assessment. Deterministic
-  gates resolve the four-state recommendation, phase-aware caching controls freshness, and failed AI stages preserve
-  the deterministic baseline. The async API exposes separate POST start and GET poll operations.
-- **Status:** Reviewed: **Yes** | Implemented: **Yes** | Done: **Yes**
-
-### 4. Ticker analysis
+### 1. Ticker analysis
 
 - **API or flow name:** `POST /ai/analyze_ticker` and `POST /ai/analyze_ticker_async`
 - **AI tasks involved:** `ANALYZE_TICKER_BUILD_PROMPT`, `ANALYZE_TICKER_EXEC`
@@ -161,7 +127,7 @@ Task IDs below use their current code spelling, including `ASX_LISTTINGS`.
   flow as a background task and exposes start/poll states.
 - **Status:** Reviewed: **No** | Implemented: **No** | Done: **No**
 
-### 5. Portfolio construction
+### 2. Portfolio construction
 
 - **API or flow name:** `POST /ai/build_portfolio`, `POST /ai/build_portfolio_async`, and the no-holdings branch of
   `POST /ai/analyze_portfolio`
@@ -173,7 +139,7 @@ Task IDs below use their current code spelling, including `ASX_LISTTINGS`.
   variants run the same flow as a background task and expose start/poll states.
 - **Status:** Reviewed: **No** | Implemented: **No** | Done: **No**
 
-### 6. Portfolio spotlight
+### 3. Portfolio spotlight
 
 - **API or flow name:** `POST /ai/spotlight_portfolio` and `POST /ai/spotlight_portfolio_async`
 - **AI tasks involved:** `SPOTLIGHT_PORTFOLIO_BUILD_PROMPT`, `SPOTLIGHT_PORTFOLIO_EXEC`
@@ -184,18 +150,18 @@ Task IDs below use their current code spelling, including `ASX_LISTTINGS`.
   line and cache it for 72 hours. The async API runs the same flow as a background task and exposes start/poll states.
 - **Status:** Reviewed: **No** | Implemented: **No** | Done: **No**
 
-### 7. Portfolio analysis dispatcher
+### 4. Portfolio analysis dispatcher
 
 - **API or flow name:** `POST /ai/analyze_portfolio` and `POST /ai/analyze_portfolio_async`
 - **AI tasks involved:** Conditionally uses `BUILD_PORTFOLIO_BUILD_PROMPT` and `BUILD_PORTFOLIO_EXEC`, or the review and
-  rebalance tasks listed in entries 8 and 9
+  rebalance tasks listed in entries 5 and 6
 - **Primary code:** `app\routers\ai.py`
 - **Summary of process flow:** Inspect the submitted allocation. If it is empty or every holding has zero shares,
   dispatch to portfolio construction. Otherwise dispatch to existing-portfolio review and optionally request a
   rebalance plan. The async API runs the selected branch as a background task and exposes start/poll states.
 - **Status:** Reviewed: **No** | Implemented: **No** | Done: **No**
 
-### 8. Existing-portfolio review
+### 5. Existing-portfolio review
 
 - **API or flow name:** Existing-holdings branch of `POST /ai/analyze_portfolio` and
   `POST /ai/analyze_portfolio_async`
@@ -207,7 +173,7 @@ Task IDs below use their current code spelling, including `ASX_LISTTINGS`.
   requested, cache and return the review for 72 hours.
 - **Status:** Reviewed: **No** | Implemented: **No** | Done: **No**
 
-### 9. Portfolio rebalance extension
+### 6. Portfolio rebalance extension
 
 - **API or flow name:** Rebalance branch of `POST /ai/analyze_portfolio` and `POST /ai/analyze_portfolio_async`
 - **AI tasks involved:** `REVIEW_PORTFOLIO_BUILD_PROMPT`, `REVIEW_PORTFOLIO_EXEC`,
@@ -220,31 +186,7 @@ Task IDs below use their current code spelling, including `ASX_LISTTINGS`.
   Return both the original review and the generated plan, then cache the combined result for 72 hours.
 - **Status:** Reviewed: **No** | Implemented: **No** | Done: **No**
 
-### 10. ASX new-listings extraction and analysis
-
-- **API or flow name:** `GET /events/new_listings` and `GET /events/new_listings_async` for country `AU`
-- **AI tasks involved:** `ASX_LISTTINGS_EXTRACT`, `ASX_LISTTINGS_RESEARCH`, `ASX_LISTTINGS_ANALYZE`,
-  `ASX_LISTTINGS_UNDERWRITTEN_RESEARCH`, `ASX_LISTTINGS_UNDERWRITTEN_ANALYZE`
-- **Primary code:** `app\routers\events_listings.py`, `app\schemas\events_listings.py`,
-  `app\models\events_listings.py`, `app\services\msai_asx_listings.py`, `app\services\crawler.py`,
-  `app\utils\ai_reference.py`
-- **Summary of process flow:** Fetch the ASX upcoming-listings page; extract candidates through a strict structured
-  low-cost task; reject candidates without confirmed dates or with supplied non-positive monetary values while
-  retaining unavailable offer values as null; exclude listings before the current Sydney date; include listings
-  occurring today; sort current/future listings by the soonest date and keep five; then run isolated, screening-level
-  structured research and assessment stages per stock. Explicitly underwritten listings use dedicated Terra/High
-  research and assessment tasks with additional underwriting scrutiny; false or unknown underwriting states retain
-  the Terra/Medium path.
-  Research is capped at five high-value sources and avoids exhaustive diligence. Research sources are
-  retained and flagged as verified only when their URLs match provider-issued citations; empty or unmatched citation
-  lists produce unverified sources rather than failing the stock pipeline. Assessment receives those verification
-  flags with the validated research. Page extraction, per-listing research, per-listing assessment, and final aggregate
-  results are cached independently, so retries resume from the last successful stage. Cache identities include stage
-  inputs and task configuration; research, assessment, and aggregate TTLs shorten as the listing date approaches. The
-  async API runs the same service flow as a background task and exposes start/poll states.
-- **Status:** Reviewed: **Yes** | Implemented: **Yes** | Done: **Yes**
-
-### 11. Shared asynchronous AI task start and polling
+### 7. Shared asynchronous AI task start and polling
 
 - **API or flow name:** All AI-backed `*_async` endpoints
 - **AI tasks involved:** All tasks used by dividend analysis, ticker analysis, portfolio construction, portfolio
