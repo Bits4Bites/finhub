@@ -330,10 +330,10 @@ curl 'http://localhost:8000/events/new_listings?country=AU'
 
 Run the new-listings request in the background. Task state and results expire after one hour.
 
-| Parameter | Type  | Required    | Description                                                                     |
-|-----------|-------|-------------|---------------------------------------------------------------------------------|
+| Parameter | Type  | Required    | Description                                                                    |
+|-----------|-------|-------------|--------------------------------------------------------------------------------|
 | `country` | query | Conditional | Country code. Currently only `AU` is supported. Required when starting a task. |
-| `task_id` | query | Conditional | Task ID returned when starting a task. Required when polling.                   |
+| `task_id` | query | Conditional | Task ID returned when starting a task. Required when polling.                  |
 
 ```bash
 # Start a task
@@ -383,53 +383,68 @@ curl 'http://localhost:8000/ai/vendors'
 
 ---
 
-### `GET /ai/analyze_dividend_event`
+### `POST /ai/analyze_dividend_event`
 
-Analyze a dividend event using AI.
+Analyze a dividend event using deterministic historical metrics, sourced AI research, and a no-web strategy
+assessment. Estimates are gross and pre-tax.
 
-| Parameter    | Type  | Required | Description                                                                                                  |
-|--------------|-------|----------|--------------------------------------------------------------------------------------------------------------|
-| `symbol`     | query | Yes      | Stock symbol in YF format (`CBA.AX`) or `EXCHANGE:CODE` (`NASDAQ:AAPL`).                                     |
-| `ex_date`    | query | Yes      | Ex-dividend date in `YYYY-MM-DD` format.                                                                     |
-| `div_amount` | query | Yes      | Dividend amount as a float (e.g. `0.50`).                                                                    |
-| `intent`     | query | No       | Analysis intent/context. Defaults to `"Looking to capture the dividend or if post-div dip is worth buying"`. |
+| JSON field                                           | Required | Description                                                        |
+|------------------------------------------------------|----------|--------------------------------------------------------------------|
+| `symbol`                                             | Yes      | Symbol in YF (`CBA.AX`) or `EXCHANGE:CODE` (`NASDAQ:AAPL`) format. |
+| `ex_date`                                            | Yes      | Ex-dividend date in `YYYY-MM-DD` format.                           |
+| `dividend_amount`                                    | Yes      | Positive finite gross dividend per share.                          |
+| `transaction_costs.dividend_capture_per_share`       | No       | Non-negative round-trip per-share cost; defaults to zero.          |
+| `transaction_costs.post_dividend_discount_per_share` | No       | Non-negative round-trip per-share cost; defaults to zero.          |
+| `holding_period_days`                                | No       | Calendar-day analysis window from 1 through 365; defaults to 28.   |
 
 **Example:**
 
 ```bash
-curl 'http://localhost:8000/ai/analyze_dividend_event?symbol=AAPL&ex_date=2026-02-09&div_amount=0.26'
+curl -X POST 'http://localhost:8000/ai/analyze_dividend_event' \
+  -H 'Content-Type: application/json' \
+  -d '{"symbol":"NASDAQ:AAPL","ex_date":"2026-08-10","dividend_amount":0.26}'
 ```
 
-### `GET /ai/analyze_dividend_event_async`
+The response keeps deterministic ex-date open/close/intraday-low drops and later drawdown separate. It also returns
+recovery estimates for the pre-ex close and both strategy break-even targets, source-linked research, independent
+strategy assessments, and one of `DividendCapture`, `PostDividendDiscount`, `NoClearWinner`, or
+`InsufficientInsights`. If an AI stage fails, HTTP `502` still includes the deterministic baseline with
+`analysis_status=Failed`.
 
-Run dividend-event analysis in the background. Start a task with the analysis inputs, then poll using
-the returned task ID. Task state and results expire after one hour; completed analyses are cached for
-72 hours.
+Repairable assessment arithmetic mismatches return HTTP `200` with `analysis_status=CompleteWithWarnings`.
+`validation_warnings` identifies each application correction, and the affected strategy repeats the warning in
+`data_gaps`.
 
-| Parameter    | Type  | Required    | Description                                                                                                  |
-|--------------|-------|-------------|--------------------------------------------------------------------------------------------------------------|
-| `symbol`     | query | Conditional | Stock symbol. Required when starting a task.                                                                 |
-| `ex_date`    | query | Conditional | Ex-dividend date in `YYYY-MM-DD` format. Required when starting a task.                                      |
-| `div_amount` | query | Conditional | Dividend amount as a float. Required when starting a task.                                                   |
-| `intent`     | query | No          | Analysis intent/context. Defaults to `"Looking to capture the dividend or if post-div dip is worth buying"`. |
-| `task_id`    | query | Conditional | Task ID returned when starting a task. Required when polling.                                                |
+### `POST /ai/analyze_dividend_event_async`
+
+Start dividend-event analysis in the background using the same JSON body as the synchronous endpoint. Task state and
+results expire after one hour. Completed analysis cache freshness varies from one hour to 72 hours based on event
+phase and proximity.
+
+### `GET /ai/analyze_dividend_event_async/{task_id}`
+
+Poll a background dividend-event analysis task.
 
 ```bash
 # Start a task
-curl 'http://localhost:8000/ai/analyze_dividend_event_async?symbol=AAPL&ex_date=2026-02-09&div_amount=0.26'
+curl -X POST 'http://localhost:8000/ai/analyze_dividend_event_async' \
+  -H 'Content-Type: application/json' \
+  -d '{"symbol":"NASDAQ:AAPL","ex_date":"2026-08-10","dividend_amount":0.26}'
 
 # Poll a task
-curl 'http://localhost:8000/ai/analyze_dividend_event_async?task_id=<TASK_ID>'
+curl 'http://localhost:8000/ai/analyze_dividend_event_async/<TASK_ID>'
 ```
 
 Polling returns:
 
-| HTTP status | Task state  | Result                                             |
-|-------------|-------------|----------------------------------------------------|
-| `202`       | `RUNNING`   | The task is still running.                         |
-| `200`       | `COMPLETED` | The standard dividend-analysis payload in `data`.  |
-| `500`       | `FAILED`    | The background task failed.                        |
-| `404`       | —           | The task ID is unknown or its cache entry expired. |
+| HTTP status | Task state  | Result                                              |
+|-------------|-------------|-----------------------------------------------------|
+| `202`       | `RUNNING`   | The task is still running.                          |
+| `200`       | `COMPLETED` | The standard dividend-analysis payload in `data`.   |
+| `400`/`422` | `FAILED`    | Market input or history validation failed.          |
+| `502`       | `FAILED`    | An AI stage failed; deterministic data is retained. |
+| `500`       | `FAILED`    | An unexpected background task failure occurred.     |
+| `404`       | —           | The task ID is unknown or its cache entry expired.  |
 
 ---
 
@@ -626,12 +641,12 @@ curl -X POST 'http://localhost:8000/ai/spotlight_portfolio_async?task_id=<TASK_I
 
 Polling returns:
 
-| HTTP status | Task state  | Result                                             |
-|-------------|-------------|----------------------------------------------------|
-| `202`       | `RUNNING`   | The task is still running.                         |
+| HTTP status | Task state  | Result                                              |
+|-------------|-------------|-----------------------------------------------------|
+| `202`       | `RUNNING`   | The task is still running.                          |
 | `200`       | `COMPLETED` | The standard spotlight-portfolio payload in `data`. |
-| `500`       | `FAILED`    | The background task failed.                        |
-| `404`       | —           | The task ID is unknown or its cache entry expired. |
+| `500`       | `FAILED`    | The background task failed.                         |
+| `404`       | —           | The task ID is unknown or its cache entry expired.  |
 
 ---
 

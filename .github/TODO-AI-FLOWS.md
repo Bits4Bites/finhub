@@ -27,7 +27,8 @@ For each flow, assess:
   are satisfied
 - Input validation, prompt-injection boundaries, and sensitive-data handling
 - Structured-output contracts, validation, repair behavior, and failure handling
-- Caching, retries, timeouts, cancellation, idempotency, and cleanup
+- Cache identity and freshness, including whether TTL should vary by event phase, data volatility, or workflow state;
+  retries, timeouts, cancellation, idempotency, and cleanup
 - Test coverage and observability across stage boundaries
 
 ### AI task configuration scoring
@@ -80,6 +81,13 @@ The score is a decision aid, not a substitute for quality gates:
   replacement source.
 - Keep temporary provider-output models private to their flow and keep final caller-facing validated models in
   `app\models`. Put provider, market, and country constraints in the owning service rather than generic models.
+- Load source-controlled AI prompt templates through `app\utils\ai_prompt.py` so services share path validation,
+  non-empty content checks, and cached file content instead of implementing file I/O independently.
+- Prefer phase-aware caching over a fixed TTL when evidence freshness changes across an event lifecycle. Use shorter
+  TTLs near or during events and for active or failed work, and longer TTLs only for stable historical results. Cache
+  identity should include normalized inputs, the relevant exchange-local or evidence date, contract/prompt revision,
+  and AI task configuration so stale results cannot survive meaningful flow changes. Every review should identify and
+  fixture-test its freshness boundaries.
 
 ## Current AI task inventory
 
@@ -98,8 +106,8 @@ Task IDs below use their current code spelling, including `ASX_LISTTINGS`.
 | `REVIEW_PORTFOLIO_REBALANCE_EXEC`         | `gpt-5.6-sol`   | High      | Yes          | Research and produce an actionable rebalance plan   |
 | `SPOTLIGHT_PORTFOLIO_BUILD_PROMPT`        | `gpt-5.6-luna`  | Medium    | No (default) | Build a concise portfolio-risk prompt               |
 | `SPOTLIGHT_PORTFOLIO_EXEC`                | `gpt-5.6-terra` | High      | Yes          | Research and identify urgent portfolio risks        |
-| `ANALYZE_DIV_EVENT_BUILD_PROMPT`          | `gpt-5.6-luna`  | Medium    | No (default) | Build a dividend-event analysis prompt              |
-| `ANALYZE_DIV_EVENT_EXEC`                  | `gpt-5.6-sol`   | High      | Yes          | Research and evaluate a dividend strategy           |
+| `ANALYZE_DIV_EVENT_RESEARCH`              | `gpt-5.6-terra` | High      | Yes          | Research sourced dividend-event evidence            |
+| `ANALYZE_DIV_EVENT_ASSESS`                | `gpt-5.6-terra` | High      | No           | Compare dividend strategies from validated evidence |
 | `ASX_LISTTINGS_EXTRACT`                   | `gpt-5.6-luna`  | Low       | No (default) | Extract structured listings from scraped ASX text   |
 | `ASX_LISTTINGS_RESEARCH` | `gpt-5.6-terra` | Medium | Yes | Run bounded first-pass research for one ASX listing |
 | `ASX_LISTTINGS_ANALYZE` | `gpt-5.6-terra` | Medium | No (default) | Produce a quick screening assessment from validated research |
@@ -130,15 +138,18 @@ Task IDs below use their current code spelling, including `ASX_LISTTINGS`.
 
 ### 3. Dividend-event analysis
 
-- **API or flow name:** `GET /ai/analyze_dividend_event` and `GET /ai/analyze_dividend_event_async`
-- **AI tasks involved:** `ANALYZE_DIV_EVENT_BUILD_PROMPT`, `ANALYZE_DIV_EVENT_EXEC`
-- **Primary code:** `app\routers\ai.py`, `app\services\msai_analyze_div_event.py`,
-  `app\services\event.py`
-- **Summary of process flow:** Validate the ticker and calculate deterministic historical dividend-event metrics;
-  combine those metrics with the user intent in a prompt-writing task; pass the generated prompt to a research-enabled
-  analysis task; parse the returned JSON and copy selected fields into the dividend-event result; cache the result for
-  72 hours. The async API runs the same flow as a background task and exposes start/poll states.
-- **Status:** Reviewed: **No** | Implemented: **No** | Done: **No**
+- **API or flow name:** `POST /ai/analyze_dividend_event`, `POST /ai/analyze_dividend_event_async`, and
+  `GET /ai/analyze_dividend_event_async/{task_id}`
+- **AI tasks involved:** `ANALYZE_DIV_EVENT_RESEARCH`, `ANALYZE_DIV_EVENT_ASSESS`
+- **Primary code:** `app\routers\ai_dividend.py`, `app\schemas\ai_dividend.py`,
+  `app\models\events_dividends.py`, `app\services\msai_analyze_div_event.py`
+- **Summary of process flow:** Validate typed event inputs and derive exchange-local phase; calculate distinct ex-date
+  open, close, intraday-low, later drawdown, pre-ex-close recovery, and per-strategy break-even metrics; run
+  Terra/High web research; canonicalize and verify its sources; then run a Terra/High no-web assessment. Deterministic
+  gates resolve the four-state recommendation, phase-aware caching controls freshness, and failed AI stages preserve
+  the deterministic baseline. The async API exposes separate POST start and GET poll operations.
+- **Detailed review plan:** `.github\detailed_review_plan\03-dividend-event-analysis.md`
+- **Status:** Reviewed: **Yes** | Implemented: **Yes** | Done: **Yes**
 
 ### 4. Ticker analysis
 

@@ -69,6 +69,22 @@ class TestLlmTaskConfig:
             False,
         )
 
+    def test_dividend_tasks_split_web_research_from_assessment(self):
+        settings = config.LLMTaskSettings()
+        research_task = settings.tasks["analyze_div_event_research"]
+        assessment_task = settings.tasks["analyze_div_event_assess"]
+
+        assert (research_task.model, research_task.reasoning_effort, research_task.use_web_search) == (
+            "gpt-5.6-terra",
+            "High",
+            True,
+        )
+        assert (assessment_task.model, assessment_task.reasoning_effort, assessment_task.use_web_search) == (
+            "gpt-5.6-terra",
+            "High",
+            False,
+        )
+
 
 class TestAiExecPrompt:
     def test_ai_exec_prompt_uses_openai_path(self):

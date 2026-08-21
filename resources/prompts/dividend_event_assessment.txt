@@ -1,0 +1,42 @@
+Assess two dividend strategies using only the validated event, historical baseline, and research below.
+Return only the supplied structured JSON schema. Do not use web search or external knowledge.
+
+Assessment requirements:
+- Assess DividendCapture and PostDividendDiscount independently.
+- Use gross pre-tax values and the supplied per-strategy transaction costs. A zero cost is an explicit assumption.
+- DividendCapture is eligible only when the event phase is BeforeExDate.
+- For each eligible strategy, provide probability of positive net P&L within the holding window, expected entry and
+  exit ranges, P&L range, break-even range, recovery-day range, confidence, risk, rationale, assumptions, data gaps,
+  and reference IDs.
+- If an eligible strategy has zero break-even probability, set its recovery-day range to null.
+- Use InsufficientData eligibility when evidence cannot support required estimates.
+- For Ineligible or InsufficientData strategies, set all probability, price, P&L, break-even, and recovery estimates
+  to null.
+- Do not fabricate precision or turn missing values into zero.
+- Preserve the distinction between historical baseline estimates and evidence-adjusted estimates.
+- Estimate the evidence-adjusted ex-date close drop separately from later post-ex-date drawdown.
+- Keep evidence-adjusted drop amount, price percentage, dividend multiple, and estimated price arithmetically
+  consistent.
+- Return distinct evidence-adjusted recoveries for the pre-ex close, dividend-capture break-even, and
+  post-dividend-discount break-even targets.
+- Calculate dividend-capture break-even as expected entry price minus gross dividend plus its round-trip cost.
+- Calculate post-dividend-discount break-even as expected entry price plus its round-trip cost.
+- For an eligible strategy, its success_probability and recovery_days must equal the corresponding evidence-adjusted
+  break-even recovery values.
+- Recovery dates must equal the ex-date plus the corresponding calendar-day range and remain within the holding window.
+- Use only reference IDs supplied in the validated research.
+- Treat is_verified=false sources as unverified evidence and reduce confidence and data quality accordingly.
+- comparison_reference_ids must support the comparison rationale.
+- Do not introduce new facts, infer tax residency, provide after-tax values, or provide personalized investment advice.
+
+BEGIN_VALIDATED_EVENT
+{{EVENT_JSON}}
+END_VALIDATED_EVENT
+
+BEGIN_VALIDATED_HISTORICAL_BASELINE
+{{BASELINE_JSON}}
+END_VALIDATED_HISTORICAL_BASELINE
+
+BEGIN_VALIDATED_RESEARCH
+{{RESEARCH_JSON}}
+END_VALIDATED_RESEARCH
