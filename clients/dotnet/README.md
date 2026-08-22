@@ -59,6 +59,52 @@ use `AnalyzeDividendEventResponse`; async start and poll responses share `Analyz
 reusable `AsyncTaskInfo`/`TaskState` metadata. Poll with
 `POST /ai/analyze_dividend_event_async?task_id=<TASK_ID>`.
 
+## Portfolio construction and analysis
+
+The construction contracts cover:
+
+```http
+POST /ai/build_portfolio
+POST /ai/build_portfolio_async
+```
+
+```csharp
+using FinHub.Client.Models.Portfolios;
+using FinHub.Client.Schemas.PortfolioConstruction;
+
+var request = new BuildPortfolioRequest
+{
+    Country = "US",
+    InvestorTheme = "Durable growth with moderate risk.",
+    CurrentAllocation =
+    [
+        new PortfolioHolding
+        {
+            Ticker = "NASDAQ:AAPL",
+            NumShares = 10,
+            AvgPrice = 150.0,
+        },
+    ],
+};
+```
+
+`InvestorTheme` is required and `CurrentAllocation` defaults to an empty collection. The result is one
+`PortfolioConstruction` with `Scratch` or `Seeded` mode, verified positive seed holdings, allocation-only target
+positions, data-quality metadata, and canonical references. It contains no trade sequence or rebalance plan.
+Synchronous calls use `BuildPortfolioResponse`; async start and query-poll calls use
+`BuildPortfolioAsyncResponse`.
+
+The dispatcher endpoints:
+
+```http
+POST /ai/analyze_portfolio
+POST /ai/analyze_portfolio_async
+```
+
+use `AnalyzePortfolioResponse` and `AnalyzePortfolioAsyncResponse`. Their `Data` property is
+`IPortfolioAnalysisResult`: the included JSON converter selects `PortfolioConstruction` for the empty/all-zero
+construction branch and `AnalyzePortfolioResult` for the existing-holdings review branch.
+
 ## Portfolio spotlight
 
 The portfolio-spotlight contracts cover:
@@ -100,8 +146,10 @@ optional and has no client default. Risk levels are limited to `Critical`, `High
 - `FinHub.Client.Models.Dividends`: reusable dividend-event analysis domain contracts.
 - `FinHub.Client.Models.Events`: reusable event contracts.
 - `FinHub.Client.Models.Listings`: listing-domain contracts shared by listing APIs.
-- `FinHub.Client.Models.Portfolios`: reusable portfolio holdings, snapshots, risk actions, and spotlight results.
+- `FinHub.Client.Models.Portfolios`: reusable holdings, construction, analysis-union, snapshot, risk, and spotlight contracts.
 - `FinHub.Client.Schemas`: reusable synchronous/async API response envelopes and async task metadata.
 - `FinHub.Client.Schemas.DividendAnalysis`: request and response schemas for dividend-event analysis.
 - `FinHub.Client.Schemas.NewListings`: schemas specific to the new-listings API.
+- `FinHub.Client.Schemas.PortfolioAnalysis`: request and response schemas for the review-or-construction dispatcher.
+- `FinHub.Client.Schemas.PortfolioConstruction`: request and response schemas for portfolio construction.
 - `FinHub.Client.Schemas.PortfolioSpotlight`: request and response schemas for portfolio spotlight.
