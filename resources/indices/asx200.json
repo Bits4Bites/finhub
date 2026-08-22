@@ -1,5 +1,5 @@
 {
-    "date": "2026-08-15",
+    "date": "2026-08-22",
     "data": [
         {
             "symbol": "ASX:360",
@@ -720,11 +720,6 @@
             "symbol": "ASX:QAN",
             "company": "QANTAS AIRWAYS LIMITED",
             "sector": "Travel, Leisure & Tourism, Transportation & Logistics"
-        },
-        {
-            "symbol": "ASX:QUB",
-            "company": "QUBE HOLDINGS LIMITED",
-            "sector": "Transportation & Logistics"
         },
         {
             "symbol": "ASX:REA",
