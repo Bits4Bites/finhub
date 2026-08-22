@@ -10,6 +10,16 @@ MAX_TICKER_LENGTH = 32
 PortfolioPriceSource = Literal["MarketData", "Client"]
 
 
+def normalize_canonical_ticker(value: object) -> object:
+    if not isinstance(value, str):
+        return value
+    normalized = value.strip().upper()
+    parts = normalized.split(":")
+    if len(parts) != 2 or not all(parts) or any(character.isspace() for character in normalized):
+        raise ValueError("ticker must use canonical EXCHANGE:CODE format")
+    return normalized
+
+
 class PortfolioHolding(BaseModel):
     """A caller-supplied position shared by portfolio features."""
 
@@ -137,7 +147,12 @@ class PortfolioVerifiedHolding(BaseModel):
         description="Optional user-supplied metadata associated with the holding.",
     )
 
-    @field_validator("ticker", "exchange", "currency", mode="before")
+    @field_validator("ticker", mode="before")
+    @classmethod
+    def normalize_ticker(cls, value: object) -> object:
+        return normalize_canonical_ticker(value)
+
+    @field_validator("exchange", "currency", mode="before")
     @classmethod
     def normalize_code(cls, value: object) -> object:
         return value.strip().upper() if isinstance(value, str) else value

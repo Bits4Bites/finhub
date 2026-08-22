@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.schemas import async_task
+from app.services import portfolio_verification
 from tests import portfolio_spotlight_fixtures
 
 client = TestClient(app)
@@ -112,12 +113,10 @@ def test_post_rejects_removed_rebalance_plan_input():
 
 
 def test_post_maps_portfolio_validation_failure_to_422():
-    from app.services import msai_spotlight_portfolio as service
-
     with patch(
         "app.routers.ai_portfolio_spotlight.services_spotlight.ai_spotlight_portfolio",
         new_callable=AsyncMock,
-        side_effect=service.PortfolioSpotlightInputError("Unknown ticker"),
+        side_effect=portfolio_verification.PortfolioInputError("Unknown ticker"),
     ):
         response = client.post("/ai/spotlight_portfolio", json=_request_body())
 

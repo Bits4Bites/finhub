@@ -97,8 +97,9 @@ Task IDs below use their current code spelling, including `ASX_LISTTINGS`.
 |-------------------------------------------|-----------------|-----------|--------------|-----------------------------------------------------------------------------------|
 | `ANALYZE_TICKER_BUILD_PROMPT`             | `gpt-5.6-luna`  | Medium    | No (default) | Build a ticker-specific analysis prompt                                           |
 | `ANALYZE_TICKER_EXEC`                     | `gpt-5.6-terra` | High      | Yes          | Research and analyze a ticker                                                     |
-| `BUILD_PORTFOLIO_BUILD_PROMPT`            | `gpt-5.6-luna`  | Medium    | No (default) | Build a portfolio-construction prompt                                             |
-| `BUILD_PORTFOLIO_EXEC`                    | `gpt-5.6-sol`   | High      | Yes          | Research and construct a portfolio                                                |
+| `BUILD_PORTFOLIO_PLAN`                    | `gpt-5.6-terra` | Medium    | No (default) | Build a validated, theme-aware portfolio-construction plan                        |
+| `BUILD_PORTFOLIO_RESEARCH`                | `gpt-5.6-terra` | High      | Yes          | Research a bounded, sourced candidate universe                                    |
+| `BUILD_PORTFOLIO_CONSTRUCT`               | `gpt-5.6-terra` | High      | No (default) | Select and allocate one evidence-backed target portfolio                          |
 | `REVIEW_PORTFOLIO_BUILD_PROMPT`           | `gpt-5.6-luna`  | Medium    | No (default) | Build a portfolio-review prompt                                                   |
 | `REVIEW_PORTFOLIO_EXEC`                   | `gpt-5.6-sol`   | High      | Yes          | Research and review an existing portfolio                                         |
 | `REVIEW_PORTFOLIO_SUMMARIZE`              | `gpt-5.6-luna`  | Medium    | No (default) | Summarize a portfolio review for rebalance planning                               |
@@ -132,23 +133,29 @@ Task IDs below use their current code spelling, including `ASX_LISTTINGS`.
 
 - **API or flow name:** `POST /ai/build_portfolio`, `POST /ai/build_portfolio_async`, and the no-holdings branch of
   `POST /ai/analyze_portfolio`
-- **AI tasks involved:** `BUILD_PORTFOLIO_BUILD_PROMPT`, `BUILD_PORTFOLIO_EXEC`
-- **Primary code:** `app\routers\ai.py`, `app\services\msai_build_portfolio.py`
-- **Summary of process flow:** Build an investor profile from country, theme, and optional existing positions; ask one
-  model to produce a self-contained portfolio-construction prompt; pass the generated prompt to a research-enabled
-  model that selects securities and allocations; return the Markdown portfolio and cache it for 72 hours. Async API
-  variants run the same flow as a background task and expose start/poll states.
-- **Status:** Reviewed: **No** | Implemented: **No** | Done: **No**
+- **AI tasks involved:** `BUILD_PORTFOLIO_PLAN`, `BUILD_PORTFOLIO_RESEARCH`, `BUILD_PORTFOLIO_CONSTRUCT`
+- **Primary code:** `app\routers\ai_portfolio_construction.py`, `app\schemas\ai_portfolio_construction.py`,
+  `app\models\ai_portfolio_construction.py`, `app\services\portfolio_verification.py`,
+  `app\services\msai_build_portfolio.py`
+- **Summary of process flow:** Require a non-blank investor theme; ignore zero-share positions; verify positive seed
+  holdings; build a structured theme-aware plan; research a bounded candidate set with canonical sources; construct
+  one allocation-only target portfolio; and validate tickers, allocations, and references deterministically.
+  Verification is cached for five minutes and each AI stage plus the final result for one hour. Async start and
+  query-poll calls expose the same structured result and preserve `422`/`502` failures.
+- **Detailed review:** [Portfolio construction review](detailed_review_plan/02-portfolio-construction.md)
+- **Status:** Reviewed: **Yes** | Implemented: **Yes** | Done: **Yes**
 
 ### 3. Portfolio analysis dispatcher
 
 - **API or flow name:** `POST /ai/analyze_portfolio` and `POST /ai/analyze_portfolio_async`
-- **AI tasks involved:** Conditionally uses `BUILD_PORTFOLIO_BUILD_PROMPT` and `BUILD_PORTFOLIO_EXEC`, or the review and
-  rebalance tasks listed in entries 4 and 5
+- **AI tasks involved:** Conditionally uses `BUILD_PORTFOLIO_PLAN`, `BUILD_PORTFOLIO_RESEARCH`, and
+  `BUILD_PORTFOLIO_CONSTRUCT`, or the review and rebalance tasks listed in entries 4 and 5
 - **Primary code:** `app\routers\ai.py`
 - **Summary of process flow:** Inspect the submitted allocation. If it is empty or every holding has zero shares,
-  dispatch to portfolio construction. Otherwise dispatch to existing-portfolio review and optionally request a
-  rebalance plan. The async API runs the selected branch as a background task and exposes start/poll states.
+  require a non-blank investor theme and dispatch to structured portfolio construction. Otherwise dispatch to
+  existing-portfolio review and optionally request a rebalance plan. The response contract is a union of the
+  structured construction result and the legacy review result. The async API runs the selected branch as a background
+  task and exposes start/poll states.
 - **Status:** Reviewed: **No** | Implemented: **No** | Done: **No**
 
 ### 4. Existing-portfolio review

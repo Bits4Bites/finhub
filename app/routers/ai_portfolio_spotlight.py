@@ -5,6 +5,7 @@ from fastapi import APIRouter, BackgroundTasks, Body, HTTPException, Query, Resp
 from ..schemas import ai_portfolio_spotlight as schemas_spotlight
 from ..schemas import async_task
 from ..services import msai_spotlight_portfolio as services_spotlight
+from ..services import portfolio_verification
 from . import async_task as router_async_task
 
 router = APIRouter(prefix="/ai", tags=["ai"])
@@ -21,12 +22,12 @@ async def _analyze(
             country=request.country,
             investor_theme=request.investor_theme,
         )
-    except services_spotlight.PortfolioSpotlightInputError as exc:
+    except portfolio_verification.PortfolioInputError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=str(exc),
         ) from exc
-    except services_spotlight.PortfolioSpotlightVerificationError as exc:
+    except portfolio_verification.PortfolioVerificationError as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=str(exc),

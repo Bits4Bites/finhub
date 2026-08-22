@@ -7,6 +7,7 @@ import pytest
 
 from app.services import ai_helper
 from app.services import msai_spotlight_portfolio as service
+from app.services import portfolio_verification as verification
 from app.utils import ai_reference as ai_reference_utils
 from tests import portfolio_spotlight_fixtures
 
@@ -101,7 +102,7 @@ def _assessment_response_data(portfolio_id: str = "portfolio-id") -> dict[str, o
 
 def test_empty_portfolio_skips_verification_and_ai():
     with (
-        patch.object(service.yf, "Ticker") as mock_ticker,
+        patch.object(verification.yf, "Ticker") as mock_ticker,
         patch.object(service.ai_helper, "ai_exec_task", new_callable=AsyncMock) as mock_ai_exec,
     ):
         result = asyncio.run(
@@ -132,12 +133,17 @@ def test_zero_share_positions_return_empty_without_ai():
 
 def test_verification_uses_current_market_data_and_calculates_snapshot():
     with (
-        patch.object(service.cache, "get", new_callable=AsyncMock, return_value=None),
-        patch.object(service.cache, "set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
-        patch.object(service.yf, "Ticker", return_value=_ticker(_ticker_info())),
+        patch.object(verification.cache, "get", new_callable=AsyncMock, return_value=None),
+        patch.object(
+            verification.cache,
+            "set",
+            new_callable=AsyncMock,
+            return_value=True,
+        ) as mock_cache_set,
+        patch.object(verification.yf, "Ticker", return_value=_ticker(_ticker_info())),
     ):
         snapshot = asyncio.run(
-            service._verify_portfolio(
+            verification.verify_portfolio(
                 [portfolio_spotlight_fixtures.request_holding()],
                 country="US",
             )
@@ -158,12 +164,12 @@ def test_verification_uses_current_market_data_and_calculates_snapshot():
 def test_verification_uses_client_price_only_as_fallback():
     info = _ticker_info(price=None)
     with (
-        patch.object(service.cache, "get", new_callable=AsyncMock, return_value=None),
-        patch.object(service.cache, "set", new_callable=AsyncMock, return_value=True),
-        patch.object(service.yf, "Ticker", return_value=_ticker(info)),
+        patch.object(verification.cache, "get", new_callable=AsyncMock, return_value=None),
+        patch.object(verification.cache, "set", new_callable=AsyncMock, return_value=True),
+        patch.object(verification.yf, "Ticker", return_value=_ticker(info)),
     ):
         snapshot = asyncio.run(
-            service._verify_portfolio(
+            verification.verify_portfolio(
                 [portfolio_spotlight_fixtures.request_holding()],
                 country="US",
             )
@@ -179,11 +185,11 @@ def test_verification_rejects_duplicate_canonical_tickers():
         portfolio_spotlight_fixtures.request_holding("NASDAQ:AAPL"),
     ]
     with (
-        patch.object(service.cache, "get", new_callable=AsyncMock, return_value=None),
-        patch.object(service.yf, "Ticker", return_value=_ticker(_ticker_info())),
-        pytest.raises(service.PortfolioSpotlightInputError, match="Duplicate"),
+        patch.object(verification.cache, "get", new_callable=AsyncMock, return_value=None),
+        patch.object(verification.yf, "Ticker", return_value=_ticker(_ticker_info())),
+        pytest.raises(verification.PortfolioInputError, match="Duplicate"),
     ):
-        asyncio.run(service._verify_portfolio(positions, country="US"))
+        asyncio.run(verification.verify_portfolio(positions, country="US"))
 
 
 def test_verification_rejects_mixed_currency_portfolio():
@@ -196,11 +202,11 @@ def test_verification_rejects_mixed_currency_portfolio():
         _ticker(_ticker_info(symbol="MSFT", currency="AUD")),
     ]
     with (
-        patch.object(service.cache, "get", new_callable=AsyncMock, return_value=None),
-        patch.object(service.yf, "Ticker", side_effect=tickers),
-        pytest.raises(service.PortfolioSpotlightInputError, match="Mixed-currency"),
+        patch.object(verification.cache, "get", new_callable=AsyncMock, return_value=None),
+        patch.object(verification.yf, "Ticker", side_effect=tickers),
+        pytest.raises(verification.PortfolioInputError, match="Mixed-currency"),
     ):
-        asyncio.run(service._verify_portfolio(positions, country="US"))
+        asyncio.run(verification.verify_portfolio(positions, country="US"))
 
 
 @pytest.mark.parametrize(
@@ -474,10 +480,10 @@ def test_full_flow_reuses_final_analysis_cache_after_verification():
     cached = portfolio_spotlight_fixtures.analysis()
     with (
         patch.object(
-            service,
-            "_verify_portfolio",
+            service.portfolio_verification,
+            "verify_portfolio",
             new_callable=AsyncMock,
-            return_value=portfolio_spotlight_fixtures.snapshot(),
+            return_value=portfolio_spotlight_fixtures.verified_portfolio(),
         ),
         patch.object(
             service.cache,
@@ -509,10 +515,10 @@ def test_full_flow_without_theme_uses_theme_neutral_plan(investor_theme):
     assessment = portfolio_spotlight_fixtures.assessment()
     with (
         patch.object(
-            service,
-            "_verify_portfolio",
+            service.portfolio_verification,
+            "verify_portfolio",
             new_callable=AsyncMock,
-            return_value=portfolio_spotlight_fixtures.snapshot(),
+            return_value=portfolio_spotlight_fixtures.verified_portfolio(),
         ) as mock_verify,
         patch.object(service.cache, "get", new_callable=AsyncMock, return_value=None),
         patch.object(service.cache, "set", new_callable=AsyncMock, return_value=True),

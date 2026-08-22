@@ -2,12 +2,10 @@ from __future__ import annotations
 
 import json
 import logging
-import math
 from datetime import UTC, datetime
 from typing import Annotated, Literal, Self
 
 import openai
-import yfinance as yf
 from pydantic import Field, ValidationError, model_validator
 
 from .. import config
@@ -18,14 +16,12 @@ from ..models import types as models_types
 from ..utils import ai_prompt as ai_prompt_utils
 from ..utils import ai_reference as ai_reference_utils
 from ..utils import cache, conv
-from . import ai_helper
+from . import ai_helper, portfolio_verification
 
-_VERIFICATION_CACHE_NAMESPACE = "portfolio-spotlight-verification-v1"
 _PLAN_CACHE_NAMESPACE = "portfolio-spotlight-plan-v1"
 _RESEARCH_CACHE_NAMESPACE = "portfolio-spotlight-research-v1"
 _ASSESSMENT_CACHE_NAMESPACE = "portfolio-spotlight-assessment-v1"
 _ANALYSIS_CACHE_NAMESPACE = "portfolio-spotlight-analysis-v1"
-_VERIFICATION_CACHE_TTL = 5 * 60
 _AI_STAGE_CACHE_TTL = 60 * 60
 _PLAN_TASK = "SPOTLIGHT_PORTFOLIO_PLAN"
 _RESEARCH_TASK = "SPOTLIGHT_PORTFOLIO_RESEARCH"
@@ -38,14 +34,6 @@ _RESEARCH_SCHEMA_NAME = "portfolio_spotlight_research"
 _ASSESSMENT_SCHEMA_NAME = "portfolio_spotlight_assessment"
 
 _ResearchCategory = Literal["Issuer", "Sector", "Macro", "Portfolio", "Liquidity", "Valuation"]
-
-
-class PortfolioSpotlightInputError(ValueError):
-    pass
-
-
-class PortfolioSpotlightVerificationError(RuntimeError):
-    pass
 
 
 class PortfolioSpotlightAIError(RuntimeError):
@@ -158,13 +146,17 @@ async def ai_spotlight_portfolio(
 
     normalized_country = conv.country_to_iso2(country.strip())
     if not normalized_country:
-        raise PortfolioSpotlightInputError("Unsupported or unknown country")
+        raise portfolio_verification.PortfolioInputError("Unsupported or unknown country")
 
     active_positions = [position.model_copy(deep=True) for position in portfolio if position.num_shares > 0]
     if not active_positions:
         return _empty_portfolio_analysis()
 
-    snapshot = await _verify_portfolio(active_positions, country=normalized_country)
+    verified_portfolio = await portfolio_verification.verify_portfolio(
+        active_positions,
+        country=normalized_country,
+    )
+    snapshot = models_spotlight.PortfolioSpotlightSnapshot.model_validate(verified_portfolio.model_dump())
     normalized_theme = (investor_theme or "").strip() or None
 
     analysis_cache_key = _analysis_cache_key(snapshot, normalized_theme)
@@ -213,145 +205,6 @@ def _empty_portfolio_analysis() -> models_spotlight.PortfolioSpotlightAnalysis:
         validation_warnings=[],
         references=[],
     )
-
-
-async def _verify_portfolio(
-    portfolio: list[models_portfolio.PortfolioHolding],
-    *,
-    country: str,
-) -> models_spotlight.PortfolioSpotlightSnapshot:
-    serialized_positions = json.dumps(
-        [position.model_dump(mode="json") for position in sorted(portfolio, key=lambda position: position.ticker)],
-        sort_keys=True,
-    )
-    cache_key = cache.generate_key(
-        _VERIFICATION_CACHE_NAMESPACE,
-        country,
-        serialized_positions,
-    )
-    cached_snapshot = await cache.get(cache_key)
-    if cached_snapshot is not None:
-        return _cached_snapshot(cached_snapshot)
-
-    snapshot = _build_verified_snapshot(portfolio, country=country)
-    await cache.set(
-        cache_key,
-        snapshot.model_dump(mode="json"),
-        ttl=_VERIFICATION_CACHE_TTL,
-    )
-    return snapshot
-
-
-def _build_verified_snapshot(
-    portfolio: list[models_portfolio.PortfolioHolding],
-    *,
-    country: str,
-) -> models_spotlight.PortfolioSpotlightSnapshot:
-    as_of = datetime.now(UTC)
-    verified_data: list[dict[str, object]] = []
-    data_gaps: list[str] = []
-    seen_tickers: set[str] = set()
-    currencies: set[str] = set()
-
-    for position in sorted(portfolio, key=lambda item: item.ticker):
-        yf_symbol = conv.to_yf_symbol_format(position.ticker)
-        try:
-            ticker = yf.Ticker(yf_symbol)
-            info = ticker.info or {}
-        except Exception as exc:
-            raise PortfolioSpotlightVerificationError(f"Unable to verify ticker '{position.ticker}'") from exc
-
-        quote_type = str(info.get("quoteType") or "").upper()
-        if quote_type not in config.ALLOWED_QUOTE_TYPES:
-            raise PortfolioSpotlightInputError(f"Unsupported or unknown ticker '{position.ticker}'")
-
-        canonical_ticker = conv.to_exch_symb_format(ticker=ticker).strip().upper()
-        if not canonical_ticker or canonical_ticker.startswith(":") or canonical_ticker.endswith(":"):
-            raise PortfolioSpotlightInputError(f"Unable to normalize ticker '{position.ticker}'")
-        if canonical_ticker in seen_tickers:
-            raise PortfolioSpotlightInputError(f"Duplicate portfolio ticker '{canonical_ticker}'")
-        seen_tickers.add(canonical_ticker)
-
-        exchange = conv.normalize_exchange_code(str(info.get("fullExchangeName") or info.get("exchange") or ""))
-        if not exchange:
-            raise PortfolioSpotlightInputError(f"Ticker '{canonical_ticker}' has no exchange")
-
-        currency = str(info.get("currency") or "").strip().upper()
-        if not currency:
-            raise PortfolioSpotlightInputError(f"Ticker '{canonical_ticker}' has no currency")
-        currencies.add(currency)
-
-        market_price = _positive_finite_number(info.get("regularMarketPrice"))
-        if market_price is None:
-            market_price = _positive_finite_number(info.get("currentPrice"))
-        if market_price is not None:
-            price_source: models_portfolio.PortfolioPriceSource = "MarketData"
-        elif position.market_price is not None:
-            market_price = position.market_price
-            price_source = "Client"
-            data_gaps.append(
-                f"Used the client-supplied market price for {canonical_ticker} because current market data was unavailable."
-            )
-        else:
-            raise PortfolioSpotlightInputError(f"Ticker '{canonical_ticker}' has no current market price")
-
-        market_value = position.num_shares * market_price
-        verified_data.append(
-            {
-                "ticker": canonical_ticker,
-                "company_name": str(info.get("longName") or info.get("shortName") or "").strip() or None,
-                "exchange": exchange,
-                "currency": currency,
-                "num_shares": position.num_shares,
-                "avg_price": position.avg_price,
-                "market_price": market_price,
-                "price_source": price_source,
-                "market_value": market_value,
-                "target_allocation": position.target_allocation,
-                "tags": position.tags,
-            }
-        )
-
-    if len(currencies) != 1:
-        raise PortfolioSpotlightInputError("Mixed-currency portfolios are not supported")
-
-    total_market_value = sum(float(holding["market_value"]) for holding in verified_data)
-    if not math.isfinite(total_market_value) or total_market_value <= 0:
-        raise PortfolioSpotlightInputError("Portfolio market value must be positive")
-
-    holdings = []
-    for holding in verified_data:
-        current_allocation = float(holding["market_value"]) / total_market_value
-        target_allocation = holding["target_allocation"]
-        avg_price = float(holding["avg_price"])
-        num_shares = float(holding["num_shares"])
-        market_price = float(holding["market_price"])
-        holdings.append(
-            models_portfolio.PortfolioVerifiedHolding(
-                **holding,
-                current_allocation=current_allocation,
-                allocation_drift=(
-                    current_allocation - float(target_allocation) if target_allocation is not None else None
-                ),
-                unrealized_profit_loss=((market_price - avg_price) * num_shares if avg_price > 0 else None),
-            )
-        )
-
-    return models_spotlight.PortfolioSpotlightSnapshot(
-        as_of=as_of,
-        country=country,
-        currency=next(iter(currencies)),
-        total_market_value=total_market_value,
-        holdings=holdings,
-        data_gaps=list(dict.fromkeys(data_gaps))[:20],
-    )
-
-
-def _positive_finite_number(value: object) -> float | None:
-    if isinstance(value, bool) or not isinstance(value, int | float):
-        return None
-    number = float(value)
-    return number if math.isfinite(number) and number > 0 else None
 
 
 def _investor_theme_context(investor_theme: str | None) -> str:
@@ -721,17 +574,6 @@ def _task_cache_identity(task_id: str) -> str:
         },
         sort_keys=True,
     )
-
-
-def _cached_snapshot(value: object) -> models_spotlight.PortfolioSpotlightSnapshot:
-    try:
-        return (
-            value.model_copy(deep=True)
-            if isinstance(value, models_spotlight.PortfolioSpotlightSnapshot)
-            else models_spotlight.PortfolioSpotlightSnapshot.model_validate(value)
-        )
-    except (TypeError, ValidationError) as exc:
-        raise RuntimeError("Portfolio spotlight verification cache contains an invalid value") from exc
 
 
 def _cached_plan(value: object) -> _PortfolioAnalysisPlan:

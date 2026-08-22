@@ -1,8 +1,8 @@
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from ..models import ai as models_ai
+from ..models import ai_portfolio_construction as models_construction
 from ..models import portfolio as models_portfolio
-from ..services import ai as services_ai
 from ..services import msai_analyze_ticker as service_analyze_ticker
 from . import async_task
 from .base_req_resp import BaseRequest, BaseResponse
@@ -39,20 +39,30 @@ class AnalyzePortfolioRequest(BaseRequest):
         default=[],
         description="Current holdings; an empty list requests construction of a new portfolio.",
     )
-    investor_theme: str = Field(
-        default=services_ai.DEFAULT_INVESTOR_THEME,
-        description="Investor risk tolerance, horizon, goals, and portfolio preferences.",
+    investor_theme: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=4000,
+        description="Investor context; required for construction and optional for existing-portfolio review.",
     )
     rebalance_plan: bool = Field(
         default=False,
         description="Whether a review may produce a major-rebalance plan when one is needed.",
     )
 
+    @field_validator("investor_theme", mode="before")
+    @classmethod
+    def normalize_investor_theme(cls, value: object) -> object:
+        if not isinstance(value, str):
+            return value
+        normalized = value.strip()
+        return normalized or None
 
-class AnalyzePortfolioResponse(AnalysisResponse):
-    """Response envelope containing a portfolio-construction analysis."""
 
-    pass
+class AnalyzePortfolioResponse(
+    BaseResponse[models_ai.AnalyzePortfolioResult | models_construction.PortfolioConstruction]
+):
+    """Response envelope containing a portfolio review or constructed target portfolio."""
 
 
 class ReviewPortfolioResponse(BaseResponse[models_ai.AnalyzePortfolioResult]):
@@ -78,9 +88,7 @@ class AnalyzeTickerAsyncResponse(async_task.AsyncTaskResponse[models_ai.Analysis
     """Background-task response for ticker analysis."""
 
 
-class BuildPortfolioAsyncResponse(async_task.AsyncTaskResponse[models_ai.AnalyzePortfolioResult]):
-    """Background-task response for portfolio construction."""
-
-
-class AnalyzePortfolioAsyncResponse(async_task.AsyncTaskResponse[models_ai.AnalyzePortfolioResult]):
+class AnalyzePortfolioAsyncResponse(
+    async_task.AsyncTaskResponse[models_ai.AnalyzePortfolioResult | models_construction.PortfolioConstruction]
+):
     """Background-task response for portfolio review or construction."""

@@ -502,16 +502,16 @@ Polling returns:
 
 ### `POST /ai/build_portfolio`
 
-Build a new portfolio using AI assistance.
+Construct one research-backed target portfolio from a required investor theme. With no positive-share positions the
+flow constructs from scratch; otherwise it verifies positive starting holdings and uses them as seed context.
 
 **Request Body (JSON):**
 
-| Field                | Type              | Required | Description                                                               |
-|----------------------|-------------------|----------|---------------------------------------------------------------------------|
-| `current_allocation` | `PortfolioHolding[]` | No       | List of existing holdings (see fields below).                             |
-| `country`            | `string`          | Yes      | Required country context for the portfolio (e.g. `AU`, `US`).             |
-| `investor_theme`     | `string`          | No       | Investor theme/preference for the analysis. Defaults to a built-in theme. |
-| `rebalance_plan`     | `boolean`         | No       | Ignored; this endpoint only builds a portfolio.                           |
+| Field                | Type                 | Required | Description                                                                                  |
+|----------------------|----------------------|----------|----------------------------------------------------------------------------------------------|
+| `country`            | `string`             | Yes      | ISO code or country name, from 2 through 64 characters.                                      |
+| `investor_theme`     | `string`             | Yes      | Non-blank goals, constraints, preferences, horizon, and risk context; maximum 4,000 characters. |
+| `current_allocation` | `PortfolioHolding[]` | No       | Up to 50 starting positions; defaults to `[]`, and zero-share positions are ignored.         |
 
 Each `PortfolioHolding` object:
 
@@ -532,20 +532,46 @@ curl -X POST 'http://localhost:8000/ai/build_portfolio' \
   -d '{"country": "AU", "investor_theme": "growth with moderate risk"}'
 ```
 
-Response `data.analysis` contains the premium AI's generated portfolio. This endpoint does not generate a rebalance plan.
+Unknown request fields, including `rebalance_plan`, are rejected. Duplicate normalized request tickers are also
+rejected. Positive starting holdings are verified against current market data; duplicate canonical tickers and
+mixed-currency seeds are invalid.
+
+The `data` object contains:
+
+| Field                     | Description                                                                                         |
+|---------------------------|-----------------------------------------------------------------------------------------------------|
+| `as_of`                   | Timezone-aware finalization timestamp.                                                              |
+| `construction_status`     | `Complete` or `CompleteWithWarnings`.                                                               |
+| `construction_mode`       | `Scratch` or `Seeded`.                                                                              |
+| `country`                 | Normalized ISO 3166-1 alpha-2 country code.                                                         |
+| `investor_theme`          | Normalized theme used by every AI stage.                                                            |
+| `summary`                 | Concise explanation of the target portfolio.                                                        |
+| `verified_seed_holdings`  | Verified positive starting holdings; empty in `Scratch` mode.                                       |
+| `target_portfolio`        | Three through 20 researched target positions whose `allocation` values sum to `1.0`.                |
+| `overall_data_quality`    | `High`, `Medium`, `Low`, or `Insufficient`.                                                         |
+| `data_gaps`               | Limitations found during verification, planning, research, or construction.                         |
+| `validation_warnings`     | Source-verification warnings.                                                                       |
+| `references`              | Canonical HTTPS sources cited by target positions.                                                  |
+
+Each target position contains `ticker`, optional `company_name`, `allocation`, `role`, `rationale`, and
+`reference_ids`. The response contains allocation percentages only: it does not invent an investment amount, share
+counts, costs, trades, or a rebalance plan.
+
+The quality-first flow is seed verification, structured theme-aware planning, sourced candidate research, structured
+portfolio construction, and deterministic final validation. Verification is cached for five minutes; planning,
+research, construction, and the final result are independently cached for one hour.
 
 ### `POST /ai/build_portfolio_async`
 
 Build a portfolio in the background. Start a task with the same JSON request body as
 `/ai/build_portfolio`, then poll by posting to this endpoint with the returned task ID. Task state and
-results expire after one hour; completed portfolio results are cached for 72 hours.
+results expire after one hour.
 
 | Parameter            | Location  | Required    | Description                                                   |
 |----------------------|-----------|-------------|---------------------------------------------------------------|
 | `current_allocation` | JSON body | No          | Optional existing holdings used when starting a task.         |
 | `country`            | JSON body | Conditional | Country context. Required when starting a task.               |
-| `investor_theme`     | JSON body | No          | Optional investor theme used when starting a task.            |
-| `rebalance_plan`     | JSON body | No          | Ignored; this endpoint only builds a portfolio.               |
+| `investor_theme`     | JSON body | Conditional | Required non-blank investor theme when starting a task.       |
 | `task_id`            | query     | Conditional | Task ID returned when starting a task. Required when polling. |
 
 ```bash
@@ -564,7 +590,9 @@ Polling returns:
 |-------------|-------------|----------------------------------------------------|
 | `202`       | `RUNNING`   | The task is still running.                         |
 | `200`       | `COMPLETED` | The standard build-portfolio payload in `data`.    |
-| `500`       | `FAILED`    | The background task failed.                        |
+| `422`       | `FAILED`    | Request semantics or verified seed holdings are invalid. |
+| `502`       | `FAILED`    | Market verification, AI execution, or structured output failed. |
+| `500`       | `FAILED`    | An unexpected background error occurred.           |
 | `404`       | —           | The task ID is unknown or its cache entry expired. |
 
 ---
@@ -684,8 +712,9 @@ Polling returns:
 
 ### `POST /ai/analyze_portfolio`
 
-Analyze or build a stock portfolio using AI. If `current_allocation` is provided, reviews the existing portfolio and can
-optionally assess whether a major rebalance is needed, generating a plan only when it is; otherwise builds a new one.
+Analyze or build a stock portfolio using AI. Positive-share holdings select the existing-portfolio review branch,
+which can optionally assess whether a major rebalance is needed. Empty or all-zero holdings select the structured
+construction flow described under `/ai/build_portfolio`.
 
 **Request Body (JSON):**
 
@@ -693,7 +722,7 @@ optionally assess whether a major rebalance is needed, generating a plan only wh
 |----------------------|-------------------|----------|----------------------------------------------------------------------------------------------------------------------------------|
 | `current_allocation` | `PortfolioHolding[]` | No       | List of current holdings. If empty, builds a new portfolio instead.                                                              |
 | `country`            | `string`          | Yes      | Required country context for the analysis (e.g. `AU`, `US`).                                                                     |
-| `investor_theme`     | `string`          | No       | Investor theme/preference for the analysis. Defaults to a built-in theme.                                                        |
+| `investor_theme`     | `string`          | Conditional | Required and non-blank for construction; optional for review, where omission uses the review default.                         |
 | `rebalance_plan`     | `boolean`         | No       | If `true`, assesses whether existing holdings need a major rebalance and generates a plan only when needed. Defaults to `false`. |
 
 Each `PortfolioHolding` object:
@@ -726,9 +755,12 @@ curl -X POST 'http://localhost:8000/ai/analyze_portfolio' \
 
 **Response `data`:**
 
+The construction branch returns the structured `PortfolioConstruction` object documented under
+`/ai/build_portfolio`. The review branch returns:
+
 | Field            | Type             | Description                                                                                                 |
 |------------------|------------------|-------------------------------------------------------------------------------------------------------------|
-| `analysis`       | `string`         | Premium portfolio review, or the generated portfolio when `current_allocation` is empty.                    |
+| `analysis`       | `string`         | Premium review of the existing positive-share portfolio.                                                   |
 | `rebalance_plan` | `string`         | Premium rebalance plan when needed; `"No rebalance needed"` when assessed but unnecessary; otherwise empty. |
 | `llm_error`      | `boolean`        | Whether an LLM stage failed.                                                                                |
 | `llm_error_msg`  | `string \| null` | Error details when an LLM stage fails.                                                                      |
@@ -740,14 +772,14 @@ the completed review while `llm_error` and `llm_error_msg` describe the later fa
 
 Analyze or build a portfolio in the background using the same review-or-build behavior and JSON
 request body as `/ai/analyze_portfolio`. Poll by posting to this endpoint with the returned task ID.
-Task state and results expire after one hour; completed analyses retain the underlying 72-hour
-build/review service cache.
+Task state and results expire after one hour. Construction results use one-hour stage and final caches; the legacy
+review branch retains its existing review cache behavior.
 
 | Parameter            | Location  | Required    | Description                                                   |
 |----------------------|-----------|-------------|---------------------------------------------------------------|
 | `current_allocation` | JSON body | No          | Holdings to review; when empty, a new portfolio is built.     |
 | `country`            | JSON body | Conditional | Country context. Required when starting a task.               |
-| `investor_theme`     | JSON body | No          | Optional investor theme used when starting a task.            |
+| `investor_theme`     | JSON body | Conditional | Required for construction; optional for review.               |
 | `rebalance_plan`     | JSON body | No          | Whether to generate a major-rebalance plan when needed.       |
 | `task_id`            | query     | Conditional | Task ID returned when starting a task. Required when polling. |
 
@@ -773,6 +805,8 @@ Polling returns:
 |-------------|-------------|----------------------------------------------------|
 | `202`       | `RUNNING`   | The task is still running.                         |
 | `200`       | `COMPLETED` | The standard analyze-portfolio payload in `data`.  |
+| `422`       | `FAILED`    | Construction input or verified seeds are invalid.  |
+| `502`       | `FAILED`    | Construction verification or an AI stage failed.  |
 | `500`       | `FAILED`    | The background task failed.                        |
 | `404`       | —           | The task ID is unknown or its cache entry expired. |
 

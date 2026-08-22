@@ -7,7 +7,11 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.models.ai import AnalysisResult, AnalyzePortfolioResult
+from app.schemas import ai_portfolio_construction as schemas_construction
 from app.schemas import async_task
+from app.services import msai_build_portfolio as service_build_portfolio
+from app.services import portfolio_verification
+from tests import portfolio_construction_fixtures
 
 client = TestClient(app)
 
@@ -248,49 +252,135 @@ class TestAnalyzeTickerAsync:
 class TestBuildPortfolio:
     """Tests for POST /ai/build_portfolio endpoint."""
 
+    def test_routes_are_owned_by_dedicated_router_module(self):
+        route_modules = {
+            route.path: route.endpoint.__module__
+            for route in app.routes
+            if getattr(route, "path", None) in {"/ai/build_portfolio", "/ai/build_portfolio_async"}
+        }
+
+        assert route_modules == {
+            "/ai/build_portfolio": "app.routers.ai_portfolio_construction",
+            "/ai/build_portfolio_async": "app.routers.ai_portfolio_construction",
+        }
+
     @patch(
-        "app.routers.ai.service_build_portfolio.ai_build_portfolio",
+        "app.routers.ai_portfolio_construction.service_build_portfolio.ai_build_portfolio",
         new_callable=AsyncMock,
     )
     def test_success(self, mock_build):
-        mock_build.return_value = AnalyzePortfolioResult(llm_error=False, analysis="Portfolio: ...")
-        resp = client.post("/ai/build_portfolio", json={"country": "AU"})
+        mock_build.return_value = portfolio_construction_fixtures.construction()
+        resp = client.post(
+            "/ai/build_portfolio",
+            json={
+                "country": "US",
+                "investor_theme": "Durable growth with moderate risk.",
+            },
+        )
         assert resp.status_code == 200
         body = resp.json()
         assert body["status"] == 200
-        assert body["data"]["analysis"] == "Portfolio: ..."
+        assert body["data"]["construction_mode"] == "Scratch"
+        assert body["data"]["target_portfolio"][0]["allocation"] == 0.4
+        assert "analysis" not in body["data"]
+        assert "rebalance_plan" not in body["data"]
 
     @patch(
-        "app.routers.ai.service_build_portfolio.ai_build_portfolio",
-        new_callable=AsyncMock,
-    )
-    def test_returns_400_when_service_returns_none(self, mock_build):
-        mock_build.return_value = None
-        resp = client.post("/ai/build_portfolio", json={"country": "AU"})
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["status"] == 400
-
-    @patch(
-        "app.routers.ai.service_build_portfolio.ai_build_portfolio",
+        "app.routers.ai_portfolio_construction.service_build_portfolio.ai_build_portfolio",
         new_callable=AsyncMock,
     )
     def test_passes_existing_positions(self, mock_build):
-        mock_build.return_value = AnalyzePortfolioResult(llm_error=False, analysis="result")
+        mock_build.return_value = portfolio_construction_fixtures.construction(mode="Seeded")
         positions = [{"ticker": "AAPL", "num_shares": 10, "market_price": 150.0}]
         resp = client.post(
             "/ai/build_portfolio",
-            json={"country": "US", "current_allocation": positions},
+            json={
+                "country": "US",
+                "investor_theme": "Growth focused",
+                "current_allocation": positions,
+            },
         )
         assert resp.status_code == 200
         call_kwargs = mock_build.call_args.kwargs
-        assert len(call_kwargs["existing_positions"]) == 1
-        assert call_kwargs["existing_positions"][0].ticker == "AAPL"
+        assert len(call_kwargs["portfolio"]) == 1
+        assert call_kwargs["portfolio"][0].ticker == "AAPL"
+        assert call_kwargs["investor_theme"] == "Growth focused"
 
-    def test_requires_country(self):
-        resp = client.post("/ai/build_portfolio", json={})
+    def test_requires_country_and_investor_theme(self):
+        assert client.post("/ai/build_portfolio", json={}).status_code == 422
+        assert (
+            client.post(
+                "/ai/build_portfolio",
+                json={"country": "US"},
+            ).status_code
+            == 422
+        )
 
-        assert resp.status_code == 422
+    def test_rejects_blank_theme_duplicates_and_removed_rebalance_plan(self):
+        blank_theme = {
+            "country": "US",
+            "investor_theme": "   ",
+        }
+        duplicates = {
+            "country": "US",
+            "investor_theme": "Growth",
+            "current_allocation": [
+                {"ticker": "aapl", "num_shares": 1},
+                {"ticker": "AAPL", "num_shares": 2},
+            ],
+        }
+        removed_field = {
+            "country": "US",
+            "investor_theme": "Growth",
+            "rebalance_plan": True,
+        }
+
+        assert client.post("/ai/build_portfolio", json=blank_theme).status_code == 422
+        assert client.post("/ai/build_portfolio", json=duplicates).status_code == 422
+        assert client.post("/ai/build_portfolio", json=removed_field).status_code == 422
+
+    @patch(
+        "app.routers.ai_portfolio_construction.service_build_portfolio.ai_build_portfolio",
+        new_callable=AsyncMock,
+        side_effect=portfolio_verification.PortfolioInputError("Unknown ticker"),
+    )
+    def test_maps_input_failure_to_422(self, mock_build):
+        response = client.post(
+            "/ai/build_portfolio",
+            json={"country": "US", "investor_theme": "Growth"},
+        )
+
+        assert response.status_code == 422
+        assert response.json()["message"] == "Unknown ticker"
+        mock_build.assert_awaited_once()
+
+    @patch(
+        "app.routers.ai_portfolio_construction.service_build_portfolio.ai_build_portfolio",
+        new_callable=AsyncMock,
+        side_effect=service_build_portfolio.PortfolioConstructionAIError("Research failed"),
+    )
+    def test_maps_ai_failure_to_502(self, mock_build):
+        response = client.post(
+            "/ai/build_portfolio",
+            json={"country": "US", "investor_theme": "Growth"},
+        )
+
+        assert response.status_code == 502
+        assert response.json()["message"] == "Research failed"
+        mock_build.assert_awaited_once()
+
+    def test_openapi_uses_dedicated_construction_contract(self):
+        paths = app.openapi()["paths"]
+        operation = paths["/ai/build_portfolio"]["post"]
+        request_ref = operation["requestBody"]["content"]["application/json"]["schema"]["$ref"]
+        response_ref = operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"]
+
+        assert request_ref.endswith("/BuildPortfolioRequest")
+        assert response_ref.endswith("/BuildPortfolioResponse")
+        assert {"200", "422", "502"} <= set(operation["responses"])
+        assert {"200", "202", "404", "422", "500", "502"} <= set(
+            paths["/ai/build_portfolio_async"]["post"]["responses"]
+        )
 
 
 # ===========================================================================
@@ -305,7 +395,10 @@ class TestBuildPortfolioAsync:
         with (
             patch("app.routers.async_task.uuid.uuid4", return_value="task-789"),
             patch("app.routers.async_task.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
-            patch("app.routers.ai._run_build_portfolio_task", new_callable=AsyncMock) as mock_run_task,
+            patch(
+                "app.routers.ai_portfolio_construction._run_build_portfolio_task",
+                new_callable=AsyncMock,
+            ) as mock_run_task,
         ):
             resp = client.post(
                 "/ai/build_portfolio_async",
@@ -375,17 +468,14 @@ class TestBuildPortfolioAsync:
         assert resp.json() == {"status": 404, "message": "Task not found"}
 
     def test_poll_returns_completed_result(self):
+        construction = portfolio_construction_fixtures.construction()
         task_entry = {
             "task_type": "build_portfolio",
             "state": async_task.TASK_STATE_COMPLETED,
             "result": {
                 "status": 200,
                 "message": "ok",
-                "data": {
-                    "llm_error": False,
-                    "analysis": "Recommended portfolio",
-                    "rebalance_plan": "",
-                },
+                "data": construction.model_dump(mode="json"),
             },
         }
         with patch("app.routers.async_task.cache.get", new_callable=AsyncMock, return_value=task_entry):
@@ -394,44 +484,47 @@ class TestBuildPortfolioAsync:
         assert resp.status_code == 200
         body = resp.json()
         assert body["status"] == 200
-        assert body["data"]["analysis"] == "Recommended portfolio"
+        assert body["data"]["construction_mode"] == "Scratch"
         assert body["extra"] == {"task_id": "task-789", "state": async_task.TASK_STATE_COMPLETED}
 
     def test_poll_returns_failed_status(self):
         task_entry = {
             "task_type": "build_portfolio",
             "state": async_task.TASK_STATE_FAILED,
-            "message": "Task failed",
+            "status": 422,
+            "message": "Unknown ticker",
         }
         with patch("app.routers.async_task.cache.get", new_callable=AsyncMock, return_value=task_entry):
             resp = client.post("/ai/build_portfolio_async", params={"task_id": "task-789"})
 
-        assert resp.status_code == 500
+        assert resp.status_code == 422
         assert resp.json() == {
-            "status": 500,
-            "message": "Task failed",
+            "status": 422,
+            "message": "Unknown ticker",
             "extra": {"task_id": "task-789", "state": async_task.TASK_STATE_FAILED},
         }
 
     def test_background_task_caches_result(self):
-        from app.routers import ai
-        from app.schemas import ai as schemas_ai
+        from app.routers import ai_portfolio_construction as router_construction
 
-        req = schemas_ai.AnalyzePortfolioRequest(country="AU", investor_theme="Growth focused")
-        result = schemas_ai.ReviewPortfolioResponse(
+        req = schemas_construction.BuildPortfolioRequest(
+            country="US",
+            investor_theme="Growth focused",
+        )
+        result = schemas_construction.BuildPortfolioResponse(
             status=200,
             message="ok",
-            data=AnalyzePortfolioResult(llm_error=False, analysis="Recommended portfolio"),
+            data=portfolio_construction_fixtures.construction(),
         )
         with (
             patch(
-                "app.routers.ai._get_build_portfolio_result",
+                "app.routers.ai_portfolio_construction._get_build_portfolio_result",
                 new_callable=AsyncMock,
                 return_value=result,
             ),
             patch("app.routers.async_task.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
         ):
-            asyncio.run(ai._run_build_portfolio_task("task-789", req))
+            asyncio.run(router_construction._run_build_portfolio_task("task-789", req))
 
         mock_cache_set.assert_awaited_once_with(
             "task-789",
@@ -449,25 +542,28 @@ class TestBuildPortfolioAsync:
         )
 
     def test_background_task_caches_failure(self):
-        from app.routers import ai
-        from app.schemas import ai as schemas_ai
+        from app.routers import ai_portfolio_construction as router_construction
 
-        req = schemas_ai.AnalyzePortfolioRequest(country="AU")
+        req = schemas_construction.BuildPortfolioRequest(
+            country="US",
+            investor_theme="Growth focused",
+        )
         with (
             patch(
-                "app.routers.ai._get_build_portfolio_result",
+                "app.routers.ai_portfolio_construction._get_build_portfolio_result",
                 new_callable=AsyncMock,
                 side_effect=RuntimeError("LLM unavailable"),
             ),
             patch("app.routers.async_task.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
         ):
-            asyncio.run(ai._run_build_portfolio_task("task-789", req))
+            asyncio.run(router_construction._run_build_portfolio_task("task-789", req))
 
         mock_cache_set.assert_awaited_once_with(
             "task-789",
             {
                 "task_type": "build_portfolio",
                 "state": async_task.TASK_STATE_FAILED,
+                "status": 500,
                 "message": "Task failed",
             },
             ttl=3600,
@@ -509,15 +605,20 @@ class TestAnalyzePortfolio:
         new_callable=AsyncMock,
     )
     def test_without_positions_calls_build(self, mock_build):
-        mock_build.return_value = AnalyzePortfolioResult(llm_error=False, analysis="New portfolio")
+        mock_build.return_value = portfolio_construction_fixtures.construction()
         resp = client.post(
             "/ai/analyze_portfolio",
-            json={"country": "US", "current_allocation": []},
+            json={
+                "country": "US",
+                "investor_theme": "Durable growth with moderate risk.",
+                "current_allocation": [],
+            },
         )
         assert resp.status_code == 200
         body = resp.json()
-        assert body["data"]["analysis"] == "New portfolio"
+        assert body["data"]["construction_mode"] == "Scratch"
         mock_build.assert_called_once()
+        assert mock_build.call_args.kwargs["portfolio"] == []
 
     @patch(
         "app.routers.ai.service_build_portfolio.ai_build_portfolio",
@@ -527,7 +628,7 @@ class TestAnalyzePortfolio:
         mock_build.return_value = None
         resp = client.post(
             "/ai/analyze_portfolio",
-            json={"country": "AU"},
+            json={"country": "AU", "investor_theme": "Balanced growth"},
         )
         assert resp.status_code == 200
         body = resp.json()
@@ -555,6 +656,15 @@ class TestAnalyzePortfolio:
         resp = client.post("/ai/analyze_portfolio", json={})
 
         assert resp.status_code == 422
+
+    def test_requires_investor_theme_for_construction_branch(self):
+        resp = client.post(
+            "/ai/analyze_portfolio",
+            json={"country": "US", "current_allocation": []},
+        )
+
+        assert resp.status_code == 422
+        assert "Investor theme is required" in resp.json()["message"]
 
 
 # ===========================================================================
@@ -685,7 +795,7 @@ class TestAnalyzePortfolioAsync:
         from app.schemas import ai as schemas_ai
 
         req = schemas_ai.AnalyzePortfolioRequest(country="AU")
-        result = schemas_ai.ReviewPortfolioResponse(
+        result = schemas_ai.AnalyzePortfolioResponse(
             status=200,
             message="ok",
             data=AnalyzePortfolioResult(llm_error=False, analysis="New portfolio"),

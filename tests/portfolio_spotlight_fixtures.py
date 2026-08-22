@@ -4,6 +4,7 @@ from app.models import ai as models_ai
 from app.models import ai_portfolio_spotlight as models_spotlight
 from app.models import portfolio as models_portfolio
 from app.services import msai_spotlight_portfolio as service
+from app.services import portfolio_verification
 
 
 def request_holding(
@@ -47,6 +48,10 @@ def snapshot() -> models_spotlight.PortfolioSpotlightSnapshot:
         ],
         data_gaps=[],
     )
+
+
+def verified_portfolio() -> portfolio_verification.VerifiedPortfolio:
+    return portfolio_verification.VerifiedPortfolio.model_validate(snapshot().model_dump())
 
 
 def reference(
