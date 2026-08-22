@@ -4,16 +4,16 @@ from .base_req_resp import BaseResponse
 
 
 class UpcomingEarningsResponse(BaseResponse[list[models_event.UpcomingEarningsEvent]]):
-    pass
+    """Response envelope containing upcoming earnings events."""
 
 
 class UpcomingDividendsResponse(BaseResponse[list[models_event.UpcomingDividendEvent]]):
-    pass
+    """Response envelope containing upcoming dividend events."""
 
 
 class UpcomingDividendsAsyncResponse(async_task.AsyncTaskResponse[list[models_event.UpcomingDividendEvent]]):
-    pass
+    """Background-task response for upcoming dividend events."""
 
 
 class UpcomingEarningsAsyncResponse(async_task.AsyncTaskResponse[list[models_event.UpcomingEarningsEvent]]):
-    pass
+    """Background-task response for upcoming earnings events."""

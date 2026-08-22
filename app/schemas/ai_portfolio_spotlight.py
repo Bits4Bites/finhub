@@ -52,8 +52,8 @@ class PortfolioSpotlightRequest(BaseRequest):
 
 
 class PortfolioSpotlightResponse(BaseResponse[models_spotlight.PortfolioSpotlightAnalysis]):
-    pass
+    """Response envelope containing a structured portfolio spotlight review."""
 
 
 class PortfolioSpotlightAsyncResponse(async_task.AsyncTaskResponse[models_spotlight.PortfolioSpotlightAnalysis]):
-    pass
+    """Background-task response for portfolio spotlight analysis."""

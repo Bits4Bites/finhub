@@ -6,7 +6,7 @@ from typing import Any
 
 import pandas as pd
 import yfinance as yf
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from ..utils import asset as asset_utils
 from ..utils import conv, yfutils
@@ -14,11 +14,16 @@ from . import types
 
 
 class SymbolBase(BaseModel):
-    symbol: str
-    normalized_symbol: str = ""
-    currency: str
-    exchange: str
-    country: str
+    """Canonical identity and market metadata shared by symbol models."""
+
+    symbol: str = Field(description="Provider-native security symbol.")
+    normalized_symbol: str = Field(
+        default="",
+        description="Canonical EXCHANGE:CODE symbol.",
+    )
+    currency: str = Field(description="Trading currency code.")
+    exchange: str = Field(description="Normalized exchange code.")
+    country: str = Field(description="ISO market country code.")
 
     def __init__(self, ticker: yf.Ticker, /, **data: Any):
         super().__init__(
@@ -34,17 +39,28 @@ class SymbolBase(BaseModel):
 
 
 class HistoryPoint(BaseModel):
-    timestamp: int
-    timestamp_str: str
-    currency: str = ""
-    open: float = 0.0
-    high: float = 0.0
-    low: float = 0.0
-    close: float = 0.0
-    volume: int = 0
-    dividends: float | None = None
-    rsi14: float | None = None
-    dvt: float | None = None  # Daily Value Traded (Approximated)
+    """One historical market-price observation and derived indicators."""
+
+    timestamp: int = Field(description="Unix timestamp of the market observation.")
+    timestamp_str: str = Field(description="Timezone-aware display timestamp.")
+    currency: str = Field(default="", description="Currency of the price values.")
+    open: float = Field(default=0.0, description="Opening price.")
+    high: float = Field(default=0.0, description="Highest price.")
+    low: float = Field(default=0.0, description="Lowest price.")
+    close: float = Field(default=0.0, description="Closing price.")
+    volume: int = Field(default=0, description="Trading volume.")
+    dividends: float | None = Field(
+        default=None,
+        description="Dividend amount recorded for the observation.",
+    )
+    rsi14: float | None = Field(
+        default=None,
+        description="Fourteen-period relative strength index.",
+    )
+    dvt: float | None = Field(
+        default=None,
+        description="Approximate daily value traded.",
+    )
 
     def to_currency(self, currency: str, x_rate: float) -> HistoryPoint:
         return self.model_copy(
@@ -62,30 +78,83 @@ class HistoryPoint(BaseModel):
 
 
 class SymbolOverview(SymbolBase):
-    short_name: str | None = None
-    long_name: str | None = None
-    sector: str | None = None
-    industry: str | None = None
-    website: str | None = None
-    description: str | None = None
-    quote_type: str | None = None
-    asset_type: types.AssetType | None = None
-    total_cash: int | None = None
-    total_cash_per_share: float | None = None
-    total_debt: int | None = None
-    total_debt_per_share: float | None = None
-    total_revenue: int | None = None
-    total_revenue_per_share: float | None = None
-    ebitda: int | None = None
-    ebitda_margins: float | None = None
-    earnings_growth: float | None = None
-    revenue_growth: float | None = None
-    gross_margins: float | None = None
-    operating_margins: float | None = None
-    profit_margins: float | None = None
-    market_cap: int | None = None
-    cap_size: types.MarketCapType | None = None
-    market_index: str | None = None
+    """Company profile, classification, and high-level financial metrics."""
+
+    short_name: str | None = Field(default=None, description="Short issuer or security name.")
+    long_name: str | None = Field(default=None, description="Full issuer or security name.")
+    sector: str | None = Field(default=None, description="Provider-reported economic sector.")
+    industry: str | None = Field(default=None, description="Provider-reported industry.")
+    website: str | None = Field(default=None, description="Issuer website URL.")
+    description: str | None = Field(
+        default=None,
+        description="Issuer business summary.",
+    )
+    quote_type: str | None = Field(
+        default=None,
+        description="Provider-native quote or instrument type.",
+    )
+    asset_type: types.AssetType | None = Field(
+        default=None,
+        description="Normalized FinHub asset classification.",
+    )
+    total_cash: int | None = Field(default=None, description="Most recently reported total cash.")
+    total_cash_per_share: float | None = Field(
+        default=None,
+        description="Most recently reported cash per share.",
+    )
+    total_debt: int | None = Field(default=None, description="Most recently reported total debt.")
+    total_debt_per_share: float | None = Field(
+        default=None,
+        description="Most recently reported debt per share.",
+    )
+    total_revenue: int | None = Field(
+        default=None,
+        description="Most recently reported total revenue.",
+    )
+    total_revenue_per_share: float | None = Field(
+        default=None,
+        description="Most recently reported revenue per share.",
+    )
+    ebitda: int | None = Field(
+        default=None,
+        description="Most recently reported earnings before interest, taxes, depreciation, and amortization.",
+    )
+    ebitda_margins: float | None = Field(
+        default=None,
+        description="EBITDA margin expressed as a decimal ratio.",
+    )
+    earnings_growth: float | None = Field(
+        default=None,
+        description="Provider-reported earnings growth rate.",
+    )
+    revenue_growth: float | None = Field(
+        default=None,
+        description="Provider-reported revenue growth rate.",
+    )
+    gross_margins: float | None = Field(
+        default=None,
+        description="Gross margin expressed as a decimal ratio.",
+    )
+    operating_margins: float | None = Field(
+        default=None,
+        description="Operating margin expressed as a decimal ratio.",
+    )
+    profit_margins: float | None = Field(
+        default=None,
+        description="Profit margin expressed as a decimal ratio.",
+    )
+    market_cap: int | None = Field(
+        default=None,
+        description="Current market capitalization.",
+    )
+    cap_size: types.MarketCapType | None = Field(
+        default=None,
+        description="FinHub market-capitalization size category.",
+    )
+    market_index: str | None = Field(
+        default=None,
+        description="Recognized market index containing the security.",
+    )
 
     def __init__(self, ticker: yf.Ticker, /, **data: Any):
         super().__init__(
@@ -141,17 +210,52 @@ class SymbolOverview(SymbolBase):
 
 
 class SymbolDividend(BaseModel):
-    dividend_rate: float = 0.0  # annual dividend amount
-    dividend_yield: float = 0.0  # Annual dividend Yield in percentage, value = 3.45 means 3.45%
-    payout_frequency: int = 0  # number of payouts per year, value = 12 means monthly
-    ex_dividend_date: int = 0
-    ex_dividend_date_str: str | None = None
-    five_year_avg_dividend_yield: float = 0.0
-    trailing_annual_dividend_rate: float = 0.0
-    trailing_annual_dividend_yield: float = 0.0
-    last_dividend_value: float = 0.0
-    last_dividend_date: int = 0
-    last_dividend_date_str: str | None = None
+    """Current and historical dividend attributes for a security."""
+
+    dividend_rate: float = Field(
+        default=0.0,
+        description="Forward annualized dividend amount per share.",
+    )
+    dividend_yield: float = Field(
+        default=0.0,
+        description="Forward annual dividend yield as a percentage.",
+    )
+    payout_frequency: int = Field(
+        default=0,
+        description="Number of dividend payments observed during the past year.",
+    )
+    ex_dividend_date: int = Field(
+        default=0,
+        description="Unix timestamp of the next or latest ex-dividend date.",
+    )
+    ex_dividend_date_str: str | None = Field(
+        default=None,
+        description="Exchange-local display value of the ex-dividend timestamp.",
+    )
+    five_year_avg_dividend_yield: float = Field(
+        default=0.0,
+        description="Provider-reported five-year average dividend yield.",
+    )
+    trailing_annual_dividend_rate: float = Field(
+        default=0.0,
+        description="Trailing annual dividend amount per share.",
+    )
+    trailing_annual_dividend_yield: float = Field(
+        default=0.0,
+        description="Trailing annual dividend yield.",
+    )
+    last_dividend_value: float = Field(
+        default=0.0,
+        description="Most recently reported dividend amount per share.",
+    )
+    last_dividend_date: int = Field(
+        default=0,
+        description="Unix timestamp of the most recent dividend payment.",
+    )
+    last_dividend_date_str: str | None = Field(
+        default=None,
+        description="Exchange-local display value of the latest dividend timestamp.",
+    )
 
     def __init__(self, ticker: yf.Ticker):
         super().__init__(
@@ -185,31 +289,87 @@ class SymbolDividend(BaseModel):
 
 
 class StockQuote(BaseModel):
-    currency: str | None = ""
-    market_price: float | None = 0.0
-    market_price_change: float | None = None
-    market_price_change_percent: float | None = None
-    market_open: float | None = None
-    market_day_high: float | None = None
-    market_day_low: float | None = None
-    fifty_two_week_high: float | None = None
-    fifty_two_week_low: float | None = None
-    market_volume: int | None = None
-    bid: float | None = None
-    bid_size: int | None = None
-    ask: float | None = None
-    ask_size: int | None = None
-    market_cap: int | None = None
-    trailing_eps: float | None = None
-    forward_eps: float | None = None
-    trailing_p_e: float | None = None
-    forward_p_e: float | None = None
-    beta: float | None = None
-    recommendation_key: str | None = None
-    target_high_price: float | None = None
-    target_low_price: float | None = None
-    target_mean_price: float | None = None
-    target_median_price: float | None = None
+    """Current quote, valuation, and analyst-target data for a security."""
+
+    currency: str | None = Field(default="", description="Currency of quote and target prices.")
+    market_price: float | None = Field(
+        default=0.0,
+        description="Latest regular-market price.",
+    )
+    market_price_change: float | None = Field(
+        default=None,
+        description="Absolute regular-market price change.",
+    )
+    market_price_change_percent: float | None = Field(
+        default=None,
+        description="Regular-market price change as a percentage.",
+    )
+    market_open: float | None = Field(default=None, description="Regular-market opening price.")
+    market_day_high: float | None = Field(
+        default=None,
+        description="Regular-market session high.",
+    )
+    market_day_low: float | None = Field(
+        default=None,
+        description="Regular-market session low.",
+    )
+    fifty_two_week_high: float | None = Field(
+        default=None,
+        description="Highest price during the trailing 52 weeks.",
+    )
+    fifty_two_week_low: float | None = Field(
+        default=None,
+        description="Lowest price during the trailing 52 weeks.",
+    )
+    market_volume: int | None = Field(
+        default=None,
+        description="Latest regular-market trading volume.",
+    )
+    bid: float | None = Field(default=None, description="Latest bid price.")
+    bid_size: int | None = Field(default=None, description="Latest bid size.")
+    ask: float | None = Field(default=None, description="Latest ask price.")
+    ask_size: int | None = Field(default=None, description="Latest ask size.")
+    market_cap: int | None = Field(
+        default=None,
+        description="Current market capitalization.",
+    )
+    trailing_eps: float | None = Field(
+        default=None,
+        description="Trailing twelve-month earnings per share.",
+    )
+    forward_eps: float | None = Field(
+        default=None,
+        description="Forward consensus earnings per share.",
+    )
+    trailing_p_e: float | None = Field(
+        default=None,
+        description="Trailing price-to-earnings ratio.",
+    )
+    forward_p_e: float | None = Field(
+        default=None,
+        description="Forward price-to-earnings ratio.",
+    )
+    beta: float | None = Field(default=None, description="Provider-reported equity beta.")
+    recommendation_key: str | None = Field(
+        default=None,
+        description="Provider-normalized analyst recommendation.",
+    )
+    target_high_price: float | None = Field(
+        default=None,
+        description="Highest reported analyst target price.",
+    )
+    target_low_price: float | None = Field(
+        default=None,
+        description="Lowest reported analyst target price.",
+    )
+    target_mean_price: float | None = Field(
+        default=None,
+        description="Mean reported analyst target price.",
+    )
+    target_median_price: float | None = Field(
+        default=None,
+        description="Median reported analyst target price.",
+    )
 
     def __init__(self, ticker: yf.Ticker):
         super().__init__(
@@ -270,18 +430,38 @@ class StockQuote(BaseModel):
 
 
 class StockHistory(BaseModel):
-    recent_high_price: float = 0.0
-    pull_pack_percent: float = 0.0  # 12.34 means 12.34%
-    current_volume: int = 0
-    yesterday_volume: int = 0
-    average_volume_30d: int = 0
-    ma10: float = 0.0
-    ma20: float = 0.0
-    ma50: float = 0.0
-    ma100: float = 0.0
-    ma200: float = 0.0
-    rsi14: float = 0.0
-    history_90d: list[HistoryPoint] = []
+    """Recent price history and derived technical indicators."""
+
+    recent_high_price: float = Field(
+        default=0.0,
+        description="Highest closing price in the recent 30-day lookback.",
+    )
+    pull_pack_percent: float = Field(
+        default=0.0,
+        description="Percentage pullback from the recent high.",
+    )
+    current_volume: int = Field(
+        default=0,
+        description="Most recent daily trading volume.",
+    )
+    yesterday_volume: int = Field(
+        default=0,
+        description="Previous trading day's volume.",
+    )
+    average_volume_30d: int = Field(
+        default=0,
+        description="Average daily volume over the recent 30-day lookback.",
+    )
+    ma10: float = Field(default=0.0, description="Ten-day simple moving average.")
+    ma20: float = Field(default=0.0, description="Twenty-day simple moving average.")
+    ma50: float = Field(default=0.0, description="Fifty-day simple moving average.")
+    ma100: float = Field(default=0.0, description="One-hundred-day simple moving average.")
+    ma200: float = Field(default=0.0, description="Two-hundred-day simple moving average.")
+    rsi14: float = Field(default=0.0, description="Fourteen-period relative strength index.")
+    history_90d: list[HistoryPoint] = Field(
+        default=[],
+        description="Up to 90 recent daily price observations.",
+    )
 
     def __init__(self, ticker: yf.Ticker):
         super().__init__()
@@ -345,9 +525,11 @@ class StockHistory(BaseModel):
 
 
 class SymbolInfo(SymbolOverview):
-    stock_quote: StockQuote
-    dividend: SymbolDividend
-    stock_history: StockHistory
+    """Comprehensive symbol profile with quote, dividend, and history data."""
+
+    stock_quote: StockQuote = Field(description="Current quote and valuation data.")
+    dividend: SymbolDividend = Field(description="Current and historical dividend attributes.")
+    stock_history: StockHistory = Field(description="Recent history and technical indicators.")
 
     def __init__(self, ticker: yf.Ticker):
         super().__init__(

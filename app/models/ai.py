@@ -7,19 +7,34 @@ ReferenceSourceType = Literal["Regulatory", "Exchange", "Issuer", "MarketData", 
 
 
 class StrictAIModel(BaseModel):
+    """Base model for AI contracts that reject undeclared fields."""
+
     model_config = ConfigDict(extra="forbid")
 
 
 class ReferenceSourceMetadata(StrictAIModel):
     """Structured metadata describing a source cited by an AI response."""
 
-    id: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
-    title: str = Field(min_length=1, max_length=500)
-    publisher: str = Field(min_length=1, max_length=200)
-    source_type: ReferenceSourceType
-    published_at: datetime | None
-    accessed_at: datetime
-    url: HttpUrl
+    id: str = Field(
+        min_length=1,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+        description="Source identifier unique within the containing response.",
+    )
+    title: str = Field(
+        min_length=1,
+        max_length=500,
+        description="Human-readable title of the cited source or document.",
+    )
+    publisher: str = Field(
+        min_length=1,
+        max_length=200,
+        description="Publisher or organization responsible for the source.",
+    )
+    source_type: ReferenceSourceType = Field(description="Category used to classify and evaluate the source.")
+    published_at: datetime | None = Field(description="UTC publication timestamp, or null when unavailable.")
+    accessed_at: datetime = Field(description="UTC timestamp when the source was retrieved.")
+    url: HttpUrl = Field(description="Canonical HTTPS URL of the source.")
 
     @field_validator("id", "title", "publisher", mode="before")
     @classmethod
@@ -72,24 +87,47 @@ class ReferenceSource(ReferenceSourceMetadata):
         is_verified: Whether the application verified the source attribution.
     """
 
-    is_verified: bool
+    is_verified: bool = Field(description="Whether provider citations verified that the response used this source.")
 
 
 class AIVendorInfo(BaseModel):
-    name: str = ""
-    tier_models: dict[str, list[str]] = {}  # map {tier -> list of models}
+    """Enabled model tiers exposed for an AI vendor."""
+
+    name: str = Field(default="", description="Display name of the AI vendor.")
+    tier_models: dict[str, list[str]] = Field(
+        default={},
+        description="Enabled model identifiers grouped by service tier.",
+    )
 
 
 class BaseAIResult(BaseModel):
-    llm_error: bool = False
-    llm_error_msg: str | None = None
-    llm_response: str | None = None
+    """Common execution metadata returned by legacy AI workflows."""
+
+    llm_error: bool = Field(
+        default=False,
+        description="Whether the language-model execution failed.",
+    )
+    llm_error_msg: str | None = Field(
+        default=None,
+        description="Language-model failure detail, or null when execution succeeded.",
+    )
+    llm_response: str | None = Field(
+        default=None,
+        description="Raw language-model response retained by the workflow, when available.",
+    )
 
 
 class AnalysisResult(BaseAIResult):
-    analysis: str = ""
+    """Text analysis returned by a legacy AI endpoint."""
+
+    analysis: str = Field(default="", description="Generated analysis content.")
 
 
 class AnalyzePortfolioResult(BaseAIResult):
-    analysis: str = ""
-    rebalance_plan: str = ""
+    """Legacy portfolio analysis and optional rebalance-plan result."""
+
+    analysis: str = Field(default="", description="Generated portfolio analysis content.")
+    rebalance_plan: str = Field(
+        default="",
+        description="Generated rebalance plan, or an empty string when no plan was requested.",
+    )

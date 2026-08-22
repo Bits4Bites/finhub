@@ -32,12 +32,33 @@ _RISK_LEVEL_ORDER: dict[PortfolioSpotlightRiskLevel, int] = {
 
 
 class PortfolioSpotlightSnapshot(models_ai.StrictAIModel):
-    as_of: datetime
-    country: str = Field(min_length=2, max_length=2)
-    currency: str = Field(min_length=3, max_length=3)
-    total_market_value: float = Field(gt=0, allow_inf_nan=False)
-    holdings: list[models_portfolio.PortfolioVerifiedHolding] = Field(min_length=1, max_length=50)
-    data_gaps: list[Annotated[models_types.NonEmptyString, Field(max_length=4000)]] = Field(max_length=20)
+    """Verified portfolio state used as the basis for spotlight analysis."""
+
+    as_of: datetime = Field(description="Timezone-aware timestamp of the verified portfolio snapshot.")
+    country: str = Field(
+        min_length=2,
+        max_length=2,
+        description="ISO 3166-1 alpha-2 market country code.",
+    )
+    currency: str = Field(
+        min_length=3,
+        max_length=3,
+        description="Three-letter currency shared by every verified holding.",
+    )
+    total_market_value: float = Field(
+        gt=0,
+        allow_inf_nan=False,
+        description="Total current market value of all verified holdings.",
+    )
+    holdings: list[models_portfolio.PortfolioVerifiedHolding] = Field(
+        min_length=1,
+        max_length=50,
+        description="Verified positions and their calculated portfolio weights.",
+    )
+    data_gaps: list[Annotated[models_types.NonEmptyString, Field(max_length=4000)]] = Field(
+        max_length=20,
+        description="Known limitations in portfolio verification or valuation data.",
+    )
 
     @model_validator(mode="after")
     def validate_snapshot(self) -> Self:
@@ -53,11 +74,21 @@ class PortfolioSpotlightSnapshot(models_ai.StrictAIModel):
 
 
 class PortfolioSpotlightRiskAction(models_ai.StrictAIModel):
-    rank: int = Field(ge=1, le=4)
-    level: PortfolioSpotlightRiskLevel
-    action_timing: PortfolioSpotlightActionTiming
-    risk: models_types.NonEmptyString = Field(max_length=4000)
-    action: models_types.NonEmptyString = Field(max_length=4000)
+    """A ranked portfolio risk with a bounded response action."""
+
+    rank: int = Field(ge=1, le=4, description="One-based priority rank among returned risks.")
+    level: PortfolioSpotlightRiskLevel = Field(description="Urgency assigned to the portfolio risk.")
+    action_timing: PortfolioSpotlightActionTiming = Field(
+        description="Required response window determined by the risk level."
+    )
+    risk: models_types.NonEmptyString = Field(
+        max_length=4000,
+        description="Concise description of the material portfolio risk.",
+    )
+    action: models_types.NonEmptyString = Field(
+        max_length=4000,
+        description="Specific action or monitoring trigger recommended for the risk.",
+    )
     affected_tickers: list[
         Annotated[
             models_types.NonEmptyString,
@@ -66,11 +97,22 @@ class PortfolioSpotlightRiskAction(models_ai.StrictAIModel):
     ] = Field(
         min_length=1,
         max_length=50,
+        description="Verified portfolio tickers affected by the risk.",
     )
-    requires_rebalance: bool
-    confidence: int = Field(ge=0, le=100)
-    data_gaps: list[Annotated[models_types.NonEmptyString, Field(max_length=4000)]] = Field(max_length=20)
-    reference_ids: list[Annotated[models_types.NonEmptyString, Field(max_length=4000)]] = Field(max_length=6)
+    requires_rebalance: bool = Field(description="Whether the action changes portfolio composition or allocation.")
+    confidence: int = Field(
+        ge=0,
+        le=100,
+        description="Confidence score for the risk and action from zero through 100.",
+    )
+    data_gaps: list[Annotated[models_types.NonEmptyString, Field(max_length=4000)]] = Field(
+        max_length=20,
+        description="Evidence limitations specific to this risk.",
+    )
+    reference_ids: list[Annotated[models_types.NonEmptyString, Field(max_length=4000)]] = Field(
+        max_length=6,
+        description="Identifiers of response references supporting this risk.",
+    )
 
     @model_validator(mode="after")
     def validate_action(self) -> Self:
@@ -84,16 +126,38 @@ class PortfolioSpotlightRiskAction(models_ai.StrictAIModel):
 
 
 class PortfolioSpotlightAnalysis(models_ai.StrictAIModel):
-    as_of: datetime
-    analysis_status: PortfolioSpotlightAnalysisStatus
-    portfolio_empty: bool
-    overall_data_quality: models_types.DataQuality
-    snapshot: PortfolioSpotlightSnapshot | None
-    risks: list[PortfolioSpotlightRiskAction] = Field(max_length=4)
-    rebalance_recommended: PortfolioSpotlightRebalanceFlag
-    data_gaps: list[Annotated[models_types.NonEmptyString, Field(max_length=4000)]] = Field(max_length=20)
-    validation_warnings: list[Annotated[models_types.NonEmptyString, Field(max_length=4000)]] = Field(max_length=20)
-    references: list[models_ai.ReferenceSource] = Field(max_length=6)
+    """Final structured portfolio spotlight review."""
+
+    as_of: datetime = Field(description="Timezone-aware timestamp when the analysis was finalized.")
+    analysis_status: PortfolioSpotlightAnalysisStatus = Field(
+        description="Completion status, including whether validation warnings were produced."
+    )
+    portfolio_empty: bool = Field(description="Whether the request contained no positions with positive holdings.")
+    overall_data_quality: models_types.DataQuality = Field(
+        description="Overall quality of the evidence supporting the analysis."
+    )
+    snapshot: PortfolioSpotlightSnapshot | None = Field(
+        description="Verified portfolio snapshot, or null for an empty portfolio."
+    )
+    risks: list[PortfolioSpotlightRiskAction] = Field(
+        max_length=4,
+        description="Highest-priority portfolio risks and actions.",
+    )
+    rebalance_recommended: PortfolioSpotlightRebalanceFlag = Field(
+        description="YES when any returned action requires portfolio rebalancing; otherwise NO."
+    )
+    data_gaps: list[Annotated[models_types.NonEmptyString, Field(max_length=4000)]] = Field(
+        max_length=20,
+        description="Known limitations across verification, planning, research, and assessment.",
+    )
+    validation_warnings: list[Annotated[models_types.NonEmptyString, Field(max_length=4000)]] = Field(
+        max_length=20,
+        description="Application validation or source-verification warnings.",
+    )
+    references: list[models_ai.ReferenceSource] = Field(
+        max_length=6,
+        description="Canonical sources cited by the returned risks.",
+    )
 
     @model_validator(mode="after")
     def validate_analysis(self) -> Self:

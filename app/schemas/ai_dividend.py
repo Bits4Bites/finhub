@@ -47,8 +47,8 @@ class AnalyzeDividendEventRequest(BaseRequest):
 
 
 class AnalyzeDividendEventResponse(BaseResponse[models_events_dividends.DividendEventAnalysis]):
-    pass
+    """Response envelope containing a structured dividend-event analysis."""
 
 
 class AnalyzeDividendEventAsyncResponse(async_task.AsyncTaskResponse[models_events_dividends.DividendEventAnalysis]):
-    pass
+    """Background-task response for dividend-event analysis."""

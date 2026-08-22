@@ -11,14 +11,45 @@ PortfolioPriceSource = Literal["MarketData", "Client"]
 
 
 class PortfolioHolding(BaseModel):
+    """A caller-supplied position shared by portfolio features."""
+
     model_config = ConfigDict(extra="forbid")
 
-    ticker: str = Field(min_length=1, max_length=MAX_TICKER_LENGTH)
-    num_shares: float = Field(default=0.0, ge=0, allow_inf_nan=False)
-    avg_price: float = Field(default=0.0, ge=0, allow_inf_nan=False)
-    market_price: float | None = Field(default=None, gt=0, allow_inf_nan=False)
-    target_allocation: float | None = Field(default=None, ge=0, le=1, allow_inf_nan=False)
-    tags: str | None = Field(default=None, max_length=MAX_TAGS_LENGTH)
+    ticker: str = Field(
+        min_length=1,
+        max_length=MAX_TICKER_LENGTH,
+        description="Security symbol in Yahoo Finance or EXCHANGE:CODE format.",
+    )
+    num_shares: float = Field(
+        default=0.0,
+        ge=0,
+        allow_inf_nan=False,
+        description="Non-negative number of shares or units held.",
+    )
+    avg_price: float = Field(
+        default=0.0,
+        ge=0,
+        allow_inf_nan=False,
+        description="Non-negative average acquisition price per share or unit.",
+    )
+    market_price: float | None = Field(
+        default=None,
+        gt=0,
+        allow_inf_nan=False,
+        description="Optional positive client-supplied market price per share or unit.",
+    )
+    target_allocation: float | None = Field(
+        default=None,
+        ge=0,
+        le=1,
+        allow_inf_nan=False,
+        description="Optional target portfolio weight expressed from zero through one.",
+    )
+    tags: str | None = Field(
+        default=None,
+        max_length=MAX_TAGS_LENGTH,
+        description="Optional user-supplied metadata associated with the holding.",
+    )
 
     @field_validator("ticker", mode="before")
     @classmethod
@@ -35,22 +66,76 @@ class PortfolioHolding(BaseModel):
 
 
 class PortfolioVerifiedHolding(BaseModel):
+    """A portfolio position enriched and validated against market data."""
+
     model_config = ConfigDict(extra="forbid")
 
-    ticker: str = Field(min_length=1, max_length=MAX_TICKER_LENGTH)
-    company_name: str | None = Field(max_length=MAX_COMPANY_NAME_LENGTH)
-    exchange: str = Field(min_length=1, max_length=MAX_EXCHANGE_LENGTH)
-    currency: str = Field(min_length=3, max_length=3)
-    num_shares: float = Field(gt=0, allow_inf_nan=False)
-    avg_price: float = Field(ge=0, allow_inf_nan=False)
-    market_price: float = Field(gt=0, allow_inf_nan=False)
-    price_source: PortfolioPriceSource
-    market_value: float = Field(gt=0, allow_inf_nan=False)
-    current_allocation: float = Field(gt=0, le=1, allow_inf_nan=False)
-    target_allocation: float | None = Field(ge=0, le=1, allow_inf_nan=False)
-    allocation_drift: float | None = Field(ge=-1, le=1, allow_inf_nan=False)
-    unrealized_profit_loss: float | None = Field(allow_inf_nan=False)
-    tags: str | None = Field(max_length=MAX_TAGS_LENGTH)
+    ticker: str = Field(
+        min_length=1,
+        max_length=MAX_TICKER_LENGTH,
+        description="Canonical security symbol used by the verified portfolio.",
+    )
+    company_name: str | None = Field(
+        max_length=MAX_COMPANY_NAME_LENGTH,
+        description="Issuer or security name, or null when market data does not provide one.",
+    )
+    exchange: str = Field(
+        min_length=1,
+        max_length=MAX_EXCHANGE_LENGTH,
+        description="Normalized exchange code for the security.",
+    )
+    currency: str = Field(
+        min_length=3,
+        max_length=3,
+        description="Three-letter trading currency code.",
+    )
+    num_shares: float = Field(
+        gt=0,
+        allow_inf_nan=False,
+        description="Positive number of shares or units included in the analysis.",
+    )
+    avg_price: float = Field(
+        ge=0,
+        allow_inf_nan=False,
+        description="Average acquisition price per share or unit.",
+    )
+    market_price: float = Field(
+        gt=0,
+        allow_inf_nan=False,
+        description="Verified market price used to value the holding.",
+    )
+    price_source: PortfolioPriceSource = Field(description="Origin of the market price used for valuation.")
+    market_value: float = Field(
+        gt=0,
+        allow_inf_nan=False,
+        description="Current market value of the holding.",
+    )
+    current_allocation: float = Field(
+        gt=0,
+        le=1,
+        allow_inf_nan=False,
+        description="Current portfolio weight expressed from zero through one.",
+    )
+    target_allocation: float | None = Field(
+        ge=0,
+        le=1,
+        allow_inf_nan=False,
+        description="Requested target portfolio weight, or null when not supplied.",
+    )
+    allocation_drift: float | None = Field(
+        ge=-1,
+        le=1,
+        allow_inf_nan=False,
+        description="Current allocation minus target allocation, or null without a target.",
+    )
+    unrealized_profit_loss: float | None = Field(
+        allow_inf_nan=False,
+        description="Unrealized profit or loss based on average price, or null when unavailable.",
+    )
+    tags: str | None = Field(
+        max_length=MAX_TAGS_LENGTH,
+        description="Optional user-supplied metadata associated with the holding.",
+    )
 
     @field_validator("ticker", "exchange", "currency", mode="before")
     @classmethod

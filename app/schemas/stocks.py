@@ -4,28 +4,28 @@ from .base_req_resp import BaseResponse
 
 
 class StockQuotesResponse(BaseResponse[dict[str, models.StockQuote]]):
-    pass
+    """Response envelope containing quotes keyed by requested symbol."""
 
 
 class StockQuoteResponse(BaseResponse[models.StockQuote]):
-    pass
+    """Response envelope containing one stock quote."""
 
 
 class StockHistoryResponse(BaseResponse[list[models.HistoryPoint]]):
-    pass
+    """Response envelope containing historical price points."""
 
 
 class SymbolOverviewResponse(BaseResponse[models.SymbolOverview]):
-    pass
+    """Response envelope containing company and security overview data."""
 
 
 class SymbolInfoResponse(BaseResponse[models.SymbolInfo]):
-    pass
+    """Response envelope containing comprehensive symbol information."""
 
 
 class StockQuoteAtDateResponse(BaseResponse[models.HistoryPoint]):
-    pass
+    """Response envelope containing a historical quote for one date."""
 
 
 class IndexCompaniesResponse(BaseResponse[list[config.CompanyBriefInfo]]):
-    pass
+    """Response envelope containing constituents of a market index."""

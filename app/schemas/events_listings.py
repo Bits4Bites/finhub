@@ -4,8 +4,8 @@ from .base_req_resp import BaseResponse
 
 
 class ListingsResponse(BaseResponse[list[models_events_listings.ListingEvent]]):
-    pass
+    """Response envelope containing new-listing events."""
 
 
 class ListingsAsyncResponse(async_task.AsyncTaskResponse[list[models_events_listings.ListingEvent]]):
-    pass
+    """Background-task response for new-listing events."""
