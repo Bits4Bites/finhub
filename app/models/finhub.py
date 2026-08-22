@@ -10,7 +10,6 @@ from pydantic import BaseModel
 
 from ..utils import asset as asset_utils
 from ..utils import conv, yfutils
-from . import ai as models_ai
 from . import types
 
 
@@ -364,16 +363,3 @@ class SymbolInfo(SymbolOverview):
 from . import event as _event_models  # noqa: E402
 
 _event_models.DividendEventAnalysis.model_rebuild()
-
-
-class HoldingTicker(BaseModel):
-    ticker: str = ""
-    num_shares: float = 0.0
-    avg_price: float = 0.0
-    market_price: float = 0.0
-    target_allocation: float = 0.0
-    tags: str | None = None
-
-
-class PortfolioAnalysis(models_ai.BaseAIResult):
-    analysis: str = ""

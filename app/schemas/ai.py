@@ -1,22 +1,18 @@
-from pydantic import BaseModel
-
 from ..models import ai as models_ai
-from ..models import finhub as models
+from ..models import portfolio as models_portfolio
 from ..services import ai as services_ai
 from ..services import msai_analyze_ticker as service_analyze_ticker
 from . import async_task
 from .base_req_resp import BaseRequest, BaseResponse
 
 
-class AnalysisResponse(BaseResponse):
+class AnalysisResponse(BaseResponse[models_ai.AnalysisResult]):
     """
     Response schema, containing the analysis result from an AI model.
 
     Attributes:
         data (models.AnalysisResponse): An object containing the analysis response of the AI model.
     """
-
-    data: models_ai.AnalysisResult | None = None
 
 
 # ----------------------------------------------------------------------#
@@ -43,14 +39,14 @@ class AnalyzePortfolioRequest(BaseRequest):
     Request to build a new portfolio or review an existing one.
 
     Attributes:
-        current_allocation (list[models.HoldingTicker]): A list of current holding tickers in the portfolio.
+        current_allocation (list[models_portfolio.PortfolioHolding]): A list of current holdings in the portfolio.
         country (str): The country code of the portfolio (e.g. AU for Australia).
         investor_theme (str): (optional) The investor's theme/style, e.g. '- Risk tolerance: moderate\n- Time horizon: 5-10 years\n- Goal: capital growth\n- Rebalance frequency: semi-annual'.
         rebalance_plan (bool): (optional) Whether to assess the need for a major rebalance and generate a plan when needed.
     """
 
     country: str
-    current_allocation: list[models.HoldingTicker] = []
+    current_allocation: list[models_portfolio.PortfolioHolding] = []
     investor_theme: str = services_ai.DEFAULT_INVESTOR_THEME
     rebalance_plan: bool = False
 
@@ -63,18 +59,16 @@ class AnalyzePortfolioResponse(AnalysisResponse):
     pass
 
 
-class ReviewPortfolioResponse(BaseResponse):
+class ReviewPortfolioResponse(BaseResponse[models_ai.AnalyzePortfolioResult]):
     """
     Response schema, containing the analysis result of a portfolio review.
     """
-
-    data: models_ai.AnalyzePortfolioResult | None = None
 
 
 # ----------------------------------------------------------------------#
 
 
-class AIVendorsResponse(BaseResponse):
+class AIVendorsResponse(BaseResponse[dict[str, models_ai.AIVendorInfo]]):
     """
     Response schema, containing the list of available AI vendors and enabled API tiers and models.
 
@@ -88,22 +82,13 @@ class AIVendorsResponse(BaseResponse):
 # ----------------------------------------------------------------------#
 
 
-class AsyncTaskInfo(BaseModel):
-    task_id: str
-    state: async_task.TaskState | None = None
+class AnalyzeTickerAsyncResponse(async_task.AsyncTaskResponse[models_ai.AnalysisResult]):
+    pass
 
 
-class AnalyzeTickerAsyncResponse(AnalysisResponse):
-    extra: AsyncTaskInfo
+class BuildPortfolioAsyncResponse(async_task.AsyncTaskResponse[models_ai.AnalyzePortfolioResult]):
+    pass
 
 
-class BuildPortfolioAsyncResponse(ReviewPortfolioResponse):
-    extra: AsyncTaskInfo
-
-
-class SpotlightPortfolioAsyncResponse(AnalyzePortfolioResponse):
-    extra: AsyncTaskInfo
-
-
-class AnalyzePortfolioAsyncResponse(ReviewPortfolioResponse):
-    extra: AsyncTaskInfo
+class AnalyzePortfolioAsyncResponse(async_task.AsyncTaskResponse[models_ai.AnalyzePortfolioResult]):
+    pass

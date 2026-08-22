@@ -1,4 +1,9 @@
-from typing import Literal
+from typing import Annotated, Literal
+
+from pydantic import Field
+
+NonEmptyString = Annotated[str, Field(min_length=1)]
+DataQuality = Literal["High", "Medium", "Low", "Insufficient"]
 
 MarketCapType = Literal["Large", "Mid", "Small", "Micro", "Nano", None]
 LARGE_CAP: MarketCapType = "Large"

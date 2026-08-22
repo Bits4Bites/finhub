@@ -11,6 +11,7 @@ from pydantic import Field, ValidationError, model_validator
 from .. import config
 from ..models import ai as models_ai
 from ..models import events_listings as models_events_listings
+from ..models import types as models_types
 from ..services import crawler as services_crawler
 from ..utils import ai_prompt as ai_prompt_utils
 from ..utils import ai_reference as ai_reference_utils
@@ -52,8 +53,8 @@ _INVALID_DATETIME = "1900-01-01 00:00:00+00:00"
 
 
 class _ExtractedListingCandidate(models_ai.StrictAIModel):
-    symbol: models_events_listings.NonEmptyString
-    company_name: models_events_listings.NonEmptyString
+    symbol: models_types.NonEmptyString
+    company_name: models_types.NonEmptyString
     listing_date: date | None
     issue_price: float | None
     issue_type: str | None
@@ -72,11 +73,11 @@ class _ExtractedListingsResponse(models_ai.StrictAIModel):
 
 class _ListingResearchSection(models_events_listings.ListingEvidenceSection):
     facts: list[models_events_listings.ListingEvidenceClaim] = Field(max_length=3)
-    reference_ids: list[models_events_listings.NonEmptyString]
+    reference_ids: list[models_types.NonEmptyString]
 
 
 class _ListingResearchSourceMetadata(models_ai.ReferenceSourceMetadata):
-    id: models_events_listings.NonEmptyString
+    id: models_types.NonEmptyString
 
 
 class _ListingResearchResponse(models_ai.StrictAIModel):

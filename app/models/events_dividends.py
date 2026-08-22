@@ -9,11 +9,10 @@ from pydantic import Field, model_validator
 
 from ..utils import ai_reference as ai_reference_utils
 from . import ai as models_ai
+from . import types as models_types
 
-NonEmptyString = Annotated[str, Field(min_length=1, max_length=4000)]
 DividendEventPhase = Literal["BeforeExDate", "ExDate", "PostExDate", "Historical"]
 DividendAnalysisStatus = Literal["Complete", "CompleteWithWarnings", "Failed"]
-DividendDataQuality = Literal["High", "Medium", "Low", "Insufficient"]
 DividendSampleQuality = Literal["Sufficient", "Limited"]
 DividendStrategy = Literal["DividendCapture", "PostDividendDiscount"]
 DividendStrategyEligibility = Literal["Eligible", "Ineligible", "InsufficientData"]
@@ -106,13 +105,13 @@ class DividendTechnicalContext(models_ai.StrictAIModel):
 
 
 class DividendEventContext(models_ai.StrictAIModel):
-    symbol: NonEmptyString
-    exchange: NonEmptyString
+    symbol: models_types.NonEmptyString = Field(max_length=4000)
+    exchange: models_types.NonEmptyString = Field(max_length=4000)
     company_name: str | None
-    currency: NonEmptyString
+    currency: models_types.NonEmptyString = Field(max_length=4000)
     country: str | None
-    asset_type: NonEmptyString
-    exchange_timezone: NonEmptyString
+    asset_type: models_types.NonEmptyString = Field(max_length=4000)
+    exchange_timezone: models_types.NonEmptyString = Field(max_length=4000)
     ex_date: date
     phase: DividendEventPhase
     as_of: datetime
@@ -146,7 +145,7 @@ class DividendEventContext(models_ai.StrictAIModel):
 class DividendHistoricalBaseline(models_ai.StrictAIModel):
     sample_count: int = Field(ge=1)
     sample_quality: DividendSampleQuality
-    quality_flags: list[NonEmptyString] = Field(max_length=20)
+    quality_flags: list[Annotated[models_types.NonEmptyString, Field(max_length=4000)]] = Field(max_length=20)
     ex_date_open_drop: DividendDropEstimate
     ex_date_close_drop: DividendDropEstimate
     ex_date_intraday_low_drop: DividendDropEstimate
@@ -158,14 +157,20 @@ class DividendHistoricalBaseline(models_ai.StrictAIModel):
 
 
 class DividendEvidenceClaim(models_ai.StrictAIModel):
-    text: NonEmptyString
-    reference_ids: list[NonEmptyString] = Field(min_length=1, max_length=6)
+    text: models_types.NonEmptyString = Field(max_length=4000)
+    reference_ids: list[Annotated[models_types.NonEmptyString, Field(max_length=4000)]] = Field(
+        min_length=1,
+        max_length=6,
+    )
 
 
 class DividendEvidenceSection(models_ai.StrictAIModel):
     facts: list[DividendEvidenceClaim] = Field(max_length=3)
-    data_gaps: list[NonEmptyString] = Field(max_length=20)
-    reference_ids: list[NonEmptyString] = Field(min_length=1, max_length=6)
+    data_gaps: list[Annotated[models_types.NonEmptyString, Field(max_length=4000)]] = Field(max_length=20)
+    reference_ids: list[Annotated[models_types.NonEmptyString, Field(max_length=4000)]] = Field(
+        min_length=1,
+        max_length=6,
+    )
 
 
 class DividendResearch(models_ai.StrictAIModel):
@@ -178,7 +183,7 @@ class DividendResearch(models_ai.StrictAIModel):
 class DividendStrategyAssessment(models_ai.StrictAIModel):
     strategy: DividendStrategy
     eligibility: DividendStrategyEligibility
-    ineligibility_reason: NonEmptyString | None
+    ineligibility_reason: models_types.NonEmptyString | None = Field(max_length=4000)
     success_probability: float | None = Field(default=None, ge=0, le=1, allow_inf_nan=False)
     expected_entry_price: DividendNumericRange | None
     expected_exit_price: DividendNumericRange | None
@@ -187,11 +192,14 @@ class DividendStrategyAssessment(models_ai.StrictAIModel):
     recovery_days: DividendDayRange | None
     confidence: int = Field(ge=0, le=100)
     risk: int = Field(ge=0, le=100)
-    rationale: NonEmptyString
-    risk_factors: list[NonEmptyString] = Field(max_length=20)
-    assumptions: list[NonEmptyString] = Field(max_length=20)
-    data_gaps: list[NonEmptyString] = Field(max_length=20)
-    reference_ids: list[NonEmptyString] = Field(min_length=1, max_length=6)
+    rationale: models_types.NonEmptyString = Field(max_length=4000)
+    risk_factors: list[Annotated[models_types.NonEmptyString, Field(max_length=4000)]] = Field(max_length=20)
+    assumptions: list[Annotated[models_types.NonEmptyString, Field(max_length=4000)]] = Field(max_length=20)
+    data_gaps: list[Annotated[models_types.NonEmptyString, Field(max_length=4000)]] = Field(max_length=20)
+    reference_ids: list[Annotated[models_types.NonEmptyString, Field(max_length=4000)]] = Field(
+        min_length=1,
+        max_length=6,
+    )
 
     @model_validator(mode="after")
     def validate_eligibility(self) -> Self:
@@ -237,15 +245,18 @@ class DividendStrategyAssessment(models_ai.StrictAIModel):
 class DividendRecommendation(models_ai.StrictAIModel):
     outcome: DividendRecommendationOutcome
     probability_advantage: float | None = Field(default=None, ge=0, le=1, allow_inf_nan=False)
-    rationale: NonEmptyString
-    reference_ids: list[NonEmptyString] = Field(min_length=1, max_length=6)
+    rationale: models_types.NonEmptyString = Field(max_length=4000)
+    reference_ids: list[Annotated[models_types.NonEmptyString, Field(max_length=4000)]] = Field(
+        min_length=1,
+        max_length=6,
+    )
 
 
 class DividendEventAnalysis(models_ai.StrictAIModel):
     as_of: datetime
     analysis_status: DividendAnalysisStatus
     failure_reason: str | None
-    overall_data_quality: DividendDataQuality
+    overall_data_quality: models_types.DataQuality
     event: DividendEventContext
     historical_baseline: DividendHistoricalBaseline
     research: DividendResearch | None
@@ -256,7 +267,7 @@ class DividendEventAnalysis(models_ai.StrictAIModel):
     dividend_capture: DividendStrategyAssessment | None
     post_dividend_discount: DividendStrategyAssessment | None
     recommendation: DividendRecommendation | None
-    validation_warnings: list[NonEmptyString] = Field(max_length=20)
+    validation_warnings: list[Annotated[models_types.NonEmptyString, Field(max_length=4000)]] = Field(max_length=20)
     references: list[models_ai.ReferenceSource] = Field(max_length=6)
 
     @model_validator(mode="after")

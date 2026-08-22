@@ -1,16 +1,15 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Annotated, Literal, Self
+from typing import Literal, Self
 
 from pydantic import ConfigDict, Field, model_validator
 
 from ..utils import ai_reference as ai_reference_utils
 from . import ai as models_ai
 from . import event
+from . import types as models_types
 
-NonEmptyString = Annotated[str, Field(min_length=1)]
-ListingDataQuality = Literal["High", "Medium", "Low", "Insufficient"]
 ListingStatus = Literal["Upcoming", "Listed"]
 ListingStance = Literal["Bullish", "Neutral", "Bearish", "InsufficientData"]
 ListingAnalysisStatus = Literal["NotStarted", "Completed", "Failed"]
@@ -22,63 +21,63 @@ ListingHorizon = Literal["IPO Day", "First Week", "First Two Weeks", "First Mont
 
 
 class ListingEvidenceClaim(models_ai.StrictAIModel):
-    text: NonEmptyString
-    reference_ids: list[NonEmptyString] = Field(min_length=1)
+    text: models_types.NonEmptyString
+    reference_ids: list[models_types.NonEmptyString] = Field(min_length=1)
 
 
 class ListingEvidenceSection(models_ai.StrictAIModel):
     facts: list[ListingEvidenceClaim]
     data_gaps: list[str]
-    reference_ids: list[NonEmptyString] = Field(min_length=1)
+    reference_ids: list[models_types.NonEmptyString] = Field(min_length=1)
 
 
 class ListingAnalysisSection(ListingEvidenceSection):
-    summary: NonEmptyString
-    data_quality: ListingDataQuality
+    summary: models_types.NonEmptyString
+    data_quality: models_types.DataQuality
     assumptions: list[str]
 
 
 class ListingOfferAnalysis(ListingAnalysisSection):
-    issue_price_assessment: NonEmptyString
-    capital_raise_assessment: NonEmptyString
-    underwriting_assessment: NonEmptyString
+    issue_price_assessment: models_types.NonEmptyString
+    capital_raise_assessment: models_types.NonEmptyString
+    underwriting_assessment: models_types.NonEmptyString
     use_of_funds: list[str]
     dilution_and_escrow: str | None
 
 
 class ListingBusinessAnalysis(ListingAnalysisSection):
-    business_model: NonEmptyString
+    business_model: models_types.NonEmptyString
     revenue_sources: list[str]
-    competitive_position: NonEmptyString
-    sector_context: NonEmptyString
+    competitive_position: models_types.NonEmptyString
+    sector_context: models_types.NonEmptyString
 
 
 class ListingFinancialAnalysis(ListingAnalysisSection):
-    historical_performance: NonEmptyString
-    profitability_and_cash_flow: NonEmptyString
-    balance_sheet_and_funding: NonEmptyString
-    forecast_quality: NonEmptyString
+    historical_performance: models_types.NonEmptyString
+    profitability_and_cash_flow: models_types.NonEmptyString
+    balance_sheet_and_funding: models_types.NonEmptyString
+    forecast_quality: models_types.NonEmptyString
 
 
 class ListingValuationAnalysis(ListingAnalysisSection):
-    valuation_view: NonEmptyString
+    valuation_view: models_types.NonEmptyString
     implied_market_cap: float | None
-    peer_comparison: NonEmptyString
-    sensitivity: NonEmptyString
+    peer_comparison: models_types.NonEmptyString
+    sensitivity: models_types.NonEmptyString
 
 
 class ListingGovernanceAnalysis(ListingAnalysisSection):
-    board_and_management: NonEmptyString
-    ownership_and_escrow: NonEmptyString
+    board_and_management: models_types.NonEmptyString
+    ownership_and_escrow: models_types.NonEmptyString
     governance_concerns: list[str]
 
 
 class ListingDriver(models_ai.StrictAIModel):
-    title: NonEmptyString
-    description: NonEmptyString
+    title: models_types.NonEmptyString
+    description: models_types.NonEmptyString
     likelihood: ListingLikelihood
     horizon: ListingHorizon
-    reference_ids: list[NonEmptyString] = Field(min_length=1)
+    reference_ids: list[models_types.NonEmptyString] = Field(min_length=1)
 
 
 class ListingRisk(ListingDriver):
@@ -103,12 +102,12 @@ class ListingPeriodOutlook(models_ai.StrictAIModel):
     expected_return_min_pct: float | None
     expected_return_max_pct: float | None
     confidence: int = Field(ge=0, le=100)
-    rationale: NonEmptyString
+    rationale: models_types.NonEmptyString
     key_drivers: list[str]
     risk_factors: list[str]
     assumptions: list[str]
     data_gaps: list[str]
-    reference_ids: list[NonEmptyString] = Field(min_length=1)
+    reference_ids: list[models_types.NonEmptyString] = Field(min_length=1)
 
     @model_validator(mode="after")
     def validate_ranges(self) -> Self:
@@ -137,10 +136,10 @@ class ListingOutlook(models_ai.StrictAIModel):
 
 
 class ListingAnalysisBase(models_ai.StrictAIModel):
-    symbol: NonEmptyString
+    symbol: models_types.NonEmptyString
     as_of: datetime
     listing_status: ListingStatus
-    overall_data_quality: ListingDataQuality
+    overall_data_quality: models_types.DataQuality
     executive_summary: ListingAnalysisSection
     overall_stance: ListingStance
     overall_confidence: int = Field(ge=0, le=100)
@@ -168,14 +167,14 @@ class ListingAnalysis(ListingAnalysisBase):
 class ListingEvent(event.EventBase):
     model_config = ConfigDict(extra="forbid")
 
-    symbol: NonEmptyString
+    symbol: models_types.NonEmptyString
     date: str
     issue_price: float | None = Field(gt=0)
     issue_type: str | None = None
     sector: str | None = None
     industry: str | None = None
     principal_activities: str | None = None
-    currency: NonEmptyString
+    currency: models_types.NonEmptyString
     capital_to_raise: float | None = Field(gt=0)
     public_offer_close_date: str | None = None
     is_underwritten: bool | None = None

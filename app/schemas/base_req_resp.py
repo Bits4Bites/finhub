@@ -1,15 +1,17 @@
-from typing import Any
+from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel
+
+ResponseDataT = TypeVar("ResponseDataT")
 
 
 class BaseRequest(BaseModel):
     model_config = {"arbitrary_types_allowed": True}
 
 
-class BaseResponse(BaseModel):
+class BaseResponse(BaseModel, Generic[ResponseDataT]):  # noqa: UP046
     status: int
     message: str
-    data: Any | None = None
+    data: ResponseDataT | None = None
     extra: Any | None = None
     model_config = {"arbitrary_types_allowed": True}

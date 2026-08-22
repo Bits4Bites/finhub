@@ -104,8 +104,9 @@ Task IDs below use their current code spelling, including `ASX_LISTTINGS`.
 | `REVIEW_PORTFOLIO_SUMMARIZE`              | `gpt-5.6-luna`  | Medium    | No (default) | Summarize a portfolio review for rebalance planning                               |
 | `REVIEW_PORTFOLIO_REBALANCE_BUILD_PROMPT` | `gpt-5.6-luna`  | Medium    | No (default) | Build a rebalance-planning prompt                                                 |
 | `REVIEW_PORTFOLIO_REBALANCE_EXEC`         | `gpt-5.6-sol`   | High      | Yes          | Research and produce an actionable rebalance plan                                 |
-| `SPOTLIGHT_PORTFOLIO_BUILD_PROMPT`        | `gpt-5.6-luna`  | Medium    | No (default) | Build a concise portfolio-risk prompt                                             |
-| `SPOTLIGHT_PORTFOLIO_EXEC`                | `gpt-5.6-terra` | High      | Yes          | Research and identify urgent portfolio risks                                      |
+| `SPOTLIGHT_PORTFOLIO_PLAN`                | `gpt-5.6-terra` | High      | No           | Build a validated, theme-aware analysis plan for a verified portfolio             |
+| `SPOTLIGHT_PORTFOLIO_RESEARCH`            | `gpt-5.6-terra` | High      | Yes          | Research sourced risks for a verified portfolio                                   |
+| `SPOTLIGHT_PORTFOLIO_ASSESS`              | `gpt-5.6-terra` | High      | No           | Rank structured risks and actions from validated research                         |
 | `ANALYZE_DIV_EVENT_RESEARCH`              | `gpt-5.6-terra` | High      | Yes          | Research sourced dividend-event evidence                                          |
 | `ANALYZE_DIV_EVENT_ASSESS`                | `gpt-5.6-terra` | High      | No           | Compare dividend strategies from validated evidence                               |
 | `ASX_LISTTINGS_EXTRACT`                   | `gpt-5.6-luna`  | Low       | No (default) | Extract structured listings from scraped ASX text                                 |
@@ -139,29 +140,18 @@ Task IDs below use their current code spelling, including `ASX_LISTTINGS`.
   variants run the same flow as a background task and expose start/poll states.
 - **Status:** Reviewed: **No** | Implemented: **No** | Done: **No**
 
-### 3. Portfolio spotlight
-
-- **API or flow name:** `POST /ai/spotlight_portfolio` and `POST /ai/spotlight_portfolio_async`
-- **AI tasks involved:** `SPOTLIGHT_PORTFOLIO_BUILD_PROMPT`, `SPOTLIGHT_PORTFOLIO_EXEC`
-- **Primary code:** `app\routers\ai.py`, `app\services\msai_spotlight_portfolio.py`
-- **Summary of process flow:** Skip AI when the portfolio has no holdings; otherwise build an investor-and-holdings
-  profile; ask one model to create a concise risk-review prompt; pass the generated prompt to a research-enabled model
-  that identifies and ranks urgent risks and actions; return the Markdown response with its required final summary
-  line and cache it for 72 hours. The async API runs the same flow as a background task and exposes start/poll states.
-- **Status:** Reviewed: **No** | Implemented: **No** | Done: **No**
-
-### 4. Portfolio analysis dispatcher
+### 3. Portfolio analysis dispatcher
 
 - **API or flow name:** `POST /ai/analyze_portfolio` and `POST /ai/analyze_portfolio_async`
 - **AI tasks involved:** Conditionally uses `BUILD_PORTFOLIO_BUILD_PROMPT` and `BUILD_PORTFOLIO_EXEC`, or the review and
-  rebalance tasks listed in entries 5 and 6
+  rebalance tasks listed in entries 4 and 5
 - **Primary code:** `app\routers\ai.py`
 - **Summary of process flow:** Inspect the submitted allocation. If it is empty or every holding has zero shares,
   dispatch to portfolio construction. Otherwise dispatch to existing-portfolio review and optionally request a
   rebalance plan. The async API runs the selected branch as a background task and exposes start/poll states.
 - **Status:** Reviewed: **No** | Implemented: **No** | Done: **No**
 
-### 5. Existing-portfolio review
+### 4. Existing-portfolio review
 
 - **API or flow name:** Existing-holdings branch of `POST /ai/analyze_portfolio` and
   `POST /ai/analyze_portfolio_async`
@@ -173,7 +163,7 @@ Task IDs below use their current code spelling, including `ASX_LISTTINGS`.
   requested, cache and return the review for 72 hours.
 - **Status:** Reviewed: **No** | Implemented: **No** | Done: **No**
 
-### 6. Portfolio rebalance extension
+### 5. Portfolio rebalance extension
 
 - **API or flow name:** Rebalance branch of `POST /ai/analyze_portfolio` and `POST /ai/analyze_portfolio_async`
 - **AI tasks involved:** `REVIEW_PORTFOLIO_BUILD_PROMPT`, `REVIEW_PORTFOLIO_EXEC`,
@@ -186,7 +176,7 @@ Task IDs below use their current code spelling, including `ASX_LISTTINGS`.
   Return both the original review and the generated plan, then cache the combined result for 72 hours.
 - **Status:** Reviewed: **No** | Implemented: **No** | Done: **No**
 
-### 7. Shared asynchronous AI task start and polling
+### 6. Shared asynchronous AI task start and polling
 
 - **API or flow name:** All AI-backed `*_async` endpoints
 - **AI tasks involved:** All tasks used by dividend analysis, ticker analysis, portfolio construction, portfolio

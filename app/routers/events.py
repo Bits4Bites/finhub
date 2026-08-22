@@ -1,8 +1,7 @@
 import logging
 import urllib.parse
-import uuid
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Response, status
+from fastapi import APIRouter, BackgroundTasks, Query, Response, status
 from fastapi.responses import RedirectResponse
 
 from .. import config
@@ -10,7 +9,8 @@ from ..schemas import async_task
 from ..schemas import events as schemas_event
 from ..services import event as services_event
 from ..utils import asset as asset_utils
-from ..utils import cache, conv
+from ..utils import conv
+from . import async_task as router_async_task
 
 router = APIRouter(prefix="/events", tags=["events"])
 
@@ -81,25 +81,13 @@ async def _run_upcoming_dividends_event_task(task_id: str, country: str, index: 
         result = await _get_upcoming_dividends_event_result(country, index)
     except Exception:
         logging.exception("Upcoming dividends task '%s' failed.", task_id)
-        await cache.set(
-            task_id,
-            {
-                "task_type": _UPCOMING_DIVIDENDS_TASK_TYPE,
-                "state": async_task.TASK_STATE_FAILED,
-                "message": "Task failed",
-            },
-            ttl=async_task.ASYNC_TASK_TTL,
-        )
+        await router_async_task.fail_task(task_id, _UPCOMING_DIVIDENDS_TASK_TYPE)
         return
 
-    await cache.set(
+    await router_async_task.complete_task(
         task_id,
-        {
-            "task_type": _UPCOMING_DIVIDENDS_TASK_TYPE,
-            "state": async_task.TASK_STATE_COMPLETED,
-            "result": result.model_dump(mode="json"),
-        },
-        ttl=async_task.ASYNC_TASK_TTL,
+        _UPCOMING_DIVIDENDS_TASK_TYPE,
+        result,
     )
 
 
@@ -134,19 +122,9 @@ async def get_upcoming_dividends_event_async(
         return RedirectResponse(url=next_url, status_code=307)
 
     if task_id:
-        task_entry = await cache.get(task_id)
-        if not isinstance(task_entry, dict) or task_entry.get("task_type") != _UPCOMING_DIVIDENDS_TASK_TYPE:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
-
-        task_state = task_entry.get("state")
-        if task_state not in {
-            async_task.TASK_STATE_RUNNING,
-            async_task.TASK_STATE_COMPLETED,
-            async_task.TASK_STATE_FAILED,
-        }:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Invalid task state")
-
-        task_info = schemas_event.AsyncTaskInfo(task_id=task_id, state=task_state)
+        task_entry = await router_async_task.load_task(task_id, _UPCOMING_DIVIDENDS_TASK_TYPE)
+        task_state = task_entry.state
+        task_info = async_task.AsyncTaskInfo(task_id=task_id, state=task_state)
         if task_state == async_task.TASK_STATE_RUNNING:
             response.status_code = status.HTTP_202_ACCEPTED
             return schemas_event.UpcomingDividendsAsyncResponse(
@@ -158,13 +136,11 @@ async def get_upcoming_dividends_event_async(
             response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
             return schemas_event.UpcomingDividendsAsyncResponse(
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                message=task_entry.get("message", "Task failed"),
+                message=task_entry.message or "Task failed",
                 extra=task_info,
             )
-        if not isinstance(task_entry.get("result"), dict):
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Invalid task state")
 
-        result = schemas_event.UpcomingDividendsResponse.model_validate(task_entry["result"])
+        result = schemas_event.UpcomingDividendsResponse.model_validate(task_entry.result)
         return schemas_event.UpcomingDividendsAsyncResponse(
             status=result.status,
             message=result.message,
@@ -172,21 +148,13 @@ async def get_upcoming_dividends_event_async(
             extra=task_info,
         )
 
-    task_id = str(uuid.uuid4())
-    await cache.set(
-        task_id,
-        {
-            "task_type": _UPCOMING_DIVIDENDS_TASK_TYPE,
-            "state": async_task.TASK_STATE_RUNNING,
-        },
-        ttl=async_task.ASYNC_TASK_TTL,
-    )
+    task_id = await router_async_task.start_task(_UPCOMING_DIVIDENDS_TASK_TYPE)
     background_tasks.add_task(_run_upcoming_dividends_event_task, task_id, country, index)
     response.status_code = status.HTTP_202_ACCEPTED
     return schemas_event.UpcomingDividendsAsyncResponse(
         status=status.HTTP_202_ACCEPTED,
         message="Task started",
-        extra=schemas_event.AsyncTaskInfo(task_id=task_id, state=async_task.TASK_STATE_RUNNING),
+        extra=async_task.AsyncTaskInfo(task_id=task_id, state=async_task.TASK_STATE_RUNNING),
     )
 
 
@@ -237,25 +205,13 @@ async def _run_upcoming_earnings_event_task(task_id: str, country: str, index: s
         result = await _get_upcoming_earnings_event_result(country, index)
     except Exception:
         logging.exception("Upcoming earnings task '%s' failed.", task_id)
-        await cache.set(
-            task_id,
-            {
-                "task_type": _UPCOMING_EARNINGS_TASK_TYPE,
-                "state": async_task.TASK_STATE_FAILED,
-                "message": "Task failed",
-            },
-            ttl=async_task.ASYNC_TASK_TTL,
-        )
+        await router_async_task.fail_task(task_id, _UPCOMING_EARNINGS_TASK_TYPE)
         return
 
-    await cache.set(
+    await router_async_task.complete_task(
         task_id,
-        {
-            "task_type": _UPCOMING_EARNINGS_TASK_TYPE,
-            "state": async_task.TASK_STATE_COMPLETED,
-            "result": result.model_dump(mode="json"),
-        },
-        ttl=async_task.ASYNC_TASK_TTL,
+        _UPCOMING_EARNINGS_TASK_TYPE,
+        result,
     )
 
 
@@ -290,19 +246,9 @@ async def get_upcoming_earnings_event_async(
         return RedirectResponse(url=next_url, status_code=307)
 
     if task_id:
-        task_entry = await cache.get(task_id)
-        if not isinstance(task_entry, dict) or task_entry.get("task_type") != _UPCOMING_EARNINGS_TASK_TYPE:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
-
-        task_state = task_entry.get("state")
-        if task_state not in {
-            async_task.TASK_STATE_RUNNING,
-            async_task.TASK_STATE_COMPLETED,
-            async_task.TASK_STATE_FAILED,
-        }:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Invalid task state")
-
-        task_info = schemas_event.AsyncTaskInfo(task_id=task_id, state=task_state)
+        task_entry = await router_async_task.load_task(task_id, _UPCOMING_EARNINGS_TASK_TYPE)
+        task_state = task_entry.state
+        task_info = async_task.AsyncTaskInfo(task_id=task_id, state=task_state)
         if task_state == async_task.TASK_STATE_RUNNING:
             response.status_code = status.HTTP_202_ACCEPTED
             return schemas_event.UpcomingEarningsAsyncResponse(
@@ -314,13 +260,11 @@ async def get_upcoming_earnings_event_async(
             response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
             return schemas_event.UpcomingEarningsAsyncResponse(
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                message=task_entry.get("message", "Task failed"),
+                message=task_entry.message or "Task failed",
                 extra=task_info,
             )
-        if not isinstance(task_entry.get("result"), dict):
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Invalid task state")
 
-        result = schemas_event.UpcomingEarningsResponse.model_validate(task_entry["result"])
+        result = schemas_event.UpcomingEarningsResponse.model_validate(task_entry.result)
         return schemas_event.UpcomingEarningsAsyncResponse(
             status=result.status,
             message=result.message,
@@ -328,19 +272,11 @@ async def get_upcoming_earnings_event_async(
             extra=task_info,
         )
 
-    task_id = str(uuid.uuid4())
-    await cache.set(
-        task_id,
-        {
-            "task_type": _UPCOMING_EARNINGS_TASK_TYPE,
-            "state": async_task.TASK_STATE_RUNNING,
-        },
-        ttl=async_task.ASYNC_TASK_TTL,
-    )
+    task_id = await router_async_task.start_task(_UPCOMING_EARNINGS_TASK_TYPE)
     background_tasks.add_task(_run_upcoming_earnings_event_task, task_id, country, index)
     response.status_code = status.HTTP_202_ACCEPTED
     return schemas_event.UpcomingEarningsAsyncResponse(
         status=status.HTTP_202_ACCEPTED,
         message="Task started",
-        extra=schemas_event.AsyncTaskInfo(task_id=task_id, state=async_task.TASK_STATE_RUNNING),
+        extra=async_task.AsyncTaskInfo(task_id=task_id, state=async_task.TASK_STATE_RUNNING),
     )

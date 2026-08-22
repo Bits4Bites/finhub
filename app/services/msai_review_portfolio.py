@@ -1,7 +1,7 @@
 import re
 
 from ..models import ai as models_ai
-from ..models import finhub as models
+from ..models import portfolio as models_portfolio
 from ..services import ai_helper
 from ..utils import cache, conv
 
@@ -191,7 +191,7 @@ def _extract_rebalance_decision(portfolio_review: str) -> tuple[bool | None, str
 
 async def ai_review_portfolio(
     *,
-    portfolio: list[models.HoldingTicker],
+    portfolio: list[models_portfolio.PortfolioHolding],
     country: str,
     investor_theme: str = DEFAULT_INVESTOR_THEME,
     rebalance_plan: bool = False,
@@ -200,7 +200,7 @@ async def ai_review_portfolio(
     Review a portfolio and optionally build a rebalance plan using AI assistance.
 
     Args:
-        portfolio (list[models.HoldingTicker]): Existing positions in the current portfolio
+        portfolio (list[models_portfolio.PortfolioHolding]): Existing positions in the current portfolio
         country (str): Country for which to build the portfolio (used for market context)
         investor_theme (optional, string): The investor's profile, goals, and preferences
         rebalance_plan (optional, bool): If True, generate a rebalance plan after reviewing the portfolio.
@@ -230,7 +230,7 @@ async def ai_review_portfolio(
     currency = conv.country_to_currency_symbol(country) or "$"
     holdings_lines = []
     for pos in portfolio:
-        market_value = pos.num_shares * pos.market_price
+        market_value = pos.num_shares * (pos.market_price or 0)
         line = f"- {pos.ticker}: {pos.num_shares} shares, avg price {currency}{pos.avg_price:.2f}, market value {currency}{market_value:.2f}"
         if pos.tags:
             line += f" ({pos.tags})"

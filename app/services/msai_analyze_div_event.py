@@ -5,7 +5,7 @@ import logging
 import math
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
-from typing import Self
+from typing import Annotated, Self
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import openai
@@ -66,7 +66,7 @@ class _DividendResearchSection(models_events_dividends.DividendEvidenceSection):
 
 
 class _DividendResearchSourceMetadata(models_ai.ReferenceSourceMetadata):
-    id: models_events_dividends.NonEmptyString
+    id: types.NonEmptyString = Field(max_length=4000)
     accessed_at: datetime | None
 
     @model_validator(mode="after")
@@ -77,7 +77,7 @@ class _DividendResearchSourceMetadata(models_ai.ReferenceSourceMetadata):
 
 
 class _DividendResearchResponse(models_ai.StrictAIModel):
-    symbol: models_events_dividends.NonEmptyString
+    symbol: types.NonEmptyString = Field(max_length=4000)
     as_of: datetime
     dividend_terms: _DividendResearchSection
     issuer_outlook: _DividendResearchSection
@@ -102,17 +102,17 @@ class _DividendStrategyAssessmentDraft(models_events_dividends.DividendStrategyA
 
 
 class _DividendAssessmentDraft(models_ai.StrictAIModel):
-    symbol: models_events_dividends.NonEmptyString
+    symbol: types.NonEmptyString = Field(max_length=4000)
     as_of: datetime
-    overall_data_quality: models_events_dividends.DividendDataQuality
+    overall_data_quality: types.DataQuality
     evidence_adjusted_ex_date_close_drop: models_events_dividends.DividendDropEstimate | None
     evidence_adjusted_pre_ex_close_recovery: models_events_dividends.DividendRecoveryEstimate | None
     evidence_adjusted_capture_break_even_recovery: models_events_dividends.DividendRecoveryEstimate | None
     evidence_adjusted_discount_break_even_recovery: models_events_dividends.DividendRecoveryEstimate | None
     dividend_capture: _DividendStrategyAssessmentDraft
     post_dividend_discount: _DividendStrategyAssessmentDraft
-    comparison_rationale: models_events_dividends.NonEmptyString
-    comparison_reference_ids: list[models_events_dividends.NonEmptyString] = Field(
+    comparison_rationale: types.NonEmptyString = Field(max_length=4000)
+    comparison_reference_ids: list[Annotated[types.NonEmptyString, Field(max_length=4000)]] = Field(
         min_length=1,
         max_length=6,
     )
@@ -1202,10 +1202,10 @@ def _add_required_assumptions(
 
 
 def _adjust_data_quality(
-    assessment_quality: models_events_dividends.DividendDataQuality,
+    assessment_quality: types.DataQuality,
     sample_count: int,
     references: list[models_ai.ReferenceSource],
-) -> models_events_dividends.DividendDataQuality:
+) -> types.DataQuality:
     if sample_count < _MINIMUM_COMPARABLE_EVENTS:
         return "Insufficient"
     verified_count = sum(reference.is_verified for reference in references)
@@ -1221,7 +1221,7 @@ def _resolve_recommendation(
     baseline: models_events_dividends.DividendHistoricalBaseline,
     assessment: _DividendAssessmentDraft,
     *,
-    overall_data_quality: models_events_dividends.DividendDataQuality,
+    overall_data_quality: types.DataQuality,
 ) -> models_events_dividends.DividendRecommendation:
     capture = assessment.dividend_capture
     discount = assessment.post_dividend_discount

@@ -1,13 +1,11 @@
 import logging
-import uuid
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Response, status
+from fastapi import APIRouter, BackgroundTasks, Body, HTTPException, Query, Response, status
 
 from ..schemas import ai_dividend as schemas_ai_dividend
 from ..schemas import async_task
-from ..schemas import events as schemas_events
 from ..services import msai_analyze_div_event as services_dividend
-from ..utils import cache
+from . import async_task as router_async_task
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 
@@ -65,136 +63,105 @@ async def _run_task(
     try:
         result = await _analyze(request)
     except HTTPException as exc:
-        await cache.set(
+        await router_async_task.fail_task(
             task_id,
-            {
-                "task_type": _TASK_TYPE,
-                "state": async_task.TASK_STATE_FAILED,
-                "status": exc.status_code,
-                "message": str(exc.detail),
-            },
-            ttl=async_task.ASYNC_TASK_TTL,
+            _TASK_TYPE,
+            status_code=exc.status_code,
+            message=str(exc.detail),
         )
         return
     except Exception:
         logging.exception("Analyze dividend event task '%s' failed.", task_id)
-        await cache.set(
+        await router_async_task.fail_task(
             task_id,
-            {
-                "task_type": _TASK_TYPE,
-                "state": async_task.TASK_STATE_FAILED,
-                "status": status.HTTP_500_INTERNAL_SERVER_ERROR,
-                "message": "Task failed",
-            },
-            ttl=async_task.ASYNC_TASK_TTL,
+            _TASK_TYPE,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
         return
 
-    task_state = (
-        async_task.TASK_STATE_COMPLETED if result.status == status.HTTP_200_OK else async_task.TASK_STATE_FAILED
-    )
-    await cache.set(
-        task_id,
-        {
-            "task_type": _TASK_TYPE,
-            "state": task_state,
-            "status": result.status,
-            "message": result.message,
-            "result": result.model_dump(mode="json"),
-        },
-        ttl=async_task.ASYNC_TASK_TTL,
-    )
+    if result.status == status.HTTP_200_OK:
+        await router_async_task.complete_task(
+            task_id,
+            _TASK_TYPE,
+            result,
+            status_code=result.status,
+            message=result.message,
+        )
+    else:
+        await router_async_task.fail_task(
+            task_id,
+            _TASK_TYPE,
+            status_code=result.status,
+            message=result.message,
+            result=result,
+        )
 
 
 @router.post(
     "/analyze_dividend_event_async",
     response_model=schemas_ai_dividend.AnalyzeDividendEventAsyncResponse,
     response_model_exclude_none=True,
-    status_code=status.HTTP_202_ACCEPTED,
 )
-async def start_analyze_dividend_event_task(
-    request: schemas_ai_dividend.AnalyzeDividendEventRequest,
+async def analyze_dividend_event_async(
     background_tasks: BackgroundTasks,
+    response: Response,
+    request: schemas_ai_dividend.AnalyzeDividendEventRequest | None = Body(
+        None,
+        description="The dividend-event analysis request. Required when starting a task; omitted when polling.",
+    ),
+    task_id: str = Query("", description="Task ID returned by a previous call to this endpoint."),
 ) -> schemas_ai_dividend.AnalyzeDividendEventAsyncResponse:
-    task_id = str(uuid.uuid4())
-    await cache.set(
-        task_id,
-        {
-            "task_type": _TASK_TYPE,
-            "state": async_task.TASK_STATE_RUNNING,
-        },
-        ttl=async_task.ASYNC_TASK_TTL,
-    )
-    background_tasks.add_task(_run_task, task_id, request)
+    normalized_task_id = task_id.strip()
+    if normalized_task_id:
+        task_entry = await router_async_task.load_task(normalized_task_id, _TASK_TYPE)
+        task_state = task_entry.state
+        task_info = async_task.AsyncTaskInfo(task_id=normalized_task_id, state=task_state)
+        if task_state == async_task.TASK_STATE_RUNNING:
+            response.status_code = status.HTTP_202_ACCEPTED
+            return schemas_ai_dividend.AnalyzeDividendEventAsyncResponse(
+                status=status.HTTP_202_ACCEPTED,
+                message="Task is running",
+                extra=task_info,
+            )
+        if task_state == async_task.TASK_STATE_FAILED:
+            failure_status = router_async_task.failure_status(task_entry)
+            response.status_code = failure_status
+            if task_entry.result is not None:
+                result = schemas_ai_dividend.AnalyzeDividendEventResponse.model_validate(task_entry.result)
+                return schemas_ai_dividend.AnalyzeDividendEventAsyncResponse(
+                    status=failure_status,
+                    message=result.message,
+                    data=result.data,
+                    extra=task_info,
+                )
+            return schemas_ai_dividend.AnalyzeDividendEventAsyncResponse(
+                status=failure_status,
+                message=task_entry.message or "Task failed",
+                extra=task_info,
+            )
+
+        result = schemas_ai_dividend.AnalyzeDividendEventResponse.model_validate(task_entry.result)
+        return schemas_ai_dividend.AnalyzeDividendEventAsyncResponse(
+            status=result.status,
+            message=result.message,
+            data=result.data,
+            extra=task_info,
+        )
+
+    if request is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Request body is required when starting a task",
+        )
+
+    new_task_id = await router_async_task.start_task(_TASK_TYPE)
+    background_tasks.add_task(_run_task, new_task_id, request)
+    response.status_code = status.HTTP_202_ACCEPTED
     return schemas_ai_dividend.AnalyzeDividendEventAsyncResponse(
         status=status.HTTP_202_ACCEPTED,
         message="Task started",
-        extra=schemas_events.AsyncTaskInfo(
-            task_id=task_id,
+        extra=async_task.AsyncTaskInfo(
+            task_id=new_task_id,
             state=async_task.TASK_STATE_RUNNING,
         ),
-    )
-
-
-@router.get(
-    "/analyze_dividend_event_async/{task_id}",
-    response_model=schemas_ai_dividend.AnalyzeDividendEventAsyncResponse,
-    response_model_exclude_none=True,
-)
-async def get_analyze_dividend_event_task(
-    task_id: str,
-    response: Response,
-) -> schemas_ai_dividend.AnalyzeDividendEventAsyncResponse:
-    normalized_task_id = task_id.strip()
-    task_entry = await cache.get(normalized_task_id)
-    if not isinstance(task_entry, dict) or task_entry.get("task_type") != _TASK_TYPE:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
-
-    task_state = task_entry.get("state")
-    if task_state not in {
-        async_task.TASK_STATE_RUNNING,
-        async_task.TASK_STATE_COMPLETED,
-        async_task.TASK_STATE_FAILED,
-    }:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Invalid task state")
-
-    task_info = schemas_events.AsyncTaskInfo(task_id=normalized_task_id, state=task_state)
-    if task_state == async_task.TASK_STATE_RUNNING:
-        response.status_code = status.HTTP_202_ACCEPTED
-        return schemas_ai_dividend.AnalyzeDividendEventAsyncResponse(
-            status=status.HTTP_202_ACCEPTED,
-            message="Task is running",
-            extra=task_info,
-        )
-    if task_state == async_task.TASK_STATE_FAILED:
-        raw_failure_status = task_entry.get("status")
-        failure_status = (
-            raw_failure_status
-            if isinstance(raw_failure_status, int) and 400 <= raw_failure_status <= 599
-            else status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
-        response.status_code = failure_status
-        failed_result = task_entry.get("result")
-        if isinstance(failed_result, dict):
-            result = schemas_ai_dividend.AnalyzeDividendEventResponse.model_validate(failed_result)
-            return schemas_ai_dividend.AnalyzeDividendEventAsyncResponse(
-                status=failure_status,
-                message=result.message,
-                data=result.data,
-                extra=task_info,
-            )
-        return schemas_ai_dividend.AnalyzeDividendEventAsyncResponse(
-            status=failure_status,
-            message=str(task_entry.get("message", "Task failed")),
-            extra=task_info,
-        )
-    if not isinstance(task_entry.get("result"), dict):
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Invalid task state")
-
-    result = schemas_ai_dividend.AnalyzeDividendEventResponse.model_validate(task_entry["result"])
-    return schemas_ai_dividend.AnalyzeDividendEventAsyncResponse(
-        status=result.status,
-        message=result.message,
-        data=result.data,
-        extra=task_info,
     )

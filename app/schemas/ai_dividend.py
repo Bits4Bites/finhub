@@ -3,7 +3,7 @@ import datetime
 from pydantic import ConfigDict, Field
 
 from ..models import events_dividends as models_events_dividends
-from . import events as schemas_events
+from . import async_task
 from .base_req_resp import BaseRequest, BaseResponse
 
 
@@ -46,9 +46,9 @@ class AnalyzeDividendEventRequest(BaseRequest):
     )
 
 
-class AnalyzeDividendEventResponse(BaseResponse):
-    data: models_events_dividends.DividendEventAnalysis | None = None
+class AnalyzeDividendEventResponse(BaseResponse[models_events_dividends.DividendEventAnalysis]):
+    pass
 
 
-class AnalyzeDividendEventAsyncResponse(AnalyzeDividendEventResponse):
-    extra: schemas_events.AsyncTaskInfo
+class AnalyzeDividendEventAsyncResponse(async_task.AsyncTaskResponse[models_events_dividends.DividendEventAnalysis]):
+    pass

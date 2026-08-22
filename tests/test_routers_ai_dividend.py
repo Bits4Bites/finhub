@@ -119,8 +119,8 @@ def test_post_returns_completed_analysis_with_validation_warnings():
 
 def test_async_start_uses_post_body():
     with (
-        patch.object(ai_dividend.uuid, "uuid4", return_value="task-123"),
-        patch.object(ai_dividend.cache, "set", new_callable=AsyncMock, return_value=True),
+        patch("app.routers.async_task.uuid.uuid4", return_value="task-123"),
+        patch("app.routers.async_task.cache.set", new_callable=AsyncMock, return_value=True),
         patch.object(ai_dividend, "_run_task", new_callable=AsyncMock) as mock_run,
     ):
         response = client.post("/ai/analyze_dividend_event_async", json=_request_body())
@@ -134,18 +134,27 @@ def test_async_start_uses_post_body():
     assert request.symbol == "asx:cba"
 
 
+def test_async_start_requires_request_body():
+    response = client.post("/ai/analyze_dividend_event_async")
+
+    assert response.status_code == 400
+    assert response.json()["message"] == "Request body is required when starting a task"
+
+
 def test_poll_returns_running_task():
     task_entry = {
         "task_type": "analyze_dividend_event",
         "state": async_task.TASK_STATE_RUNNING,
     }
-    with patch.object(
-        ai_dividend.cache,
-        "get",
+    with patch(
+        "app.routers.async_task.cache.get",
         new_callable=AsyncMock,
         return_value=task_entry,
     ):
-        response = client.get("/ai/analyze_dividend_event_async/task-123")
+        response = client.post(
+            "/ai/analyze_dividend_event_async",
+            params={"task_id": "task-123"},
+        )
 
     assert response.status_code == 202
     assert response.json()["extra"]["state"] == async_task.TASK_STATE_RUNNING
@@ -162,13 +171,15 @@ def test_poll_returns_completed_result():
         "state": async_task.TASK_STATE_COMPLETED,
         "result": result.model_dump(mode="json"),
     }
-    with patch.object(
-        ai_dividend.cache,
-        "get",
+    with patch(
+        "app.routers.async_task.cache.get",
         new_callable=AsyncMock,
         return_value=task_entry,
     ):
-        response = client.get("/ai/analyze_dividend_event_async/task-123")
+        response = client.post(
+            "/ai/analyze_dividend_event_async",
+            params={"task_id": "task-123"},
+        )
 
     assert response.status_code == 200
     assert response.json()["data"]["recommendation"]["outcome"] == "DividendCapture"
@@ -187,13 +198,15 @@ def test_poll_returns_failed_result_with_baseline():
         "message": result.message,
         "result": result.model_dump(mode="json"),
     }
-    with patch.object(
-        ai_dividend.cache,
-        "get",
+    with patch(
+        "app.routers.async_task.cache.get",
         new_callable=AsyncMock,
         return_value=task_entry,
     ):
-        response = client.get("/ai/analyze_dividend_event_async/task-123")
+        response = client.post(
+            "/ai/analyze_dividend_event_async",
+            params={"task_id": "task-123"},
+        )
 
     assert response.status_code == 502
     assert response.json()["data"]["historical_baseline"]["sample_count"] == 5
@@ -208,7 +221,7 @@ def test_background_task_caches_failure_result():
     request = schemas_dividends.AnalyzeDividendEventRequest.model_validate(_request_body())
     with (
         patch.object(ai_dividend, "_analyze", new_callable=AsyncMock, return_value=response),
-        patch.object(ai_dividend.cache, "set", new_callable=AsyncMock, return_value=True) as mock_set,
+        patch("app.routers.async_task.cache.set", new_callable=AsyncMock, return_value=True) as mock_set,
     ):
         asyncio.run(ai_dividend._run_task("task-123", request))
 

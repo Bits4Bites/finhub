@@ -83,8 +83,8 @@ class TestUpcomingDividends:
 class TestUpcomingDividendsAsync:
     def test_starts_task(self):
         with (
-            patch("app.routers.events.uuid.uuid4", return_value="task-123"),
-            patch("app.routers.events.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
+            patch("app.routers.async_task.uuid.uuid4", return_value="task-123"),
+            patch("app.routers.async_task.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
             patch("app.routers.events._run_upcoming_dividends_event_task", new_callable=AsyncMock) as mock_run_task,
         ):
             resp = client.get(
@@ -107,7 +107,9 @@ class TestUpcomingDividendsAsync:
 
     def test_poll_returns_running_status(self):
         task_entry = {"task_type": "upcoming_dividends", "state": async_task.TASK_STATE_RUNNING}
-        with patch("app.routers.events.cache.get", new_callable=AsyncMock, return_value=task_entry) as mock_cache_get:
+        with patch(
+            "app.routers.async_task.cache.get", new_callable=AsyncMock, return_value=task_entry
+        ) as mock_cache_get:
             resp = client.get("/events/upcoming_dividends_async", params={"task_id": "task-123"})
 
         assert resp.status_code == 202
@@ -116,7 +118,7 @@ class TestUpcomingDividendsAsync:
         mock_cache_get.assert_awaited_once_with("task-123")
 
     def test_poll_returns_404_for_missing_task(self):
-        with patch("app.routers.events.cache.get", new_callable=AsyncMock, return_value=None):
+        with patch("app.routers.async_task.cache.get", new_callable=AsyncMock, return_value=None):
             resp = client.get("/events/upcoming_dividends_async", params={"task_id": "missing"})
 
         assert resp.status_code == 404
@@ -140,7 +142,7 @@ class TestUpcomingDividendsAsync:
                 ],
             },
         }
-        with patch("app.routers.events.cache.get", new_callable=AsyncMock, return_value=task_entry):
+        with patch("app.routers.async_task.cache.get", new_callable=AsyncMock, return_value=task_entry):
             resp = client.get("/events/upcoming_dividends_async", params={"task_id": "task-123"})
 
         assert resp.status_code == 200
@@ -160,7 +162,7 @@ class TestUpcomingDividendsAsync:
                 new_callable=AsyncMock,
                 return_value=result,
             ),
-            patch("app.routers.events.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
+            patch("app.routers.async_task.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
         ):
             asyncio.run(events._run_upcoming_dividends_event_task("task-123", "AU", "ASX200"))
 
@@ -229,8 +231,8 @@ class TestUpcomingEarnings:
 class TestUpcomingEarningsAsync:
     def test_starts_task(self):
         with (
-            patch("app.routers.events.uuid.uuid4", return_value="task-456"),
-            patch("app.routers.events.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
+            patch("app.routers.async_task.uuid.uuid4", return_value="task-456"),
+            patch("app.routers.async_task.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
             patch("app.routers.events._run_upcoming_earnings_event_task", new_callable=AsyncMock) as mock_run_task,
         ):
             resp = client.get(
@@ -253,7 +255,9 @@ class TestUpcomingEarningsAsync:
 
     def test_poll_returns_running_status(self):
         task_entry = {"task_type": "upcoming_earnings", "state": async_task.TASK_STATE_RUNNING}
-        with patch("app.routers.events.cache.get", new_callable=AsyncMock, return_value=task_entry) as mock_cache_get:
+        with patch(
+            "app.routers.async_task.cache.get", new_callable=AsyncMock, return_value=task_entry
+        ) as mock_cache_get:
             resp = client.get("/events/upcoming_earnings_async", params={"task_id": "task-456"})
 
         assert resp.status_code == 202
@@ -262,7 +266,7 @@ class TestUpcomingEarningsAsync:
         mock_cache_get.assert_awaited_once_with("task-456")
 
     def test_poll_returns_404_for_missing_task(self):
-        with patch("app.routers.events.cache.get", new_callable=AsyncMock, return_value=None):
+        with patch("app.routers.async_task.cache.get", new_callable=AsyncMock, return_value=None):
             resp = client.get("/events/upcoming_earnings_async", params={"task_id": "missing"})
 
         assert resp.status_code == 404
@@ -284,7 +288,7 @@ class TestUpcomingEarningsAsync:
                 ],
             },
         }
-        with patch("app.routers.events.cache.get", new_callable=AsyncMock, return_value=task_entry):
+        with patch("app.routers.async_task.cache.get", new_callable=AsyncMock, return_value=task_entry):
             resp = client.get("/events/upcoming_earnings_async", params={"task_id": "task-456"})
 
         assert resp.status_code == 200
@@ -304,7 +308,7 @@ class TestUpcomingEarningsAsync:
                 new_callable=AsyncMock,
                 return_value=result,
             ),
-            patch("app.routers.events.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
+            patch("app.routers.async_task.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
         ):
             asyncio.run(events._run_upcoming_earnings_event_task("task-456", "US", "SP500"))
 
@@ -368,8 +372,8 @@ class TestNewListings:
 class TestNewListingsAsync:
     def test_starts_task(self):
         with (
-            patch("app.routers.events_listings.uuid.uuid4", return_value="task-789"),
-            patch("app.routers.events_listings.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
+            patch("app.routers.async_task.uuid.uuid4", return_value="task-789"),
+            patch("app.routers.async_task.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
             patch("app.routers.events_listings._run_new_listings_task", new_callable=AsyncMock) as mock_run_task,
         ):
             resp = client.get("/events/new_listings_async", params={"country": "AU"})
@@ -390,7 +394,7 @@ class TestNewListingsAsync:
     def test_poll_returns_running_status(self):
         task_entry = {"task_type": "new_listings", "state": async_task.TASK_STATE_RUNNING}
         with patch(
-            "app.routers.events_listings.cache.get",
+            "app.routers.async_task.cache.get",
             new_callable=AsyncMock,
             return_value=task_entry,
         ) as mock_cache_get:
@@ -402,7 +406,7 @@ class TestNewListingsAsync:
         mock_cache_get.assert_awaited_once_with("task-789")
 
     def test_poll_returns_404_for_missing_task(self):
-        with patch("app.routers.events_listings.cache.get", new_callable=AsyncMock, return_value=None):
+        with patch("app.routers.async_task.cache.get", new_callable=AsyncMock, return_value=None):
             resp = client.get("/events/new_listings_async", params={"task_id": "missing"})
 
         assert resp.status_code == 404
@@ -427,7 +431,7 @@ class TestNewListingsAsync:
                 ],
             },
         }
-        with patch("app.routers.events_listings.cache.get", new_callable=AsyncMock, return_value=task_entry):
+        with patch("app.routers.async_task.cache.get", new_callable=AsyncMock, return_value=task_entry):
             resp = client.get("/events/new_listings_async", params={"task_id": "task-789"})
 
         assert resp.status_code == 200
@@ -445,7 +449,7 @@ class TestNewListingsAsync:
                 return_value=result,
             ),
             patch(
-                "app.routers.events_listings.cache.set",
+                "app.routers.async_task.cache.set",
                 new_callable=AsyncMock,
                 return_value=True,
             ) as mock_cache_set,

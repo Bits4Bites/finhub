@@ -369,6 +369,10 @@ Polling returns:
 
 ## AI
 
+AI features use one HTTP verb consistently across each endpoint pair: `VERB /endpoint` runs synchronously,
+`VERB /endpoint_async` starts a background task, and `VERB /endpoint_async?task_id=<TASK_ID>` polls it. The
+AI-assisted new-listings endpoints under `/events` follow the same convention.
+
 ### `GET /ai/vendors`
 
 Get the list of available AI vendors and supported API tiers and models.
@@ -417,13 +421,9 @@ Repairable assessment arithmetic mismatches return HTTP `200` with `analysis_sta
 
 ### `POST /ai/analyze_dividend_event_async`
 
-Start dividend-event analysis in the background using the same JSON body as the synchronous endpoint. Task state and
-results expire after one hour. Completed analysis cache freshness varies from one hour to 72 hours based on event
-phase and proximity.
-
-### `GET /ai/analyze_dividend_event_async/{task_id}`
-
-Poll a background dividend-event analysis task.
+Start dividend-event analysis in the background using the same JSON body as the synchronous endpoint, or poll the
+same endpoint with the returned task ID in the `task_id` query parameter. Task state and results expire after one
+hour. Completed analysis cache freshness varies from one hour to 72 hours based on event phase and proximity.
 
 ```bash
 # Start a task
@@ -432,7 +432,7 @@ curl -X POST 'http://localhost:8000/ai/analyze_dividend_event_async' \
   -d '{"symbol":"NASDAQ:AAPL","ex_date":"2026-08-10","dividend_amount":0.26}'
 
 # Poll a task
-curl 'http://localhost:8000/ai/analyze_dividend_event_async/<TASK_ID>'
+curl -X POST 'http://localhost:8000/ai/analyze_dividend_event_async?task_id=<TASK_ID>'
 ```
 
 Polling returns:
@@ -508,21 +508,21 @@ Build a new portfolio using AI assistance.
 
 | Field                | Type              | Required | Description                                                               |
 |----------------------|-------------------|----------|---------------------------------------------------------------------------|
-| `current_allocation` | `HoldingTicker[]` | No       | List of existing holdings (see fields below).                             |
+| `current_allocation` | `PortfolioHolding[]` | No       | List of existing holdings (see fields below).                             |
 | `country`            | `string`          | Yes      | Required country context for the portfolio (e.g. `AU`, `US`).             |
 | `investor_theme`     | `string`          | No       | Investor theme/preference for the analysis. Defaults to a built-in theme. |
 | `rebalance_plan`     | `boolean`         | No       | Ignored; this endpoint only builds a portfolio.                           |
 
-Each `HoldingTicker` object:
+Each `PortfolioHolding` object:
 
 | Field               | Type   | Description                                     |
 |---------------------|--------|-------------------------------------------------|
-| `ticker`            | string | Stock symbol.                                   |
-| `num_shares`        | float  | Number of shares held.                          |
-| `avg_price`         | float  | Average purchase price per share.               |
-| `market_price`      | float  | Current market price per share.                 |
-| `target_allocation` | float  | Target allocation weight (e.g. `0.25` for 25%). |
-| `tags`              | string | Optional tag(s) for the holding.                |
+| `ticker`            | string | Required stock symbol, limited to 32 characters.                    |
+| `num_shares`        | float  | Non-negative finite share count; defaults to zero.                  |
+| `avg_price`         | float  | Non-negative finite average purchase price; defaults to zero.       |
+| `market_price`      | float  | Optional positive current market price per share.                   |
+| `target_allocation` | float  | Optional target allocation from `0` through `1`.                    |
+| `tags`              | string | Optional holding metadata, limited to 500 characters.               |
 
 **Example:**
 
@@ -571,28 +571,30 @@ Polling returns:
 
 ### `POST /ai/spotlight_portfolio`
 
-Review a portfolio using AI, rank its top 2-4 risks as `Critical`, `High`, `Medium`, or `Low`, and provide specific,
-actionable responses for `Critical` and `High` risks.
+Verify a portfolio against current market data, build a validated analysis plan, research its material risks, and
+return up to four ranked, structured risk actions. Risk levels are limited to `Critical`, `High`, and `Medium`.
 
 **Request Body (JSON):**
 
-| Field                | Type              | Required | Description                                                               |
-|----------------------|-------------------|----------|---------------------------------------------------------------------------|
-| `current_allocation` | `HoldingTicker[]` | Yes      | Non-empty list of current holdings to review.                             |
-| `country`            | `string`          | Yes      | Required country context for the analysis (e.g. `AU`, `US`).              |
-| `investor_theme`     | `string`          | No       | Investor theme/preference for the analysis. Defaults to a built-in theme. |
-| `rebalance_plan`     | `boolean`         | No       | Ignored; use `/ai/analyze_portfolio` to request a rebalance plan.         |
+| Field                | Type                 | Required | Description                                                                                          |
+|----------------------|----------------------|----------|------------------------------------------------------------------------------------------------------|
+| `country`            | `string`             | Yes      | ISO code or country name, from 2 through 64 characters.                                              |
+| `current_allocation` | `PortfolioHolding[]` | No       | Up to 50 positions; defaults to `[]`. Empty or all-zero positions skip verification and every AI stage. |
+| `investor_theme`     | `string \| null`     | No       | Optional risk tolerance, horizon, goals, and preferences. Omitted, null, or blank means no theme.    |
 
-Each `HoldingTicker` object:
+Each `PortfolioHolding` object:
 
-| Field               | Type   | Description                                     |
-|---------------------|--------|-------------------------------------------------|
-| `ticker`            | string | Stock symbol.                                   |
-| `num_shares`        | float  | Number of shares held.                          |
-| `avg_price`         | float  | Average purchase price per share.               |
-| `market_price`      | float  | Current market price per share.                 |
-| `target_allocation` | float  | Target allocation weight (e.g. `0.25` for 25%). |
-| `tags`              | string | Optional tag(s) for the holding.                |
+| Field               | Required | Description                                                                                          |
+|---------------------|----------|------------------------------------------------------------------------------------------------------|
+| `ticker`            | Yes      | Stock symbol in Yahoo Finance or `EXCHANGE:CODE` format, limited to 32 characters.                   |
+| `num_shares`        | No       | Non-negative finite share count; defaults to zero.                                                   |
+| `avg_price`         | No       | Non-negative finite average purchase price; defaults to zero.                                        |
+| `market_price`      | No       | Positive client price used only when authoritative market data has no usable price.                  |
+| `target_allocation` | No       | Target portfolio weight from `0` through `1`.                                                        |
+| `tags`              | No       | Optional holding metadata, limited to 500 characters.                                                |
+
+Duplicate request tickers, unknown securities, duplicate canonical symbols, and mixed-currency portfolios are
+rejected. Zero-share positions are ignored.
 
 **Example:**
 
@@ -610,18 +612,46 @@ curl -X POST 'http://localhost:8000/ai/spotlight_portfolio' \
   }'
 ```
 
+The `data` object contains:
+
+| Field                     | Description                                                                                         |
+|---------------------------|-----------------------------------------------------------------------------------------------------|
+| `as_of`                   | Timezone-aware analysis timestamp.                                                                  |
+| `analysis_status`         | `Complete` or `CompleteWithWarnings`.                                                               |
+| `portfolio_empty`         | Whether the request contained no positive-share positions.                                          |
+| `overall_data_quality`    | `High`, `Medium`, `Low`, or `Insufficient`.                                                         |
+| `snapshot`                | Verified holdings, allocations, valuation, price source, P/L, target drift, and verification gaps. |
+| `risks`                   | Up to four ranked `PortfolioSpotlightRiskAction` objects.                                           |
+| `rebalance_recommended`   | Deterministic `YES` when any risk requires rebalancing; otherwise `NO`.                              |
+| `data_gaps`               | Analysis-level evidence gaps.                                                                       |
+| `validation_warnings`     | Application validation or source-verification warnings.                                             |
+| `references`              | Canonical HTTPS sources cited by the returned risks.                                                 |
+
+Each risk includes `rank`, `level`, `action_timing`, `risk`, `action`, `affected_tickers`,
+`requires_rebalance`, `confidence`, `data_gaps`, and `reference_ids`. Timing is fixed by risk level:
+`Critical` means `AsSoonAsPossibleWithinOneWeek`, `High` means `WithinOneToTwoWeeks`, and `Medium` means `Monitor`.
+The API returns only the `YES`/`NO` rebalance recommendation, not a rebalance plan.
+
+An empty or all-zero portfolio returns HTTP `200` with `portfolio_empty=true`, `snapshot=null`, no risks,
+`rebalance_recommended=NO`, and `overall_data_quality=Insufficient`, without invoking AI.
+
+For a non-empty portfolio, the flow is verify, build a structured plan, perform sourced research, assess the validated
+research, and deterministically finalize the response. The plan adapts to a supplied investor theme; without one, it
+derives priorities only from the verified holdings.
+
+Invalid input returns HTTP `422`. Portfolio-verification, AI-provider, and invalid structured-output failures return
+HTTP `502`.
+
 ### `POST /ai/spotlight_portfolio_async`
 
-Review a portfolio for immediate risks in the background. Start a task with the same JSON request
-body as `/ai/spotlight_portfolio`, then poll by posting to this endpoint with the returned task ID.
-Task state and results expire after one hour; completed spotlight analyses are cached for 72 hours.
+Run the same structured portfolio spotlight flow in the background. Start a task with the same JSON request body as
+`/ai/spotlight_portfolio`, then poll by posting to this endpoint with the returned task ID. Task state and results
+expire after one hour. Verification is cached for five minutes; planning, research, assessment, and final analysis
+stages are cached independently for one hour.
 
 | Parameter            | Location  | Required    | Description                                                   |
 |----------------------|-----------|-------------|---------------------------------------------------------------|
-| `current_allocation` | JSON body | Conditional | Current holdings. Required when starting a task.              |
-| `country`            | JSON body | Conditional | Country context. Required when starting a task.               |
-| `investor_theme`     | JSON body | No          | Optional investor theme used when starting a task.            |
-| `rebalance_plan`     | JSON body | No          | Ignored; this endpoint only spotlights immediate risks.       |
+| Request body         | JSON body | Conditional | Spotlight request. Required when starting and omitted when polling. |
 | `task_id`            | query     | Conditional | Task ID returned when starting a task. Required when polling. |
 
 ```bash
@@ -645,6 +675,8 @@ Polling returns:
 |-------------|-------------|-----------------------------------------------------|
 | `202`       | `RUNNING`   | The task is still running.                          |
 | `200`       | `COMPLETED` | The standard spotlight-portfolio payload in `data`. |
+| `422`       | `FAILED`    | Portfolio input validation failed.                  |
+| `502`       | `FAILED`    | Portfolio verification or an AI stage failed.       |
 | `500`       | `FAILED`    | The background task failed.                         |
 | `404`       | —           | The task ID is unknown or its cache entry expired.  |
 
@@ -659,21 +691,21 @@ optionally assess whether a major rebalance is needed, generating a plan only wh
 
 | Field                | Type              | Required | Description                                                                                                                      |
 |----------------------|-------------------|----------|----------------------------------------------------------------------------------------------------------------------------------|
-| `current_allocation` | `HoldingTicker[]` | No       | List of current holdings. If empty, builds a new portfolio instead.                                                              |
+| `current_allocation` | `PortfolioHolding[]` | No       | List of current holdings. If empty, builds a new portfolio instead.                                                              |
 | `country`            | `string`          | Yes      | Required country context for the analysis (e.g. `AU`, `US`).                                                                     |
 | `investor_theme`     | `string`          | No       | Investor theme/preference for the analysis. Defaults to a built-in theme.                                                        |
 | `rebalance_plan`     | `boolean`         | No       | If `true`, assesses whether existing holdings need a major rebalance and generates a plan only when needed. Defaults to `false`. |
 
-Each `HoldingTicker` object:
+Each `PortfolioHolding` object:
 
 | Field               | Type   | Description                                     |
 |---------------------|--------|-------------------------------------------------|
-| `ticker`            | string | Stock symbol.                                   |
-| `num_shares`        | float  | Number of shares held.                          |
-| `avg_price`         | float  | Average purchase price per share.               |
-| `market_price`      | float  | Current market price per share.                 |
-| `target_allocation` | float  | Target allocation weight (e.g. `0.25` for 25%). |
-| `tags`              | string | Optional tag(s) for the holding.                |
+| `ticker`            | string | Required stock symbol, limited to 32 characters.                    |
+| `num_shares`        | float  | Non-negative finite share count; defaults to zero.                  |
+| `avg_price`         | float  | Non-negative finite average purchase price; defaults to zero.       |
+| `market_price`      | float  | Optional positive current market price per share.                   |
+| `target_allocation` | float  | Optional target allocation from `0` through `1`.                    |
+| `tags`              | string | Optional holding metadata, limited to 500 characters.               |
 
 **Example:**
 

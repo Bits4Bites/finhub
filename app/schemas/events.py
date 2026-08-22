@@ -1,26 +1,19 @@
-from pydantic import BaseModel
-
 from ..models import event as models_event
 from . import async_task
 from .base_req_resp import BaseResponse
 
 
-class UpcomingEarningsResponse(BaseResponse):
-    data: list[models_event.UpcomingEarningsEvent] | None = None
+class UpcomingEarningsResponse(BaseResponse[list[models_event.UpcomingEarningsEvent]]):
+    pass
 
 
-class UpcomingDividendsResponse(BaseResponse):
-    data: list[models_event.UpcomingDividendEvent] | None = None
+class UpcomingDividendsResponse(BaseResponse[list[models_event.UpcomingDividendEvent]]):
+    pass
 
 
-class AsyncTaskInfo(BaseModel):
-    task_id: str
-    state: async_task.TaskState | None = None
+class UpcomingDividendsAsyncResponse(async_task.AsyncTaskResponse[list[models_event.UpcomingDividendEvent]]):
+    pass
 
 
-class UpcomingDividendsAsyncResponse(UpcomingDividendsResponse):
-    extra: AsyncTaskInfo
-
-
-class UpcomingEarningsAsyncResponse(UpcomingEarningsResponse):
-    extra: AsyncTaskInfo
+class UpcomingEarningsAsyncResponse(async_task.AsyncTaskResponse[list[models_event.UpcomingEarningsEvent]]):
+    pass

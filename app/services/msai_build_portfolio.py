@@ -1,5 +1,5 @@
 from ..models import ai as models_ai
-from ..models import finhub as models
+from ..models import portfolio as models_portfolio
 from ..services import ai_helper
 from ..utils import cache, conv
 
@@ -69,7 +69,7 @@ BUILD_PROMPT_TEMPLATE = (
 
 async def ai_build_portfolio(
     *,
-    existing_positions: list[models.HoldingTicker] | None = None,
+    existing_positions: list[models_portfolio.PortfolioHolding] | None = None,
     country: str,
     investor_theme: str = DEFAULT_INVESTOR_THEME,
 ) -> models_ai.AnalyzePortfolioResult | None:
@@ -77,7 +77,7 @@ async def ai_build_portfolio(
     Build a portfolio using AI assistance.
 
     Args:
-        existing_positions (optional, list[models.HoldingTicker] | None): Existing positions to consider in the analysis
+        existing_positions (optional, list[models_portfolio.PortfolioHolding] | None): Existing positions to consider
         country (str): Country for which to build the portfolio (used for market context)
         investor_theme (optional, string): The investor's profile, goals, and preferences
 
@@ -106,7 +106,7 @@ async def ai_build_portfolio(
         currency = conv.country_to_currency_symbol(country) or "$"
         holdings_lines = []
         for pos in existing_positions:
-            market_value = pos.num_shares * pos.market_price
+            market_value = pos.num_shares * (pos.market_price or 0)
             line = f"- {pos.ticker}: {pos.num_shares} shares, avg price {currency}{pos.avg_price:.2f}, market value {currency}{market_value:.2f}"
             if pos.tags:
                 line += f" ({pos.tags})"

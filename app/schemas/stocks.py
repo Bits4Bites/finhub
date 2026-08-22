@@ -3,29 +3,29 @@ from ..models import finhub as models
 from .base_req_resp import BaseResponse
 
 
-class StockQuotesResponse(BaseResponse):
-    data: dict[str, models.StockQuote] | None = None
+class StockQuotesResponse(BaseResponse[dict[str, models.StockQuote]]):
+    pass
 
 
-class StockQuoteResponse(BaseResponse):
-    data: models.StockQuote | None = None
+class StockQuoteResponse(BaseResponse[models.StockQuote]):
+    pass
 
 
-class StockHistoryResponse(BaseResponse):
-    data: list[models.HistoryPoint] | None = None
+class StockHistoryResponse(BaseResponse[list[models.HistoryPoint]]):
+    pass
 
 
-class SymbolOverviewResponse(BaseResponse):
-    data: models.SymbolOverview | None = None
+class SymbolOverviewResponse(BaseResponse[models.SymbolOverview]):
+    pass
 
 
-class SymbolInfoResponse(BaseResponse):
-    data: models.SymbolInfo | None = None
+class SymbolInfoResponse(BaseResponse[models.SymbolInfo]):
+    pass
 
 
-class StockQuoteAtDateResponse(BaseResponse):
-    data: models.HistoryPoint | None = None
+class StockQuoteAtDateResponse(BaseResponse[models.HistoryPoint]):
+    pass
 
 
-class IndexCompaniesResponse(BaseResponse):
-    data: list[config.CompanyBriefInfo] | None = None
+class IndexCompaniesResponse(BaseResponse[list[config.CompanyBriefInfo]]):
+    pass

@@ -1,11 +1,11 @@
 from ..models import events_listings as models_events_listings
-from . import events as schemas_events
+from . import async_task
 from .base_req_resp import BaseResponse
 
 
-class ListingsResponse(BaseResponse):
-    data: list[models_events_listings.ListingEvent] | None = None
+class ListingsResponse(BaseResponse[list[models_events_listings.ListingEvent]]):
+    pass
 
 
-class ListingsAsyncResponse(ListingsResponse):
-    extra: schemas_events.AsyncTaskInfo
+class ListingsAsyncResponse(async_task.AsyncTaskResponse[list[models_events_listings.ListingEvent]]):
+    pass
