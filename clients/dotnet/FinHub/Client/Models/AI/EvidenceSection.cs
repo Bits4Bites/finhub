@@ -1,11 +1,11 @@
 using System.Text.Json.Serialization;
 
-namespace FinHub.Client.Models.Dividends;
+namespace FinHub.Client.Models.AI;
 
-public sealed record DividendEvidenceSection
+public record EvidenceSection
 {
     [JsonPropertyName("facts")]
-    public required IReadOnlyList<DividendEvidenceClaim> Facts { get; init; }
+    public required IReadOnlyList<EvidenceClaim> Facts { get; init; }
 
     [JsonPropertyName("data_gaps")]
     public required IReadOnlyList<string> DataGaps { get; init; }

@@ -15,7 +15,7 @@ public sealed record ListingAnalysis
     public required ListingStatus ListingStatus { get; init; }
 
     [JsonPropertyName("overall_data_quality")]
-    public required ListingDataQuality OverallDataQuality { get; init; }
+    public required DataQuality OverallDataQuality { get; init; }
 
     [JsonPropertyName("executive_summary")]
     public required ListingAnalysisSection ExecutiveSummary { get; init; }

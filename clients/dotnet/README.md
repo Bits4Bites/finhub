@@ -38,7 +38,6 @@ The dividend-analysis contracts cover:
 ```http
 POST /ai/analyze_dividend_event
 POST /ai/analyze_dividend_event_async
-GET /ai/analyze_dividend_event_async/{task_id}
 ```
 
 ```csharp
@@ -57,14 +56,52 @@ var response = JsonSerializer.Deserialize<AnalyzeDividendEventAsyncResponse>(jso
 
 `TransactionCosts` defaults both per-share costs to zero, and `HoldingPeriodDays` defaults to 28. Synchronous results
 use `AnalyzeDividendEventResponse`; async start and poll responses share `AnalyzeDividendEventAsyncResponse` and
-reusable `AsyncTaskInfo`/`TaskState` metadata.
+reusable `AsyncTaskInfo`/`TaskState` metadata. Poll with
+`POST /ai/analyze_dividend_event_async?task_id=<TASK_ID>`.
+
+## Portfolio spotlight
+
+The portfolio-spotlight contracts cover:
+
+```http
+POST /ai/spotlight_portfolio
+POST /ai/spotlight_portfolio_async
+```
+
+```csharp
+using FinHub.Client.Models.Portfolios;
+using FinHub.Client.Schemas.PortfolioSpotlight;
+
+var request = new PortfolioSpotlightRequest
+{
+    Country = "AU",
+    CurrentAllocation =
+    [
+        new PortfolioHolding
+        {
+            Ticker = "CBA.AX",
+            NumShares = 10,
+            AvgPrice = 150.0,
+            TargetAllocation = 1.0,
+        },
+    ],
+};
+```
+
+The synchronous endpoint uses `PortfolioSpotlightResponse`. Async start and poll calls both use
+`PortfolioSpotlightAsyncResponse` with shared `AsyncTaskInfo`/`TaskState` metadata. Results contain verified holdings
+through the reusable `PortfolioVerifiedHolding` contract and up to four structured risk actions. `InvestorTheme` is
+optional and has no client default. Risk levels are limited to `Critical`, `High`, and `Medium`;
+`PortfolioSpotlightRebalanceFlag` strictly maps the wire values `YES` and `NO`.
 
 ## Contract namespaces
 
-- `FinHub.Client.Models.AI`: reusable AI contracts such as reference sources.
+- `FinHub.Client.Models.AI`: reusable AI contracts for data quality, evidence, and reference sources.
 - `FinHub.Client.Models.Dividends`: reusable dividend-event analysis domain contracts.
 - `FinHub.Client.Models.Events`: reusable event contracts.
 - `FinHub.Client.Models.Listings`: listing-domain contracts shared by listing APIs.
-- `FinHub.Client.Schemas`: reusable API response envelopes and async task metadata.
+- `FinHub.Client.Models.Portfolios`: reusable portfolio holdings, snapshots, risk actions, and spotlight results.
+- `FinHub.Client.Schemas`: reusable synchronous/async API response envelopes and async task metadata.
 - `FinHub.Client.Schemas.DividendAnalysis`: request and response schemas for dividend-event analysis.
 - `FinHub.Client.Schemas.NewListings`: schemas specific to the new-listings API.
+- `FinHub.Client.Schemas.PortfolioSpotlight`: request and response schemas for portfolio spotlight.

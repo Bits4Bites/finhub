@@ -1,8 +1,8 @@
 using System.Text.Json.Serialization;
 
-namespace FinHub.Client.Models.Listings;
+namespace FinHub.Client.Models.AI;
 
-public sealed record ListingEvidenceClaim
+public sealed record EvidenceClaim
 {
     [JsonPropertyName("text")]
     public required string Text { get; init; }

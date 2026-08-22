@@ -15,7 +15,7 @@ public sealed record DividendEventAnalysis
     public required string? FailureReason { get; init; }
 
     [JsonPropertyName("overall_data_quality")]
-    public required DividendDataQuality OverallDataQuality { get; init; }
+    public required DataQuality OverallDataQuality { get; init; }
 
     [JsonPropertyName("event")]
     public required DividendEventContext Event { get; init; }

@@ -5,7 +5,9 @@
 - feat(AI): Add task-level reasoning and web search.
 - refactor(AI): Standardize prompt execution execution with reasoning, web search and response JSON schema.
 - refactor(AI): Introduce shared ReferenceSource model for source identity.
-- impr(AI/new-listings): Improve ASX new listings flow with deep research and analysis.
+- impr(AI/new-listings): Rebuild feature with deep research and analysis.
 - feat(client/dotnet): Add new-listings API contracts.
-- feat(AI/analyze-dividend-event): Add evidence-backed dividend-event research and analysis.
+- feat(AI/analyze-dividend-event): Rebuild feature with evidence-backed dividend-event research and analysis.
 - feat(client/dotnet): Add analyze-dividend-event API contracts.
+- feat(AI/spotlight-portfolio): Rebuild feature with structured theme-aware analysis.
+- feat(client/dotnet): Add spotlight-portfolio API contracts.

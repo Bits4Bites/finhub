@@ -1,11 +1,6 @@
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using FinHub.Client.Models.Listings;
+using FinHub.Client.Schemas;
 
 namespace FinHub.Client.Schemas.NewListings;
 
-public sealed record GetNewListingsResponse : ApiResponse<IReadOnlyList<ListingEvent>>
-{
-    [JsonPropertyName("extra")]
-    public JsonElement? Extra { get; init; }
-}
+public sealed record GetNewListingsResponse : ApiResponseWithExtra<IReadOnlyList<ListingEvent>>;
