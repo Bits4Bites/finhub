@@ -1,5 +1,5 @@
 {
-    "date": "2026-08-15",
+    "date": "2026-08-22",
     "data": [
         {
             "symbol": "NYSE:MMM",
@@ -265,11 +265,6 @@
             "symbol": "NYSE:AZO",
             "company": "AutoZone",
             "sector": "Consumer Discretionary"
-        },
-        {
-            "symbol": "NYSE:AVB",
-            "company": "AvalonBay Communities",
-            "sector": "Real Estate"
         },
         {
             "symbol": "NYSE:AVY",
@@ -874,11 +869,6 @@
         {
             "symbol": "NASDAQ:EQIX",
             "company": "Equinix",
-            "sector": "Real Estate"
-        },
-        {
-            "symbol": "NYSE:EQR",
-            "company": "Equity Residential",
             "sector": "Real Estate"
         },
         {
@@ -1942,6 +1932,11 @@
             "sector": "Financials"
         },
         {
+            "symbol": "NYSE:RDDT",
+            "company": "Reddit",
+            "sector": "Communication Services"
+        },
+        {
             "symbol": "NYSE:RTX",
             "company": "RTX Corporation",
             "sector": "Industrials"
@@ -2385,6 +2380,11 @@
             "symbol": "NYSE:VST",
             "company": "Vistra Corp.",
             "sector": "Utilities"
+        },
+        {
+            "symbol": "NYSE:VMRK",
+            "company": "Vivmark Residential",
+            "sector": "Real Estate"
         },
         {
             "symbol": "NYSE:VMC",

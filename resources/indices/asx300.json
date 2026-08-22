@@ -1,5 +1,5 @@
 {
-    "date": "2026-08-15",
+    "date": "2026-08-22",
     "data": [
         {
             "symbol": "ASX:360",
@@ -1070,11 +1070,6 @@
             "symbol": "ASX:QRI",
             "company": "QUALITAS REAL ESTATE INCOME FUND",
             "sector": ""
-        },
-        {
-            "symbol": "ASX:QUB",
-            "company": "QUBE HOLDINGS LIMITED",
-            "sector": "Transportation & Logistics"
         },
         {
             "symbol": "ASX:RDX",
