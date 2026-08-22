@@ -104,7 +104,7 @@ Task IDs below use their current code spelling, including `ASX_LISTTINGS`.
 | `REVIEW_PORTFOLIO_SUMMARIZE`              | `gpt-5.6-luna`  | Medium    | No (default) | Summarize a portfolio review for rebalance planning                               |
 | `REVIEW_PORTFOLIO_REBALANCE_BUILD_PROMPT` | `gpt-5.6-luna`  | Medium    | No (default) | Build a rebalance-planning prompt                                                 |
 | `REVIEW_PORTFOLIO_REBALANCE_EXEC`         | `gpt-5.6-sol`   | High      | Yes          | Research and produce an actionable rebalance plan                                 |
-| `SPOTLIGHT_PORTFOLIO_PLAN`                | `gpt-5.6-terra` | High      | No           | Build a validated, theme-aware analysis plan for a verified portfolio             |
+| `SPOTLIGHT_PORTFOLIO_PLAN`                | `gpt-5.6-terra` | Medium    | No (default) | Build a validated, theme-aware analysis plan for a verified portfolio             |
 | `SPOTLIGHT_PORTFOLIO_RESEARCH`            | `gpt-5.6-terra` | High      | Yes          | Research sourced risks for a verified portfolio                                   |
 | `SPOTLIGHT_PORTFOLIO_ASSESS`              | `gpt-5.6-terra` | High      | No           | Rank structured risks and actions from validated research                         |
 | `ANALYZE_DIV_EVENT_RESEARCH`              | `gpt-5.6-terra` | High      | Yes          | Research sourced dividend-event evidence                                          |

@@ -576,13 +576,13 @@ def test_provider_schema_requires_every_declared_property(response_model):
     _assert_all_object_properties_are_required(schema)
 
 
-def test_task_configuration_uses_terra_high_for_all_stages():
+def test_task_configuration_uses_terra_medium_for_planning():
     plan = service.config.settings_llm_task.tasks["SPOTLIGHT_PORTFOLIO_PLAN"]
     research = service.config.settings_llm_task.tasks["SPOTLIGHT_PORTFOLIO_RESEARCH"]
     assessment = service.config.settings_llm_task.tasks["SPOTLIGHT_PORTFOLIO_ASSESS"]
 
     assert plan.model == "gpt-5.6-terra"
-    assert plan.reasoning_effort == "High"
+    assert plan.reasoning_effort == "Medium"
     assert plan.use_web_search is False
     assert research.model == "gpt-5.6-terra"
     assert research.reasoning_effort == "High"
