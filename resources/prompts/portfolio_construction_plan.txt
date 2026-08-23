@@ -13,9 +13,12 @@ Market date: {{MARKET_DATE}}
 Requirements:
 - Return only the requested structured object.
 - Copy construction_mode exactly.
-- Copy the normalized budget object exactly; it was extracted deterministically from the investor theme.
+- Copy the application-normalized budget object exactly; supplied values were extracted from the investor theme.
 - Plan one target portfolio, not trades or a rebalance sequence.
 - Use a supplied budget as a security-affordability and portfolio-design constraint.
+- Treat a Total budget as one new-cash amount added on top of verified holdings, never as the final portfolio value.
+- Treat a Recurring budget as exactly the next contribution only. Never multiply it by its frequency or investment horizon.
+- When budget.is_inferred is true, treat the amount as an application-estimated next contribution and disclose that limitation.
 - If no budget was supplied, preserve NotProvided and do not invent an amount.
 - Do not calculate share counts, transaction costs, or tax consequences; a later deterministic stage handles whole-share quantities.
 - For Seeded mode, explain how verified seed holdings should inform selection without assuming they must all remain.

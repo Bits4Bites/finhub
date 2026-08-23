@@ -90,6 +90,8 @@ _OPENAI_SUPPORTED_STRING_FORMATS = frozenset(
 
 
 def _openai_compatible_json_schema(schema: Mapping[str, object]) -> dict[str, object]:
+    if "$ref" in schema:
+        return {"$ref": schema["$ref"]}
     return {
         key: _openai_compatible_json_schema_value(value)
         for key, value in schema.items()

@@ -3,7 +3,14 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Annotated, Literal, Self
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import (
+    Field,
+    SerializationInfo,
+    SerializerFunctionWrapHandler,
+    field_validator,
+    model_serializer,
+    model_validator,
+)
 
 from ..utils import ai_reference as ai_reference_utils
 from . import ai as models_ai
@@ -18,28 +25,31 @@ PortfolioActionType = Literal["EXIT", "TRIM", "BUY", "ACCUMULATE", "HOLD"]
 
 
 class PortfolioBudget(models_ai.StrictAIModel):
-    """Investment budget extracted deterministically from the investor theme."""
+    """Supplied or application-inferred new money available for portfolio actions."""
 
     budget_type: PortfolioBudgetType = Field(
-        description="Whether the theme supplies no budget, a total portfolio budget, or a recurring contribution."
+        description="Whether no budget is available, or new money is a total amount or recurring contribution."
+    )
+    is_inferred: bool = Field(
+        description="Whether the application inferred the recurring next-iteration budget from current holdings."
     )
     amount: float | None = Field(
         gt=0,
         allow_inf_nan=False,
-        description="Positive total or per-period budget amount, or null when no budget was supplied.",
+        description="Positive new-money amount for one action-plan iteration, or null when no budget is available.",
     )
     currency: str | None = Field(
         min_length=3,
         max_length=3,
-        description="Three-letter budget currency, or null when no budget was supplied.",
+        description="Three-letter budget currency, or null when no budget is available.",
     )
     frequency: PortfolioBudgetFrequency | None = Field(
-        description="Contribution frequency for a recurring budget, otherwise null.",
+        description="Investor-supplied contribution frequency, or null for total and inferred next-iteration budgets.",
     )
     source_text: str | None = Field(
         min_length=1,
         max_length=500,
-        description="Exact investor-theme excerpt from which the budget was extracted.",
+        description="Exact investor-theme excerpt or deterministic explanation of an inferred budget.",
     )
 
     @field_validator("currency", mode="before")
@@ -55,15 +65,23 @@ class PortfolioBudget(models_ai.StrictAIModel):
     @model_validator(mode="after")
     def validate_budget(self) -> Self:
         if self.budget_type == "NotProvided":
-            if any(value is not None for value in (self.amount, self.currency, self.frequency, self.source_text)):
+            if self.is_inferred or any(
+                value is not None for value in (self.amount, self.currency, self.frequency, self.source_text)
+            ):
                 raise ValueError("NotProvided budget cannot contain budget details")
         elif self.budget_type == "Total":
             if self.amount is None or self.currency is None or self.source_text is None:
                 raise ValueError("Total budget requires amount, currency, and source_text")
+            if self.is_inferred:
+                raise ValueError("Total budget cannot be application-inferred")
             if self.frequency is not None:
                 raise ValueError("Total budget cannot contain a recurring frequency")
-        elif self.amount is None or self.currency is None or self.frequency is None or self.source_text is None:
-            raise ValueError("Recurring budget requires amount, currency, frequency, and source_text")
+        elif self.amount is None or self.currency is None or self.source_text is None:
+            raise ValueError("Recurring budget requires amount, currency, and source_text")
+        elif self.is_inferred and self.frequency is not None:
+            raise ValueError("Inferred recurring budget cannot invent a contribution frequency")
+        elif not self.is_inferred and self.frequency is None:
+            raise ValueError("Investor-supplied recurring budget requires a frequency")
         return self
 
 
@@ -203,7 +221,7 @@ class PortfolioActionPlan(models_ai.StrictAIModel):
         default=None,
         ge=0,
         allow_inf_nan=False,
-        description="Estimated whole-share target value or recurring contribution used.",
+        description="New-money budget spent on whole-share purchases.",
     )
     unallocated_amount: float | None = Field(
         default=None,
@@ -227,20 +245,16 @@ class PortfolioActionPlan(models_ai.StrictAIModel):
             raise ValueError("action plan tickers must be unique")
 
         if self.budget.budget_type == "NotProvided":
-            if self.budget_utilized is not None or self.unallocated_amount is not None:
-                raise ValueError("action plan without a budget cannot contain budget amounts")
-            if any(step.action in {"BUY", "TRIM"} for step in self.steps):
-                raise ValueError("action plan without a budget cannot contain BUY or TRIM actions")
-        else:
-            if self.budget_utilized is None or self.unallocated_amount is None:
-                raise ValueError("budget-aware action plan requires utilized and unallocated amounts")
-            if self.budget.amount is None:
-                raise ValueError("budget-aware action plan requires a budget amount")
-            if abs(self.budget_utilized + self.unallocated_amount - self.budget.amount) > 0.01:
-                raise ValueError("utilized and unallocated amounts must equal the supplied budget")
+            raise ValueError("action plan requires a supplied or inferred budget")
+        if self.budget_utilized is None or self.unallocated_amount is None:
+            raise ValueError("budget-aware action plan requires utilized and unallocated amounts")
+        if self.budget.amount is None:
+            raise ValueError("budget-aware action plan requires a budget amount")
+        if abs(self.budget_utilized + self.unallocated_amount - self.budget.amount) > 0.01:
+            raise ValueError("utilized and unallocated amounts must equal the action-plan budget")
+        if any(step.action == "TRIM" for step in self.steps):
+            raise ValueError("new-money action plan cannot contain TRIM actions")
         if self.budget.budget_type == "Recurring":
-            if any(step.action == "TRIM" for step in self.steps):
-                raise ValueError("recurring-budget action plan cannot contain TRIM actions")
             buy_total = sum(step.estimated_amount or 0 for step in self.steps if step.action == "BUY")
             if self.budget.amount is not None and buy_total - self.budget.amount > 0.01:
                 raise ValueError("recurring BUY actions cannot exceed the contribution budget")
@@ -279,8 +293,10 @@ class PortfolioConstruction(models_ai.StrictAIModel):
         max_length=20,
         description="Constructed target holdings whose allocation weights sum to one.",
     )
-    action_plan: PortfolioActionPlan = Field(
-        description="Prioritized whole-share implementation plan for the constructed target portfolio."
+    action_plan: PortfolioActionPlan | None = Field(
+        description=(
+            "Prioritized whole-share implementation plan, or null when neither a budget nor current holdings exist."
+        )
     )
     overall_data_quality: models_types.DataQuality = Field(
         description="Overall quality of the evidence supporting the constructed portfolio."
@@ -298,6 +314,23 @@ class PortfolioConstruction(models_ai.StrictAIModel):
         max_length=20,
         description="Canonical sources cited by target portfolio positions.",
     )
+
+    @model_serializer(mode="wrap")
+    def serialize_action_plan(
+        self,
+        handler: SerializerFunctionWrapHandler,
+        info: SerializationInfo,
+    ):
+        data = handler(self)
+        included = info.include
+        excluded = info.exclude
+        action_plan_included = included is None or (
+            isinstance(included, dict | set | frozenset) and "action_plan" in included
+        )
+        action_plan_excluded = isinstance(excluded, dict | set | frozenset) and "action_plan" in excluded
+        if self.action_plan is None and info.exclude_none and action_plan_included and not action_plan_excluded:
+            data["action_plan"] = None
+        return data
 
     @model_validator(mode="after")
     def validate_construction(self) -> Self:
@@ -325,31 +358,36 @@ class PortfolioConstruction(models_ai.StrictAIModel):
 
         target_tickers = set(tickers)
         seed_ticker_set = set(seed_tickers)
-        action_tickers = {step.ticker for step in self.action_plan.steps}
-        if action_tickers != target_tickers | seed_ticker_set:
-            raise ValueError("action plan must cover every target and verified seed ticker")
-        target_allocations = {position.ticker: position.allocation for position in self.target_portfolio}
-        for step in self.action_plan.steps:
-            if step.action in {"BUY", "ACCUMULATE"} and step.ticker not in target_tickers:
-                raise ValueError(f"{step.action} action contains a ticker outside the target portfolio")
-            if step.action in {"EXIT", "TRIM"} and step.ticker not in seed_ticker_set:
-                raise ValueError(f"{step.action} action contains a ticker outside verified seed holdings")
-            if step.action == "EXIT" and step.ticker in target_tickers:
-                raise ValueError("EXIT action cannot contain a target portfolio ticker")
-            if step.action == "TRIM" and step.ticker not in target_tickers:
-                raise ValueError("TRIM action requires a retained target portfolio ticker")
-            if step.action == "HOLD" and step.ticker not in target_tickers:
-                raise ValueError("HOLD action contains a ticker outside the target portfolio")
-            if step.target_allocation is not None and step.ticker not in target_tickers:
-                raise ValueError("action target allocation requires a target portfolio ticker")
-            if step.ticker in target_allocations and (
-                step.target_allocation is None or abs(step.target_allocation - target_allocations[step.ticker]) > 1e-6
-            ):
-                raise ValueError("action target allocation must match the target portfolio")
-        if self.verified_seed_holdings and self.action_plan.budget.currency is not None:
-            seed_currencies = {holding.currency for holding in self.verified_seed_holdings}
-            if seed_currencies != {self.action_plan.budget.currency}:
-                raise ValueError("action budget currency must match verified seed holdings")
+        if self.action_plan is None:
+            if self.construction_mode != "Scratch":
+                raise ValueError("Seeded construction requires an action plan")
+        else:
+            action_tickers = {step.ticker for step in self.action_plan.steps}
+            if action_tickers != target_tickers | seed_ticker_set:
+                raise ValueError("action plan must cover every target and verified seed ticker")
+            target_allocations = {position.ticker: position.allocation for position in self.target_portfolio}
+            for step in self.action_plan.steps:
+                if step.action in {"BUY", "ACCUMULATE"} and step.ticker not in target_tickers:
+                    raise ValueError(f"{step.action} action contains a ticker outside the target portfolio")
+                if step.action in {"EXIT", "TRIM"} and step.ticker not in seed_ticker_set:
+                    raise ValueError(f"{step.action} action contains a ticker outside verified seed holdings")
+                if step.action == "EXIT" and step.ticker in target_tickers:
+                    raise ValueError("EXIT action cannot contain a target portfolio ticker")
+                if step.action == "TRIM" and step.ticker not in target_tickers:
+                    raise ValueError("TRIM action requires a retained target portfolio ticker")
+                if step.action == "HOLD" and step.ticker not in target_tickers:
+                    raise ValueError("HOLD action contains a ticker outside the target portfolio")
+                if step.target_allocation is not None and step.ticker not in target_tickers:
+                    raise ValueError("action target allocation requires a target portfolio ticker")
+                if step.ticker in target_allocations and (
+                    step.target_allocation is None
+                    or abs(step.target_allocation - target_allocations[step.ticker]) > 1e-6
+                ):
+                    raise ValueError("action target allocation must match the target portfolio")
+            if self.verified_seed_holdings and self.action_plan.budget.currency is not None:
+                seed_currencies = {holding.currency for holding in self.verified_seed_holdings}
+                if seed_currencies != {self.action_plan.budget.currency}:
+                    raise ValueError("action budget currency must match verified seed holdings")
 
         ai_reference_utils.validate_reference_registry(self.references, self)
         return self

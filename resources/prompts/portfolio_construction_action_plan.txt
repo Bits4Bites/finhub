@@ -31,7 +31,10 @@ Requirements:
 - Keep all EXIT actions before TRIM, all TRIM before BUY, all BUY before ACCUMULATE, and all ACCUMULATE before HOLD. Rank actions within each category by urgency and importance.
 - Do not change, recalculate, recommend alternatives to, or contradict any action, quantity, price, amount, target allocation, or SELL ALL instruction.
 - Explain each action briefly using the investor theme, target role, researched evidence, and budget treatment.
-- For recurring budgets, never suggest trimming an aligned target holding; explain HOLD as preserving it while new money is directed elsewhere.
+- Treat Total as one new-cash amount on top of current holdings, never as the final portfolio value.
+- Treat Recurring as exactly the next contribution only. Never annualize or multiply it by frequency or horizon.
+- Never suggest trimming an aligned target holding; explain HOLD as preserving it while new money is directed elsewhere.
+- When budget.is_inferred is true, state that the next contribution was estimated from verified holdings.
 - For EXIT, explain that the seed holding was omitted because it contradicts the finalized target plan. Do not claim it is high risk unless the supplied evidence establishes that.
 - For ACCUMULATE, explain the whole-share affordability limitation.
 - Do not invent facts, references, trades, fractional shares, fees, taxes, prices, or amounts.

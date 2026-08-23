@@ -536,11 +536,17 @@ Unknown request fields, including `rebalance_plan`, are rejected. Duplicate norm
 rejected. Positive starting holdings are verified against current market data; duplicate canonical tickers and
 mixed-currency seeds are invalid.
 
-The service extracts at most one budget from `investor_theme`. A total budget is the desired target-portfolio value;
-a recurring budget is new money available each stated period. Ambiguous multiple amounts and recurring amounts
-without a weekly, fortnightly, monthly, quarterly, or annual frequency return `422`. A seeded budget must use the
-verified seed portfolio currency; a scratch budget must use the selected country's primary currency. The flow does
-not perform foreign-exchange conversion.
+The service extracts at most one budget from `investor_theme`. A total budget is one new-cash amount added on top of
+existing holdings. A recurring budget sizes the next contribution only and is never multiplied by its frequency or
+investment horizon. Ambiguous multiple amounts and supplied recurring amounts without a weekly, fortnightly,
+monthly, quarterly, or annual frequency return `422`. A seeded budget must use the verified seed portfolio currency;
+a scratch budget must use the selected country's primary currency. The flow does not perform foreign-exchange
+conversion.
+
+When no budget is supplied for a seeded portfolio, the service infers a next-iteration recurring budget at 10% of
+verified market value. It increases that assumption to at most 15% only when doing so enables a whole-share purchase.
+The response marks this with `budget.is_inferred=true`. When neither a budget nor current holdings are supplied, the
+target portfolio is still returned but `action_plan` is `null`.
 
 The `data` object contains:
 
@@ -554,7 +560,7 @@ The `data` object contains:
 | `summary`                 | Concise explanation of the target portfolio.                                                        |
 | `verified_seed_holdings`  | Verified positive starting holdings; empty in `Scratch` mode.                                       |
 | `target_portfolio`        | Three through 20 researched target positions whose `allocation` values sum to `1.0`.                |
-| `action_plan`             | Prioritized implementation steps using the normalized budget and whole-share quantities.            |
+| `action_plan`             | Prioritized implementation steps, or `null` when no budget or holdings support executable actions.  |
 | `overall_data_quality`    | `High`, `Medium`, `Low`, or `Insufficient`.                                                         |
 | `data_gaps`               | Limitations found during verification, planning, research, or construction.                         |
 | `validation_warnings`     | Source-verification warnings.                                                                       |
@@ -567,27 +573,28 @@ The `action_plan` contains:
 
 | Field                | Type                    | Description                                                                                       |
 |----------------------|-------------------------|---------------------------------------------------------------------------------------------------|
-| `budget`             | `PortfolioBudget`       | Deterministically normalized budget from the exact investor-theme excerpt.                        |
+| `budget`             | `PortfolioBudget`       | Deterministically normalized supplied or application-inferred new-money budget.                   |
 | `summary`            | `string`                | Brief implementation sequence.                                                                    |
-| `budget_utilized`    | `float \| null`         | Whole-share target value for a total budget, or recurring contribution spent; null without budget. |
-| `unallocated_amount` | `float \| null`         | Budget remaining after whole-share sizing; null without budget.                                   |
+| `budget_utilized`    | `float`                 | New-money budget spent on whole-share purchases.                                                   |
+| `unallocated_amount` | `float`                 | New-money budget remaining after whole-share sizing.                                               |
 | `steps`              | `PortfolioActionStep[]` | One action per target or verified seed ticker, highest priority first.                             |
 
-`PortfolioBudget` contains `budget_type` (`NotProvided`, `Total`, or `Recurring`), optional positive `amount`,
-three-letter `currency`, optional `frequency` (`Weekly`, `Fortnightly`, `Monthly`, `Quarterly`, or `Annually`), and
-the exact `source_text`. Budget detail fields are null when `budget_type` is `NotProvided`.
+`PortfolioBudget` contains `budget_type` (`NotProvided`, `Total`, or `Recurring`), `is_inferred`, optional positive
+`amount`, three-letter `currency`, optional supplied `frequency` (`Weekly`, `Fortnightly`, `Monthly`, `Quarterly`, or
+`Annually`), and `source_text`. For inferred budgets, `frequency` is null and `source_text` explains the deterministic
+assumption. When `budget_type` is `NotProvided`, `is_inferred` is false and the remaining detail fields are null.
 
 Each action step contains `priority`, `action` (`EXIT`, `TRIM`, `BUY`, `ACCUMULATE`, or `HOLD`), `ticker`, optional
 `company_name`, executable `instruction`, optional whole-share `quantity`, optional verified `market_price`, optional
 `estimated_amount`, optional `target_allocation`, brief `reasoning`, and `reference_ids`.
 
 - `EXIT` is a highest-priority `SELL ALL` instruction for a seeded holding omitted from the target.
-- A total budget sizes the final target portfolio and may `TRIM` an oversized retained seed holding.
-- A recurring budget sizes only new purchases. Retained overweight holdings are `HOLD`, never `TRIM`.
+- Total and recurring budgets both size only new purchases on top of existing holdings.
+- A recurring budget covers exactly the next contribution iteration.
+- Retained target holdings are `HOLD`, never `TRIM`; new money is directed toward underweight targets.
 - `BUY` and `TRIM` quantities are positive whole numbers. Fractional trading is never assumed.
 - `ACCUMULATE` identifies a target for which the current budget cannot buy one whole share.
-- Without a budget, the service returns percentage-based `ACCUMULATE`, `HOLD`, and applicable `EXIT` steps rather
-  than inventing BUY quantities or costs.
+- Without a budget or current holdings, `action_plan` is `null` rather than inventing BUY quantities or costs.
 
 The quality-first flow is seed verification, structured theme-aware planning, sourced candidate research, structured
 portfolio construction, target-price verification, deterministic whole-share sizing, focused action reasoning, and

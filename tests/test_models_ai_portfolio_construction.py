@@ -5,8 +5,9 @@ from app.models import ai_portfolio_construction as models_construction
 from tests import portfolio_construction_fixtures as fixtures
 
 
-def test_recurring_action_plan_rejects_trim():
+def test_new_money_action_plan_rejects_trim():
     total_plan = fixtures.construction(mode="Seeded").action_plan
+    assert total_plan is not None
     trim_step = total_plan.steps[0].model_copy(
         update={
             "action": "TRIM",
@@ -46,10 +47,34 @@ def test_action_plan_requires_consecutive_priorities():
 
 def test_construction_requires_actions_for_every_target():
     construction = fixtures.construction()
+    assert construction.action_plan is not None
     incomplete_plan = construction.action_plan.model_copy(update={"steps": construction.action_plan.steps[:-1]})
 
     with pytest.raises(ValidationError, match="cover every target"):
         models_construction.PortfolioConstruction(
             **construction.model_dump(exclude={"action_plan"}),
             action_plan=incomplete_plan,
+        )
+
+
+def test_scratch_construction_allows_null_action_plan():
+    construction = fixtures.construction()
+
+    result = models_construction.PortfolioConstruction(
+        **construction.model_dump(exclude={"action_plan"}),
+        action_plan=None,
+    )
+
+    assert result.action_plan is None
+    assert result.model_dump(exclude_none=True)["action_plan"] is None
+    assert result.model_dump(include={"country"}, exclude_none=True) == {"country": "US"}
+
+
+def test_seeded_construction_rejects_null_action_plan():
+    construction = fixtures.construction(mode="Seeded")
+
+    with pytest.raises(ValidationError, match="requires an action plan"):
+        models_construction.PortfolioConstruction(
+            **construction.model_dump(exclude={"action_plan"}),
+            action_plan=None,
         )

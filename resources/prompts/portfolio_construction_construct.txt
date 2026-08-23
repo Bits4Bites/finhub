@@ -24,5 +24,7 @@ Requirements:
 - Cite only reference IDs attached to that same researched candidate.
 - For Seeded mode, use verified holdings as context but return no trades, deltas, or rebalance instructions.
 - Respect the normalized budget as a feasibility constraint, but do not calculate share counts or purchase costs.
+- Treat Total as new cash added on top of verified holdings and Recurring as exactly one next contribution.
+- Never reinterpret a supplied budget as final portfolio value or multiply a recurring amount by frequency or horizon.
 - Do not alter or invent investment amounts, fees, taxes, or prices.
 - State evidence limitations as data gaps and assign overall data quality conservatively.

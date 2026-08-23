@@ -57,7 +57,7 @@ async def _get_build_portfolio_result(
 async def build_portfolio(
     req: schemas_construction.BuildPortfolioRequest = Body(description="The build portfolio request."),
 ) -> schemas_construction.BuildPortfolioResponse:
-    """Build one research-backed target portfolio and budget-aware action plan."""
+    """Build a research-backed target portfolio and an action plan when funding is available."""
 
     return await _get_build_portfolio_result(req)
 

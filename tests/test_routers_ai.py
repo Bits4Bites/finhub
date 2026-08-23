@@ -277,6 +277,24 @@ class TestBuildPortfolio:
         "app.routers.ai_portfolio_construction.service_build_portfolio.ai_build_portfolio",
         new_callable=AsyncMock,
     )
+    def test_success_preserves_null_action_plan(self, mock_build):
+        mock_build.return_value = portfolio_construction_fixtures.construction(action_plan_available=False)
+
+        resp = client.post(
+            "/ai/build_portfolio",
+            json={
+                "country": "US",
+                "investor_theme": "Durable growth with moderate risk.",
+            },
+        )
+
+        assert resp.status_code == 200
+        assert resp.json()["data"]["action_plan"] is None
+
+    @patch(
+        "app.routers.ai_portfolio_construction.service_build_portfolio.ai_build_portfolio",
+        new_callable=AsyncMock,
+    )
     def test_passes_existing_positions(self, mock_build):
         mock_build.return_value = portfolio_construction_fixtures.construction(mode="Seeded")
         positions = [{"ticker": "AAPL", "num_shares": 10, "market_price": 150.0}]
@@ -443,7 +461,7 @@ class TestBuildPortfolioAsync:
         assert resp.json() == {"status": 404, "message": "Task not found"}
 
     def test_poll_returns_completed_result(self):
-        construction = portfolio_construction_fixtures.construction()
+        construction = portfolio_construction_fixtures.construction(action_plan_available=False)
         task_entry = {
             "task_type": "build_portfolio",
             "state": async_task.TASK_STATE_COMPLETED,
@@ -460,6 +478,7 @@ class TestBuildPortfolioAsync:
         body = resp.json()
         assert body["status"] == 200
         assert body["data"]["construction_mode"] == "Scratch"
+        assert body["data"]["action_plan"] is None
         assert body["extra"] == {"task_id": "task-789", "state": async_task.TASK_STATE_COMPLETED}
 
     def test_poll_returns_failed_status(self):

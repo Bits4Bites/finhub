@@ -19,6 +19,7 @@ Requirements:
 - Research between 3 and 20 candidates and do not exceed the plan's target holding count by more than five.
 - Include theme fit, a decision-useful investment case, material risks, and a role for each candidate.
 - When a budget is supplied, research securities whose likely whole-share affordability is compatible with it without inventing prices.
+- Treat Total as new cash on top of verified holdings and Recurring as one next contribution; never annualize either amount.
 - Support every candidate with one through six reference IDs.
 - Each reference ID and URL must be unique; use HTTPS URLs only.
 - Do not provide allocation weights, share counts, purchase costs, or a rebalance plan.

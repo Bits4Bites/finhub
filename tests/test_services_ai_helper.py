@@ -297,6 +297,46 @@ class TestExecPromptOpenAiClient:
         assert response_format["name"] == "json_responses"
         assert response_format["schema"] == response_schema
 
+    def test_structured_response_removes_ref_sibling_keywords(self):
+        task_cfg = config.LLMTaskConfig(vendor="OPENAI", model="gpt-5-mini")
+        client = MagicMock()
+        client.responses.create = AsyncMock(return_value=_make_openai_response())
+        response_schema = {
+            "$defs": {
+                "ListingPeriodOutlook": {
+                    "type": "object",
+                    "properties": {"direction": {"type": "string"}},
+                },
+                "ListingOutlook": {
+                    "type": "object",
+                    "properties": {
+                        "ipo_day": {
+                            "$ref": "#/$defs/ListingPeriodOutlook",
+                            "description": "Outlook for the initial listing day.",
+                        }
+                    },
+                },
+            },
+            "type": "object",
+            "properties": {"outlook": {"$ref": "#/$defs/ListingOutlook"}},
+        }
+
+        asyncio.run(
+            ai_helper._exec_prompt_openai_client(
+                client,
+                task_cfg,
+                "prompt",
+                response_json_schema=response_schema,
+                schema_name="asx_listing_analysis",
+            )
+        )
+
+        sent_schema = client.responses.create.await_args.kwargs["text"]["format"]["schema"]
+        assert sent_schema["$defs"]["ListingOutlook"]["properties"]["ipo_day"] == {
+            "$ref": "#/$defs/ListingPeriodOutlook"
+        }
+        assert "description" in response_schema["$defs"]["ListingOutlook"]["properties"]["ipo_day"]
+
     def test_structured_response_removes_only_unsupported_string_formats(self):
         task_cfg = config.LLMTaskConfig(vendor="OPENAI", model="gpt-5-mini")
         client = MagicMock()

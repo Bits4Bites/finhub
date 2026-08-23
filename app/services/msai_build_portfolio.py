@@ -39,18 +39,21 @@ _PLAN_CACHE_NAMESPACE = "portfolio-construction-plan-v2"
 _RESEARCH_CACHE_NAMESPACE = "portfolio-construction-research-v1"
 _CONSTRUCT_CACHE_NAMESPACE = "portfolio-construction-draft-v1"
 _ACTION_PLAN_CACHE_NAMESPACE = "portfolio-construction-action-plan-v1"
-_FINAL_CACHE_NAMESPACE = "portfolio-construction-final-v2"
+_FINAL_CACHE_NAMESPACE = "portfolio-construction-final-v3"
 _AI_STAGE_CACHE_TTL = 60 * 60
 _ALLOCATION_TOLERANCE = 0.01
 _MONEY_QUANTUM = Decimal("0.000001")
+_INFERRED_BUDGET_MIN_RATE = Decimal("0.10")
+_INFERRED_BUDGET_MAX_RATE = Decimal("0.15")
 _CURRENCY_CODES = "AUD|CAD|CHF|CNY|EUR|GBP|HKD|INR|JPY|NZD|SGD|USD|VND"
+_CURRENCY_MARKERS = rf"{_CURRENCY_CODES}|A\$|[$€£¥]"
 _AMOUNT_TOKEN = (
     r"(?P<number>(?:\d{1,3}(?:[,\s]\d{3})+|\d+)(?:\.\d+)?)"
-    r"\s*(?P<scale>[kKmM])?(?![\d,])"
+    r"(?:\s*(?P<scale>[kKmM])(?![A-Za-z]))?(?![\d,])"
 )
 _BUDGET_PATTERNS = (
     re.compile(
-        rf"(?P<source>(?P<currency>{_CURRENCY_CODES}|[$€£¥])\s*{_AMOUNT_TOKEN})",
+        rf"(?P<source>(?P<currency>{_CURRENCY_MARKERS})\s*{_AMOUNT_TOKEN})",
         re.IGNORECASE,
     ),
     re.compile(
@@ -72,8 +75,8 @@ _BUDGET_CONTEXT_PATTERN = re.compile(
 )
 _NEGATIVE_BUDGET_PATTERN = re.compile(
     rf"\b(?:budget|investment|contribution|invest|contribute|deploy|fund)\b"
-    rf"[^.;!?\n]{{0,30}}(?:-\s*(?:{_CURRENCY_CODES}|[$€£¥])?\s*\d|"
-    rf"(?:{_CURRENCY_CODES}|[$€£¥])\s*-\s*\d)",
+    rf"[^.;!?\n]{{0,30}}(?:-\s*(?:{_CURRENCY_MARKERS})?\s*\d|"
+    rf"(?:{_CURRENCY_MARKERS})\s*-\s*\d)",
     re.IGNORECASE,
 )
 
@@ -336,6 +339,7 @@ def _extract_budget(
     if not non_overlapping:
         return models_construction.PortfolioBudget(
             budget_type="NotProvided",
+            is_inferred=False,
             amount=None,
             currency=None,
             frequency=None,
@@ -371,6 +375,7 @@ def _extract_budget(
     try:
         return models_construction.PortfolioBudget(
             budget_type=("Recurring" if frequency is not None else "Total"),
+            is_inferred=False,
             amount=float(amount),
             currency=currency,
             frequency=frequency,
@@ -418,6 +423,8 @@ def _resolve_budget_currency(marker: str | None, *, default_currency: str) -> st
         return "GBP"
     if normalized_marker == "¥":
         return default_currency if default_currency in {"CNY", "JPY"} else "JPY"
+    if normalized_marker == "A$":
+        return "AUD"
     if normalized_marker == "$":
         return default_currency if default_currency in {"AUD", "CAD", "HKD", "NZD", "SGD", "USD"} else "USD"
     raise portfolio_verification.PortfolioInputError(f"Unsupported investment budget currency marker: {marker}")
@@ -446,6 +453,26 @@ def _budget_frequency(
         if re.search(pattern, context, re.IGNORECASE):
             return frequency
     return None
+
+
+def _inferred_recurring_budget(
+    verified_portfolio: portfolio_verification.VerifiedPortfolio,
+    *,
+    rate: Decimal,
+) -> models_construction.PortfolioBudget:
+    amount = (Decimal(str(verified_portfolio.total_market_value)) * rate).quantize(_MONEY_QUANTUM)
+    if amount <= 0:
+        raise PortfolioConstructionAIError("Verified holdings are too small to infer an investment budget")
+    return models_construction.PortfolioBudget(
+        budget_type="Recurring",
+        is_inferred=True,
+        amount=float(amount),
+        currency=verified_portfolio.currency,
+        frequency=None,
+        source_text=(
+            f"Application-inferred next-iteration contribution at {rate:.0%} of verified current holdings market value."
+        ),
+    )
 
 
 async def ai_build_portfolio(
@@ -481,6 +508,11 @@ async def ai_build_portfolio(
         normalized_theme,
         default_currency=portfolio_currency,
     )
+    if budget.budget_type == "NotProvided" and verified_portfolio is not None:
+        budget = _inferred_recurring_budget(
+            verified_portfolio,
+            rate=_INFERRED_BUDGET_MIN_RATE,
+        )
     if budget.currency is not None and portfolio_currency and budget.currency != portfolio_currency:
         raise portfolio_verification.PortfolioInputError(
             f"Investment budget currency must match the {portfolio_currency} portfolio currency"
@@ -529,6 +561,17 @@ async def ai_build_portfolio(
         ) as exc:
             raise PortfolioConstructionAIError("Portfolio construction target-price verification failed") from exc
 
+    calculated_actions = None
+    if budget.budget_type != "NotProvided":
+        budget, calculated_actions = _resolve_action_budget(
+            target_positions=target_positions,
+            verified_portfolio=verified_portfolio,
+            verified_quotes=verified_quotes,
+            budget=budget,
+        )
+        if plan.budget != budget:
+            plan = plan.model_copy(update={"budget": budget})
+
     final_cache_key = _final_cache_key(
         country=normalized_country,
         investor_theme=normalized_theme,
@@ -544,21 +587,19 @@ async def ai_build_portfolio(
     if cached_construction is not None:
         return _cached_final(cached_construction)
 
-    calculated_actions = _calculate_actions(
-        target_positions=target_positions,
-        verified_portfolio=verified_portfolio,
-        verified_quotes=verified_quotes,
-        budget=budget,
-    )
-    action_plan_draft = await _create_action_plan(
-        country=normalized_country,
-        investor_theme=normalized_theme,
-        construction_mode=construction_mode,
-        verified_portfolio=verified_portfolio,
-        plan=plan,
-        research=research,
-        target_positions=target_positions,
-        calculated_actions=calculated_actions,
+    action_plan_draft = (
+        await _create_action_plan(
+            country=normalized_country,
+            investor_theme=normalized_theme,
+            construction_mode=construction_mode,
+            verified_portfolio=verified_portfolio,
+            plan=plan,
+            research=research,
+            target_positions=target_positions,
+            calculated_actions=calculated_actions,
+        )
+        if calculated_actions is not None
+        else None
     )
     construction = _finalize_portfolio(
         country=normalized_country,
@@ -985,43 +1026,35 @@ def _calculate_actions(
     budget: models_construction.PortfolioBudget,
 ) -> _CalculatedActions:
     if budget.budget_type == "NotProvided":
-        return _calculate_unfunded_actions(
-            target_positions=target_positions,
-            verified_portfolio=verified_portfolio,
-        )
+        raise PortfolioConstructionAIError("Portfolio action planning requires a supplied or inferred budget")
     if verified_quotes is None or budget.amount is None or budget.currency is None:
         raise PortfolioConstructionAIError("Portfolio construction lacks verified prices for budget-aware sizing")
 
     quote_by_ticker = {security.ticker: security for security in verified_quotes.securities}
     prices = {ticker: Decimal(str(security.market_price)) for ticker, security in quote_by_ticker.items()}
     budget_amount = Decimal(str(budget.amount))
-    if budget.budget_type == "Total":
-        desired_amounts = {
-            position.ticker: budget_amount * Decimal(str(position.allocation)) for position in target_positions
-        }
-    else:
-        current_values = _target_current_values(
-            target_positions,
-            verified_portfolio=verified_portfolio,
-            prices=prices,
+    current_values = _target_current_values(
+        target_positions,
+        verified_portfolio=verified_portfolio,
+        prices=prices,
+    )
+    target_value = sum(current_values.values(), Decimal("0")) + budget_amount
+    gaps = {
+        position.ticker: max(
+            target_value * Decimal(str(position.allocation)) - current_values[position.ticker],
+            Decimal("0"),
         )
-        target_value = sum(current_values.values(), Decimal("0")) + budget_amount
-        gaps = {
-            position.ticker: max(
-                target_value * Decimal(str(position.allocation)) - current_values[position.ticker],
-                Decimal("0"),
-            )
-            for position in target_positions
-        }
-        gap_total = sum(gaps.values(), Decimal("0"))
-        desired_amounts = {
-            position.ticker: (
-                budget_amount * gaps[position.ticker] / gap_total
-                if gap_total > 0
-                else budget_amount * Decimal(str(position.allocation))
-            )
-            for position in target_positions
-        }
+        for position in target_positions
+    }
+    gap_total = sum(gaps.values(), Decimal("0"))
+    desired_amounts = {
+        position.ticker: (
+            budget_amount * gaps[position.ticker] / gap_total
+            if gap_total > 0
+            else budget_amount * Decimal(str(position.allocation))
+        )
+        for position in target_positions
+    }
 
     quantities, utilized = _allocate_whole_shares(
         budget_amount,
@@ -1042,47 +1075,7 @@ def _calculate_actions(
         current_quantity = int(current_holding.num_shares) if current_holding else 0
         calculated_quantity = quantities[position.ticker]
 
-        if budget.budget_type == "Total":
-            delta = calculated_quantity - current_quantity
-            if delta > 0:
-                candidates.append(
-                    _action_candidate(
-                        action="BUY",
-                        position=position,
-                        company_name=quote.company_name or position.company_name,
-                        instruction=f"BUY {delta} whole shares of {position.ticker}.",
-                        quantity=delta,
-                        market_price=quote.market_price,
-                        estimated_amount=_round_money(Decimal(delta) * prices[position.ticker]),
-                        priority_score=float(Decimal(delta) * prices[position.ticker]),
-                    )
-                )
-            elif delta < 0:
-                trim_quantity = abs(delta)
-                candidates.append(
-                    _action_candidate(
-                        action="TRIM",
-                        position=position,
-                        company_name=quote.company_name or position.company_name,
-                        instruction=f"SELL {trim_quantity} whole shares of {position.ticker}.",
-                        quantity=trim_quantity,
-                        market_price=quote.market_price,
-                        estimated_amount=_round_money(Decimal(trim_quantity) * prices[position.ticker]),
-                        priority_score=float(Decimal(trim_quantity) * prices[position.ticker]),
-                    )
-                )
-            elif calculated_quantity == 0:
-                candidates.append(_accumulate_candidate(position, quote, currency=budget.currency))
-            else:
-                candidates.append(
-                    _hold_candidate(
-                        position,
-                        company_name=quote.company_name or position.company_name,
-                        market_price=quote.market_price,
-                        instruction=f"HOLD {current_quantity} whole shares of {position.ticker}.",
-                    )
-                )
-        elif calculated_quantity > 0:
+        if calculated_quantity > 0:
             candidates.append(
                 _action_candidate(
                     action="BUY",
@@ -1103,7 +1096,7 @@ def _calculate_actions(
                     market_price=quote.market_price,
                     instruction=(
                         f"HOLD {current_quantity} whole shares of {position.ticker}; "
-                        "do not trim during this recurring contribution cycle."
+                        "apply the new-money budget to underweight targets instead of trimming."
                     ),
                 )
             )
@@ -1113,7 +1106,7 @@ def _calculate_actions(
     ordered_candidates = _order_action_candidates(candidates)
     budget_utilized = _round_money(utilized)
     unallocated_amount = _round_money(max(budget_amount - utilized, Decimal("0")))
-    data_gaps = []
+    data_gaps = [budget.source_text] if budget.is_inferred and budget.source_text is not None else []
     unfunded_count = sum(candidate.action == "ACCUMULATE" for candidate in ordered_candidates)
     if unfunded_count:
         data_gaps.append(f"Whole-share pricing left {unfunded_count} target position(s) without a purchasable share.")
@@ -1125,51 +1118,37 @@ def _calculate_actions(
     )
 
 
-def _calculate_unfunded_actions(
+def _resolve_action_budget(
     *,
     target_positions: list[models_construction.PortfolioTargetPosition],
     verified_portfolio: portfolio_verification.VerifiedPortfolio | None,
-) -> _CalculatedActions:
-    candidates = _seed_exit_candidates(
+    verified_quotes: portfolio_verification.VerifiedSecurityQuotes | None,
+    budget: models_construction.PortfolioBudget,
+) -> tuple[models_construction.PortfolioBudget, _CalculatedActions]:
+    actions = _calculate_actions(
         target_positions=target_positions,
         verified_portfolio=verified_portfolio,
+        verified_quotes=verified_quotes,
+        budget=budget,
     )
-    current_holdings = (
-        {holding.ticker: holding for holding in verified_portfolio.holdings} if verified_portfolio else {}
+    if not budget.is_inferred or any(candidate.action == "BUY" for candidate in actions.candidates):
+        return budget, actions
+    if verified_portfolio is None:
+        raise PortfolioConstructionAIError("Inferred investment budget requires verified current holdings")
+
+    maximum_budget = _inferred_recurring_budget(
+        verified_portfolio,
+        rate=_INFERRED_BUDGET_MAX_RATE,
     )
-    for position in target_positions:
-        current_holding = current_holdings.get(position.ticker)
-        if current_holding and current_holding.current_allocation + 1e-6 >= position.allocation:
-            candidates.append(
-                _hold_candidate(
-                    position,
-                    company_name=position.company_name,
-                    market_price=None,
-                    instruction=f"HOLD the existing whole shares of {position.ticker}.",
-                )
-            )
-        else:
-            candidates.append(
-                _action_candidate(
-                    action="ACCUMULATE",
-                    position=position,
-                    company_name=position.company_name,
-                    instruction=(
-                        f"Set an investment amount, then fund {position.ticker} "
-                        f"toward its {position.allocation:.1%} target."
-                    ),
-                    quantity=None,
-                    market_price=None,
-                    estimated_amount=None,
-                    priority_score=position.allocation,
-                )
-            )
-    return _CalculatedActions(
-        budget_utilized=None,
-        unallocated_amount=None,
-        candidates=_order_action_candidates(candidates),
-        data_gaps=["Investment amount was not supplied; BUY quantities and estimated costs cannot be calculated."],
+    maximum_actions = _calculate_actions(
+        target_positions=target_positions,
+        verified_portfolio=verified_portfolio,
+        verified_quotes=verified_quotes,
+        budget=maximum_budget,
     )
+    if any(candidate.action == "BUY" for candidate in maximum_actions.candidates):
+        return maximum_budget, maximum_actions
+    return budget, actions
 
 
 def _target_current_values(
@@ -1358,40 +1337,46 @@ def _finalize_portfolio(
     research: _PortfolioResearch,
     draft: _PortfolioConstructionDraft,
     target_positions: list[models_construction.PortfolioTargetPosition],
-    calculated_actions: _CalculatedActions,
-    action_plan_draft: _PortfolioActionPlanDraft,
+    calculated_actions: _CalculatedActions | None,
+    action_plan_draft: _PortfolioActionPlanDraft | None,
 ) -> models_construction.PortfolioConstruction:
     _validate_draft_against_research(draft, research)
+    if (calculated_actions is None) != (action_plan_draft is None):
+        raise PortfolioConstructionAIError("Portfolio construction action-plan state is inconsistent")
     try:
-        candidate_by_id = {candidate.action_id: candidate for candidate in calculated_actions.candidates}
-        action_steps = []
-        for reasoning in sorted(
-            action_plan_draft.steps,
-            key=lambda item: item.priority,
-        ):
-            candidate = candidate_by_id[reasoning.action_id]
-            action_steps.append(
-                models_construction.PortfolioActionStep(
-                    priority=reasoning.priority,
-                    action=candidate.action,
-                    ticker=candidate.ticker,
-                    company_name=candidate.company_name,
-                    instruction=candidate.instruction,
-                    quantity=candidate.quantity,
-                    market_price=candidate.market_price,
-                    estimated_amount=candidate.estimated_amount,
-                    target_allocation=candidate.target_allocation,
-                    reasoning=reasoning.reasoning,
-                    reference_ids=candidate.reference_ids,
+        action_plan = None
+        action_data_gaps = ["Investment budget and current holdings were not supplied; an action plan cannot be built."]
+        if calculated_actions is not None and action_plan_draft is not None:
+            candidate_by_id = {candidate.action_id: candidate for candidate in calculated_actions.candidates}
+            action_steps = []
+            for reasoning in sorted(
+                action_plan_draft.steps,
+                key=lambda item: item.priority,
+            ):
+                candidate = candidate_by_id[reasoning.action_id]
+                action_steps.append(
+                    models_construction.PortfolioActionStep(
+                        priority=reasoning.priority,
+                        action=candidate.action,
+                        ticker=candidate.ticker,
+                        company_name=candidate.company_name,
+                        instruction=candidate.instruction,
+                        quantity=candidate.quantity,
+                        market_price=candidate.market_price,
+                        estimated_amount=candidate.estimated_amount,
+                        target_allocation=candidate.target_allocation,
+                        reasoning=reasoning.reasoning,
+                        reference_ids=candidate.reference_ids,
+                    )
                 )
+            action_plan = models_construction.PortfolioActionPlan(
+                budget=plan.budget,
+                summary=action_plan_draft.summary,
+                budget_utilized=calculated_actions.budget_utilized,
+                unallocated_amount=calculated_actions.unallocated_amount,
+                steps=action_steps,
             )
-        action_plan = models_construction.PortfolioActionPlan(
-            budget=plan.budget,
-            summary=action_plan_draft.summary,
-            budget_utilized=calculated_actions.budget_utilized,
-            unallocated_amount=calculated_actions.unallocated_amount,
-            steps=action_steps,
-        )
+            action_data_gaps = calculated_actions.data_gaps
         used_reference_ids = ai_reference_utils.collect_reference_ids(target_positions)
         references = [reference for reference in research.references if reference.id in used_reference_ids]
         unverified_count = sum(not reference.is_verified for reference in references)
@@ -1402,7 +1387,7 @@ def _finalize_portfolio(
         data_gaps = list(
             dict.fromkeys(
                 [
-                    *calculated_actions.data_gaps,
+                    *action_data_gaps,
                     *verification_data_gaps,
                     *plan.data_gaps,
                     *research.data_gaps,

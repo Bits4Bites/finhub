@@ -88,6 +88,7 @@ def plan(
 def no_budget() -> models_construction.PortfolioBudget:
     return models_construction.PortfolioBudget(
         budget_type="NotProvided",
+        is_inferred=False,
         amount=None,
         currency=None,
         frequency=None,
@@ -98,6 +99,7 @@ def no_budget() -> models_construction.PortfolioBudget:
 def total_budget(amount: float = 10_000) -> models_construction.PortfolioBudget:
     return models_construction.PortfolioBudget(
         budget_type="Total",
+        is_inferred=False,
         amount=amount,
         currency="USD",
         frequency=None,
@@ -108,10 +110,24 @@ def total_budget(amount: float = 10_000) -> models_construction.PortfolioBudget:
 def recurring_budget(amount: float = 1_000) -> models_construction.PortfolioBudget:
     return models_construction.PortfolioBudget(
         budget_type="Recurring",
+        is_inferred=False,
         amount=amount,
         currency="USD",
         frequency="Monthly",
         source_text=f"monthly contribution USD {amount:g}",
+    )
+
+
+def inferred_budget(amount: float = 200, *, rate: int = 10) -> models_construction.PortfolioBudget:
+    return models_construction.PortfolioBudget(
+        budget_type="Recurring",
+        is_inferred=True,
+        amount=amount,
+        currency="USD",
+        frequency=None,
+        source_text=(
+            f"Application-inferred next-iteration contribution at {rate}% of verified current holdings market value."
+        ),
     )
 
 
@@ -242,6 +258,7 @@ def action_plan_draft(action_ids: list[str]) -> service._PortfolioActionPlanDraf
 def action_plan(
     mode: models_construction.PortfolioConstructionMode = "Scratch",
 ) -> models_construction.PortfolioActionPlan:
+    budget = inferred_budget() if mode == "Seeded" else total_budget(1_000)
     if mode == "Scratch":
         ordered_tickers = TICKERS
         actions = ["ACCUMULATE", "ACCUMULATE", "ACCUMULATE"]
@@ -250,10 +267,10 @@ def action_plan(
         actions = ["ACCUMULATE", "ACCUMULATE", "HOLD"]
     positions = {position.ticker: position for position in target_positions()}
     return models_construction.PortfolioActionPlan(
-        budget=no_budget(),
+        budget=budget,
         summary="Set an investment amount before placing whole-share orders.",
-        budget_utilized=None,
-        unallocated_amount=None,
+        budget_utilized=0,
+        unallocated_amount=budget.amount,
         steps=[
             models_construction.PortfolioActionStep(
                 priority=priority,
@@ -309,7 +326,9 @@ def verified_quotes(
 def construction(
     *,
     mode: models_construction.PortfolioConstructionMode = "Scratch",
+    action_plan_available: bool = True,
 ) -> models_construction.PortfolioConstruction:
+    unavailable_gap = "Investment budget and current holdings were not supplied; an action plan cannot be built."
     return models_construction.PortfolioConstruction(
         as_of=datetime(2026, 8, 21, tzinfo=UTC),
         construction_status="Complete",
@@ -319,9 +338,9 @@ def construction(
         summary="A diversified target portfolio aligned with the growth theme.",
         verified_seed_holdings=(verified_portfolio().holdings if mode == "Seeded" else []),
         target_portfolio=target_positions(),
-        action_plan=action_plan(mode),
+        action_plan=(action_plan(mode) if action_plan_available else None),
         overall_data_quality="High",
-        data_gaps=[],
+        data_gaps=([] if action_plan_available else [unavailable_gap]),
         validation_warnings=[],
         references=[reference()],
     )
