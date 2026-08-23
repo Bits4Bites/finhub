@@ -264,6 +264,10 @@ class PortfolioActionPlan(models_ai.StrictAIModel):
 class PortfolioConstruction(models_ai.StrictAIModel):
     """A research-backed target portfolio with prioritized implementation actions."""
 
+    result_type: Literal["PortfolioConstruction"] = Field(
+        default="PortfolioConstruction",
+        description="Discriminator identifying a portfolio-construction result.",
+    )
     as_of: datetime = Field(description="Timezone-aware timestamp when the portfolio was finalized.")
     construction_status: PortfolioConstructionStatus = Field(
         description="Completion status, including whether source-validation warnings were produced."

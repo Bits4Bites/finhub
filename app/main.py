@@ -8,6 +8,7 @@ from .routers import (
     ai,
     ai_dividend,
     ai_portfolio_construction,
+    ai_portfolio_review,
     ai_portfolio_spotlight,
     events,
     events_listings,
@@ -76,6 +77,7 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
 app.include_router(ai.router, dependencies=[Depends(auth.verify_api_key)])
 app.include_router(ai_dividend.router, dependencies=[Depends(auth.verify_api_key)])
 app.include_router(ai_portfolio_construction.router, dependencies=[Depends(auth.verify_api_key)])
+app.include_router(ai_portfolio_review.router, dependencies=[Depends(auth.verify_api_key)])
 app.include_router(ai_portfolio_spotlight.router, dependencies=[Depends(auth.verify_api_key)])
 app.include_router(events.router, dependencies=[Depends(auth.verify_api_key)])
 app.include_router(events_listings.router, dependencies=[Depends(auth.verify_api_key)])

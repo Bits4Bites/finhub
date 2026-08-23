@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from pydantic import ValidationError
 
-from app.services import ai_helper
+from app.services import ai_helper, portfolio_budget
 from app.services import msai_build_portfolio as service
 from tests import portfolio_construction_fixtures as fixtures
 
@@ -159,7 +159,7 @@ def test_seeded_construction_verifies_only_positive_positions_before_ai_stages()
 
 def test_total_budget_pipeline_returns_whole_share_action_plan():
     theme = "Build a durable growth portfolio with a total budget of USD 1,000."
-    budget = service._extract_budget(theme, default_currency="USD")
+    budget = portfolio_budget.extract_budget(theme, default_currency="USD")
     responses = [
         ai_helper.LLMResponse(completion=fixtures.plan(budget=budget).model_dump_json()),
         ai_helper.LLMResponse(
@@ -210,7 +210,7 @@ def test_total_budget_pipeline_returns_whole_share_action_plan():
 
 def test_budget_pipeline_rejects_target_quote_currency_mismatch():
     theme = "Build a durable portfolio with a total budget of USD 1,000."
-    budget = service._extract_budget(theme, default_currency="USD")
+    budget = portfolio_budget.extract_budget(theme, default_currency="USD")
     mismatched_quotes = fixtures.verified_quotes().model_copy(update={"currency": "EUR"})
     with (
         patch.object(service.cache, "get", new_callable=AsyncMock, return_value=None),
@@ -482,7 +482,7 @@ def test_extract_budget_from_investor_theme(
     expected_currency,
     expected_frequency,
 ):
-    budget = service._extract_budget(theme, default_currency="USD")
+    budget = portfolio_budget.extract_budget(theme, default_currency="USD")
 
     assert budget.budget_type == expected_type
     assert budget.amount == expected_amount
@@ -493,7 +493,7 @@ def test_extract_budget_from_investor_theme(
 
 def test_extract_budget_rejects_multiple_amounts():
     with pytest.raises(service.portfolio_verification.PortfolioInputError, match="multiple"):
-        service._extract_budget(
+        portfolio_budget.extract_budget(
             "Use a USD 10,000 total budget plus USD 500 monthly.",
             default_currency="USD",
         )
@@ -501,7 +501,7 @@ def test_extract_budget_rejects_multiple_amounts():
 
 def test_extract_budget_rejects_negative_amount():
     with pytest.raises(service.portfolio_verification.PortfolioInputError, match="positive"):
-        service._extract_budget(
+        portfolio_budget.extract_budget(
             "Use an investment budget of -$500.",
             default_currency="USD",
         )
@@ -510,7 +510,7 @@ def test_extract_budget_rejects_negative_amount():
 def test_recurring_budget_source_text_preserves_frequency_context():
     theme = "Prefer broad diversification. Invest a recurring $500 per month for retirement."
 
-    budget = service._extract_budget(theme, default_currency="USD")
+    budget = portfolio_budget.extract_budget(theme, default_currency="USD")
 
     assert budget.source_text == "Invest a recurring $500 per month for retirement"
 
@@ -554,9 +554,9 @@ def test_recurring_budget_holds_overweight_seed_instead_of_trimming():
 
 def test_inferred_budget_increases_to_fifteen_percent_only_when_it_enables_a_buy():
     verified = fixtures.verified_portfolio()
-    initial_budget = service._inferred_recurring_budget(
+    initial_budget = portfolio_budget.infer_recurring_budget(
         verified,
-        rate=service._INFERRED_BUDGET_MIN_RATE,
+        rate=portfolio_budget.INFERRED_BUDGET_MIN_RATE,
     )
 
     budget, actions = service._resolve_action_budget(
@@ -574,9 +574,9 @@ def test_inferred_budget_increases_to_fifteen_percent_only_when_it_enables_a_buy
 
 def test_inferred_budget_stays_at_ten_percent_when_fifteen_percent_is_still_unaffordable():
     verified = fixtures.verified_portfolio()
-    initial_budget = service._inferred_recurring_budget(
+    initial_budget = portfolio_budget.infer_recurring_budget(
         verified,
-        rate=service._INFERRED_BUDGET_MIN_RATE,
+        rate=portfolio_budget.INFERRED_BUDGET_MIN_RATE,
     )
 
     budget, actions = service._resolve_action_budget(

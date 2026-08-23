@@ -552,6 +552,7 @@ The `data` object contains:
 
 | Field                     | Description                                                                                         |
 |---------------------------|-----------------------------------------------------------------------------------------------------|
+| `result_type`             | `PortfolioConstruction`; discriminator used by the analyze-portfolio response union.                |
 | `as_of`                   | Timezone-aware finalization timestamp.                                                              |
 | `construction_status`     | `Complete` or `CompleteWithWarnings`.                                                               |
 | `construction_mode`       | `Scratch` or `Seeded`.                                                                              |
@@ -752,29 +753,30 @@ Polling returns:
 
 ### `POST /ai/analyze_portfolio`
 
-Analyze or build a stock portfolio using AI. Positive-share holdings select the existing-portfolio review branch,
-which can optionally assess whether a major rebalance is needed. Empty or all-zero holdings select the structured
-construction flow described under `/ai/build_portfolio`.
+Build or review a stock portfolio using a deterministic dispatcher. The request routes to the structured construction
+flow when there are no submitted positions, no positive positions, or positive positions make up 35% or less of all
+submitted positions. Sparse positive holdings are retained as construction seeds. Other requests use the structured
+existing-portfolio review flow.
 
 **Request Body (JSON):**
 
-| Field                | Type              | Required | Description                                                                                                                      |
-|----------------------|-------------------|----------|----------------------------------------------------------------------------------------------------------------------------------|
-| `current_allocation` | `PortfolioHolding[]` | No       | List of current holdings. If empty, builds a new portfolio instead.                                                              |
-| `country`            | `string`          | Yes      | Required country context for the analysis (e.g. `AU`, `US`).                                                                     |
-| `investor_theme`     | `string \| null`   | Conditional | Maximum 4,000 characters; required and non-blank for construction, optional for review, where omission uses the review default. |
-| `rebalance_plan`     | `boolean`         | No       | If `true`, assesses whether existing holdings need a major rebalance and generates a plan only when needed. Defaults to `false`. |
+| Field                | Type                 | Required | Description                                                                                         |
+|----------------------|----------------------|----------|-----------------------------------------------------------------------------------------------------|
+| `current_allocation` | `PortfolioHolding[]` | No       | Up to 50 submitted positions, including zero-share positions used by the dispatcher.                |
+| `country`            | `string`             | Yes      | Market country as an ISO code or country name.                                                      |
+| `investor_theme`     | `string`             | Yes      | Non-blank goals, strategy, constraints, risk context, and optional budget; maximum 4,000 characters. |
+| `rebalance_plan`     | `boolean`            | No       | Include execution actions when a major rebalance is recommended; defaults to `false`.               |
 
 Each `PortfolioHolding` object:
 
-| Field               | Type   | Description                                     |
-|---------------------|--------|-------------------------------------------------|
-| `ticker`            | string | Required stock symbol, limited to 32 characters.                    |
-| `num_shares`        | float  | Non-negative finite share count; defaults to zero.                  |
-| `avg_price`         | float  | Non-negative finite average purchase price; defaults to zero.       |
-| `market_price`      | float  | Optional positive current market price per share.                   |
-| `target_allocation` | float  | Optional target allocation from `0` through `1`.                    |
-| `tags`              | string | Optional holding metadata, limited to 500 characters.               |
+| Field               | Type             | Description                                                           |
+|---------------------|------------------|-----------------------------------------------------------------------|
+| `ticker`            | `string`         | Required Yahoo Finance or `EXCHANGE:CODE` symbol; maximum 32 characters. |
+| `num_shares`        | `number`         | Non-negative whole-share count; defaults to zero.                     |
+| `avg_price`         | `number`         | Non-negative finite average purchase price; defaults to zero.         |
+| `market_price`      | `number \| null` | Optional positive fallback price when current market data is unavailable. |
+| `target_allocation` | `number \| null` | Optional caller target from zero through one.                         |
+| `tags`              | `string \| null` | Optional holding metadata; maximum 500 characters.                    |
 
 **Example:**
 
@@ -788,39 +790,51 @@ curl -X POST 'http://localhost:8000/ai/analyze_portfolio' \
       {"ticker": "GOOGL", "num_shares": 20, "avg_price": 120.0, "market_price": 175.0, "target_allocation": 0.4}
     ],
     "country": "US",
-    "investor_theme": "growth with moderate risk",
+    "investor_theme": "Long-term growth with moderate risk and a monthly USD 1000 contribution",
     "rebalance_plan": true
   }'
 ```
 
 **Response `data`:**
 
-The construction branch returns the structured `PortfolioConstruction` object documented under
-`/ai/build_portfolio`. The review branch returns:
+`result_type` discriminates the response union:
 
-| Field            | Type             | Description                                                                                                 |
-|------------------|------------------|-------------------------------------------------------------------------------------------------------------|
-| `analysis`       | `string`         | Premium review of the existing positive-share portfolio.                                                   |
-| `rebalance_plan` | `string`         | Premium rebalance plan when needed; `"No rebalance needed"` when assessed but unnecessary; otherwise empty. |
-| `llm_error`      | `boolean`        | Whether an LLM stage failed.                                                                                |
-| `llm_error_msg`  | `string \| null` | Error details when an LLM stage fails.                                                                      |
-| `llm_response`   | `string \| null` | Raw language-model response retained by the legacy workflow, when available.                                |
+- `PortfolioConstruction` returns the structured construction object documented under `/ai/build_portfolio`.
+- `PortfolioReview` returns a verified snapshot, deterministic `LongTerm` or `Swing` strategy, normalized budget,
+  structured strengths and risks, one emoji-prefixed role and review per holding, a validated target portfolio,
+  target turnover, `rebalance_recommended` (`YES` or `NO`), and canonical references.
 
-If the rebalance decision or any later rebalance stage fails after the portfolio review succeeds, `analysis` retains
-the completed review while `llm_error` and `llm_error_msg` describe the later failure.
+A review recommends a major rebalance when the target exits a holding, introduces a holding, or has at least 20%
+one-way turnover. The application derives this decision rather than accepting an AI-authored flag.
+
+| `rebalance_plan` | `rebalance_recommended` | `action_plan` |
+|------------------|-------------------------|---------------|
+| `false`          | `YES`                   | `null`        |
+| `true`           | `YES`                   | `Rebalance` plan |
+| `false`          | `NO`                    | `Growth` plan |
+| `true`           | `NO`                    | `Growth` plan |
+
+Action plans contain a normalized budget, balanced new-money/sale/purchase/cash ledger, and prioritized typed actions:
+`HOLD`, `TRIM`, `EXIT`, `BUY_MORE`, `INTRODUCE`, or `ACCUMULATE`. Every action includes reasoning. Long-term reviews
+never emit `TRIM`; they use `EXIT` only for validated critical risk or structural change. A supplied total budget is
+new cash on top of current holdings, a recurring budget funds only the next iteration, and an omitted budget is
+inferred at 10% of verified market value, rising to 15% only when that enables a whole-share purchase.
+
+Invalid themes, conflicting strategy cues, budgets, holdings, or currencies return HTTP `422`. Market verification,
+provider, structured-output, and final-validation failures return HTTP `502`.
 
 ### `POST /ai/analyze_portfolio_async`
 
-Analyze or build a portfolio in the background using the same review-or-build behavior and JSON
-request body as `/ai/analyze_portfolio`. Poll by posting to this endpoint with the returned task ID.
-Task state and results expire after one hour. Construction results use one-hour stage and final caches; the legacy
-review branch retains its existing review cache behavior.
+Run the same construction-or-review flow in the background. Start with the same request body as
+`/ai/analyze_portfolio`, then poll by posting with the returned task ID. Task state expires after one hour. Review
+verification is cached for five minutes; planning for one hour; research, assessment, and target design for 30
+minutes; and action reasoning plus the final review for five minutes.
 
 | Parameter            | Location  | Required    | Description                                                   |
 |----------------------|-----------|-------------|---------------------------------------------------------------|
 | `current_allocation` | JSON body | No          | Holdings to review; when empty, a new portfolio is built.     |
 | `country`            | JSON body | Conditional | Country context. Required when starting a task.               |
-| `investor_theme`     | JSON body | Conditional | Required for construction; optional for review.               |
+| `investor_theme`     | JSON body | Conditional | Non-blank investor context. Required when starting a task.     |
 | `rebalance_plan`     | JSON body | No          | Whether to generate a major-rebalance plan when needed.       |
 | `task_id`            | query     | Conditional | Task ID returned when starting a task. Required when polling. |
 
@@ -833,6 +847,7 @@ curl -X POST 'http://localhost:8000/ai/analyze_portfolio_async' \
     "current_allocation": [
       {"ticker": "AAPL", "num_shares": 50, "avg_price": 150.0, "target_allocation": 1.0}
     ],
+    "investor_theme": "Long-term growth with a monthly USD 1000 contribution",
     "rebalance_plan": true
   }'
 
@@ -846,8 +861,8 @@ Polling returns:
 |-------------|-------------|----------------------------------------------------|
 | `202`       | `RUNNING`   | The task is still running.                         |
 | `200`       | `COMPLETED` | The standard analyze-portfolio payload in `data`.  |
-| `422`       | `FAILED`    | Construction input or verified seeds are invalid.  |
-| `502`       | `FAILED`    | Construction verification or an AI stage failed.  |
+| `422`       | `FAILED`    | Request, strategy, budget, or holdings are invalid. |
+| `502`       | `FAILED`    | Market verification or an AI stage failed.         |
 | `500`       | `FAILED`    | The background task failed.                        |
 | `404`       | —           | The task ID is unknown or its cache entry expired. |
 

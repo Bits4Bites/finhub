@@ -121,13 +121,3 @@ class AnalysisResult(BaseAIResult):
     """Text analysis returned by a legacy AI endpoint."""
 
     analysis: str = Field(default="", description="Generated analysis content.")
-
-
-class AnalyzePortfolioResult(BaseAIResult):
-    """Legacy portfolio analysis and optional rebalance-plan result."""
-
-    analysis: str = Field(default="", description="Generated portfolio analysis content.")
-    rebalance_plan: str = Field(
-        default="",
-        description="Generated rebalance plan, or an empty string when no plan was requested.",
-    )
