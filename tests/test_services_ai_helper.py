@@ -56,14 +56,17 @@ class TestLlmTaskConfig:
 
     def test_underwritten_listing_tasks_use_terra_with_high_reasoning(self):
         settings = config.LLMTaskSettings()
+        standard_research_task = settings.tasks["asx_listtings_research"]
         research_task = settings.tasks["asx_listtings_underwritten_research"]
         analysis_task = settings.tasks["asx_listtings_underwritten_analyze"]
 
+        assert standard_research_task.max_tool_calls == 0
         assert (research_task.model, research_task.reasoning_effort, research_task.use_web_search) == (
             "gpt-5.6-terra",
             "High",
             True,
         )
+        assert research_task.max_tool_calls == 0
         assert (analysis_task.model, analysis_task.reasoning_effort, analysis_task.use_web_search) == (
             "gpt-5.6-terra",
             "High",

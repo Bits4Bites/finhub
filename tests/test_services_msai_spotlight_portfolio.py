@@ -593,6 +593,7 @@ def test_task_configuration_uses_terra_medium_for_planning():
     assert research.model == "gpt-5.6-terra"
     assert research.reasoning_effort == "High"
     assert research.use_web_search is True
+    assert research.max_tool_calls == 0
     assert assessment.model == "gpt-5.6-terra"
     assert assessment.reasoning_effort == "High"
     assert assessment.use_web_search is False

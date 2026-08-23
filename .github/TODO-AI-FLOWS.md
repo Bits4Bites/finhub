@@ -117,6 +117,10 @@ Task IDs below use their current code spelling, including `ASX_LISTTINGS`.
 | `ASX_LISTTINGS_UNDERWRITTEN_RESEARCH`     | `gpt-5.6-terra` | High      | Yes          | Research an explicitly underwritten listing with additional underwriting scrutiny |
 | `ASX_LISTTINGS_UNDERWRITTEN_ANALYZE`      | `gpt-5.6-terra` | High      | No (default) | Assess an explicitly underwritten listing and residual execution risk             |
 
+Explicit web-tool overrides are `BUILD_PORTFOLIO_RESEARCH=25` and `REVIEW_PORTFOLIO_RESEARCH=25`. Spotlight
+research and both ASX-listing research tasks retain their reasoning-based defaults because their contracts are bounded
+to six and five sources respectively.
+
 ## Flow review backlog
 
 ### 1. Ticker analysis

@@ -426,10 +426,11 @@ def test_task_configuration_matches_quality_first_stage_design():
         "Medium",
         False,
     )
-    assert (research.model, research.reasoning_effort, research.use_web_search) == (
+    assert (research.model, research.reasoning_effort, research.use_web_search, research.max_tool_calls) == (
         "gpt-5.6-terra",
         "High",
         True,
+        25,
     )
     assert (construct.model, construct.reasoning_effort, construct.use_web_search) == (
         "gpt-5.6-terra",
@@ -442,6 +443,9 @@ def test_task_configuration_matches_quality_first_stage_design():
         False,
     )
     assert json.loads(service._task_cache_identity("BUILD_PORTFOLIO_PLAN"))["config"] == plan.model_dump(mode="json")
+    assert json.loads(service._task_cache_identity("BUILD_PORTFOLIO_RESEARCH"))["config"] == research.model_dump(
+        mode="json"
+    )
 
 
 @pytest.mark.parametrize(
