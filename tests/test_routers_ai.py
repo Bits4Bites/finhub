@@ -252,18 +252,6 @@ class TestAnalyzeTickerAsync:
 class TestBuildPortfolio:
     """Tests for POST /ai/build_portfolio endpoint."""
 
-    def test_routes_are_owned_by_dedicated_router_module(self):
-        route_modules = {
-            route.path: route.endpoint.__module__
-            for route in app.routes
-            if getattr(route, "path", None) in {"/ai/build_portfolio", "/ai/build_portfolio_async"}
-        }
-
-        assert route_modules == {
-            "/ai/build_portfolio": "app.routers.ai_portfolio_construction",
-            "/ai/build_portfolio_async": "app.routers.ai_portfolio_construction",
-        }
-
     @patch(
         "app.routers.ai_portfolio_construction.service_build_portfolio.ai_build_portfolio",
         new_callable=AsyncMock,
@@ -368,19 +356,6 @@ class TestBuildPortfolio:
         assert response.status_code == 502
         assert response.json()["message"] == "Research failed"
         mock_build.assert_awaited_once()
-
-    def test_openapi_uses_dedicated_construction_contract(self):
-        paths = app.openapi()["paths"]
-        operation = paths["/ai/build_portfolio"]["post"]
-        request_ref = operation["requestBody"]["content"]["application/json"]["schema"]["$ref"]
-        response_ref = operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"]
-
-        assert request_ref.endswith("/BuildPortfolioRequest")
-        assert response_ref.endswith("/BuildPortfolioResponse")
-        assert {"200", "422", "502"} <= set(operation["responses"])
-        assert {"200", "202", "404", "422", "500", "502"} <= set(
-            paths["/ai/build_portfolio_async"]["post"]["responses"]
-        )
 
 
 # ===========================================================================

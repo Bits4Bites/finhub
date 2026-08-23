@@ -13,9 +13,13 @@ Market date: {{MARKET_DATE}}
 Requirements:
 - Return only the requested structured object.
 - Copy construction_mode exactly.
+- Copy the normalized budget object exactly; it was extracted deterministically from the investor theme.
 - Plan one target portfolio, not trades or a rebalance sequence.
-- Do not invent an investment amount, share counts, transaction costs, or tax consequences.
+- Use a supplied budget as a security-affordability and portfolio-design constraint.
+- If no budget was supplied, preserve NotProvided and do not invent an amount.
+- Do not calculate share counts, transaction costs, or tax consequences; a later deterministic stage handles whole-share quantities.
 - For Seeded mode, explain how verified seed holdings should inform selection without assuming they must all remain.
+- Identify seed holdings that contradict the theme or create unacceptable risk so construction can omit them.
 - Make research queries current, evidence-oriented, and bounded.
 - Set a target holding count from 3 through 20 that fits the theme and diversification needs.
 - Record unresolved ambiguities as data gaps rather than silently assuming them.

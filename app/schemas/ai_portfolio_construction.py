@@ -21,12 +21,15 @@ class BuildPortfolioRequest(BaseRequest):
     investor_theme: str = Field(
         min_length=1,
         max_length=4000,
-        description="Required investor goals, constraints, preferences, horizon, and risk context.",
+        description=(
+            "Required investor goals, constraints, preferences, horizon, risk context, "
+            "and optional total or recurring investment budget."
+        ),
     )
     current_allocation: list[models_portfolio.PortfolioHolding] = Field(
         default_factory=list,
         max_length=50,
-        description="Optional starting positions; zero-share positions are ignored during construction.",
+        description=("Optional whole-share starting positions; zero-share positions are ignored during construction."),
     )
 
     @field_validator("country", "investor_theme", mode="before")
@@ -39,11 +42,15 @@ class BuildPortfolioRequest(BaseRequest):
         tickers = [holding.ticker for holding in self.current_allocation]
         if len(tickers) != len(set(tickers)):
             raise ValueError("current_allocation tickers must be unique")
+        if any(
+            holding.num_shares > 0 and not float(holding.num_shares).is_integer() for holding in self.current_allocation
+        ):
+            raise ValueError("current_allocation supports whole-share holdings only")
         return self
 
 
 class BuildPortfolioResponse(BaseResponse[models_construction.PortfolioConstruction]):
-    """Response envelope containing a structured target portfolio."""
+    """Response envelope containing a structured target portfolio and implementation actions."""
 
 
 class BuildPortfolioAsyncResponse(async_task.AsyncTaskResponse[models_construction.PortfolioConstruction]):

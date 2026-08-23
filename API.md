@@ -510,7 +510,7 @@ flow constructs from scratch; otherwise it verifies positive starting holdings a
 | Field                | Type                 | Required | Description                                                                                  |
 |----------------------|----------------------|----------|----------------------------------------------------------------------------------------------|
 | `country`            | `string`             | Yes      | ISO code or country name, from 2 through 64 characters.                                      |
-| `investor_theme`     | `string`             | Yes      | Non-blank goals, constraints, preferences, horizon, and risk context; maximum 4,000 characters. |
+| `investor_theme`     | `string`             | Yes      | Non-blank goals, constraints, preferences, horizon, risk context, and optional total or recurring investment budget; maximum 4,000 characters. |
 | `current_allocation` | `PortfolioHolding[]` | No       | Up to 50 starting positions; defaults to `[]`, and zero-share positions are ignored.         |
 
 Each `PortfolioHolding` object:
@@ -518,7 +518,7 @@ Each `PortfolioHolding` object:
 | Field               | Type   | Description                                     |
 |---------------------|--------|-------------------------------------------------|
 | `ticker`            | string | Required stock symbol, limited to 32 characters.                    |
-| `num_shares`        | float  | Non-negative finite share count; defaults to zero.                  |
+| `num_shares`        | float  | Non-negative finite share count; positive construction holdings must be whole shares. |
 | `avg_price`         | float  | Non-negative finite average purchase price; defaults to zero.       |
 | `market_price`      | float  | Optional positive current market price per share.                   |
 | `target_allocation` | float  | Optional target allocation from `0` through `1`.                    |
@@ -529,12 +529,18 @@ Each `PortfolioHolding` object:
 ```bash
 curl -X POST 'http://localhost:8000/ai/build_portfolio' \
   -H 'Content-Type: application/json' \
-  -d '{"country": "AU", "investor_theme": "growth with moderate risk"}'
+  -d '{"country": "AU", "investor_theme": "growth with moderate risk and a recurring budget of AUD 1,000 per month"}'
 ```
 
 Unknown request fields, including `rebalance_plan`, are rejected. Duplicate normalized request tickers are also
 rejected. Positive starting holdings are verified against current market data; duplicate canonical tickers and
 mixed-currency seeds are invalid.
+
+The service extracts at most one budget from `investor_theme`. A total budget is the desired target-portfolio value;
+a recurring budget is new money available each stated period. Ambiguous multiple amounts and recurring amounts
+without a weekly, fortnightly, monthly, quarterly, or annual frequency return `422`. A seeded budget must use the
+verified seed portfolio currency; a scratch budget must use the selected country's primary currency. The flow does
+not perform foreign-exchange conversion.
 
 The `data` object contains:
 
@@ -548,18 +554,45 @@ The `data` object contains:
 | `summary`                 | Concise explanation of the target portfolio.                                                        |
 | `verified_seed_holdings`  | Verified positive starting holdings; empty in `Scratch` mode.                                       |
 | `target_portfolio`        | Three through 20 researched target positions whose `allocation` values sum to `1.0`.                |
+| `action_plan`             | Prioritized implementation steps using the normalized budget and whole-share quantities.            |
 | `overall_data_quality`    | `High`, `Medium`, `Low`, or `Insufficient`.                                                         |
 | `data_gaps`               | Limitations found during verification, planning, research, or construction.                         |
 | `validation_warnings`     | Source-verification warnings.                                                                       |
 | `references`              | Canonical HTTPS sources cited by target positions.                                                  |
 
 Each target position contains `ticker`, optional `company_name`, `allocation`, `role`, `rationale`, and
-`reference_ids`. The response contains allocation percentages only: it does not invent an investment amount, share
-counts, costs, trades, or a rebalance plan.
+`reference_ids`.
+
+The `action_plan` contains:
+
+| Field                | Type                    | Description                                                                                       |
+|----------------------|-------------------------|---------------------------------------------------------------------------------------------------|
+| `budget`             | `PortfolioBudget`       | Deterministically normalized budget from the exact investor-theme excerpt.                        |
+| `summary`            | `string`                | Brief implementation sequence.                                                                    |
+| `budget_utilized`    | `float \| null`         | Whole-share target value for a total budget, or recurring contribution spent; null without budget. |
+| `unallocated_amount` | `float \| null`         | Budget remaining after whole-share sizing; null without budget.                                   |
+| `steps`              | `PortfolioActionStep[]` | One action per target or verified seed ticker, highest priority first.                             |
+
+`PortfolioBudget` contains `budget_type` (`NotProvided`, `Total`, or `Recurring`), optional positive `amount`,
+three-letter `currency`, optional `frequency` (`Weekly`, `Fortnightly`, `Monthly`, `Quarterly`, or `Annually`), and
+the exact `source_text`. Budget detail fields are null when `budget_type` is `NotProvided`.
+
+Each action step contains `priority`, `action` (`EXIT`, `TRIM`, `BUY`, `ACCUMULATE`, or `HOLD`), `ticker`, optional
+`company_name`, executable `instruction`, optional whole-share `quantity`, optional verified `market_price`, optional
+`estimated_amount`, optional `target_allocation`, brief `reasoning`, and `reference_ids`.
+
+- `EXIT` is a highest-priority `SELL ALL` instruction for a seeded holding omitted from the target.
+- A total budget sizes the final target portfolio and may `TRIM` an oversized retained seed holding.
+- A recurring budget sizes only new purchases. Retained overweight holdings are `HOLD`, never `TRIM`.
+- `BUY` and `TRIM` quantities are positive whole numbers. Fractional trading is never assumed.
+- `ACCUMULATE` identifies a target for which the current budget cannot buy one whole share.
+- Without a budget, the service returns percentage-based `ACCUMULATE`, `HOLD`, and applicable `EXIT` steps rather
+  than inventing BUY quantities or costs.
 
 The quality-first flow is seed verification, structured theme-aware planning, sourced candidate research, structured
-portfolio construction, and deterministic final validation. Verification is cached for five minutes; planning,
-research, construction, and the final result are independently cached for one hour.
+portfolio construction, target-price verification, deterministic whole-share sizing, focused action reasoning, and
+final validation. Holding and target-price verification are cached for five minutes; planning, research,
+construction, action reasoning, and the final result are independently cached for one hour.
 
 ### `POST /ai/build_portfolio_async`
 
@@ -722,7 +755,7 @@ construction flow described under `/ai/build_portfolio`.
 |----------------------|-------------------|----------|----------------------------------------------------------------------------------------------------------------------------------|
 | `current_allocation` | `PortfolioHolding[]` | No       | List of current holdings. If empty, builds a new portfolio instead.                                                              |
 | `country`            | `string`          | Yes      | Required country context for the analysis (e.g. `AU`, `US`).                                                                     |
-| `investor_theme`     | `string`          | Conditional | Required and non-blank for construction; optional for review, where omission uses the review default.                         |
+| `investor_theme`     | `string \| null`   | Conditional | Maximum 4,000 characters; required and non-blank for construction, optional for review, where omission uses the review default. |
 | `rebalance_plan`     | `boolean`         | No       | If `true`, assesses whether existing holdings need a major rebalance and generates a plan only when needed. Defaults to `false`. |
 
 Each `PortfolioHolding` object:
@@ -764,6 +797,7 @@ The construction branch returns the structured `PortfolioConstruction` object do
 | `rebalance_plan` | `string`         | Premium rebalance plan when needed; `"No rebalance needed"` when assessed but unnecessary; otherwise empty. |
 | `llm_error`      | `boolean`        | Whether an LLM stage failed.                                                                                |
 | `llm_error_msg`  | `string \| null` | Error details when an LLM stage fails.                                                                      |
+| `llm_response`   | `string \| null` | Raw language-model response retained by the legacy workflow, when available.                                |
 
 If the rebalance decision or any later rebalance stage fails after the portfolio review succeeds, `analysis` retains
 the completed review while `llm_error` and `llm_error_msg` describe the later failure.

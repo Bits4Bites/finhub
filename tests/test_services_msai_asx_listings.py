@@ -406,7 +406,7 @@ def test_research_reuses_cached_validated_result(mock_listings_cache):
     mock_cache_set.assert_not_awaited()
 
 
-def test_underwritten_listing_uses_dedicated_research_task():
+def test_underwritten_listing_selects_underwritten_research_task():
     llm_response = ai_helper.LLMResponse(
         completion=json.dumps(_research_data()),
         citation_urls=["https://www.asx.com.au/announcement"],
@@ -605,7 +605,7 @@ def test_listing_cache_ttl_shortens_near_listing_date(listing_date, expected_ttl
     assert msai_asx_listings._listing_cache_ttl(event, today=date(2026, 6, 15)) == expected_ttl
 
 
-def test_underwritten_listing_uses_dedicated_analysis_task():
+def test_underwritten_listing_selects_underwritten_analysis_task():
     llm_response = ai_helper.LLMResponse(completion=json.dumps(_analysis_draft_data()))
 
     with patch.object(

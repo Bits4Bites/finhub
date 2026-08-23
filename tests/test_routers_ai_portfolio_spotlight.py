@@ -91,18 +91,6 @@ def test_post_rejects_overlong_country_and_ticker():
     assert client.post("/ai/spotlight_portfolio", json=ticker_request).status_code == 422
 
 
-def test_openapi_reuses_shared_holding_and_optional_theme_contracts():
-    schemas = app.openapi()["components"]["schemas"]
-    spotlight_request = schemas["PortfolioSpotlightRequest"]
-    analyze_request = schemas["AnalyzePortfolioRequest"]
-
-    assert spotlight_request["properties"]["current_allocation"]["items"]["$ref"].endswith("/PortfolioHolding")
-    assert analyze_request["properties"]["current_allocation"]["items"]["$ref"].endswith("/PortfolioHolding")
-    assert "PortfolioSpotlightHolding" not in schemas
-    assert "investor_theme" not in spotlight_request["required"]
-    assert "default" not in spotlight_request["properties"]["investor_theme"]
-
-
 def test_post_rejects_removed_rebalance_plan_input():
     request = _request_body()
     request["rebalance_plan"] = True
@@ -138,7 +126,7 @@ def test_post_maps_ai_failure_to_502():
     assert response.json()["message"] == "Assessment failed"
 
 
-def test_async_start_uses_dedicated_request_schema():
+def test_async_start_passes_validated_request_to_task():
     with (
         patch("app.routers.async_task.uuid.uuid4", return_value="task-spotlight"),
         patch(

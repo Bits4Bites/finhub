@@ -29,6 +29,9 @@ public sealed record PortfolioConstruction : IPortfolioAnalysisResult
     [JsonPropertyName("target_portfolio")]
     public required IReadOnlyList<PortfolioTargetPosition> TargetPortfolio { get; init; }
 
+    [JsonPropertyName("action_plan")]
+    public required PortfolioActionPlan ActionPlan { get; init; }
+
     [JsonPropertyName("overall_data_quality")]
     public required DataQuality OverallDataQuality { get; init; }
 

@@ -37,11 +37,8 @@ def country_to_currency_symbol(country: str | None) -> str:
         str: The local currency symbol, or an empty string if the country or currency is unknown.
     """
     country_code = country_to_iso2(country)
-    if not country_code:
-        return ""
-
-    currencies = babel.numbers.get_territory_currencies(country_code, tender=True)
-    if not currencies:
+    currency_code = country_to_currency_code(country)
+    if not country_code or not currency_code:
         return ""
 
     territory_languages = babel.core.get_global("territory_languages").get(country_code, {})
@@ -52,9 +49,27 @@ def country_to_currency_symbol(country: str | None) -> str:
     )
     locale = f"{language}_{country_code}"
     try:
-        return babel.numbers.get_currency_symbol(currencies[0], locale=locale)
+        return babel.numbers.get_currency_symbol(currency_code, locale=locale)
     except babel.core.UnknownLocaleError:
-        return babel.numbers.get_currency_symbol(currencies[0], locale="en")
+        return babel.numbers.get_currency_symbol(currency_code, locale="en")
+
+
+def country_to_currency_code(country: str | None) -> str:
+    """
+    Converts a country name/code to its primary active ISO 4217 currency code.
+
+    Args:
+        country (str): The country name or code to convert.
+
+    Returns:
+        str: The ISO 4217 currency code, or an empty string if the country is unknown.
+    """
+    country_code = country_to_iso2(country)
+    if not country_code:
+        return ""
+
+    currencies = babel.numbers.get_territory_currencies(country_code, tender=True)
+    return currencies[0] if currencies else ""
 
 
 # Mapping of known exchange name variants to canonical codes

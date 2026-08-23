@@ -56,9 +56,12 @@ def verified_portfolio() -> portfolio_verification.VerifiedPortfolio:
 
 def plan(
     mode: models_construction.PortfolioConstructionMode = "Scratch",
+    *,
+    budget: models_construction.PortfolioBudget | None = None,
 ) -> service._PortfolioConstructionPlan:
     return service._PortfolioConstructionPlan(
         construction_mode=mode,
+        budget=budget or no_budget(),
         objective="Construct a diversified growth portfolio.",
         theme_interpretation="Favor durable growth with moderate concentration risk.",
         constraints=["US-listed securities only."],
@@ -79,6 +82,36 @@ def plan(
         ],
         target_holding_count=3,
         data_gaps=[],
+    )
+
+
+def no_budget() -> models_construction.PortfolioBudget:
+    return models_construction.PortfolioBudget(
+        budget_type="NotProvided",
+        amount=None,
+        currency=None,
+        frequency=None,
+        source_text=None,
+    )
+
+
+def total_budget(amount: float = 10_000) -> models_construction.PortfolioBudget:
+    return models_construction.PortfolioBudget(
+        budget_type="Total",
+        amount=amount,
+        currency="USD",
+        frequency=None,
+        source_text=f"budget USD {amount:g}",
+    )
+
+
+def recurring_budget(amount: float = 1_000) -> models_construction.PortfolioBudget:
+    return models_construction.PortfolioBudget(
+        budget_type="Recurring",
+        amount=amount,
+        currency="USD",
+        frequency="Monthly",
+        source_text=f"monthly contribution USD {amount:g}",
     )
 
 
@@ -172,6 +205,107 @@ def reference(*, is_verified: bool = True) -> models_ai.ReferenceSource:
     )
 
 
+def target_positions() -> list[models_construction.PortfolioTargetPosition]:
+    return [
+        models_construction.PortfolioTargetPosition(
+            ticker=ticker,
+            company_name=company_name,
+            allocation=allocation,
+            role=role,
+            rationale=f"Research supports including {ticker}.",
+            reference_ids=[SOURCE_ID],
+        )
+        for ticker, company_name, allocation, role in zip(
+            TICKERS,
+            ["Apple Inc.", "Microsoft Corporation", "Alphabet Inc."],
+            [0.4, 0.35, 0.25],
+            ["Consumer platform", "Enterprise platform", "Digital services"],
+            strict=True,
+        )
+    ]
+
+
+def action_plan_draft(action_ids: list[str]) -> service._PortfolioActionPlanDraft:
+    return service._PortfolioActionPlanDraft(
+        summary="Implement the target in priority order.",
+        steps=[
+            service._PortfolioActionReasoning(
+                action_id=action_id,
+                priority=priority,
+                reasoning=f"{action_id} advances the researched target portfolio.",
+            )
+            for priority, action_id in enumerate(action_ids, start=1)
+        ],
+    )
+
+
+def action_plan(
+    mode: models_construction.PortfolioConstructionMode = "Scratch",
+) -> models_construction.PortfolioActionPlan:
+    if mode == "Scratch":
+        ordered_tickers = TICKERS
+        actions = ["ACCUMULATE", "ACCUMULATE", "ACCUMULATE"]
+    else:
+        ordered_tickers = ["NASDAQ:MSFT", "NASDAQ:GOOGL", "NASDAQ:AAPL"]
+        actions = ["ACCUMULATE", "ACCUMULATE", "HOLD"]
+    positions = {position.ticker: position for position in target_positions()}
+    return models_construction.PortfolioActionPlan(
+        budget=no_budget(),
+        summary="Set an investment amount before placing whole-share orders.",
+        budget_utilized=None,
+        unallocated_amount=None,
+        steps=[
+            models_construction.PortfolioActionStep(
+                priority=priority,
+                action=action,
+                ticker=ticker,
+                company_name=positions[ticker].company_name,
+                instruction=(
+                    f"Set an investment amount, then fund {ticker}."
+                    if action == "ACCUMULATE"
+                    else f"HOLD the existing whole shares of {ticker}."
+                ),
+                quantity=None,
+                market_price=None,
+                estimated_amount=None,
+                target_allocation=positions[ticker].allocation,
+                reasoning=f"{action} supports the target portfolio.",
+                reference_ids=[SOURCE_ID],
+            )
+            for priority, (ticker, action) in enumerate(
+                zip(ordered_tickers, actions, strict=True),
+                start=1,
+            )
+        ],
+    )
+
+
+def verified_quotes(
+    prices: list[float] | None = None,
+) -> portfolio_verification.VerifiedSecurityQuotes:
+    quote_prices = prices or [200, 400, 160]
+    return portfolio_verification.VerifiedSecurityQuotes(
+        as_of=datetime(2026, 8, 21, tzinfo=UTC),
+        country="US",
+        currency="USD",
+        securities=[
+            portfolio_verification.VerifiedSecurityQuote(
+                ticker=ticker,
+                company_name=company_name,
+                exchange="NASDAQ",
+                currency="USD",
+                market_price=market_price,
+            )
+            for ticker, company_name, market_price in zip(
+                TICKERS,
+                ["Apple Inc.", "Microsoft Corporation", "Alphabet Inc."],
+                quote_prices,
+                strict=True,
+            )
+        ],
+    )
+
+
 def construction(
     *,
     mode: models_construction.PortfolioConstructionMode = "Scratch",
@@ -184,23 +318,8 @@ def construction(
         investor_theme="Durable growth with moderate risk.",
         summary="A diversified target portfolio aligned with the growth theme.",
         verified_seed_holdings=(verified_portfolio().holdings if mode == "Seeded" else []),
-        target_portfolio=[
-            models_construction.PortfolioTargetPosition(
-                ticker=ticker,
-                company_name=company_name,
-                allocation=allocation,
-                role=role,
-                rationale=f"Research supports including {ticker}.",
-                reference_ids=[SOURCE_ID],
-            )
-            for ticker, company_name, allocation, role in zip(
-                TICKERS,
-                ["Apple Inc.", "Microsoft Corporation", "Alphabet Inc."],
-                [0.4, 0.35, 0.25],
-                ["Consumer platform", "Enterprise platform", "Digital services"],
-                strict=True,
-            )
-        ],
+        target_portfolio=target_positions(),
+        action_plan=action_plan(mode),
         overall_data_quality="High",
         data_gaps=[],
         validation_warnings=[],

@@ -59,6 +59,22 @@ class TestCountryToCurrencySymbol:
         assert conv.country_to_currency_symbol("Atlantis") == ""
 
 
+class TestCountryToCurrencyCode:
+    """Tests for conv.country_to_currency_code."""
+
+    def test_country_name(self):
+        assert conv.country_to_currency_code("Australia") == "AUD"
+
+    def test_country_code(self):
+        assert conv.country_to_currency_code("US") == "USD"
+
+    def test_none_returns_empty(self):
+        assert conv.country_to_currency_code(None) == ""
+
+    def test_unknown_country_returns_empty(self):
+        assert conv.country_to_currency_code("Atlantis") == ""
+
+
 class TestNormalizeExchangeCode:
     """Tests for conv.normalize_exchange_code."""
 
