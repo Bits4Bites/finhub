@@ -102,10 +102,10 @@ Task IDs below use their current code spelling, including `ASX_LISTTINGS`.
 | `BUILD_PORTFOLIO_CONSTRUCT`               | `gpt-5.6-terra` | High      | No (default) | Select and allocate one evidence-backed target portfolio                          |
 | `BUILD_PORTFOLIO_ACTION_PLAN`             | `gpt-5.6-terra` | High      | No (default) | Explain fixed, budget-aware whole-share actions in priority order                 |
 | `REVIEW_PORTFOLIO_PLAN`                   | `gpt-5.6-terra` | Medium    | No (default) | Build a structured, portfolio-specific review plan                               |
-| `REVIEW_PORTFOLIO_RESEARCH`               | `gpt-5.6-terra` | High      | Yes          | Research current holdings and bounded addition candidates                         |
+| `REVIEW_PORTFOLIO_RESEARCH`               | `gpt-5.6-sol`   | High      | Yes          | Research current holdings and bounded addition candidates                         |
 | `REVIEW_PORTFOLIO_ASSESS`                 | `gpt-5.6-terra` | High      | No (default) | Assess strengths, risks, roles, and holding disposition intent                    |
-| `REVIEW_PORTFOLIO_TARGET`                 | `gpt-5.6-terra` | High      | No (default) | Design one validated aspirational target portfolio                               |
-| `REVIEW_PORTFOLIO_ACTION_PLAN`            | `gpt-5.6-terra` | High      | No (default) | Rank and explain application-calculated portfolio actions                         |
+| `REVIEW_PORTFOLIO_TARGET`                 | `gpt-5.6-sol`   | Medium    | No (default) | Design one validated aspirational target portfolio                               |
+| `REVIEW_PORTFOLIO_ACTION_PLAN`            | `gpt-5.6-sol`   | Medium    | No (default) | Rank and explain application-calculated portfolio actions                         |
 | `SPOTLIGHT_PORTFOLIO_PLAN`                | `gpt-5.6-terra` | Medium    | No (default) | Build a validated, theme-aware analysis plan for a verified portfolio             |
 | `SPOTLIGHT_PORTFOLIO_RESEARCH`            | `gpt-5.6-terra` | High      | Yes          | Research sourced risks for a verified portfolio                                   |
 | `SPOTLIGHT_PORTFOLIO_ASSESS`              | `gpt-5.6-terra` | High      | No           | Rank structured risks and actions from validated research                         |

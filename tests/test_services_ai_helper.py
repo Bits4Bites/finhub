@@ -46,6 +46,7 @@ class TestLlmTaskConfig:
 
         assert task_cfg.reasoning_effort is None
         assert task_cfg.use_web_search is False
+        assert task_cfg.max_tool_calls == 0
         assert not hasattr(task_cfg, "temperature")
 
     def test_reasoning_effort_is_case_insensitive(self):
@@ -82,6 +83,35 @@ class TestLlmTaskConfig:
         assert (assessment_task.model, assessment_task.reasoning_effort, assessment_task.use_web_search) == (
             "gpt-5.6-terra",
             "High",
+            False,
+        )
+
+    def test_portfolio_review_tasks_use_selected_profiles(self):
+        settings = config.LLMTaskSettings()
+        research = settings.tasks["review_portfolio_research"]
+        assessment = settings.tasks["review_portfolio_assess"]
+        target = settings.tasks["review_portfolio_target"]
+        action_plan = settings.tasks["review_portfolio_action_plan"]
+
+        assert (research.model, research.reasoning_effort, research.use_web_search, research.max_tool_calls) == (
+            "gpt-5.6-sol",
+            "High",
+            True,
+            25,
+        )
+        assert (assessment.model, assessment.reasoning_effort, assessment.use_web_search) == (
+            "gpt-5.6-terra",
+            "High",
+            False,
+        )
+        assert (target.model, target.reasoning_effort, target.use_web_search) == (
+            "gpt-5.6-sol",
+            "Medium",
+            False,
+        )
+        assert (action_plan.model, action_plan.reasoning_effort, action_plan.use_web_search) == (
+            "gpt-5.6-sol",
+            "Medium",
             False,
         )
 
@@ -254,9 +284,54 @@ class TestExecPromptOpenAiClient:
         assert result.completion == "ok"
         request_kwargs = client.responses.create.await_args.kwargs
         assert request_kwargs["reasoning"] == {"effort": "high"}
+        assert request_kwargs["max_tool_calls"] == 13
         assert request_kwargs["tools"][0]["user_location"] == {"type": "approximate", "country": "AU"}
         assert "temperature" not in request_kwargs
         client.chat.completions.create.assert_not_called()
+
+    def test_web_search_uses_positive_max_tool_call_override(self):
+        task_cfg = config.LLMTaskConfig(
+            vendor="OPENAI",
+            model="gpt-5.6-sol",
+            reasoning_effort="High",
+            use_web_search=True,
+            max_tool_calls=25,
+        )
+        client = MagicMock()
+        client.responses.create = AsyncMock(return_value=_make_openai_response())
+
+        asyncio.run(
+            ai_helper._exec_prompt_openai_client(
+                client,
+                task_cfg,
+                "prompt",
+                schema_name="json_responses",
+            )
+        )
+
+        assert client.responses.create.await_args.kwargs["max_tool_calls"] == 25
+
+    def test_web_search_uses_reasoning_default_for_negative_max_tool_calls(self):
+        task_cfg = config.LLMTaskConfig(
+            vendor="OPENAI",
+            model="gpt-5.6-sol",
+            reasoning_effort="Medium",
+            use_web_search=True,
+            max_tool_calls=-1,
+        )
+        client = MagicMock()
+        client.responses.create = AsyncMock(return_value=_make_openai_response())
+
+        asyncio.run(
+            ai_helper._exec_prompt_openai_client(
+                client,
+                task_cfg,
+                "prompt",
+                schema_name="json_responses",
+            )
+        )
+
+        assert client.responses.create.await_args.kwargs["max_tool_calls"] == 7
 
     def test_web_search_omits_reasoning_when_missing(self):
         task_cfg = config.LLMTaskConfig(vendor="OPENAI", model="gpt-5", use_web_search=True)

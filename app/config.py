@@ -105,6 +105,7 @@ class LLMTaskConfig(BaseSettings):
     model: str = ""
     reasoning_effort: ReasoningEffort | None = None
     use_web_search: bool = False
+    max_tool_calls: int = 0
 
     @field_validator("reasoning_effort", mode="before")
     @classmethod

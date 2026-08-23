@@ -281,21 +281,26 @@ async def _exec_prompt_openai_client(
     """
     Execute a prompt using OpenAI client and return the response.
     """
+    model = task_cfg.model
+    reasoning_effort = task_cfg.reasoning_effort
+    use_web_search = task_cfg.use_web_search
+    max_tool_calls = (
+        task_cfg.max_tool_calls if task_cfg.max_tool_calls > 0 else _MAX_TOOL_CALLS_BY_REASONING[reasoning_effort]
+    )
     timer_start = time.perf_counter()
     logging.info(
-        "_exec_prompt_openai_client('%s') - Using {%s - %s - %s} | Web search: %s | Reasoning: %s | Prompt:",
+        "_exec_prompt_openai_client('%s') - Using {%s - %s - %s} | Web search: %s | Reasoning: %s "
+        "| Max tool calls: %d | Prompt:",
         task_cfg.task_name,
         task_cfg.vendor,
         task_cfg.tier,
         task_cfg.model,
         task_cfg.use_web_search,
         task_cfg.reasoning_effort,
+        max_tool_calls,
     )
     print(prompt if _is_debug_mode() else "<prompt omitted>")
 
-    model = task_cfg.model
-    reasoning_effort = task_cfg.reasoning_effort
-    use_web_search = task_cfg.use_web_search
     openai_json_schema = (
         _openai_compatible_json_schema(response_json_schema) if response_json_schema is not None else None
     )
@@ -328,7 +333,7 @@ async def _exec_prompt_openai_client(
             "input": prompt,
         }
         if use_web_search:
-            request_kwargs["max_tool_calls"] = _MAX_TOOL_CALLS_BY_REASONING[reasoning_effort]
+            request_kwargs["max_tool_calls"] = max_tool_calls
             request_kwargs["tools"] = [
                 {
                     "type": "web_search",

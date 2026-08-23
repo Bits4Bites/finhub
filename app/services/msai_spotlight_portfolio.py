@@ -571,6 +571,7 @@ def _task_cache_identity(task_id: str) -> str:
             "model": task_config.model,
             "reasoning_effort": task_config.reasoning_effort,
             "use_web_search": task_config.use_web_search,
+            "max_tool_calls": task_config.max_tool_calls,
         },
         sort_keys=True,
     )
