@@ -13,3 +13,5 @@
 - feat(client/dotnet): Add spotlight-portfolio API contracts.
 - feat(AI/build-portfolio): Rebuild feature with structured theme-aware research, analysis and action plan.
 - feat(client/dotnet): Add build-portfolio API contracts.
+- feat(AI/review-portfolio): Rebuild feature with structured theme-aware research, analysis and action plan.
+- feat(client/dotnet): Add review-portfolio API contracts.

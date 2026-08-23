@@ -101,11 +101,11 @@ Task IDs below use their current code spelling, including `ASX_LISTTINGS`.
 | `BUILD_PORTFOLIO_RESEARCH`                | `gpt-5.6-terra` | High      | Yes          | Research a bounded, sourced candidate universe                                    |
 | `BUILD_PORTFOLIO_CONSTRUCT`               | `gpt-5.6-terra` | High      | No (default) | Select and allocate one evidence-backed target portfolio                          |
 | `BUILD_PORTFOLIO_ACTION_PLAN`             | `gpt-5.6-terra` | High      | No (default) | Explain fixed, budget-aware whole-share actions in priority order                 |
-| `REVIEW_PORTFOLIO_BUILD_PROMPT`           | `gpt-5.6-luna`  | Medium    | No (default) | Build a portfolio-review prompt                                                   |
-| `REVIEW_PORTFOLIO_EXEC`                   | `gpt-5.6-sol`   | High      | Yes          | Research and review an existing portfolio                                         |
-| `REVIEW_PORTFOLIO_SUMMARIZE`              | `gpt-5.6-luna`  | Medium    | No (default) | Summarize a portfolio review for rebalance planning                               |
-| `REVIEW_PORTFOLIO_REBALANCE_BUILD_PROMPT` | `gpt-5.6-luna`  | Medium    | No (default) | Build a rebalance-planning prompt                                                 |
-| `REVIEW_PORTFOLIO_REBALANCE_EXEC`         | `gpt-5.6-sol`   | High      | Yes          | Research and produce an actionable rebalance plan                                 |
+| `REVIEW_PORTFOLIO_PLAN`                   | `gpt-5.6-terra` | Medium    | No (default) | Build a structured, portfolio-specific review plan                               |
+| `REVIEW_PORTFOLIO_RESEARCH`               | `gpt-5.6-terra` | High      | Yes          | Research current holdings and bounded addition candidates                         |
+| `REVIEW_PORTFOLIO_ASSESS`                 | `gpt-5.6-terra` | High      | No (default) | Assess strengths, risks, roles, and holding disposition intent                    |
+| `REVIEW_PORTFOLIO_TARGET`                 | `gpt-5.6-terra` | High      | No (default) | Design one validated aspirational target portfolio                               |
+| `REVIEW_PORTFOLIO_ACTION_PLAN`            | `gpt-5.6-terra` | High      | No (default) | Rank and explain application-calculated portfolio actions                         |
 | `SPOTLIGHT_PORTFOLIO_PLAN`                | `gpt-5.6-terra` | Medium    | No (default) | Build a validated, theme-aware analysis plan for a verified portfolio             |
 | `SPOTLIGHT_PORTFOLIO_RESEARCH`            | `gpt-5.6-terra` | High      | Yes          | Research sourced risks for a verified portfolio                                   |
 | `SPOTLIGHT_PORTFOLIO_ASSESS`              | `gpt-5.6-terra` | High      | No           | Rank structured risks and actions from validated research                         |
@@ -146,47 +146,51 @@ Task IDs below use their current code spelling, including `ASX_LISTTINGS`.
   seeded TRIM actions, recurring budgets preserve aligned holdings with HOLD, and non-target seeds use EXIT/SELL ALL.
   Verification is cached for five minutes and each AI stage plus the final result for one hour. Async start and
   query-poll calls expose the same structured result and preserve `422`/`502` failures.
-- **Detailed review:** [Portfolio construction review](detailed_review_plan/02-portfolio-construction.md)
 - **Status:** Reviewed: **Yes** | Implemented: **Yes** | Done: **Yes**
 
 ### 3. Portfolio analysis dispatcher
 
 - **API or flow name:** `POST /ai/analyze_portfolio` and `POST /ai/analyze_portfolio_async`
-- **AI tasks involved:** Conditionally uses `BUILD_PORTFOLIO_PLAN`, `BUILD_PORTFOLIO_RESEARCH`, and
-  `BUILD_PORTFOLIO_CONSTRUCT`, `BUILD_PORTFOLIO_ACTION_PLAN`, or the review and rebalance tasks listed in entries 4
-  and 5
-- **Primary code:** `app\routers\ai.py`
-- **Summary of process flow:** Inspect the submitted allocation. If it is empty or every holding has zero shares,
-  require a non-blank investor theme and dispatch to structured portfolio construction. Otherwise dispatch to
-  existing-portfolio review and optionally request a rebalance plan. The response contract is a union of the
-  structured construction result and the legacy review result. The async API runs the selected branch as a background
-  task and exposes start/poll states.
-- **Status:** Reviewed: **No** | Implemented: **No** | Done: **No**
+- **AI tasks involved:** Conditionally uses the four `BUILD_PORTFOLIO_*` tasks or the five structured
+  `REVIEW_PORTFOLIO_*` tasks listed in entries 4 and 5.
+- **Primary code:** `app\routers\ai_portfolio_review.py`, `app\schemas\ai_portfolio_review.py`
+- **Summary of process flow:** Require a non-blank investor theme and inspect all submitted positions. Dispatch to
+  structured construction when no positions are submitted, no position is positive, or positive positions make up
+  35% or less of submissions; pass sparse positive positions through as construction seeds. Otherwise dispatch to
+  structured existing-portfolio review. Return a `result_type`-discriminated union of `PortfolioConstruction` and
+  `PortfolioReview`; async start/poll preserves the same typed result and failure status.
+- **Detailed review:** [Review portfolio redesign](detailed_review_plan/04-review-portfolio.md)
+- **Status:** Reviewed: **Yes** | Implemented: **Yes** | Done: **Yes**
 
 ### 4. Existing-portfolio review
 
 - **API or flow name:** Existing-holdings branch of `POST /ai/analyze_portfolio` and
   `POST /ai/analyze_portfolio_async`
-- **AI tasks involved:** `REVIEW_PORTFOLIO_BUILD_PROMPT`, `REVIEW_PORTFOLIO_EXEC`
-- **Primary code:** `app\routers\ai.py`, `app\services\msai_review_portfolio.py`
-- **Summary of process flow:** Build an investor profile containing current positions and values; ask one model to
-  create a portfolio-review prompt; pass the generated prompt to a research-enabled model; require a final
-  `REBALANCE_NEEDED` decision; remove that control line before returning the review. When no rebalance plan is
-  requested, cache and return the review for 72 hours.
-- **Status:** Reviewed: **No** | Implemented: **No** | Done: **No**
+- **AI tasks involved:** `REVIEW_PORTFOLIO_PLAN`, `REVIEW_PORTFOLIO_RESEARCH`, `REVIEW_PORTFOLIO_ASSESS`,
+  `REVIEW_PORTFOLIO_TARGET`, and conditionally `REVIEW_PORTFOLIO_ACTION_PLAN`
+- **Primary code:** `app\routers\ai_portfolio_review.py`, `app\schemas\ai_portfolio_review.py`,
+  `app\models\ai_portfolio_review.py`, `app\services\msai_review_portfolio.py`
+- **Summary of process flow:** Verify and value every positive holding; extract LongTerm or Swing strategy and a
+  supplied or inferred budget deterministically; plan, research, assess, and design a sourced target through focused
+  structured stages; render emoji roles; derive turnover and the `YES`/`NO` rebalance recommendation in the
+  application; and return structured strengths, risks, holding reviews, target allocations, data gaps, and canonical
+  references. Verification and AI stages use freshness-specific caches.
+- **Detailed review:** [Review portfolio redesign](detailed_review_plan/04-review-portfolio.md)
+- **Status:** Reviewed: **Yes** | Implemented: **Yes** | Done: **Yes**
 
 ### 5. Portfolio rebalance extension
 
 - **API or flow name:** Rebalance branch of `POST /ai/analyze_portfolio` and `POST /ai/analyze_portfolio_async`
-- **AI tasks involved:** `REVIEW_PORTFOLIO_BUILD_PROMPT`, `REVIEW_PORTFOLIO_EXEC`,
-  `REVIEW_PORTFOLIO_SUMMARIZE`, `REVIEW_PORTFOLIO_REBALANCE_BUILD_PROMPT`,
-  `REVIEW_PORTFOLIO_REBALANCE_EXEC`
-- **Primary code:** `app\routers\ai.py`, `app\services\msai_review_portfolio.py`
-- **Summary of process flow:** Run the existing-portfolio review and inspect its final rebalance flag. Return
-  deterministically when no major rebalance is needed. When one is needed, summarize the model-generated review,
-  pass that summary to a prompt-writing task, and pass the resulting prompt to a research-enabled rebalance task.
-  Return both the original review and the generated plan, then cache the combined result for 72 hours.
-- **Status:** Reviewed: **No** | Implemented: **No** | Done: **No**
+- **AI tasks involved:** `REVIEW_PORTFOLIO_TARGET` and conditionally `REVIEW_PORTFOLIO_ACTION_PLAN`, using the
+  validated plan, research, and assessment from entry 4
+- **Primary code:** `app\models\ai_portfolio_review.py`, `app\services\msai_review_portfolio.py`
+- **Summary of process flow:** Derive major rebalancing from validated EXIT intent, introduced holdings, or at least
+  20% one-way turnover. When a recommended rebalance was not requested, return an explicit null action plan. Otherwise
+  calculate whole-share EXIT/TRIM/BUY_MORE/INTRODUCE/ACCUMULATE/HOLD actions, balance new money and sale proceeds,
+  enforce LongTerm and Swing policy, and ask the final model only to rank within fixed groups and explain every
+  immutable action. No-rebalance reviews always return a funded Growth plan.
+- **Detailed review:** [Review portfolio redesign](detailed_review_plan/04-review-portfolio.md)
+- **Status:** Reviewed: **Yes** | Implemented: **Yes** | Done: **Yes**
 
 ### 6. Shared asynchronous AI task start and polling
 

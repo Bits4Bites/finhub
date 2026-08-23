@@ -5,6 +5,9 @@ namespace FinHub.Client.Models.Portfolios;
 
 public sealed record PortfolioConstruction : IPortfolioAnalysisResult
 {
+    [JsonPropertyName("result_type")]
+    public string ResultType { get; init; } = "PortfolioConstruction";
+
     [JsonPropertyName("as_of")]
     public required DateTimeOffset AsOf { get; init; }
 

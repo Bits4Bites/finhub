@@ -12,13 +12,35 @@ public sealed class PortfolioAnalysisResultJsonConverter : JsonConverter<IPortfo
     )
     {
         using var document = JsonDocument.ParseValue(ref reader);
-        var resultType = document.RootElement.TryGetProperty("construction_mode", out _)
-            ? typeof(PortfolioConstruction)
-            : typeof(AnalyzePortfolioResult);
-        return (IPortfolioAnalysisResult)(
-            document.RootElement.Deserialize(resultType, options)
-            ?? throw new JsonException("Portfolio analysis result cannot be null.")
-        );
+        if (document.RootElement.ValueKind != JsonValueKind.Object)
+        {
+            throw new JsonException("Portfolio analysis result must be a JSON object.");
+        }
+
+        if (!document.RootElement.TryGetProperty("result_type", out var resultTypeElement))
+        {
+            throw new JsonException(
+                "Portfolio analysis result is missing the 'result_type' discriminator."
+            );
+        }
+
+        if (resultTypeElement.ValueKind != JsonValueKind.String)
+        {
+            throw new JsonException(
+                "Portfolio analysis result 'result_type' discriminator must be a string."
+            );
+        }
+
+        return resultTypeElement.GetString() switch
+        {
+            "PortfolioConstruction" => document.RootElement.Deserialize<PortfolioConstruction>(options)
+                ?? throw new JsonException("Portfolio construction result cannot be null."),
+            "PortfolioReview" => document.RootElement.Deserialize<PortfolioReview>(options)
+                ?? throw new JsonException("Portfolio review result cannot be null."),
+            var resultType => throw new JsonException(
+                $"Unknown portfolio analysis result_type discriminator '{resultType}'."
+            ),
+        };
     }
 
     public override void Write(
@@ -27,6 +49,18 @@ public sealed class PortfolioAnalysisResultJsonConverter : JsonConverter<IPortfo
         JsonSerializerOptions options
     )
     {
-        JsonSerializer.Serialize(writer, value, value.GetType(), options);
+        switch (value)
+        {
+            case PortfolioConstruction construction:
+                JsonSerializer.Serialize(writer, construction, options);
+                break;
+            case PortfolioReview review:
+                JsonSerializer.Serialize(writer, review, options);
+                break;
+            default:
+                throw new JsonException(
+                    $"Unsupported portfolio analysis result type '{value.GetType().FullName}'."
+                );
+        }
     }
 }

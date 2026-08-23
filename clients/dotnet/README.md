@@ -90,9 +90,9 @@ var request = new BuildPortfolioRequest
 
 `InvestorTheme` is required and `CurrentAllocation` defaults to an empty collection. The result is one
 `PortfolioConstruction` with `Scratch` or `Seeded` mode, verified positive seed holdings, allocation-only target
-positions, data-quality metadata, and canonical references. It contains no trade sequence or rebalance plan.
-Synchronous calls use `BuildPortfolioResponse`; async start and query-poll calls use
-`BuildPortfolioAsyncResponse`.
+positions, an optional budget-aware action plan, data-quality metadata, canonical references, and the
+`PortfolioConstruction` result discriminator. Synchronous calls use `BuildPortfolioResponse`; async start and
+query-poll calls use `BuildPortfolioAsyncResponse`.
 
 The dispatcher endpoints:
 
@@ -102,8 +102,11 @@ POST /ai/analyze_portfolio_async
 ```
 
 use `AnalyzePortfolioResponse` and `AnalyzePortfolioAsyncResponse`. Their `Data` property is
-`IPortfolioAnalysisResult`: the included JSON converter selects `PortfolioConstruction` for the empty/all-zero
-construction branch and `AnalyzePortfolioResult` for the existing-holdings review branch.
+`IPortfolioAnalysisResult`: the included JSON converter requires `result_type` and explicitly selects
+`PortfolioConstruction` or `PortfolioReview`. Structured reviews include the verified snapshot, budget, strengths,
+risks, per-holding recommendations, target portfolio, rebalance decision, optional action plan, data-quality
+metadata, and canonical references. `AnalyzePortfolioRequest.InvestorTheme` is required,
+`CurrentAllocation` defaults to an empty collection, and `RebalancePlan` defaults to `false`.
 
 ## Portfolio spotlight
 

@@ -12,8 +12,8 @@ public sealed record AnalyzePortfolioRequest
     public IReadOnlyList<PortfolioHolding> CurrentAllocation { get; init; } = [];
 
     [JsonPropertyName("investor_theme")]
-    public string? InvestorTheme { get; init; }
+    public required string InvestorTheme { get; init; }
 
     [JsonPropertyName("rebalance_plan")]
-    public bool RebalancePlan { get; init; }
+    public bool RebalancePlan { get; init; } = false;
 }
