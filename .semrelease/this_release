@@ -11,5 +11,5 @@
 - feat(client/dotnet): Add analyze-dividend-event API contracts.
 - feat(AI/spotlight-portfolio): Rebuild feature with structured theme-aware research and analysis.
 - feat(client/dotnet): Add spotlight-portfolio API contracts.
-- feat(AI/build-portfolio): Rebuild feature with structured theme-aware research and analysis.
+- feat(AI/build-portfolio): Rebuild feature with structured theme-aware research, analysis and action plan.
 - feat(client/dotnet): Add build-portfolio API contracts.
