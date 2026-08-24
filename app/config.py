@@ -180,6 +180,7 @@ settings_llm_task = LLMTaskSettings()
 class FinHubProxySettings(BaseSettings):
     proxy_mode: Literal["None", "Redirect", "Forward"] = Field(default="None", alias="FINHUB_PROXY_MODE")
     url_web_crawl_node: str = Field(default="", alias="FINHUB_URL_WEB_CRAWL_NODE")
+    url_ai_task_node: str = Field(default="", alias="FINHUB_URL_AI_TASK_NODE")
     model_config = SettingsConfigDict(
         env_file="finhub_proxy_config.env",
         env_file_encoding="utf-8",

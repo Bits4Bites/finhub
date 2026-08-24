@@ -19,3 +19,4 @@
 - feat(client/dotnet): Add analyze-ticker API contracts.
 - feat(async): Deduplicate identical task starts.
 - fix(AI/new-listings/async): Reject unsupported country before task creation.
+- refactor(proxy): Centralize FinHub proxy mode handler.

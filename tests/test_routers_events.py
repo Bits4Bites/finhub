@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
+from app import config
 from app.main import app
 from app.models import events_listings as models_events_listings
 from app.models.event import UpcomingDividendEvent, UpcomingEarningsEvent
@@ -22,6 +23,26 @@ client = TestClient(app)
 
 
 class TestUpcomingDividends:
+    def test_redirects_through_shared_proxy_handler(self):
+        with (
+            patch.object(config.settings_finhub_proxy, "proxy_mode", "Redirect"),
+            patch.object(
+                config.settings_finhub_proxy,
+                "url_web_crawl_node",
+                "https://proxy.example/finhub/",
+            ),
+        ):
+            resp = client.get(
+                "/events/upcoming_dividends",
+                params={"country": "AU", "index": "ASX200"},
+                follow_redirects=False,
+            )
+
+        assert resp.status_code == 307
+        assert (
+            resp.headers["location"] == "https://proxy.example/finhub/events/upcoming_dividends?country=AU&index=ASX200"
+        )
+
     @patch("app.routers.events.services_event.get_asx_upcoming_dividends_events", new_callable=AsyncMock)
     def test_au_returns_dividends(self, mock_get):
         event = UpcomingDividendEvent.model_construct(
@@ -82,6 +103,27 @@ class TestUpcomingDividends:
 
 
 class TestUpcomingDividendsAsync:
+    def test_redirects_through_shared_proxy_handler(self):
+        with (
+            patch.object(config.settings_finhub_proxy, "proxy_mode", "Redirect"),
+            patch.object(
+                config.settings_finhub_proxy,
+                "url_web_crawl_node",
+                "https://proxy.example/finhub/",
+            ),
+        ):
+            resp = client.get(
+                "/events/upcoming_dividends_async",
+                params={"country": "AU", "index": "ASX200", "task_id": "task-123"},
+                follow_redirects=False,
+            )
+
+        assert resp.status_code == 307
+        assert (
+            resp.headers["location"] == "https://proxy.example/finhub/events/upcoming_dividends_async"
+            "?country=AU&index=ASX200&task_id=task-123"
+        )
+
     def test_starts_task(self):
         with (
             patch("app.routers.async_task._generate_task_id", return_value="task-123"),
@@ -184,6 +226,26 @@ class TestUpcomingDividendsAsync:
 
 
 class TestUpcomingEarnings:
+    def test_redirects_through_shared_proxy_handler(self):
+        with (
+            patch.object(config.settings_finhub_proxy, "proxy_mode", "Redirect"),
+            patch.object(
+                config.settings_finhub_proxy,
+                "url_web_crawl_node",
+                "https://proxy.example/finhub/",
+            ),
+        ):
+            resp = client.get(
+                "/events/upcoming_earnings",
+                params={"country": "US", "index": "SP500"},
+                follow_redirects=False,
+            )
+
+        assert resp.status_code == 307
+        assert (
+            resp.headers["location"] == "https://proxy.example/finhub/events/upcoming_earnings?country=US&index=SP500"
+        )
+
     @patch("app.routers.events.services_event.get_asx_upcoming_earnings_events", new_callable=AsyncMock)
     def test_au_returns_earnings(self, mock_get):
         event = UpcomingEarningsEvent.model_construct(
@@ -230,6 +292,27 @@ class TestUpcomingEarnings:
 
 
 class TestUpcomingEarningsAsync:
+    def test_redirects_through_shared_proxy_handler(self):
+        with (
+            patch.object(config.settings_finhub_proxy, "proxy_mode", "Redirect"),
+            patch.object(
+                config.settings_finhub_proxy,
+                "url_web_crawl_node",
+                "https://proxy.example/finhub/",
+            ),
+        ):
+            resp = client.get(
+                "/events/upcoming_earnings_async",
+                params={"country": "US", "index": "SP500", "task_id": "task-456"},
+                follow_redirects=False,
+            )
+
+        assert resp.status_code == 307
+        assert (
+            resp.headers["location"] == "https://proxy.example/finhub/events/upcoming_earnings_async"
+            "?country=US&index=SP500&task_id=task-456"
+        )
+
     def test_starts_task(self):
         with (
             patch("app.routers.async_task._generate_task_id", return_value="task-456"),
