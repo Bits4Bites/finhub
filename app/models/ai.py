@@ -98,26 +98,3 @@ class AIVendorInfo(BaseModel):
         default={},
         description="Enabled model identifiers grouped by service tier.",
     )
-
-
-class BaseAIResult(BaseModel):
-    """Common execution metadata returned by legacy AI workflows."""
-
-    llm_error: bool = Field(
-        default=False,
-        description="Whether the language-model execution failed.",
-    )
-    llm_error_msg: str | None = Field(
-        default=None,
-        description="Language-model failure detail, or null when execution succeeded.",
-    )
-    llm_response: str | None = Field(
-        default=None,
-        description="Raw language-model response retained by the workflow, when available.",
-    )
-
-
-class AnalysisResult(BaseAIResult):
-    """Text analysis returned by a legacy AI endpoint."""
-
-    analysis: str = Field(default="", description="Generated analysis content.")

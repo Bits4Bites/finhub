@@ -10,6 +10,7 @@ from .routers import (
     ai_portfolio_construction,
     ai_portfolio_review,
     ai_portfolio_spotlight,
+    ai_ticker,
     events,
     events_listings,
     market,
@@ -79,6 +80,7 @@ app.include_router(ai_dividend.router, dependencies=[Depends(auth.verify_api_key
 app.include_router(ai_portfolio_construction.router, dependencies=[Depends(auth.verify_api_key)])
 app.include_router(ai_portfolio_review.router, dependencies=[Depends(auth.verify_api_key)])
 app.include_router(ai_portfolio_spotlight.router, dependencies=[Depends(auth.verify_api_key)])
+app.include_router(ai_ticker.router, dependencies=[Depends(auth.verify_api_key)])
 app.include_router(events.router, dependencies=[Depends(auth.verify_api_key)])
 app.include_router(events_listings.router, dependencies=[Depends(auth.verify_api_key)])
 app.include_router(stocks.router, dependencies=[Depends(auth.verify_api_key)])

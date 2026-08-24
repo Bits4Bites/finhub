@@ -1,17 +1,10 @@
-import logging
-
-from fastapi import APIRouter, BackgroundTasks, Body, HTTPException, Query, Response, status
+from fastapi import APIRouter
 
 from .. import config
 from ..models import ai as models_ai
 from ..schemas import ai as schemas_ai
-from ..schemas import async_task
-from ..services import msai_analyze_ticker as service_analyze_ticker
-from . import async_task as router_async_task
 
 router = APIRouter(prefix="/ai", tags=["ai"])
-
-_ANALYZE_TICKER_TASK_TYPE = "analyze_ticker"
 
 
 @router.get(
@@ -32,103 +25,3 @@ async def get_vendors() -> schemas_ai.AIVendorsResponse:
             result[v_name].tier_models[t_name] = list(config.settings_llm_vendor.vendors[v][t].models or [])
 
     return schemas_ai.AIVendorsResponse(status=200, message="ok", data=result)
-
-
-# ----------------------------------------------------------------------
-
-
-async def _get_analyze_ticker_result(symbol: str, intent: str) -> schemas_ai.AnalysisResponse:
-    result = await service_analyze_ticker.ai_analyze_ticker(symbol=symbol, intent=intent)
-    if not result:
-        return schemas_ai.AnalysisResponse(status=400, message="Invalid stock symbol or analysis failed")
-    return schemas_ai.AnalysisResponse(status=200, message="ok", data=result)
-
-
-@router.post(
-    "/analyze_ticker",
-    response_model=schemas_ai.AnalysisResponse,
-    response_model_exclude_none=True,
-)
-async def analyze_ticker(
-    req: schemas_ai.AnalyzeTickerRequest = Body(description="The analyze portfolio request."),
-) -> schemas_ai.AnalysisResponse:
-    """
-    Analyzes a ticker using AI assistance.
-    """
-    return await _get_analyze_ticker_result(req.symbol, req.intent)
-
-
-async def _run_analyze_ticker_task(task_id: str, symbol: str, intent: str) -> None:
-    try:
-        result = await _get_analyze_ticker_result(symbol, intent)
-    except Exception:
-        logging.exception("Analyze ticker task '%s' failed.", task_id)
-        await router_async_task.fail_task(task_id, _ANALYZE_TICKER_TASK_TYPE)
-        return
-
-    await router_async_task.complete_task(
-        task_id,
-        _ANALYZE_TICKER_TASK_TYPE,
-        result,
-    )
-
-
-@router.post(
-    "/analyze_ticker_async",
-    response_model=schemas_ai.AnalyzeTickerAsyncResponse,
-    response_model_exclude_none=True,
-)
-async def analyze_ticker_async(
-    background_tasks: BackgroundTasks,
-    response: Response,
-    req: schemas_ai.AnalyzeTickerRequest | None = Body(
-        None,
-        description="The ticker analysis request. Required when starting a task; not required when polling.",
-    ),
-    task_id: str = Query("", description="Task ID returned by a previous call to this endpoint."),
-) -> schemas_ai.AnalyzeTickerAsyncResponse:
-    """
-    Start an analyze-ticker task or poll a previously started task.
-    """
-    task_id = task_id.strip()
-    if task_id:
-        task_entry = await router_async_task.load_task(task_id, _ANALYZE_TICKER_TASK_TYPE)
-        task_state = task_entry.state
-        task_info = async_task.AsyncTaskInfo(task_id=task_id, state=task_state)
-        if task_state == async_task.TASK_STATE_RUNNING:
-            response.status_code = status.HTTP_202_ACCEPTED
-            return schemas_ai.AnalyzeTickerAsyncResponse(
-                status=status.HTTP_202_ACCEPTED,
-                message="Task is running",
-                extra=task_info,
-            )
-        if task_state == async_task.TASK_STATE_FAILED:
-            response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
-            return schemas_ai.AnalyzeTickerAsyncResponse(
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                message=task_entry.message or "Task failed",
-                extra=task_info,
-            )
-
-        result = schemas_ai.AnalysisResponse.model_validate(task_entry.result)
-        return schemas_ai.AnalyzeTickerAsyncResponse(
-            status=result.status,
-            message=result.message,
-            data=result.data,
-            extra=task_info,
-        )
-
-    if req is None or not req.symbol.strip():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Symbol is required when starting a task",
-        )
-
-    task_id = await router_async_task.start_task(_ANALYZE_TICKER_TASK_TYPE)
-    background_tasks.add_task(_run_analyze_ticker_task, task_id, req.symbol, req.intent)
-    response.status_code = status.HTTP_202_ACCEPTED
-    return schemas_ai.AnalyzeTickerAsyncResponse(
-        status=status.HTTP_202_ACCEPTED,
-        message="Task started",
-        extra=async_task.AsyncTaskInfo(task_id=task_id, state=async_task.TASK_STATE_RUNNING),
-    )

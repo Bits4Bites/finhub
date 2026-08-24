@@ -525,45 +525,79 @@ Polling returns:
 
 ### `POST /ai/analyze_ticker`
 
-Analyze a stock ticker using AI.
+Return deterministic market context, current sourced research, four bounded price forecasts, and a generic
+holding-aware `BUY`, `HOLD`, or `SELL` recommendation.
 
 **Request Body (JSON):**
 
-| Field    | Type     | Required | Description                                                                                         |
-|----------|----------|----------|-----------------------------------------------------------------------------------------------------|
-| `symbol` | `string` | No       | Stock symbol in YF or `EXCHANGE:CODE` format; defaults to empty, but must be usable for a successful analysis. |
-| `intent` | `string` | No       | Analysis intent defining the angle of insight. Defaults to a built-in intent.                       |
+| Field             | Type                 | Required | Description |
+|-------------------|----------------------|----------|-------------|
+| `symbol`          | `string`             | Yes      | Security symbol in Yahoo Finance or `EXCHANGE:CODE` format; normalized to uppercase, maximum 32 characters, and no whitespace. |
+| `intent`          | `string \| null`     | No       | Optional analysis focus, from 1 through 4,000 characters after trimming. It cannot override the required output contract. |
+| `current_holding` | `TickerHoldingInput \| null` | No | Optional holding context used only by the recommendation stage. |
+
+`TickerHoldingInput` contains:
+
+| Field        | Type    | Required | Description |
+|--------------|---------|----------|-------------|
+| `num_shares` | `float` | Yes      | Positive finite number of shares or units held. |
+| `avg_price`  | `float` | Yes      | Positive finite average acquisition price in the security's trading currency. |
 
 **Example:**
 
 ```bash
 curl -X POST 'http://localhost:8000/ai/analyze_ticker' \
   -H 'Content-Type: application/json' \
-  -d '{"symbol": "CBA.AX", "intent": "dividend capture strategy"}'
+  -d '{
+    "symbol": "NASDAQ:AAPL",
+    "intent": "Focus on margins, valuation, and product-cycle risk",
+    "current_holding": {"num_shares": 10, "avg_price": 185.50}
+  }'
 ```
 
-An omitted, blank, invalid, or otherwise unanalyzable symbol currently returns HTTP `200` with envelope `status=400`
-and no `data`.
+The response `data` is a `TickerAnalysis` object containing:
+
+- a verified quote, historical-return, volatility, technical, benchmark, peer, and analyst snapshot;
+- deterministic holding value, cost basis, unrealized P/L, return, and break-even price when a holding is supplied;
+- source-linked research for business profile, financial performance, valuation, recent developments, catalysts,
+  risks, market consensus, and asset-specific considerations;
+- exactly four forecasts in `OneWeek`, `TwoWeeks`, `OneMonth`, and `ThreeMonths` order, with application-calculated
+  calendar dates, directions, and return percentages;
+- one generic recommendation. `BUY` contains only `buy_range`, `SELL` contains only `sell_range`, and `HOLD`
+  contains neither;
+- aggregate data quality, explicit data gaps, validation warnings, and a canonical source registry with
+  application-owned IDs and verification flags.
+
+Forecast price ranges are constrained to empirical historical-return envelopes. Recommendation scope is
+`NewPosition` without a holding and `ExistingHolding` with one. Insufficient overall data can only produce `HOLD`.
+The market baseline, research, forecast, recommendation, and final result are independently cached for one hour.
+Research and forecast caches exclude holding data; recommendation and final caches include it.
+
+| HTTP status | Meaning |
+|-------------|---------|
+| `200` | Structured analysis completed. |
+| `422` | Request validation failed, or the symbol/security type is invalid or unsupported. |
+| `502` | Market verification, an AI stage, cached structured data, or final structured validation failed. |
 
 ### `POST /ai/analyze_ticker_async`
 
 Run ticker analysis in the background. Start a task with the same JSON request body as
 `/ai/analyze_ticker`, then poll by posting to this endpoint with the returned task ID. Task state and
-results expire after one hour; completed analyses are cached for 72 hours.
+results expire after one hour.
 
-Starting without a request body or with a blank symbol returns immediate HTTP `400` and does not create a task.
+Starting without a request body returns immediate HTTP `400`; an invalid request body returns HTTP `422`. Neither
+case creates a task.
 
 | Parameter | Location  | Required    | Description                                                   |
 |-----------|-----------|-------------|---------------------------------------------------------------|
-| `symbol`  | JSON body | Conditional | Stock symbol. Required when starting a task.                  |
-| `intent`  | JSON body | No          | Optional analysis intent used when starting a task.           |
+| request body | JSON body | Conditional | `AnalyzeTickerRequest`; required when starting and omitted when polling. |
 | `task_id` | query     | Conditional | Task ID returned when starting a task. Required when polling. |
 
 ```bash
 # Start a task
 curl -X POST 'http://localhost:8000/ai/analyze_ticker_async' \
   -H 'Content-Type: application/json' \
-  -d '{"symbol": "CBA.AX", "intent": "dividend capture strategy"}'
+  -d '{"symbol": "NASDAQ:AAPL", "intent": "Focus on margins and valuation"}'
 
 # Poll a task
 curl -X POST 'http://localhost:8000/ai/analyze_ticker_async?task_id=<TASK_ID>'
@@ -571,11 +605,13 @@ curl -X POST 'http://localhost:8000/ai/analyze_ticker_async?task_id=<TASK_ID>'
 
 Polling returns:
 
-| HTTP status | Task state  | Result                                             |
-|-------------|-------------|----------------------------------------------------|
-| `202`       | `RUNNING`   | The task is still running.                         |
-| `200`       | `COMPLETED` | The ticker-analysis payload, or envelope `status=400` with no data when analysis returns no result. |
-| `500`       | `FAILED`    | The background task failed.                        |
+| HTTP status | Task state  | Result |
+|-------------|-------------|--------|
+| `202`       | `RUNNING`   | The task started or is still running. |
+| `200`       | `COMPLETED` | The standard structured ticker-analysis payload in `data`. |
+| `422`       | `FAILED`    | Symbol or security input validation failed during execution. |
+| `502`       | `FAILED`    | Market verification, AI execution, or structured validation failed. |
+| `500`       | `FAILED`    | The background task failed unexpectedly. |
 | `404`       | —           | The task ID is unknown or its cache entry expired. |
 
 ---
