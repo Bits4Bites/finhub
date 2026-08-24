@@ -17,7 +17,7 @@ public sealed record ReferenceSource
     public required ReferenceSourceType SourceType { get; init; }
 
     [JsonPropertyName("published_at")]
-    public DateTimeOffset? PublishedAt { get; init; }
+    public required DateTimeOffset? PublishedAt { get; init; }
 
     [JsonPropertyName("accessed_at")]
     public required DateTimeOffset AccessedAt { get; init; }

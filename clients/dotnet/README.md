@@ -59,6 +59,35 @@ use `AnalyzeDividendEventResponse`; async start and poll responses share `Analyz
 reusable `AsyncTaskInfo`/`TaskState` metadata. Poll with
 `POST /ai/analyze_dividend_event_async?task_id=<TASK_ID>`.
 
+## Ticker analysis
+
+The ticker-analysis contracts cover:
+
+```http
+POST /ai/analyze_ticker
+POST /ai/analyze_ticker_async
+```
+
+```csharp
+using FinHub.Client.Schemas.TickerAnalysis;
+
+var request = new AnalyzeTickerRequest
+{
+    Symbol = "NASDAQ:AAPL",
+    CurrentHolding = new TickerHoldingInput
+    {
+        NumShares = 10,
+        AvgPrice = 150.0,
+    },
+};
+```
+
+Results contain a verified market snapshot, an optional holding snapshot, source-linked research, exactly four fixed
+forecast horizons, and a holding-aware recommendation. `TickerAssetType` and `TickerRecommendationAction` use strict
+converters for their exact wire values, including `MUTUAL FUND` and `BUY`. Unformatted OpenAPI integer fields for
+market volume and capitalization use `long` to accommodate real market values. Synchronous calls use
+`AnalyzeTickerResponse`; async start and poll calls use `AnalyzeTickerAsyncResponse` with shared task metadata.
+
 ## Portfolio construction and analysis
 
 The construction contracts cover:
@@ -150,9 +179,11 @@ optional and has no client default. Risk levels are limited to `Critical`, `High
 - `FinHub.Client.Models.Events`: reusable event contracts.
 - `FinHub.Client.Models.Listings`: listing-domain contracts shared by listing APIs.
 - `FinHub.Client.Models.Portfolios`: reusable holdings, construction, analysis-union, snapshot, risk, and spotlight contracts.
+- `FinHub.Client.Models.Tickers`: reusable ticker research, forecast, market snapshot, and recommendation contracts.
 - `FinHub.Client.Schemas`: reusable synchronous/async API response envelopes and async task metadata.
 - `FinHub.Client.Schemas.DividendAnalysis`: request and response schemas for dividend-event analysis.
 - `FinHub.Client.Schemas.NewListings`: schemas specific to the new-listings API.
 - `FinHub.Client.Schemas.PortfolioAnalysis`: request and response schemas for the review-or-construction dispatcher.
 - `FinHub.Client.Schemas.PortfolioConstruction`: request and response schemas for portfolio construction.
 - `FinHub.Client.Schemas.PortfolioSpotlight`: request and response schemas for portfolio spotlight.
+- `FinHub.Client.Schemas.TickerAnalysis`: request and response schemas for ticker analysis.
