@@ -1,5 +1,7 @@
 """Asynchronous in-memory cache with expiring entries."""
 
+import re
+from datetime import UTC, datetime
 from typing import Any
 
 import xxhash
@@ -7,9 +9,15 @@ from aiocache import SimpleMemoryCache
 
 from .. import version
 
-__all__ = ["clear", "delete", "exists", "generate_key", "get", "set"]
+__all__ = ["clear", "delete", "exists", "generate_hourly_key", "generate_key", "get", "set"]
 
 _DEFAULT_TTL = 3600
+_ISO_DATETIME_PATTERN = re.compile(
+    r"(?<!\d)"
+    r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?"
+    r"(?:Z|[+-]\d{2}:\d{2})"
+    r"(?!\d)"
+)
 _cache = SimpleMemoryCache()
 
 
@@ -21,6 +29,20 @@ def generate_key(*items: str) -> str:
         hasher.update(len(encoded_item).to_bytes(8, byteorder="big"))
         hasher.update(encoded_item)
     return hasher.hexdigest()
+
+
+def generate_hourly_key(*items: str) -> str:
+    """Generate a cache key after normalizing embedded ISO datetimes to UTC hours."""
+    return generate_key(*(_ISO_DATETIME_PATTERN.sub(_normalize_datetime_hour, item) for item in items))
+
+
+def _normalize_datetime_hour(match: re.Match[str]) -> str:
+    try:
+        value = datetime.fromisoformat(match.group().replace("Z", "+00:00"))
+    except ValueError:
+        return match.group()
+    hourly_value = value.astimezone(UTC).replace(minute=0, second=0, microsecond=0)
+    return hourly_value.isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
 async def get(key: str, default: Any = None) -> Any:

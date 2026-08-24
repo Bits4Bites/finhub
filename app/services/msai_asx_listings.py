@@ -168,7 +168,7 @@ def _generate_analysis_cache_key(
     *,
     today: date,
 ) -> str:
-    return cache.generate_key(
+    return cache.generate_hourly_key(
         _ASX_LISTINGS_CACHE_NAMESPACE,
         today.isoformat(),
         *(
@@ -267,7 +267,7 @@ async def _get_asx_new_listings() -> list[models_events_listings.ListingEvent]:
         },
     )
 
-    cache_key = cache.generate_key(
+    cache_key = cache.generate_hourly_key(
         _ASX_LISTINGS_EXTRACTION_CACHE_NAMESPACE,
         extract_prompt,
         json.dumps(_ExtractedListingsResponse.model_json_schema(), sort_keys=True),
@@ -411,7 +411,7 @@ async def _research_asx_listing(
     )
 
     today = _current_asx_date()
-    cache_key = cache.generate_key(
+    cache_key = cache.generate_hourly_key(
         _ASX_LISTINGS_RESEARCH_CACHE_NAMESPACE,
         today.isoformat(),
         research_prompt,
@@ -571,7 +571,7 @@ async def _assess_asx_listing(
         },
     )
 
-    cache_key = cache.generate_key(
+    cache_key = cache.generate_hourly_key(
         _ASX_LISTINGS_ASSESSMENT_CACHE_NAMESPACE,
         today.isoformat(),
         analysis_prompt,

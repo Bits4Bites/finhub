@@ -164,7 +164,7 @@ async def ai_spotlight_portfolio(
     if cached_analysis is not None:
         return _cached_analysis(cached_analysis)
 
-    portfolio_id = cache.generate_key("portfolio-spotlight-id", snapshot.model_dump_json())
+    portfolio_id = cache.generate_hourly_key("portfolio-spotlight-id", snapshot.model_dump_json())
     plan = await _build_analysis_plan(
         portfolio_id,
         snapshot,
@@ -229,7 +229,7 @@ async def _build_analysis_plan(
             "PORTFOLIO_JSON": snapshot.model_dump_json(),
         },
     )
-    cache_key = cache.generate_key(
+    cache_key = cache.generate_hourly_key(
         _PLAN_CACHE_NAMESPACE,
         prompt,
         json.dumps(_PortfolioAnalysisPlan.model_json_schema(), sort_keys=True),
@@ -292,7 +292,7 @@ async def _research_portfolio(
             "PLAN_JSON": plan.model_dump_json(),
         },
     )
-    cache_key = cache.generate_key(
+    cache_key = cache.generate_hourly_key(
         _RESEARCH_CACHE_NAMESPACE,
         prompt,
         json.dumps(_PortfolioResearchDraft.model_json_schema(), sort_keys=True),
@@ -425,7 +425,7 @@ async def _assess_portfolio(
             "RESEARCH_JSON": research.model_dump_json(),
         },
     )
-    cache_key = cache.generate_key(
+    cache_key = cache.generate_hourly_key(
         _ASSESSMENT_CACHE_NAMESPACE,
         prompt,
         json.dumps(_PortfolioAssessmentDraft.model_json_schema(), sort_keys=True),
@@ -542,7 +542,7 @@ def _analysis_cache_key(
     snapshot: models_spotlight.PortfolioSpotlightSnapshot,
     investor_theme: str | None,
 ) -> str:
-    return cache.generate_key(
+    return cache.generate_hourly_key(
         _ANALYSIS_CACHE_NAMESPACE,
         snapshot.model_dump_json(),
         json.dumps({"investor_theme": investor_theme}, sort_keys=True),

@@ -218,7 +218,7 @@ Run the upcoming-dividends request in the background. Start a task with the same
 
 | Parameter | Type  | Required    | Description                                                                                                   |
 |-----------|-------|-------------|---------------------------------------------------------------------------------------------------------------|
-| `country` | query | Conditional | Country code: `AU`, `US`, or `VN`. Required when starting a task.                                             |
+| `country` | query | No          | Country code used when starting: `AU`, `US`, or `VN`; defaults to an empty string and is ignored when polling. |
 | `index`   | query | No          | Optional stock-index filter used when starting a task; supports the same indices as the synchronous endpoint. |
 | `task_id` | query | Conditional | Task ID returned when starting a task. Required when polling.                                                 |
 
@@ -252,6 +252,9 @@ Polling returns:
 | `500`       | `FAILED`    | The background task failed.                         |
 | `404`       | —           | The task ID is unknown or its cache entry expired.  |
 
+The current endpoint starts a task even when `country` is omitted or unsupported. That task completes without event
+data; polling returns HTTP `200` with envelope `status=501` and an unsupported-country message.
+
 ---
 
 ### `GET /events/upcoming_earnings`
@@ -274,11 +277,11 @@ curl 'http://localhost:8000/events/upcoming_earnings?country=US&index=SP500'
 Run the upcoming-earnings request in the background using the same one-hour task lifecycle as
 `/events/upcoming_dividends_async`.
 
-| Parameter | Type  | Required    | Description                                                        |
-|-----------|-------|-------------|--------------------------------------------------------------------|
-| `country` | query | Conditional | Country code: `AU` or `US`. Required when starting a task.         |
-| `index`   | query | No          | Optional stock-index filter used when starting a task.             |
-| `task_id` | query | Conditional | Task ID returned when starting a task. Required when polling.      |
+| Parameter | Type  | Required    | Description                                                                                  |
+|-----------|-------|-------------|----------------------------------------------------------------------------------------------|
+| `country` | query | No          | Country code used when starting: `AU` or `US`; defaults to an empty string and is ignored when polling. |
+| `index`   | query | No          | Optional stock-index filter used when starting a task.                                       |
+| `task_id` | query | Conditional | Task ID returned when starting a task. Required when polling.                                |
 
 ```bash
 # Start a task
@@ -310,15 +313,19 @@ Polling returns:
 | `500`       | `FAILED`    | The background task failed.                        |
 | `404`       | —           | The task ID is unknown or its cache entry expired. |
 
+The current endpoint starts a task even when `country` is omitted or unsupported. That task completes without event
+data; polling returns HTTP `200` with envelope `status=501` and an unsupported-country message.
+
 ---
 
 ### `GET /events/new_listings`
 
-Get new listing events for a market (AI-assisted).
+Get up to five confirmed current or upcoming listing events for a market, ordered by listing date and enriched with
+structured AI analysis.
 
-| Parameter | Type  | Required | Description                                     |
-|-----------|-------|----------|-------------------------------------------------|
-| `country` | query | Yes      | Country code. Currently only `AU` is supported. |
+| Parameter | Type  | Required | Description                                                                 |
+|-----------|-------|----------|-----------------------------------------------------------------------------|
+| `country` | query | No       | Country code; defaults to an empty string. Currently only `AU` is supported. |
 
 **Example:**
 
@@ -326,14 +333,70 @@ Get new listing events for a market (AI-assisted).
 curl 'http://localhost:8000/events/new_listings?country=AU'
 ```
 
+Omitting `country` or supplying an unsupported country returns HTTP `200` with envelope `status=501`, an
+unsupported-country message, and no `data`.
+
+For a successful request, `data` is an array of `ListingEvent` objects:
+
+| Field                     | Description                                                                                       |
+|---------------------------|---------------------------------------------------------------------------------------------------|
+| `symbol`                  | Canonical exchange-qualified listing symbol.                                                      |
+| `exchange`                | Exchange code, when available.                                                                    |
+| `company_name`            | Issuer name, when available.                                                                      |
+| `timestamp`               | Unix timestamp corresponding to the listing date.                                                 |
+| `date`                    | Scheduled or actual listing date as an ISO datetime string.                                       |
+| `event_category`          | Event category supplied by the source, when available.                                            |
+| `source_name`             | Source name, when available.                                                                      |
+| `link`                    | Source URL containing listing details, when available.                                            |
+| `issue_price`             | Positive offer price per security, when available.                                                |
+| `currency`                | Currency used for the offer price and capital raise.                                              |
+| `capital_to_raise`        | Positive target capital raise, when available.                                                    |
+| `issue_type`              | Security or offer type, when available.                                                           |
+| `sector` / `industry`     | Issuer sector and industry, when available.                                                       |
+| `principal_activities`    | Summary of the issuer's principal business activities, when available.                            |
+| `public_offer_close_date` | Public-offer closing date, when applicable.                                                        |
+| `is_underwritten`         | Whether underwriting was disclosed.                                                               |
+| `underwriters`            | Disclosed underwriting organizations.                                                             |
+| `lead_managers`           | Disclosed lead managers.                                                                          |
+| `analysis_status`         | `NotStarted`, `Completed`, or `Failed`.                                                           |
+| `analysis_error`          | Analysis failure detail when `analysis_status=Failed`.                                            |
+| `analysis`                | Structured `ListingAnalysis` when analysis completes.                                             |
+
+Nullable fields are omitted when unavailable because this endpoint excludes `null` response properties.
+
+`ListingAnalysis` contains:
+
+| Field                   | Description                                                                                         |
+|-------------------------|-----------------------------------------------------------------------------------------------------|
+| `symbol`                | Canonical symbol analyzed.                                                                          |
+| `as_of`                 | Analysis finalization timestamp.                                                                    |
+| `listing_status`        | `Upcoming` or `Listed`.                                                                              |
+| `overall_data_quality`  | `High`, `Medium`, `Low`, or `Insufficient`.                                                         |
+| `executive_summary`     | Evidence-linked summary, assumptions, data gaps, and data quality.                                  |
+| `overall_stance`        | `Bullish`, `Neutral`, `Bearish`, or `InsufficientData`.                                             |
+| `overall_confidence`    | Confidence score from zero through 100.                                                             |
+| `offer`                 | Issue-price, capital-raise, underwriting, use-of-funds, dilution, and escrow assessment.            |
+| `business`              | Business model, revenue sources, competitive position, and sector context.                          |
+| `financials`            | Historical performance, profitability, cash flow, balance sheet, funding, and forecast assessment. |
+| `valuation`             | Valuation view, optional implied market capitalization, peer comparison, and sensitivity.          |
+| `governance`            | Board, management, ownership, escrow, and governance assessment.                                   |
+| `risks_and_catalysts`   | Evidence-linked risks and catalysts with likelihood and horizon; risks also include severity.       |
+| `outlook`               | IPO-day, first-week, first-two-weeks, and first-month outlooks.                                     |
+| `references`            | Canonical source registry used by every nested `reference_ids` field.                               |
+
+Each analysis section includes a summary, data quality, sourced facts, assumptions, data gaps, and source IDs. Each
+outlook period identifies whether it is observed, forecast, or unavailable; its period end, direction, optional
+price and return ranges, confidence, rationale, drivers, risks, assumptions, gaps, and source IDs. Each reference
+includes source metadata, publication and access timestamps, its canonical HTTPS URL, and `is_verified`.
+
 ### `GET /events/new_listings_async`
 
 Run the new-listings request in the background. Task state and results expire after one hour.
 
-| Parameter | Type  | Required    | Description                                                                    |
-|-----------|-------|-------------|--------------------------------------------------------------------------------|
-| `country` | query | Conditional | Country code. Currently only `AU` is supported. Required when starting a task. |
-| `task_id` | query | Conditional | Task ID returned when starting a task. Required when polling.                  |
+| Parameter | Type  | Required    | Description                                                                                             |
+|-----------|-------|-------------|---------------------------------------------------------------------------------------------------------|
+| `country` | query | No          | Country code used when starting; defaults to an empty string. Currently only `AU` is supported.         |
+| `task_id` | query | Conditional | Task ID returned when starting a task. Required when polling; `country` is ignored when this is supplied. |
 
 ```bash
 # Start a task
@@ -365,6 +428,9 @@ Polling returns:
 | `500`       | `FAILED`    | The background task failed.                        |
 | `404`       | —           | The task ID is unknown or its cache entry expired. |
 
+The current endpoint starts a task even when `country` is omitted or unsupported. That task reaches `COMPLETED`;
+polling returns HTTP `200` with envelope `status=501`, an unsupported-country message, and no listing data.
+
 ---
 
 ## AI
@@ -372,6 +438,9 @@ Polling returns:
 AI features use one HTTP verb consistently across each endpoint pair: `VERB /endpoint` runs synchronously,
 `VERB /endpoint_async` starts a background task, and `VERB /endpoint_async?task_id=<TASK_ID>` polls it. The
 AI-assisted new-listings endpoints under `/events` follow the same convention.
+
+For asynchronous POST endpoints, malformed or schema-invalid start bodies return immediate HTTP `422` without
+creating a task. The polling tables below describe requests that passed HTTP request validation and created a task.
 
 ### `GET /ai/vendors`
 
@@ -415,6 +484,9 @@ strategy assessments, and one of `DividendCapture`, `PostDividendDiscount`, `NoC
 `InsufficientInsights`. If an AI stage fails, HTTP `502` still includes the deterministic baseline with
 `analysis_status=Failed`.
 
+Invalid market or event inputs return HTTP `400`; insufficient historical data returns HTTP `422`; and AI execution
+or structured-output failures return HTTP `502`.
+
 Repairable assessment arithmetic mismatches return HTTP `200` with `analysis_status=CompleteWithWarnings`.
 `validation_warnings` identifies each application correction, and the affected strategy repeats the warning in
 `data_gaps`.
@@ -424,6 +496,8 @@ Repairable assessment arithmetic mismatches return HTTP `200` with `analysis_sta
 Start dividend-event analysis in the background using the same JSON body as the synchronous endpoint, or poll the
 same endpoint with the returned task ID in the `task_id` query parameter. Task state and results expire after one
 hour. Completed analysis cache freshness varies from one hour to 72 hours based on event phase and proximity.
+
+Starting without a request body and without `task_id` returns immediate HTTP `400` and does not create a task.
 
 ```bash
 # Start a task
@@ -441,7 +515,8 @@ Polling returns:
 |-------------|-------------|-----------------------------------------------------|
 | `202`       | `RUNNING`   | The task is still running.                          |
 | `200`       | `COMPLETED` | The standard dividend-analysis payload in `data`.   |
-| `400`/`422` | `FAILED`    | Market input or history validation failed.          |
+| `400`       | `FAILED`    | Market or event input validation failed.            |
+| `422`       | `FAILED`    | Insufficient historical data prevented analysis.    |
 | `502`       | `FAILED`    | An AI stage failed; deterministic data is retained. |
 | `500`       | `FAILED`    | An unexpected background task failure occurred.     |
 | `404`       | —           | The task ID is unknown or its cache entry expired.  |
@@ -454,10 +529,10 @@ Analyze a stock ticker using AI.
 
 **Request Body (JSON):**
 
-| Field    | Type     | Required | Description                                                                       |
-|----------|----------|----------|-----------------------------------------------------------------------------------|
-| `symbol` | `string` | Yes      | Stock symbol in YF format (`CBA.AX`) or `EXCHANGE:CODE` (`NASDAQ:AAPL`).          |
-| `intent` | `string` | No       | Analysis intent defining the angle of insight. Defaults to a built-in intent.     |
+| Field    | Type     | Required | Description                                                                                         |
+|----------|----------|----------|-----------------------------------------------------------------------------------------------------|
+| `symbol` | `string` | No       | Stock symbol in YF or `EXCHANGE:CODE` format; defaults to empty, but must be usable for a successful analysis. |
+| `intent` | `string` | No       | Analysis intent defining the angle of insight. Defaults to a built-in intent.                       |
 
 **Example:**
 
@@ -467,11 +542,16 @@ curl -X POST 'http://localhost:8000/ai/analyze_ticker' \
   -d '{"symbol": "CBA.AX", "intent": "dividend capture strategy"}'
 ```
 
+An omitted, blank, invalid, or otherwise unanalyzable symbol currently returns HTTP `200` with envelope `status=400`
+and no `data`.
+
 ### `POST /ai/analyze_ticker_async`
 
 Run ticker analysis in the background. Start a task with the same JSON request body as
 `/ai/analyze_ticker`, then poll by posting to this endpoint with the returned task ID. Task state and
 results expire after one hour; completed analyses are cached for 72 hours.
+
+Starting without a request body or with a blank symbol returns immediate HTTP `400` and does not create a task.
 
 | Parameter | Location  | Required    | Description                                                   |
 |-----------|-----------|-------------|---------------------------------------------------------------|
@@ -494,7 +574,7 @@ Polling returns:
 | HTTP status | Task state  | Result                                             |
 |-------------|-------------|----------------------------------------------------|
 | `202`       | `RUNNING`   | The task is still running.                         |
-| `200`       | `COMPLETED` | The standard ticker-analysis payload in `data`.    |
+| `200`       | `COMPLETED` | The ticker-analysis payload, or envelope `status=400` with no data when analysis returns no result. |
 | `500`       | `FAILED`    | The background task failed.                        |
 | `404`       | —           | The task ID is unknown or its cache entry expired. |
 
@@ -600,13 +680,16 @@ Each action step contains `priority`, `action` (`EXIT`, `TRIM`, `BUY`, `ACCUMULA
 The quality-first flow is seed verification, structured theme-aware planning, sourced candidate research, structured
 portfolio construction, target-price verification, deterministic whole-share sizing, focused action reasoning, and
 final validation. Holding and target-price verification are cached for five minutes; planning, research,
-construction, action reasoning, and the final result are independently cached for one hour.
+construction, action reasoning, and the final result are independently cached for one hour. Datetimes in downstream
+cache identities use UTC hourly resolution.
 
 ### `POST /ai/build_portfolio_async`
 
 Build a portfolio in the background. Start a task with the same JSON request body as
 `/ai/build_portfolio`, then poll by posting to this endpoint with the returned task ID. Task state and
 results expire after one hour.
+
+Starting without a request body and without `task_id` returns immediate HTTP `400` and does not create a task.
 
 | Parameter            | Location  | Required    | Description                                                   |
 |----------------------|-----------|-------------|---------------------------------------------------------------|
@@ -716,7 +799,9 @@ HTTP `502`.
 Run the same structured portfolio spotlight flow in the background. Start a task with the same JSON request body as
 `/ai/spotlight_portfolio`, then poll by posting to this endpoint with the returned task ID. Task state and results
 expire after one hour. Verification is cached for five minutes; planning, research, assessment, and final analysis
-stages are cached independently for one hour.
+stages are cached independently for one hour. Datetimes in downstream cache identities use UTC hourly resolution.
+
+Starting without a request body and without `task_id` returns immediate HTTP `400` and does not create a task.
 
 | Parameter            | Location  | Required    | Description                                                   |
 |----------------------|-----------|-------------|---------------------------------------------------------------|
@@ -827,8 +912,11 @@ provider, structured-output, and final-validation failures return HTTP `502`.
 
 Run the same construction-or-review flow in the background. Start with the same request body as
 `/ai/analyze_portfolio`, then poll by posting with the returned task ID. Task state expires after one hour. Review
-verification is cached for five minutes; planning for one hour; research, assessment, and target design for 30
-minutes; and action reasoning plus the final review for five minutes.
+verification is cached for five minutes; planning, research, assessment, target design, action reasoning, and the
+final review are independently cached for one hour. Datetimes in downstream cache identities use UTC hourly
+resolution.
+
+Starting without a request body and without `task_id` returns immediate HTTP `400` and does not create a task.
 
 | Parameter            | Location  | Required    | Description                                                   |
 |----------------------|-----------|-------------|---------------------------------------------------------------|

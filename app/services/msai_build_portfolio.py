@@ -1155,7 +1155,7 @@ def _stage_cache_key(
     response_model: type[models_ai.StrictAIModel],
     task_id: str,
 ) -> str:
-    return cache.generate_key(
+    return cache.generate_hourly_key(
         namespace,
         prompt,
         json.dumps(response_model.model_json_schema(), sort_keys=True),
@@ -1175,7 +1175,7 @@ def _final_cache_key(
     draft: _PortfolioConstructionDraft,
     verified_quotes: portfolio_verification.VerifiedSecurityQuotes | None,
 ) -> str:
-    return cache.generate_key(
+    return cache.generate_hourly_key(
         _FINAL_CACHE_NAMESPACE,
         _construction_input_json(
             country=country,

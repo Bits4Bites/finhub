@@ -10,6 +10,13 @@ from app.services import msai_review_portfolio as service
 from tests import portfolio_review_fixtures as fixtures
 
 
+def test_timestamp_bearing_review_caches_live_at_least_one_hour():
+    assert service._PLAN_CACHE_TTL >= 60 * 60
+    assert service._ANALYSIS_CACHE_TTL >= 60 * 60
+    assert service._ACTION_CACHE_TTL >= 60 * 60
+    assert service._FINAL_CACHE_TTL >= 60 * 60
+
+
 def _major_assessment() -> service._PortfolioAssessmentDraft:
     data = fixtures.assessment_data()
     data["holding_reviews"][2]["recommendation"] = "EXIT"

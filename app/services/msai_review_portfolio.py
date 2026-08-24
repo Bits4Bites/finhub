@@ -46,9 +46,9 @@ _TARGET_CACHE_NAMESPACE = "portfolio-review-target-v1"
 _ACTION_PLAN_CACHE_NAMESPACE = "portfolio-review-action-plan-v1"
 _FINAL_CACHE_NAMESPACE = "portfolio-review-final-v1"
 _PLAN_CACHE_TTL = 60 * 60
-_ANALYSIS_CACHE_TTL = 30 * 60
-_ACTION_CACHE_TTL = 5 * 60
-_FINAL_CACHE_TTL = 5 * 60
+_ANALYSIS_CACHE_TTL = 60 * 60
+_ACTION_CACHE_TTL = 60 * 60
+_FINAL_CACHE_TTL = 60 * 60
 _ALLOCATION_TOLERANCE = 0.01
 _EXACT_ALLOCATION_TOLERANCE = 1e-6
 
@@ -490,7 +490,7 @@ async def ai_review_portfolio(
             f"Investment budget currency must match the {snapshot.currency} portfolio currency"
         )
 
-    portfolio_id = cache.generate_key(
+    portfolio_id = cache.generate_hourly_key(
         "portfolio-review-id-v1",
         snapshot.model_dump_json(),
         normalized_theme,
@@ -1737,7 +1737,7 @@ def _stage_cache_key(
     response_model: type[models_ai.StrictAIModel],
     task_id: str,
 ) -> str:
-    return cache.generate_key(
+    return cache.generate_hourly_key(
         namespace,
         prompt,
         json.dumps(response_model.model_json_schema(), sort_keys=True),
@@ -1759,7 +1759,7 @@ def _final_cache_key(
     verified_addition_quotes: portfolio_verification.VerifiedSecurityQuotes | None,
     calculated_actions: _CalculatedActions | None,
 ) -> str:
-    return cache.generate_key(
+    return cache.generate_hourly_key(
         _FINAL_CACHE_NAMESPACE,
         json.dumps(
             {
