@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter, BackgroundTasks, Query, Response, status
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Response, status
 from fastapi.responses import RedirectResponse
 
 from ..schemas import async_task
@@ -66,7 +66,10 @@ async def _run_new_listings_task(task_id: str, country: str) -> None:
 async def get_new_listings_async(
     background_tasks: BackgroundTasks,
     response: Response,
-    country: str = Query("", description="Country code to filter events by (only 'AU' is supported)."),
+    country: str = Query(
+        "",
+        description="Country code used when starting a task. Required when starting; only 'AU' is supported.",
+    ),
     task_id: str = Query("", description="Task ID returned by a previous call to this endpoint."),
 ) -> schemas_events_listings.ListingsAsyncResponse:
     """
@@ -100,7 +103,22 @@ async def get_new_listings_async(
             extra=task_info,
         )
 
-    task_id = await router_async_task.start_task(_NEW_LISTINGS_TASK_TYPE)
+    country = conv.country_to_iso2(country)
+    if country != "AU":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="New listings supports only country 'AU'",
+        )
+
+    task_id, is_new = await router_async_task.start_task(_NEW_LISTINGS_TASK_TYPE, country)
+    if not is_new:
+        return await get_new_listings_async(
+            background_tasks=background_tasks,
+            response=response,
+            country=country,
+            task_id=task_id,
+        )
+
     background_tasks.add_task(_run_new_listings_task, task_id, country)
     response.status_code = status.HTTP_202_ACCEPTED
     return schemas_events_listings.ListingsAsyncResponse(

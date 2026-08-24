@@ -131,7 +131,7 @@ class TestAnalyzePortfolioRouting:
 class TestAnalyzePortfolioAsync:
     def test_starts_task(self):
         with (
-            patch("app.routers.async_task.uuid.uuid4", return_value="task-review"),
+            patch("app.routers.async_task._generate_task_id", return_value="task-review"),
             patch(
                 "app.routers.async_task.cache.set",
                 new_callable=AsyncMock,

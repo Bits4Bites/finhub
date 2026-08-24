@@ -168,7 +168,15 @@ async def analyze_ticker_async(
             detail="Request body is required when starting a task",
         )
 
-    new_task_id = await router_async_task.start_task(_TASK_TYPE)
+    new_task_id, is_new = await router_async_task.start_task(_TASK_TYPE, request)
+    if not is_new:
+        return await analyze_ticker_async(
+            background_tasks=background_tasks,
+            response=response,
+            request=request,
+            task_id=new_task_id,
+        )
+
     background_tasks.add_task(_run_task, new_task_id, request)
     response.status_code = status.HTTP_202_ACCEPTED
     return schemas_ticker.AnalyzeTickerAsyncResponse(

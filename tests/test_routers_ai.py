@@ -174,7 +174,7 @@ class TestBuildPortfolioAsync:
 
     def test_starts_task(self):
         with (
-            patch("app.routers.async_task.uuid.uuid4", return_value="task-789"),
+            patch("app.routers.async_task._generate_task_id", return_value="task-789"),
             patch("app.routers.async_task.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
             patch(
                 "app.routers.ai_portfolio_construction._run_build_portfolio_task",

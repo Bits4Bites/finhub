@@ -162,7 +162,15 @@ async def build_portfolio_async(
             detail="Request body is required when starting a task",
         )
 
-    task_id = await router_async_task.start_task(_TASK_TYPE)
+    task_id, is_new = await router_async_task.start_task(_TASK_TYPE, req)
+    if not is_new:
+        return await build_portfolio_async(
+            background_tasks=background_tasks,
+            response=response,
+            req=req,
+            task_id=task_id,
+        )
+
     background_tasks.add_task(_run_build_portfolio_task, task_id, req)
     response.status_code = status.HTTP_202_ACCEPTED
     return schemas_construction.BuildPortfolioAsyncResponse(

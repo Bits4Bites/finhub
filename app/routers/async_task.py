@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-import uuid
+import asyncio
+import hmac
+import secrets
 from typing import Any, Self
 
 from fastapi import HTTPException, status
@@ -8,6 +10,9 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 
 from ..schemas import async_task as schemas_async_task
 from ..utils import cache
+
+_TASK_ID_SECRET = secrets.token_bytes(32)
+_TASK_START_LOCK = asyncio.Lock()
 
 
 class _TaskEntry(BaseModel):
@@ -41,16 +46,39 @@ async def _store(task_id: str, entry: _TaskEntry) -> None:
     )
 
 
-async def start_task(task_type: str) -> str:
-    task_id = str(uuid.uuid4())
-    await _store(
-        task_id,
-        _TaskEntry(
-            task_type=task_type,
-            state=schemas_async_task.TASK_STATE_RUNNING,
-        ),
-    )
-    return task_id
+def _generate_task_id(task_type: str, *task_input: str | BaseModel) -> str:
+    normalized_input = tuple(item.model_dump_json() if isinstance(item, BaseModel) else item for item in task_input)
+    request_key = cache.generate_key("async-task", task_type, *normalized_input)
+    return hmac.new(_TASK_ID_SECRET, request_key.encode(), digestmod="sha256").hexdigest()
+
+
+async def start_task(task_type: str, *task_input: str | BaseModel) -> tuple[str, bool]:
+    task_id = _generate_task_id(task_type, *task_input)
+    async with _TASK_START_LOCK:
+        cached_entry = await cache.get(task_id)
+        if cached_entry is not None:
+            if not isinstance(cached_entry, dict) or cached_entry.get("task_type") != task_type:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Invalid task state",
+                )
+            try:
+                _TaskEntry.model_validate(cached_entry)
+            except ValidationError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Invalid task state",
+                ) from exc
+            return task_id, False
+
+        await _store(
+            task_id,
+            _TaskEntry(
+                task_type=task_type,
+                state=schemas_async_task.TASK_STATE_RUNNING,
+            ),
+        )
+        return task_id, True
 
 
 async def complete_task(

@@ -148,7 +148,20 @@ async def get_upcoming_dividends_event_async(
             extra=task_info,
         )
 
-    task_id = await router_async_task.start_task(_UPCOMING_DIVIDENDS_TASK_TYPE)
+    task_id, is_new = await router_async_task.start_task(
+        _UPCOMING_DIVIDENDS_TASK_TYPE,
+        conv.country_to_iso2(country),
+        index.upper(),
+    )
+    if not is_new:
+        return await get_upcoming_dividends_event_async(
+            background_tasks=background_tasks,
+            response=response,
+            country=country,
+            index=index,
+            task_id=task_id,
+        )
+
     background_tasks.add_task(_run_upcoming_dividends_event_task, task_id, country, index)
     response.status_code = status.HTTP_202_ACCEPTED
     return schemas_event.UpcomingDividendsAsyncResponse(
@@ -272,7 +285,20 @@ async def get_upcoming_earnings_event_async(
             extra=task_info,
         )
 
-    task_id = await router_async_task.start_task(_UPCOMING_EARNINGS_TASK_TYPE)
+    task_id, is_new = await router_async_task.start_task(
+        _UPCOMING_EARNINGS_TASK_TYPE,
+        conv.country_to_iso2(country),
+        index.upper(),
+    )
+    if not is_new:
+        return await get_upcoming_earnings_event_async(
+            background_tasks=background_tasks,
+            response=response,
+            country=country,
+            index=index,
+            task_id=task_id,
+        )
+
     background_tasks.add_task(_run_upcoming_earnings_event_task, task_id, country, index)
     response.status_code = status.HTTP_202_ACCEPTED
     return schemas_event.UpcomingEarningsAsyncResponse(

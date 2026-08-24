@@ -128,7 +128,7 @@ def test_post_maps_ai_failure_to_502():
 
 def test_async_start_passes_validated_request_to_task():
     with (
-        patch("app.routers.async_task.uuid.uuid4", return_value="task-spotlight"),
+        patch("app.routers.async_task._generate_task_id", return_value="task-spotlight"),
         patch(
             "app.routers.async_task.cache.set",
             new_callable=AsyncMock,

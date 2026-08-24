@@ -3,6 +3,7 @@
 import asyncio
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -83,7 +84,7 @@ class TestUpcomingDividends:
 class TestUpcomingDividendsAsync:
     def test_starts_task(self):
         with (
-            patch("app.routers.async_task.uuid.uuid4", return_value="task-123"),
+            patch("app.routers.async_task._generate_task_id", return_value="task-123"),
             patch("app.routers.async_task.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
             patch("app.routers.events._run_upcoming_dividends_event_task", new_callable=AsyncMock) as mock_run_task,
         ):
@@ -231,7 +232,7 @@ class TestUpcomingEarnings:
 class TestUpcomingEarningsAsync:
     def test_starts_task(self):
         with (
-            patch("app.routers.async_task.uuid.uuid4", return_value="task-456"),
+            patch("app.routers.async_task._generate_task_id", return_value="task-456"),
             patch("app.routers.async_task.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
             patch("app.routers.events._run_upcoming_earnings_event_task", new_callable=AsyncMock) as mock_run_task,
         ):
@@ -372,7 +373,10 @@ class TestNewListings:
 class TestNewListingsAsync:
     def test_starts_task(self):
         with (
-            patch("app.routers.async_task.uuid.uuid4", return_value="task-789"),
+            patch(
+                "app.routers.async_task._generate_task_id",
+                return_value="task-789",
+            ) as mock_generate_task_id,
             patch("app.routers.async_task.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
             patch("app.routers.events_listings._run_new_listings_task", new_callable=AsyncMock) as mock_run_task,
         ):
@@ -389,7 +393,47 @@ class TestNewListingsAsync:
             {"task_type": "new_listings", "state": async_task.TASK_STATE_RUNNING},
             ttl=3600,
         )
+        mock_generate_task_id.assert_called_once_with("new_listings", "AU")
         mock_run_task.assert_awaited_once_with("task-789", "AU")
+
+    @pytest.mark.parametrize("country", ["", "JP"])
+    def test_rejects_unsupported_country_before_starting_task(self, country):
+        with (
+            patch(
+                "app.routers.events_listings.router_async_task.start_task", new_callable=AsyncMock
+            ) as mock_start_task,
+            patch("app.routers.events_listings._run_new_listings_task", new_callable=AsyncMock) as mock_run_task,
+        ):
+            resp = client.get("/events/new_listings_async", params={"country": country})
+
+        assert resp.status_code == 422
+        assert resp.json()["message"] == "New listings supports only country 'AU'"
+        mock_start_task.assert_not_awaited()
+        mock_run_task.assert_not_awaited()
+
+    def test_duplicate_start_returns_existing_task_without_scheduling(self):
+        task_entry = {"task_type": "new_listings", "state": async_task.TASK_STATE_RUNNING}
+        with (
+            patch("app.routers.async_task._generate_task_id", return_value="task-789"),
+            patch(
+                "app.routers.async_task.cache.get",
+                new_callable=AsyncMock,
+                return_value=task_entry,
+            ) as mock_cache_get,
+            patch("app.routers.async_task.cache.set", new_callable=AsyncMock) as mock_cache_set,
+            patch("app.routers.events_listings._run_new_listings_task", new_callable=AsyncMock) as mock_run_task,
+        ):
+            resp = client.get("/events/new_listings_async", params={"country": "AU"})
+
+        assert resp.status_code == 202
+        assert resp.json()["message"] == "Task is running"
+        assert resp.json()["extra"] == {
+            "task_id": "task-789",
+            "state": async_task.TASK_STATE_RUNNING,
+        }
+        assert mock_cache_get.await_count == 2
+        mock_cache_set.assert_not_awaited()
+        mock_run_task.assert_not_awaited()
 
     def test_poll_returns_running_status(self):
         task_entry = {"task_type": "new_listings", "state": async_task.TASK_STATE_RUNNING}

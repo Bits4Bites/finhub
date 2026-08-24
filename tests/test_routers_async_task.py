@@ -11,12 +11,13 @@ from app.schemas import base_req_resp
 
 def test_start_task_stores_shared_running_entry():
     with (
-        patch.object(router_async_task.uuid, "uuid4", return_value="task-123"),
+        patch.object(router_async_task, "_generate_task_id", return_value="task-123"),
         patch.object(router_async_task.cache, "set", new_callable=AsyncMock, return_value=True) as mock_set,
     ):
-        task_id = asyncio.run(router_async_task.start_task("example"))
+        task_id, is_new = asyncio.run(router_async_task.start_task("example", "input"))
 
     assert task_id == "task-123"
+    assert is_new is True
     mock_set.assert_awaited_once_with(
         "task-123",
         {
@@ -25,6 +26,42 @@ def test_start_task_stores_shared_running_entry():
         },
         ttl=schemas_async_task.ASYNC_TASK_TTL,
     )
+
+
+def test_start_task_deduplicates_concurrent_identical_inputs():
+    entries = {}
+
+    async def get_entry(task_id):
+        await asyncio.sleep(0)
+        return entries.get(task_id)
+
+    async def set_entry(task_id, entry, ttl):
+        entries[task_id] = entry
+        return True
+
+    async def start_twice():
+        return await asyncio.gather(
+            router_async_task.start_task("example", "same-input"),
+            router_async_task.start_task("example", "same-input"),
+        )
+
+    with (
+        patch.object(router_async_task, "_generate_task_id", return_value="task-123"),
+        patch.object(router_async_task.cache, "get", side_effect=get_entry),
+        patch.object(router_async_task.cache, "set", side_effect=set_entry) as mock_set,
+    ):
+        results = asyncio.run(start_twice())
+
+    assert results == [("task-123", True), ("task-123", False)]
+    mock_set.assert_awaited_once()
+
+
+def test_generate_task_id_is_process_local_and_input_dependent():
+    first_id = router_async_task._generate_task_id("example", "input")
+
+    assert router_async_task._generate_task_id("example", "input") == first_id
+    assert router_async_task._generate_task_id("example", "other-input") != first_id
+    assert router_async_task._generate_task_id("other-task", "input") != first_id
 
 
 def test_complete_task_serializes_response():

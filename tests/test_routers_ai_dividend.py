@@ -119,7 +119,7 @@ def test_post_returns_completed_analysis_with_validation_warnings():
 
 def test_async_start_uses_post_body():
     with (
-        patch("app.routers.async_task.uuid.uuid4", return_value="task-123"),
+        patch("app.routers.async_task._generate_task_id", return_value="task-123"),
         patch("app.routers.async_task.cache.set", new_callable=AsyncMock, return_value=True),
         patch.object(ai_dividend, "_run_task", new_callable=AsyncMock) as mock_run,
     ):

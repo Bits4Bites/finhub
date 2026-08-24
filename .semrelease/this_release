@@ -17,3 +17,5 @@
 - feat(client/dotnet): Add review-portfolio API contracts.
 - feat(AI/analyze-ticker): Rebuild feature with structured deep research and analysis.
 - feat(client/dotnet): Add analyze-ticker API contracts.
+- feat(async): Deduplicate identical task starts.
+- fix(AI/new-listings/async): Reject unsupported country before task creation.

@@ -14,6 +14,11 @@ Most responses follow a standard envelope format:
 
 `GET /market/index/{index_id}` is the exception: it returns the cached static JSON file directly.
 
+All `*_async` endpoints derive a process-local keyed task ID from the application version, task type, and normalized
+start input. Retrying an identical start while its record exists returns the same running or terminal task without
+scheduling duplicate work. Task records expire after one hour. Restarting the single-process server loses existing
+tasks and changes the generated IDs.
+
 ---
 
 ## Authentication
@@ -237,7 +242,7 @@ Starting a task returns HTTP `202`:
   "status": 202,
   "message": "Task started",
   "extra": {
-    "task_id": "550e8400-e29b-41d4-a716-446655440000",
+    "task_id": "4bd51f5da3146b1296ef9842d3bc6b3004df2b9c7a77cb608d63adfaa7caee94",
     "state": "RUNNING"
   }
 }
@@ -298,7 +303,7 @@ Starting a task returns HTTP `202`:
   "status": 202,
   "message": "Task started",
   "extra": {
-    "task_id": "550e8400-e29b-41d4-a716-446655440000",
+    "task_id": "4bd51f5da3146b1296ef9842d3bc6b3004df2b9c7a77cb608d63adfaa7caee94",
     "state": "RUNNING"
   }
 }
@@ -395,7 +400,7 @@ Run the new-listings request in the background. Task state and results expire af
 
 | Parameter | Type  | Required    | Description                                                                                             |
 |-----------|-------|-------------|---------------------------------------------------------------------------------------------------------|
-| `country` | query | No          | Country code used when starting; defaults to an empty string. Currently only `AU` is supported.         |
+| `country` | query | Conditional | Country code used when starting. Required for starts and currently limited to `AU`; ignored when polling. |
 | `task_id` | query | Conditional | Task ID returned when starting a task. Required when polling; `country` is ignored when this is supplied. |
 
 ```bash
@@ -413,7 +418,7 @@ Starting a task returns HTTP `202`:
   "status": 202,
   "message": "Task started",
   "extra": {
-    "task_id": "550e8400-e29b-41d4-a716-446655440000",
+    "task_id": "4bd51f5da3146b1296ef9842d3bc6b3004df2b9c7a77cb608d63adfaa7caee94",
     "state": "RUNNING"
   }
 }
@@ -427,9 +432,9 @@ Polling returns:
 | `200`       | `COMPLETED` | The standard new-listings payload in `data`.       |
 | `500`       | `FAILED`    | The background task failed.                        |
 | `404`       | —           | The task ID is unknown or its cache entry expired. |
+| `422`       | —           | A start omitted `country` or supplied a country other than `AU`; no task was created. |
 
-The current endpoint starts a task even when `country` is omitted or unsupported. That task reaches `COMPLETED`;
-polling returns HTTP `200` with envelope `status=501`, an unsupported-country message, and no listing data.
+Missing or unsupported countries are rejected before task creation.
 
 ---
 

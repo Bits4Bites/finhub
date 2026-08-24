@@ -77,7 +77,7 @@ def test_request_rejects_invalid_holding():
 
 def test_async_starts_with_normalized_request():
     with (
-        patch("app.routers.async_task.uuid.uuid4", return_value="task-456"),
+        patch("app.routers.async_task._generate_task_id", return_value="task-456"),
         patch("app.routers.async_task.cache.set", new_callable=AsyncMock, return_value=True),
         patch("app.routers.ai_ticker._run_task", new_callable=AsyncMock) as run_task,
     ):

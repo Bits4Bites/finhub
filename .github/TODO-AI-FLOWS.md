@@ -97,7 +97,7 @@ Task IDs below use their current code spelling, including `ASX_LISTTINGS`.
 |---------------------------------------|-----------------|-----------|--------------|-----------------------------------------------------------------------------------|
 | `ANALYZE_TICKER_RESEARCH`             | `gpt-5.6-sol`   | High      | Yes          | Research current, source-linked evidence for one verified security                |
 | `ANALYZE_TICKER_FORECAST`             | `gpt-5.6-terra` | High      | No (default) | Produce four price ranges inside deterministic historical envelopes               |
-| `ANALYZE_TICKER_RECOMMEND`            | `gpt-5.6-terra` | High      | No (default) | Select a generic holding-aware `BUY`, `HOLD`, or `SELL` action                     |
+| `ANALYZE_TICKER_RECOMMEND`            | `gpt-5.6-terra` | High      | No (default) | Select a generic holding-aware `BUY`, `HOLD`, or `SELL` action                    |
 | `BUILD_PORTFOLIO_PLAN`                | `gpt-5.6-terra` | Medium    | No (default) | Build a validated, theme-aware portfolio-construction plan                        |
 | `BUILD_PORTFOLIO_RESEARCH`            | `gpt-5.6-terra` | High      | Yes          | Research a bounded, sourced candidate universe                                    |
 | `BUILD_PORTFOLIO_CONSTRUCT`           | `gpt-5.6-terra` | High      | No (default) | Select and allocate one evidence-backed target portfolio                          |
@@ -128,13 +128,14 @@ Spotlight research plus both ASX-listing research tasks retain their reasoning-b
 - **API or flow name:** All AI-backed `*_async` endpoints
 - **AI tasks involved:** All tasks used by dividend analysis, ticker analysis, portfolio construction, portfolio
   spotlight, portfolio review/rebalance, and ASX new listings
-- **Primary code:** `app\routers\ai.py`, `app\routers\events.py`, `app\schemas\async_task.py`,
+- **Primary code:** `app\routers\async_task.py`, the eight owning feature routes, `app\schemas\async_task.py`, and
   `app\utils\cache.py`
-- **Summary of process flow:** Create a UUID task ID, store a `RUNNING` record with a one-hour TTL, execute the selected
-  flow with FastAPI `BackgroundTasks`, and replace the cache record with `COMPLETED` plus the serialized response or
-  `FAILED` plus a generic error. Clients poll the same endpoint using the task ID. There are no current streaming
-  endpoints; all long-running APIs use start/poll behavior.
-- **Status:** Reviewed: **No** | Implemented: **No** | Done: **No**
+- **Summary of process flow:** Derive a process-local keyed task ID from the task type and normalized input, reuse an
+  existing one-hour task record for identical start retries, otherwise store `RUNNING` and execute with FastAPI
+  `BackgroundTasks`. The new-listings async route rejects missing or unsupported countries before task creation.
+  Remaining lifecycle consistency, expiry, capacity, observability, and durability work stays in this backlog item.
+- **Detailed review:** [Shared asynchronous task lifecycle review](detailed_review_plan/01-shared-async-tasks.md)
+- **Status:** Reviewed: **Yes** | Implemented: **No** | Done: **No**
 
 ## Inventory exclusions
 
