@@ -15,3 +15,5 @@
 - feat(client/dotnet): Add build-portfolio API contracts.
 - feat(AI/review-portfolio): Rebuild feature with structured theme-aware research, analysis and action plan.
 - feat(client/dotnet): Add review-portfolio API contracts.
+- feat(AI/analyze-ticker): Rebuild feature with structured deep research and analysis.
+- feat(client/dotnet): Add analyze-ticker API contracts.

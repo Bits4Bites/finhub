@@ -93,48 +93,37 @@ The score is a decision aid, not a substitute for quality gates:
 
 Task IDs below use their current code spelling, including `ASX_LISTTINGS`.
 
-| AI task                                   | Current model   | Reasoning | Web search   | Current objective                                                                 |
-|-------------------------------------------|-----------------|-----------|--------------|-----------------------------------------------------------------------------------|
-| `ANALYZE_TICKER_BUILD_PROMPT`             | `gpt-5.6-luna`  | Medium    | No (default) | Build a ticker-specific analysis prompt                                           |
-| `ANALYZE_TICKER_EXEC`                     | `gpt-5.6-terra` | High      | Yes          | Research and analyze a ticker                                                     |
-| `BUILD_PORTFOLIO_PLAN`                    | `gpt-5.6-terra` | Medium    | No (default) | Build a validated, theme-aware portfolio-construction plan                        |
-| `BUILD_PORTFOLIO_RESEARCH`                | `gpt-5.6-terra` | High      | Yes          | Research a bounded, sourced candidate universe                                    |
-| `BUILD_PORTFOLIO_CONSTRUCT`               | `gpt-5.6-terra` | High      | No (default) | Select and allocate one evidence-backed target portfolio                          |
-| `BUILD_PORTFOLIO_ACTION_PLAN`             | `gpt-5.6-terra` | High      | No (default) | Explain fixed, budget-aware whole-share actions in priority order                 |
-| `REVIEW_PORTFOLIO_PLAN`                   | `gpt-5.6-terra` | Medium    | No (default) | Build a structured, portfolio-specific review plan                               |
-| `REVIEW_PORTFOLIO_RESEARCH`               | `gpt-5.6-sol`   | High      | Yes          | Research current holdings and bounded addition candidates                         |
-| `REVIEW_PORTFOLIO_ASSESS`                 | `gpt-5.6-terra` | High      | No (default) | Assess strengths, risks, roles, and holding disposition intent                    |
-| `REVIEW_PORTFOLIO_TARGET`                 | `gpt-5.6-sol`   | Medium    | No (default) | Design one validated aspirational target portfolio                               |
-| `REVIEW_PORTFOLIO_ACTION_PLAN`            | `gpt-5.6-sol`   | Medium    | No (default) | Rank and explain application-calculated portfolio actions                         |
-| `SPOTLIGHT_PORTFOLIO_PLAN`                | `gpt-5.6-terra` | Medium    | No (default) | Build a validated, theme-aware analysis plan for a verified portfolio             |
-| `SPOTLIGHT_PORTFOLIO_RESEARCH`            | `gpt-5.6-terra` | High      | Yes          | Research sourced risks for a verified portfolio                                   |
-| `SPOTLIGHT_PORTFOLIO_ASSESS`              | `gpt-5.6-terra` | High      | No           | Rank structured risks and actions from validated research                         |
-| `ANALYZE_DIV_EVENT_RESEARCH`              | `gpt-5.6-terra` | High      | Yes          | Research sourced dividend-event evidence                                          |
-| `ANALYZE_DIV_EVENT_ASSESS`                | `gpt-5.6-terra` | High      | No           | Compare dividend strategies from validated evidence                               |
-| `ASX_LISTTINGS_EXTRACT`                   | `gpt-5.6-luna`  | Low       | No (default) | Extract structured listings from scraped ASX text                                 |
-| `ASX_LISTTINGS_RESEARCH`                  | `gpt-5.6-terra` | Medium    | Yes          | Run bounded first-pass research for one ASX listing                               |
-| `ASX_LISTTINGS_ANALYZE`                   | `gpt-5.6-terra` | Medium    | No (default) | Produce a quick screening assessment from validated research                      |
-| `ASX_LISTTINGS_UNDERWRITTEN_RESEARCH`     | `gpt-5.6-terra` | High      | Yes          | Research an explicitly underwritten listing with additional underwriting scrutiny |
-| `ASX_LISTTINGS_UNDERWRITTEN_ANALYZE`      | `gpt-5.6-terra` | High      | No (default) | Assess an explicitly underwritten listing and residual execution risk             |
+| AI task                               | Current model   | Reasoning | Web search   | Current objective                                                                 |
+|---------------------------------------|-----------------|-----------|--------------|-----------------------------------------------------------------------------------|
+| `ANALYZE_TICKER_RESEARCH`             | `gpt-5.6-sol`   | High      | Yes          | Research current, source-linked evidence for one verified security                |
+| `ANALYZE_TICKER_FORECAST`             | `gpt-5.6-terra` | High      | No (default) | Produce four price ranges inside deterministic historical envelopes               |
+| `ANALYZE_TICKER_RECOMMEND`            | `gpt-5.6-terra` | High      | No (default) | Select a generic holding-aware `BUY`, `HOLD`, or `SELL` action                     |
+| `BUILD_PORTFOLIO_PLAN`                | `gpt-5.6-terra` | Medium    | No (default) | Build a validated, theme-aware portfolio-construction plan                        |
+| `BUILD_PORTFOLIO_RESEARCH`            | `gpt-5.6-terra` | High      | Yes          | Research a bounded, sourced candidate universe                                    |
+| `BUILD_PORTFOLIO_CONSTRUCT`           | `gpt-5.6-terra` | High      | No (default) | Select and allocate one evidence-backed target portfolio                          |
+| `BUILD_PORTFOLIO_ACTION_PLAN`         | `gpt-5.6-terra` | High      | No (default) | Explain fixed, budget-aware whole-share actions in priority order                 |
+| `REVIEW_PORTFOLIO_PLAN`               | `gpt-5.6-terra` | Medium    | No (default) | Build a structured, portfolio-specific review plan                                |
+| `REVIEW_PORTFOLIO_RESEARCH`           | `gpt-5.6-sol`   | High      | Yes          | Research current holdings and bounded addition candidates                         |
+| `REVIEW_PORTFOLIO_ASSESS`             | `gpt-5.6-terra` | High      | No (default) | Assess strengths, risks, roles, and holding disposition intent                    |
+| `REVIEW_PORTFOLIO_TARGET`             | `gpt-5.6-sol`   | Medium    | No (default) | Design one validated aspirational target portfolio                                |
+| `REVIEW_PORTFOLIO_ACTION_PLAN`        | `gpt-5.6-sol`   | Medium    | No (default) | Rank and explain application-calculated portfolio actions                         |
+| `SPOTLIGHT_PORTFOLIO_PLAN`            | `gpt-5.6-terra` | Medium    | No (default) | Build a validated, theme-aware analysis plan for a verified portfolio             |
+| `SPOTLIGHT_PORTFOLIO_RESEARCH`        | `gpt-5.6-terra` | High      | Yes          | Research sourced risks for a verified portfolio                                   |
+| `SPOTLIGHT_PORTFOLIO_ASSESS`          | `gpt-5.6-terra` | High      | No           | Rank structured risks and actions from validated research                         |
+| `ANALYZE_DIV_EVENT_RESEARCH`          | `gpt-5.6-terra` | High      | Yes          | Research sourced dividend-event evidence                                          |
+| `ANALYZE_DIV_EVENT_ASSESS`            | `gpt-5.6-terra` | High      | No           | Compare dividend strategies from validated evidence                               |
+| `ASX_LISTTINGS_EXTRACT`               | `gpt-5.6-luna`  | Low       | No (default) | Extract structured listings from scraped ASX text                                 |
+| `ASX_LISTTINGS_RESEARCH`              | `gpt-5.6-terra` | Medium    | Yes          | Run bounded first-pass research for one ASX listing                               |
+| `ASX_LISTTINGS_ANALYZE`               | `gpt-5.6-terra` | Medium    | No (default) | Produce a quick screening assessment from validated research                      |
+| `ASX_LISTTINGS_UNDERWRITTEN_RESEARCH` | `gpt-5.6-terra` | High      | Yes          | Research an explicitly underwritten listing with additional underwriting scrutiny |
+| `ASX_LISTTINGS_UNDERWRITTEN_ANALYZE`  | `gpt-5.6-terra` | High      | No (default) | Assess an explicitly underwritten listing and residual execution risk             |
 
-Explicit web-tool overrides are `BUILD_PORTFOLIO_RESEARCH=25` and `REVIEW_PORTFOLIO_RESEARCH=25`. Spotlight
-research and both ASX-listing research tasks retain their reasoning-based defaults because their contracts are bounded
-to six and five sources respectively.
+Explicit web-tool overrides are `BUILD_PORTFOLIO_RESEARCH=25` and `REVIEW_PORTFOLIO_RESEARCH=25`. Ticker and
+Spotlight research plus both ASX-listing research tasks retain their reasoning-based defaults.
 
 ## Flow review backlog
 
-### 1. Ticker analysis
-
-- **API or flow name:** `POST /ai/analyze_ticker` and `POST /ai/analyze_ticker_async`
-- **AI tasks involved:** `ANALYZE_TICKER_BUILD_PROMPT`, `ANALYZE_TICKER_EXEC`
-- **Primary code:** `app\routers\ai.py`, `app\services\msai_analyze_ticker.py`
-- **Summary of process flow:** Normalize and validate the symbol through Yahoo Finance; derive asset type, exchange,
-  sector, and market-cap context; ask one model to build an intent-specific prompt; pass that model output to a
-  research-enabled analysis task; return the Markdown analysis and cache it for 72 hours. The async API runs the same
-  flow as a background task and exposes start/poll states.
-- **Status:** Reviewed: **No** | Implemented: **No** | Done: **No**
-
-### 6. Shared asynchronous AI task start and polling
+### 1. Shared asynchronous AI task start and polling
 
 - **API or flow name:** All AI-backed `*_async` endpoints
 - **AI tasks involved:** All tasks used by dividend analysis, ticker analysis, portfolio construction, portfolio

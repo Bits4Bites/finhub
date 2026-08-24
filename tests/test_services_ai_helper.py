@@ -89,6 +89,29 @@ class TestLlmTaskConfig:
             False,
         )
 
+    def test_ticker_tasks_use_selected_profiles(self):
+        settings = config.LLMTaskSettings()
+        research = settings.tasks["analyze_ticker_research"]
+        forecast = settings.tasks["analyze_ticker_forecast"]
+        recommendation = settings.tasks["analyze_ticker_recommend"]
+
+        assert (research.model, research.reasoning_effort, research.use_web_search, research.max_tool_calls) == (
+            "gpt-5.6-sol",
+            "High",
+            True,
+            0,
+        )
+        assert (forecast.model, forecast.reasoning_effort, forecast.use_web_search) == (
+            "gpt-5.6-terra",
+            "High",
+            False,
+        )
+        assert (recommendation.model, recommendation.reasoning_effort, recommendation.use_web_search) == (
+            "gpt-5.6-terra",
+            "High",
+            False,
+        )
+
     def test_portfolio_review_tasks_use_selected_profiles(self):
         settings = config.LLMTaskSettings()
         research = settings.tasks["review_portfolio_research"]
