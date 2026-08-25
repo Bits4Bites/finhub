@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Path, Response
 
-from .. import config
+from ..services import market as services_market
 
 router = APIRouter(prefix="/market", tags=["market"])
 
@@ -41,7 +41,7 @@ def get_market_index(
     if normalized_index_id not in SUPPORTED_INDEX_IDS:
         raise HTTPException(status_code=404, detail="Market index not found")
 
-    raw_json = config.market_indices.raw_json.get(normalized_index_id)
+    raw_json = services_market.market_indices.raw_json.get(normalized_index_id)
     if raw_json is None:
         raise HTTPException(status_code=404, detail="Market index not found")
 

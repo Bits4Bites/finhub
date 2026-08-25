@@ -3,7 +3,7 @@ from decimal import ROUND_FLOOR, Decimal
 
 from pydantic import ValidationError
 
-from ..models import ai_portfolio_construction as models_construction
+from ..models import portfolio as models_portfolio
 from . import portfolio_verification
 
 MONEY_QUANTUM = Decimal("0.000001")
@@ -50,7 +50,7 @@ def extract_budget(
     investor_theme: str,
     *,
     default_currency: str,
-) -> models_construction.PortfolioBudget:
+) -> models_portfolio.PortfolioBudget:
     if _NEGATIVE_BUDGET_PATTERN.search(investor_theme):
         raise portfolio_verification.PortfolioInputError("Investment budget must be a positive finite amount")
     matches: list[tuple[int, int, Decimal, str, str, bool]] = []
@@ -116,7 +116,7 @@ def extract_budget(
     non_overlapping.sort(key=lambda item: item[0])
 
     if not non_overlapping:
-        return models_construction.PortfolioBudget(
+        return models_portfolio.PortfolioBudget(
             budget_type="NotProvided",
             is_inferred=False,
             amount=None,
@@ -152,7 +152,7 @@ def extract_budget(
         )
 
     try:
-        return models_construction.PortfolioBudget(
+        return models_portfolio.PortfolioBudget(
             budget_type=("Recurring" if frequency is not None else "Total"),
             is_inferred=False,
             amount=float(amount),
@@ -170,13 +170,13 @@ def infer_recurring_budget(
     verified_portfolio: portfolio_verification.VerifiedPortfolio,
     *,
     rate: Decimal,
-) -> models_construction.PortfolioBudget:
+) -> models_portfolio.PortfolioBudget:
     amount = (Decimal(str(verified_portfolio.total_market_value)) * rate).quantize(MONEY_QUANTUM)
     if amount <= 0:
         raise portfolio_verification.PortfolioInputError(
             "Verified holdings are too small to infer an investment budget"
         )
-    return models_construction.PortfolioBudget(
+    return models_portfolio.PortfolioBudget(
         budget_type="Recurring",
         is_inferred=True,
         amount=float(amount),
@@ -274,9 +274,9 @@ def _resolve_budget_currency(marker: str | None, *, default_currency: str) -> st
 
 def _budget_frequency(
     context: str,
-) -> models_construction.PortfolioBudgetFrequency | None:
+) -> models_portfolio.PortfolioBudgetFrequency | None:
     frequency_patterns: tuple[
-        tuple[models_construction.PortfolioBudgetFrequency, str],
+        tuple[models_portfolio.PortfolioBudgetFrequency, str],
         ...,
     ] = (
         ("Fortnightly", r"\b(?:fortnightly|biweekly|every\s+two\s+weeks?)\b"),

@@ -1,9 +1,9 @@
 import yfinance as yf
 
-from ..models import finhub as models
+from ..models import market_data as models_market_data
 
 
-def get_gold_quote(currency: str = "USD") -> models.StockQuote | None:
+def get_gold_quote(currency: str = "USD") -> models_market_data.StockQuote | None:
     """
     Get the current gold price in the specified currency.
 
@@ -11,7 +11,7 @@ def get_gold_quote(currency: str = "USD") -> models.StockQuote | None:
         currency (str): The currency code (e.g., "USD", "EUR") to get the price in.
 
     Returns:
-        models.StockQuote | None: The current price as a models.StockQuote object, or None if the price could not be retrieved or the currency is not supported.
+        models_market_data.StockQuote | None: The current price, or None when unavailable.
     """
     x_rate = 1.0
     currency = currency.upper()
@@ -24,7 +24,7 @@ def get_gold_quote(currency: str = "USD") -> models.StockQuote | None:
 
     # second, get the price in USD
     ticker = yf.Ticker("GC=F")  # Gold Futures
-    quote = models.StockQuote(ticker)
+    quote = models_market_data.StockQuote(ticker)
 
     if currency != "" and currency != "USD":
         # finally, convert the price to the specified currency
@@ -33,7 +33,7 @@ def get_gold_quote(currency: str = "USD") -> models.StockQuote | None:
     return quote
 
 
-def get_gold_history(currency: str = "USD", num_days: int = 30) -> list[models.HistoryPoint] | None:
+def get_gold_history(currency: str = "USD", num_days: int = 30) -> list[models_market_data.HistoryPoint] | None:
     """
     Get the historical gold prices for the specified period and currency.
 
@@ -42,7 +42,7 @@ def get_gold_history(currency: str = "USD", num_days: int = 30) -> list[models.H
         num_days (int): The number of days of historical data to retrieve (default is 30).
 
     Returns:
-        list[models.HistoryPoint] | None: A list of models.HistoryPoint objects representing the historical prices, or None if the prices could not be retrieved or the currency is not supported.
+        list[models_market_data.HistoryPoint] | None: Historical prices, or None when unavailable.
     """
     x_rate = 1.0
     currency = currency.upper()
@@ -60,7 +60,7 @@ def get_gold_history(currency: str = "USD", num_days: int = 30) -> list[models.H
     hist = ticker.history(period=f"{num_days}d", interval="1d", auto_adjust=False)
 
     points = [
-        models.HistoryPoint(
+        models_market_data.HistoryPoint(
             timestamp=int(hist.index[i].timestamp()),
             timestamp_str=hist.index[i].isoformat(sep=" ", timespec="seconds"),
             currency=currency,
@@ -82,7 +82,7 @@ def get_gold_history(currency: str = "USD", num_days: int = 30) -> list[models.H
 # ----------------------------------------------------------------------#
 
 
-def get_silver_quote(currency: str = "USD") -> models.StockQuote | None:
+def get_silver_quote(currency: str = "USD") -> models_market_data.StockQuote | None:
     """
     Get the current silver price in the specified currency.
 
@@ -90,7 +90,7 @@ def get_silver_quote(currency: str = "USD") -> models.StockQuote | None:
         currency (str): The currency code (e.g., "USD", "EUR") to get the price in.
 
     Returns:
-        models.StockQuote | None: The current price as a models.StockQuote object, or None if the price could not be retrieved or the currency is not supported.
+        models_market_data.StockQuote | None: The current price, or None when unavailable.
     """
     x_rate = 1.0
     currency = currency.upper()
@@ -103,7 +103,7 @@ def get_silver_quote(currency: str = "USD") -> models.StockQuote | None:
 
     # second, get the price in USD
     ticker = yf.Ticker("SI=F")  # Silver Futures
-    quote = models.StockQuote(ticker)
+    quote = models_market_data.StockQuote(ticker)
 
     if currency != "" and currency != "USD":
         # finally, convert the price to the specified currency
@@ -112,7 +112,7 @@ def get_silver_quote(currency: str = "USD") -> models.StockQuote | None:
     return quote
 
 
-def get_silver_history(currency: str = "USD", num_days: int = 30) -> list[models.HistoryPoint] | None:
+def get_silver_history(currency: str = "USD", num_days: int = 30) -> list[models_market_data.HistoryPoint] | None:
     """
     Get the historical silver prices for the specified period and currency.
 
@@ -121,7 +121,7 @@ def get_silver_history(currency: str = "USD", num_days: int = 30) -> list[models
         num_days (int): The number of days of historical data to retrieve (default is 30).
 
     Returns:
-        list[models.HistoryPoint] | None: A list of models.HistoryPoint objects representing the historical prices, or None if the prices could not be retrieved or the currency is not supported.
+        list[models_market_data.HistoryPoint] | None: Historical prices, or None when unavailable.
     """
     x_rate = 1.0
     currency = currency.upper()
@@ -139,7 +139,7 @@ def get_silver_history(currency: str = "USD", num_days: int = 30) -> list[models
     hist = ticker.history(period=f"{num_days}d", interval="1d", auto_adjust=False)
 
     points = [
-        models.HistoryPoint(
+        models_market_data.HistoryPoint(
             timestamp=int(hist.index[i].timestamp()),
             timestamp_str=hist.index[i].isoformat(sep=" ", timespec="seconds"),
             currency=currency,

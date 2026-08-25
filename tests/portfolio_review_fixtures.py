@@ -3,7 +3,6 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from app.models import ai as models_ai
-from app.models import ai_portfolio_construction as models_construction
 from app.models import ai_portfolio_review as models_review
 from app.models import portfolio as models_portfolio
 from app.services import msai_review_portfolio as service
@@ -81,8 +80,8 @@ def snapshot() -> models_review.PortfolioReviewSnapshot:
     return models_review.PortfolioReviewSnapshot.model_validate(verified_portfolio().model_dump())
 
 
-def total_budget(amount: float = 500) -> models_construction.PortfolioBudget:
-    return models_construction.PortfolioBudget(
+def total_budget(amount: float = 500) -> models_portfolio.PortfolioBudget:
+    return models_portfolio.PortfolioBudget(
         budget_type="Total",
         is_inferred=False,
         amount=amount,
@@ -95,7 +94,7 @@ def total_budget(amount: float = 500) -> models_construction.PortfolioBudget:
 def plan(
     *,
     portfolio_id: str = "portfolio-id",
-    budget: models_construction.PortfolioBudget | None = None,
+    budget: models_portfolio.PortfolioBudget | None = None,
     strategy: models_review.PortfolioReviewStrategy = "LongTerm",
 ) -> service._PortfolioReviewPlan:
     return service._PortfolioReviewPlan(

@@ -57,7 +57,7 @@ def verified_portfolio() -> portfolio_verification.VerifiedPortfolio:
 def plan(
     mode: models_construction.PortfolioConstructionMode = "Scratch",
     *,
-    budget: models_construction.PortfolioBudget | None = None,
+    budget: models_portfolio.PortfolioBudget | None = None,
 ) -> service._PortfolioConstructionPlan:
     return service._PortfolioConstructionPlan(
         construction_mode=mode,
@@ -85,8 +85,8 @@ def plan(
     )
 
 
-def no_budget() -> models_construction.PortfolioBudget:
-    return models_construction.PortfolioBudget(
+def no_budget() -> models_portfolio.PortfolioBudget:
+    return models_portfolio.PortfolioBudget(
         budget_type="NotProvided",
         is_inferred=False,
         amount=None,
@@ -96,8 +96,8 @@ def no_budget() -> models_construction.PortfolioBudget:
     )
 
 
-def total_budget(amount: float = 10_000) -> models_construction.PortfolioBudget:
-    return models_construction.PortfolioBudget(
+def total_budget(amount: float = 10_000) -> models_portfolio.PortfolioBudget:
+    return models_portfolio.PortfolioBudget(
         budget_type="Total",
         is_inferred=False,
         amount=amount,
@@ -107,8 +107,8 @@ def total_budget(amount: float = 10_000) -> models_construction.PortfolioBudget:
     )
 
 
-def recurring_budget(amount: float = 1_000) -> models_construction.PortfolioBudget:
-    return models_construction.PortfolioBudget(
+def recurring_budget(amount: float = 1_000) -> models_portfolio.PortfolioBudget:
+    return models_portfolio.PortfolioBudget(
         budget_type="Recurring",
         is_inferred=False,
         amount=amount,
@@ -118,8 +118,8 @@ def recurring_budget(amount: float = 1_000) -> models_construction.PortfolioBudg
     )
 
 
-def inferred_budget(amount: float = 200, *, rate: int = 10) -> models_construction.PortfolioBudget:
-    return models_construction.PortfolioBudget(
+def inferred_budget(amount: float = 200, *, rate: int = 10) -> models_portfolio.PortfolioBudget:
+    return models_portfolio.PortfolioBudget(
         budget_type="Recurring",
         is_inferred=True,
         amount=amount,

@@ -14,7 +14,10 @@ public abstract record EventBase
     public string? CompanyName { get; init; }
 
     [JsonPropertyName("timestamp")]
-    public long Timestamp { get; init; }
+    public long Timestamp { get; init; } = 0;
+
+    [JsonPropertyName("date")]
+    public virtual string? Date { get; init; }
 
     [JsonPropertyName("event_category")]
     public string? EventCategory { get; init; }

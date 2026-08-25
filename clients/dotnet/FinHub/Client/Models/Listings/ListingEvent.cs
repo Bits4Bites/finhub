@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Serialization;
 using FinHub.Client.Models.Events;
 
@@ -6,7 +7,8 @@ namespace FinHub.Client.Models.Listings;
 public sealed record ListingEvent : EventBase
 {
     [JsonPropertyName("date")]
-    public required string Date { get; init; }
+    [AllowNull]
+    public required override string Date { get; init; }
 
     [JsonPropertyName("issue_price")]
     public required double? IssuePrice { get; init; }

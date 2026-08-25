@@ -49,7 +49,7 @@ class PortfolioConstructionAIError(RuntimeError):
 
 class _PortfolioConstructionPlan(models_ai.StrictAIModel):
     construction_mode: models_construction.PortfolioConstructionMode
-    budget: models_construction.PortfolioBudget
+    budget: models_portfolio.PortfolioBudget
     objective: models_types.NonEmptyString = Field(max_length=4000)
     theme_interpretation: models_types.NonEmptyString = Field(max_length=4000)
     constraints: list[Annotated[models_types.NonEmptyString, Field(max_length=1000)]] = Field(
@@ -381,7 +381,7 @@ async def _plan_portfolio(
     investor_theme: str,
     construction_mode: models_construction.PortfolioConstructionMode,
     verified_portfolio: portfolio_verification.VerifiedPortfolio | None,
-    budget: models_construction.PortfolioBudget,
+    budget: models_portfolio.PortfolioBudget,
 ) -> _PortfolioConstructionPlan:
     prompt = ai_prompt_utils.render_prompt(
         _PLAN_PROMPT,
@@ -759,7 +759,7 @@ def _validate_target_quotes(
     target_positions: list[models_construction.PortfolioTargetPosition],
     verified_quotes: portfolio_verification.VerifiedSecurityQuotes,
     *,
-    budget: models_construction.PortfolioBudget,
+    budget: models_portfolio.PortfolioBudget,
     verified_portfolio: portfolio_verification.VerifiedPortfolio | None,
 ) -> None:
     target_tickers = {position.ticker for position in target_positions}
@@ -777,7 +777,7 @@ def _calculate_actions(
     target_positions: list[models_construction.PortfolioTargetPosition],
     verified_portfolio: portfolio_verification.VerifiedPortfolio | None,
     verified_quotes: portfolio_verification.VerifiedSecurityQuotes | None,
-    budget: models_construction.PortfolioBudget,
+    budget: models_portfolio.PortfolioBudget,
 ) -> _CalculatedActions:
     if budget.budget_type == "NotProvided":
         raise PortfolioConstructionAIError("Portfolio action planning requires a supplied or inferred budget")
@@ -879,8 +879,8 @@ def _resolve_action_budget(
     target_positions: list[models_construction.PortfolioTargetPosition],
     verified_portfolio: portfolio_verification.VerifiedPortfolio | None,
     verified_quotes: portfolio_verification.VerifiedSecurityQuotes | None,
-    budget: models_construction.PortfolioBudget,
-) -> tuple[models_construction.PortfolioBudget, _CalculatedActions]:
+    budget: models_portfolio.PortfolioBudget,
+) -> tuple[models_portfolio.PortfolioBudget, _CalculatedActions]:
     actions = _calculate_actions(
         target_positions=target_positions,
         verified_portfolio=verified_portfolio,
@@ -1135,7 +1135,7 @@ def _construction_input_json(
     investor_theme: str,
     construction_mode: models_construction.PortfolioConstructionMode,
     verified_portfolio: portfolio_verification.VerifiedPortfolio | None,
-    budget: models_construction.PortfolioBudget,
+    budget: models_portfolio.PortfolioBudget,
 ) -> str:
     return json.dumps(
         {
@@ -1169,7 +1169,7 @@ def _final_cache_key(
     investor_theme: str,
     construction_mode: models_construction.PortfolioConstructionMode,
     verified_portfolio: portfolio_verification.VerifiedPortfolio | None,
-    budget: models_construction.PortfolioBudget,
+    budget: models_portfolio.PortfolioBudget,
     plan: _PortfolioConstructionPlan,
     research: _PortfolioResearch,
     draft: _PortfolioConstructionDraft,

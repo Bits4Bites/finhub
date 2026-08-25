@@ -1,6 +1,6 @@
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 MAX_COMPANY_NAME_LENGTH = 200
 MAX_EXCHANGE_LENGTH = 32
@@ -8,6 +8,8 @@ MAX_TAGS_LENGTH = 500
 MAX_TICKER_LENGTH = 32
 
 PortfolioPriceSource = Literal["MarketData", "Client"]
+PortfolioBudgetType = Literal["NotProvided", "Total", "Recurring"]
+PortfolioBudgetFrequency = Literal["Weekly", "Fortnightly", "Monthly", "Quarterly", "Annually"]
 
 
 def normalize_canonical_ticker(value: object) -> object:
@@ -18,6 +20,69 @@ def normalize_canonical_ticker(value: object) -> object:
     if len(parts) != 2 or not all(parts) or any(character.isspace() for character in normalized):
         raise ValueError("ticker must use canonical EXCHANGE:CODE format")
     return normalized
+
+
+class PortfolioBudget(BaseModel):
+    """Supplied or application-inferred new money available for portfolio actions."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    budget_type: PortfolioBudgetType = Field(
+        description="Whether no budget is available, or new money is a total amount or recurring contribution."
+    )
+    is_inferred: bool = Field(
+        description="Whether the application inferred the recurring next-iteration budget from current holdings."
+    )
+    amount: float | None = Field(
+        gt=0,
+        allow_inf_nan=False,
+        description="Positive new-money amount for one action-plan iteration, or null when no budget is available.",
+    )
+    currency: str | None = Field(
+        min_length=3,
+        max_length=3,
+        description="Three-letter budget currency, or null when no budget is available.",
+    )
+    frequency: PortfolioBudgetFrequency | None = Field(
+        description="Investor-supplied contribution frequency, or null for total and inferred next-iteration budgets.",
+    )
+    source_text: str | None = Field(
+        min_length=1,
+        max_length=500,
+        description="Exact investor-theme excerpt or deterministic explanation of an inferred budget.",
+    )
+
+    @field_validator("currency", mode="before")
+    @classmethod
+    def normalize_currency(cls, value: object) -> object:
+        if not isinstance(value, str):
+            return value
+        normalized = value.strip().upper()
+        if not normalized.isascii() or not normalized.isalpha():
+            raise ValueError("currency must be a three-letter ISO code")
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_budget(self) -> Self:
+        if self.budget_type == "NotProvided":
+            if self.is_inferred or any(
+                value is not None for value in (self.amount, self.currency, self.frequency, self.source_text)
+            ):
+                raise ValueError("NotProvided budget cannot contain budget details")
+        elif self.budget_type == "Total":
+            if self.amount is None or self.currency is None or self.source_text is None:
+                raise ValueError("Total budget requires amount, currency, and source_text")
+            if self.is_inferred:
+                raise ValueError("Total budget cannot be application-inferred")
+            if self.frequency is not None:
+                raise ValueError("Total budget cannot contain a recurring frequency")
+        elif self.amount is None or self.currency is None or self.source_text is None:
+            raise ValueError("Recurring budget requires amount, currency, and source_text")
+        elif self.is_inferred and self.frequency is not None:
+            raise ValueError("Inferred recurring budget cannot invent a contribution frequency")
+        elif not self.is_inferred and self.frequency is None:
+            raise ValueError("Investor-supplied recurring budget requires a frequency")
+        return self
 
 
 class PortfolioHolding(BaseModel):

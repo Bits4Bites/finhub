@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Path, Query
 
-from .. import config
 from ..schemas import stocks as schemas
+from ..services import market as market_service
 from ..services import stock as stock_service
 
 router = APIRouter(prefix="/stocks", tags=["stocks"])
@@ -103,6 +103,6 @@ def get_index_companies(
     """
     companies = []
     index = index.upper()
-    if index in config.market_indices.indices:
-        companies = config.market_indices.indices[index].values()
+    if index in market_service.market_indices.indices:
+        companies = market_service.market_indices.indices[index].values()
     return schemas.IndexCompaniesResponse(status=200, message="ok", data=companies)

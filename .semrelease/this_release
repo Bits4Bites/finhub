@@ -23,3 +23,5 @@
 - feat(client/dotnet): Add AI-vendor API contracts.
 - feat(client/dotnet): Add market-index API contracts.
 - feat(client/dotnet): Add stock and precious-metals API contracts.
+- refactor(api): organize models and schemas by domain
+- feat(client/dotnet): add upcoming market-event API contracts

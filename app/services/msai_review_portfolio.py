@@ -12,7 +12,6 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 
 from .. import config
 from ..models import ai as models_ai
-from ..models import ai_portfolio_construction as models_construction
 from ..models import ai_portfolio_review as models_review
 from ..models import portfolio as models_portfolio
 from ..models import types as models_types
@@ -104,7 +103,7 @@ class PortfolioReviewAIError(RuntimeError):
 class _PortfolioReviewPlan(models_ai.StrictAIModel):
     portfolio_id: models_types.NonEmptyString = Field(max_length=128)
     strategy: models_review.PortfolioReviewStrategy
-    budget: models_construction.PortfolioBudget
+    budget: models_portfolio.PortfolioBudget
     objective: models_types.NonEmptyString = Field(max_length=4000)
     theme_interpretation: models_types.NonEmptyString = Field(max_length=4000)
     research_priorities: list[_ResearchCategory] = Field(min_length=1, max_length=7)
@@ -441,7 +440,7 @@ class _PortfolioActionCandidate(BaseModel):
 class _CalculatedActions(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    budget: models_construction.PortfolioBudget
+    budget: models_portfolio.PortfolioBudget
     cash_ledger: models_review.PortfolioReviewCashLedger
     candidates: list[_PortfolioActionCandidate] = Field(min_length=1, max_length=70)
 
@@ -639,7 +638,7 @@ async def _plan_portfolio(
     snapshot: models_review.PortfolioReviewSnapshot,
     investor_theme: str,
     strategy: models_review.PortfolioReviewStrategy,
-    budget: models_construction.PortfolioBudget,
+    budget: models_portfolio.PortfolioBudget,
 ) -> _PortfolioReviewPlan:
     prompt = ai_prompt_utils.render_prompt(
         _PLAN_PROMPT,
@@ -1308,9 +1307,9 @@ def _resolve_action_budget(
     target_positions: list[models_review.PortfolioReviewTargetPosition],
     holding_reviews: list[models_review.PortfolioHoldingReview],
     verified_addition_quotes: portfolio_verification.VerifiedSecurityQuotes | None,
-    budget: models_construction.PortfolioBudget,
+    budget: models_portfolio.PortfolioBudget,
     strategy: models_review.PortfolioReviewStrategy,
-) -> tuple[models_construction.PortfolioBudget, _CalculatedActions]:
+) -> tuple[models_portfolio.PortfolioBudget, _CalculatedActions]:
     calculated = _calculate_actions(
         snapshot=snapshot,
         target_positions=target_positions,
@@ -1347,7 +1346,7 @@ def _calculate_actions(
     target_positions: list[models_review.PortfolioReviewTargetPosition],
     holding_reviews: list[models_review.PortfolioHoldingReview],
     verified_addition_quotes: portfolio_verification.VerifiedSecurityQuotes | None,
-    budget: models_construction.PortfolioBudget,
+    budget: models_portfolio.PortfolioBudget,
     strategy: models_review.PortfolioReviewStrategy,
 ) -> _CalculatedActions:
     if budget.amount is None:
@@ -1596,7 +1595,7 @@ def _finalize_review(
     rebalance_requested: bool,
     rebalance_recommended: models_review.PortfolioReviewRebalanceFlag,
     major_rebalance_reasons: list[str],
-    budget: models_construction.PortfolioBudget,
+    budget: models_portfolio.PortfolioBudget,
     plan: _PortfolioReviewPlan,
     research: _PortfolioResearch,
     assessment: _PortfolioAssessmentDraft,
@@ -1717,7 +1716,7 @@ def _review_input_json(
     snapshot: models_review.PortfolioReviewSnapshot,
     investor_theme: str,
     strategy: models_review.PortfolioReviewStrategy,
-    budget: models_construction.PortfolioBudget,
+    budget: models_portfolio.PortfolioBudget,
 ) -> str:
     return json.dumps(
         {
@@ -1755,7 +1754,7 @@ def _final_cache_key(
     research: _PortfolioResearch,
     assessment: _PortfolioAssessmentDraft,
     target_draft: _PortfolioTargetDraft,
-    budget: models_construction.PortfolioBudget,
+    budget: models_portfolio.PortfolioBudget,
     verified_addition_quotes: portfolio_verification.VerifiedSecurityQuotes | None,
     calculated_actions: _CalculatedActions | None,
 ) -> str:

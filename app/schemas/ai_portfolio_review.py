@@ -1,6 +1,6 @@
 from typing import Annotated, Self
 
-from pydantic import ConfigDict, Field, TypeAdapter, field_validator, model_validator
+from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from ..models import ai_portfolio_construction as models_construction
 from ..models import ai_portfolio_review as models_review
@@ -12,7 +12,6 @@ AnalyzePortfolioResult = Annotated[
     models_construction.PortfolioConstruction | models_review.PortfolioReview,
     Field(discriminator="result_type"),
 ]
-ANALYZE_PORTFOLIO_RESULT_ADAPTER = TypeAdapter(AnalyzePortfolioResult)
 
 
 class AnalyzePortfolioRequest(BaseRequest):
@@ -61,10 +60,6 @@ class AnalyzePortfolioRequest(BaseRequest):
 
 class AnalyzePortfolioResponse(BaseResponse[AnalyzePortfolioResult]):
     """Response envelope containing a structured review or constructed portfolio."""
-
-
-class ReviewPortfolioResponse(BaseResponse[models_review.PortfolioReview]):
-    """Internal response envelope containing a structured existing-portfolio review."""
 
 
 class AnalyzePortfolioAsyncResponse(async_task.AsyncTaskResponse[AnalyzePortfolioResult]):

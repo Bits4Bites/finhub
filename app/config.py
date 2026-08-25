@@ -203,30 +203,3 @@ class AppSettings(BaseSettings):
 
 
 settings_app = AppSettings()
-
-# ----------------------------------------------------------------------#
-
-
-class CompanyBriefInfo(BaseSettings):
-    """Brief company profile returned for a market-index constituent."""
-
-    symbol: str = Field(default="", description="Security symbol of the index constituent.")
-    name: str = Field(default="", description="Company or issuer name.")
-    sector: str = Field(default="", description="Economic sector of the company.")
-    market_cap: int = Field(default=0, description="Current market capitalization.")
-
-    model_config = SettingsConfigDict(
-        nested_model_default_partial_update=True,
-    )
-
-
-class MarketIndices(BaseSettings):
-    # {index -> {symbol -> CompanyBriefInfo}}
-    indices: dict[str, dict[str, CompanyBriefInfo]] = Field(default={})
-    raw_json: dict[str, str] = Field(default={})
-    model_config = SettingsConfigDict(
-        nested_model_default_partial_update=True,
-    )
-
-
-market_indices = MarketIndices()

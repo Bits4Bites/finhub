@@ -88,13 +88,3 @@ class ReferenceSource(ReferenceSourceMetadata):
     """
 
     is_verified: bool = Field(description="Whether provider citations verified that the response used this source.")
-
-
-class AIVendorInfo(BaseModel):
-    """Enabled model tiers exposed for an AI vendor."""
-
-    name: str = Field(default="", description="Display name of the AI vendor.")
-    tier_models: dict[str, list[str]] = Field(
-        default={},
-        description="Enabled model identifiers grouped by service tier.",
-    )

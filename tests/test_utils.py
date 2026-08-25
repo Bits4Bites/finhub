@@ -292,17 +292,17 @@ class TestDetectAssetType:
 class TestIsInIndex:
     """Tests for asset.is_in_index."""
 
-    @patch("app.utils.asset.config.market_indices")
+    @patch("app.utils.asset.services_market.market_indices")
     def test_symbol_in_index(self, mock_indices):
         mock_indices.indices = {"ASX200": {"ASX:CBA": True}}
         assert asset.is_in_index(index="ASX200", symbol="ASX:CBA") is True
 
-    @patch("app.utils.asset.config.market_indices")
+    @patch("app.utils.asset.services_market.market_indices")
     def test_symbol_not_in_index(self, mock_indices):
         mock_indices.indices = {"ASX200": {"ASX:CBA": True}}
         assert asset.is_in_index(index="ASX200", symbol="ASX:XYZ") is False
 
-    @patch("app.utils.asset.config.market_indices")
+    @patch("app.utils.asset.services_market.market_indices")
     def test_case_insensitive_lookup(self, mock_indices):
         mock_indices.indices = {"ASX200": {"ASX:CBA": True}}
         assert asset.is_in_index(index="asx200", symbol="asx:cba") is True
@@ -311,7 +311,7 @@ class TestIsInIndex:
 class TestClassifyMarketCap:
     """Tests for asset.classify_market_cap."""
 
-    @patch("app.utils.asset.config.market_indices")
+    @patch("app.utils.asset.services_market.market_indices")
     def test_au_large_cap(self, mock_indices):
         mock_indices.indices = {
             "ASX50": {},
@@ -326,7 +326,7 @@ class TestClassifyMarketCap:
         cap, index = asset.classify_market_cap(country="AU", exchange_symbol="ASX:BHP", market_cap=15_000_000_000)
         assert cap == types.LARGE_CAP
 
-    @patch("app.utils.asset.config.market_indices")
+    @patch("app.utils.asset.services_market.market_indices")
     def test_au_mid_cap(self, mock_indices):
         mock_indices.indices = {
             "ASX50": {},
@@ -342,7 +342,7 @@ class TestClassifyMarketCap:
         # Mid cap outside ASX300 gets downgraded to Small
         assert cap == types.SMALL_CAP
 
-    @patch("app.utils.asset.config.market_indices")
+    @patch("app.utils.asset.services_market.market_indices")
     def test_au_small_cap_outside_asx300_downgraded(self, mock_indices):
         mock_indices.indices = {
             "ASX50": {},
@@ -357,7 +357,7 @@ class TestClassifyMarketCap:
         cap, index = asset.classify_market_cap(country="AU", exchange_symbol="ASX:TINY", market_cap=500_000_000)
         assert cap == types.MICRO_CAP  # downgraded from small because not in ASX300
 
-    @patch("app.utils.asset.config.market_indices")
+    @patch("app.utils.asset.services_market.market_indices")
     def test_us_nasdaq100_member_large_cap(self, mock_indices):
         mock_indices.indices = {
             "ASX50": {},
@@ -375,14 +375,14 @@ class TestClassifyMarketCap:
         assert cap == types.LARGE_CAP
         assert index == "NASDAQ100"
 
-    @patch("app.utils.asset.config.market_indices")
+    @patch("app.utils.asset.services_market.market_indices")
     def test_vn_large_cap(self, mock_indices):
         mock_indices.indices = {"VN30": {"HOSE:VNM": True}, "VN100": {}, "HNX30": {}}
         cap, index = asset.classify_market_cap(country="VN", exchange_symbol="HOSE:VNM", market_cap=50_000_000_000_000)
         assert cap == types.LARGE_CAP
         assert index == "VN30"
 
-    @patch("app.utils.asset.config.market_indices")
+    @patch("app.utils.asset.services_market.market_indices")
     def test_vn_mid_cap_in_vn100(self, mock_indices):
         mock_indices.indices = {"VN30": {}, "VN100": {"HOSE:REE": True}, "HNX30": {}}
         cap, index = asset.classify_market_cap(country="VN", exchange_symbol="HOSE:REE", market_cap=20_000_000_000_000)
@@ -577,14 +577,14 @@ class TestTzFromYfTicker:
 class TestYfutilsIsInIndex:
     """Tests for yfutils.is_in_index."""
 
-    @patch("app.utils.asset.config.market_indices")
+    @patch("app.utils.asset.services_market.market_indices")
     def test_ticker_in_index(self, mock_indices):
         mock_indices.indices = {"ASX200": {"ASX:CBA": True}}
         mock_ticker = MagicMock()
         mock_ticker.info = {"fullExchangeName": "ASX", "symbol": "CBA.AX"}
         assert yfutils.is_in_index(index="ASX200", ticker=mock_ticker) is True
 
-    @patch("app.utils.asset.config.market_indices")
+    @patch("app.utils.asset.services_market.market_indices")
     def test_ticker_not_in_index(self, mock_indices):
         mock_indices.indices = {"ASX200": {"ASX:CBA": True}}
         mock_ticker = MagicMock()
@@ -595,7 +595,7 @@ class TestYfutilsIsInIndex:
 class TestLookupIndexYfStaticSymbol:
     """Tests for yfutils.lookup_index_yf_static_symbol."""
 
-    @patch("app.utils.asset.config.market_indices")
+    @patch("app.utils.asset.services_market.market_indices")
     def test_asx_member_returns_index_symbol(self, mock_indices):
         mock_indices.indices = {"ASX20": {"ASX:CBA": True}, "ASX50": {}, "ASX100": {}, "ASX200": {}, "ASX300": {}}
         mock_ticker = MagicMock()
@@ -603,7 +603,7 @@ class TestLookupIndexYfStaticSymbol:
         result = yfutils.lookup_index_yf_static_symbol(ticker=mock_ticker)
         assert result == "^ATLI"  # ASX20 symbol
 
-    @patch("app.utils.asset.config.market_indices")
+    @patch("app.utils.asset.services_market.market_indices")
     def test_nasdaq100_member(self, mock_indices):
         mock_indices.indices = {"NASDAQ100": {"NASDAQ:AAPL": True}}
         mock_ticker = MagicMock()
@@ -611,7 +611,7 @@ class TestLookupIndexYfStaticSymbol:
         result = yfutils.lookup_index_yf_static_symbol(ticker=mock_ticker)
         assert result == "^NDX"
 
-    @patch("app.utils.asset.config.market_indices")
+    @patch("app.utils.asset.services_market.market_indices")
     def test_nyse_sp500_member(self, mock_indices):
         mock_indices.indices = {"SP500": {"NYSE:JPM": True}, "SP400": {}, "SP600": {}}
         mock_ticker = MagicMock()
@@ -619,7 +619,7 @@ class TestLookupIndexYfStaticSymbol:
         result = yfutils.lookup_index_yf_static_symbol(ticker=mock_ticker)
         assert result == "^GSPC"
 
-    @patch("app.utils.asset.config.market_indices")
+    @patch("app.utils.asset.services_market.market_indices")
     def test_unknown_exchange_returns_none(self, mock_indices):
         mock_indices.indices = {}
         mock_ticker = MagicMock()
@@ -631,7 +631,7 @@ class TestLookupIndexYfStaticSymbol:
 class TestLookupPeerYfStaticSymbol:
     """Tests for yfutils.lookup_peer_yf_static_symbol."""
 
-    @patch("app.utils.asset.config.market_indices")
+    @patch("app.utils.asset.services_market.market_indices")
     def test_asx_financials_sector(self, mock_indices):
         mock_indices.indices = {}
         mock_ticker = MagicMock()
@@ -644,7 +644,7 @@ class TestLookupPeerYfStaticSymbol:
         result = yfutils.lookup_peer_yf_static_symbol(ticker=mock_ticker)
         assert result == "^AXFJ"
 
-    @patch("app.utils.asset.config.market_indices")
+    @patch("app.utils.asset.services_market.market_indices")
     def test_unknown_sector_returns_none(self, mock_indices):
         mock_indices.indices = {}
         mock_ticker = MagicMock()
@@ -656,7 +656,7 @@ class TestLookupPeerYfStaticSymbol:
 class TestYfutilsClassifyMarketCap:
     """Tests for yfutils.classify_market_cap."""
 
-    @patch("app.utils.asset.config.market_indices")
+    @patch("app.utils.asset.services_market.market_indices")
     def test_large_cap_au(self, mock_indices):
         mock_indices.indices = {
             "ASX50": {"ASX:CBA": True},
@@ -679,7 +679,7 @@ class TestYfutilsClassifyMarketCap:
         assert cap == types.LARGE_CAP
         assert index == "ASX50"
 
-    @patch("app.utils.asset.config.market_indices")
+    @patch("app.utils.asset.services_market.market_indices")
     def test_none_ticker_defaults_to_nano(self, mock_indices):
         mock_indices.indices = {
             "ASX50": {},

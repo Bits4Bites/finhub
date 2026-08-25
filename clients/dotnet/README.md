@@ -89,6 +89,40 @@ var silverHistory = JsonSerializer.Deserialize<GetStockHistoryResponse>(silverJs
 Both quote endpoints use `GetStockQuoteResponse`; both history endpoints use `GetStockHistoryResponse`. The optional
 `currency` query defaults to `USD`, and the history endpoints' optional `days` query defaults to `30`.
 
+## Upcoming market events
+
+Upcoming dividend and earnings contracts cover:
+
+```http
+GET /events/upcoming_dividends
+GET /events/upcoming_dividends_async
+GET /events/upcoming_earnings
+GET /events/upcoming_earnings_async
+```
+
+```csharp
+using System.Text.Json;
+using FinHub.Client.Schemas.Events;
+
+var dividends = JsonSerializer.Deserialize<GetUpcomingDividendsResponse>(dividendsJson);
+var asyncEarnings = JsonSerializer.Deserialize<GetUpcomingEarningsAsyncResponse>(asyncEarningsJson);
+```
+
+Synchronous calls use `GetUpcomingDividendsResponse` or `GetUpcomingEarningsResponse`. Start an async task with
+`country` and optional `index`, then poll the same endpoint with `task_id=<TASK_ID>`; each endpoint has its own async
+response type. Start and running responses use HTTP `202`, completed polls can contain the event collection in
+`Data`, and failed polls use HTTP `500`. Async responses require the shared `AsyncTaskInfo` metadata and strict
+`TaskState`; cached tasks expire after one hour.
+
+`EventBase.Date`, dividend `PaymentDate`, and earnings `ReportPeriod` remain strings because OpenAPI does not assign
+date formats. `UpcomingDividendEvent.PaymentDate` is required but nullable. Unix timestamps, traded-value metrics,
+and volume metrics use `long`; sample counts, recovery-day ranges, and `Rsi14` use `int`.
+
+An upcoming dividend can contain nullable `DividendEventMetrics` in its `Analysis` property. This Events-domain type
+contains only the current event identity, historical recovery, and technical metrics. It is intentionally distinct
+from `FinHub.Client.Models.Dividends.DividendEventAnalysis` and excludes the removed AI error, search, strategy,
+reasoning, sentiment, adjusted-forecast, expected-profit/loss, confidence, and risk fields.
+
 ## New listings
 
 The new-listings contracts cover:
@@ -272,6 +306,7 @@ optional and has no client default. Risk levels are limited to `Critical`, `High
 - `FinHub.Client.Schemas`: reusable synchronous/async API response envelopes and async task metadata.
 - `FinHub.Client.Schemas.AIVendors`: response schemas for AI vendor discovery.
 - `FinHub.Client.Schemas.DividendAnalysis`: request and response schemas for dividend-event analysis.
+- `FinHub.Client.Schemas.Events`: response schemas for upcoming dividend and earnings events.
 - `FinHub.Client.Schemas.MarketIndex`: direct response schemas for cached market-index snapshots.
 - `FinHub.Client.Schemas.NewListings`: schemas specific to the new-listings API.
 - `FinHub.Client.Schemas.PortfolioAnalysis`: request and response schemas for the review-or-construction dispatcher.

@@ -4,7 +4,8 @@ from typing import Any
 import yfinance as yf
 
 from .. import config
-from ..models import finhub as models
+from ..models import market_data as models_market_data
+from ..models import stocks as models_stocks
 from ..utils import conv
 
 
@@ -29,7 +30,7 @@ def get_symbol_info_raw(symbol: str) -> dict[str, Any]:
     return result
 
 
-def get_symbol_info(symbol: str) -> models.SymbolInfo | None:
+def get_symbol_info(symbol: str) -> models_stocks.SymbolInfo | None:
     """
     Fetches detailed information about a ticker symbol.
 
@@ -37,17 +38,17 @@ def get_symbol_info(symbol: str) -> models.SymbolInfo | None:
         symbol (str): The stock symbol to fetch information for, accepting YF format (e.g. ABC.AX) or EXCHANGE:CODE (e.g. NASDAQ:XYZ).
 
     Returns:
-        models.SymbolInfo | None: A models.SymbolInfo object containing the information about the symbol, or None.
+        models_stocks.SymbolInfo | None: Symbol information, or None.
     """
     yf_symbol = conv.to_yf_symbol_format(symbol)
     ticker = yf.Ticker(yf_symbol)
     quote_type = ticker.info.get("quoteType")
     if quote_type in config.ALLOWED_QUOTE_TYPES:
-        return models.SymbolInfo(ticker)
+        return models_stocks.SymbolInfo(ticker)
     return None
 
 
-def get_symbol_overview(symbol: str) -> models.SymbolOverview | None:
+def get_symbol_overview(symbol: str) -> models_stocks.SymbolOverview | None:
     """
     Fetches overview information about a ticker symbol.
 
@@ -55,17 +56,17 @@ def get_symbol_overview(symbol: str) -> models.SymbolOverview | None:
         symbol (str): The stock symbol to fetch information for, accepting YF format (e.g. ABC.AX) or EXCHANGE:CODE (e.g. NASDAQ:XYZ).
 
     Returns:
-        models.SymbolOverview | None: A models.SymbolOverview object containing the overview information about the symbol, or None.
+        models_stocks.SymbolOverview | None: Symbol overview information, or None.
     """
     yf_symbol = conv.to_yf_symbol_format(symbol)
     ticker = yf.Ticker(yf_symbol)
     quote_type = ticker.info.get("quoteType")
     if quote_type in config.ALLOWED_QUOTE_TYPES:
-        return models.SymbolOverview(ticker)
+        return models_stocks.SymbolOverview(ticker)
     return None
 
 
-def get_stock_quotes(symbols: list[str]) -> dict[str, models.StockQuote]:
+def get_stock_quotes(symbols: list[str]) -> dict[str, models_market_data.StockQuote]:
     """
     Fetches stock quotes for a list of ticker symbols.
 
@@ -73,7 +74,7 @@ def get_stock_quotes(symbols: list[str]) -> dict[str, models.StockQuote]:
         symbols (list[str]): A list of stock symbols to fetch quotes for, accepting YF format (e.g. ABC.AX) or EXCHANGE:CODE (e.g. NASDAQ:XYZ).
 
     Returns:
-        dict[str, models.StockQuote]: A dictionary mapping each symbol to its corresponding models.StockQuote object.
+        dict[str, models_market_data.StockQuote]: Quotes keyed by requested symbol.
     """
     yf_symbols = [conv.to_yf_symbol_format(s) for s in symbols]
     tickers = yf.Tickers(" ".join(yf_symbols))
@@ -85,11 +86,11 @@ def get_stock_quotes(symbols: list[str]) -> dict[str, models.StockQuote]:
             quote_type = ticker.info.get("quoteType") if ticker.info.get("quoteType") is not None else "NONE"
             if quote_type in config.ALLOWED_QUOTE_TYPES:
                 symbol = symbols[i]
-                quotes[symbol] = models.StockQuote(ticker)
+                quotes[symbol] = models_market_data.StockQuote(ticker)
     return quotes
 
 
-def get_stock_quote_at_date(symbol: str, date_str: str) -> models.HistoryPoint | None:
+def get_stock_quote_at_date(symbol: str, date_str: str) -> models_market_data.HistoryPoint | None:
     """
     Fetches stock quote information for a given ticker symbol at a specific date.
 
@@ -98,7 +99,7 @@ def get_stock_quote_at_date(symbol: str, date_str: str) -> models.HistoryPoint |
         date_str (str): The date to fetch the quote for (format: YYYY-MM-DD).
 
     Returns:
-        models.HistoryPoint | None: A models.HistoryPoint object containing the quote information for the symbol at the specified date, or None.
+        models_market_data.HistoryPoint | None: The quote for the requested date, or None.
     """
     yf_symbol = conv.to_yf_symbol_format(symbol)
     ticker = yf.Ticker(yf_symbol)
@@ -114,7 +115,7 @@ def get_stock_quote_at_date(symbol: str, date_str: str) -> models.HistoryPoint |
         history = ticker.history(start=start_date, end=end_date, interval="1d", auto_adjust=False)
         if not history.empty:
             point = history.iloc[-1]
-            return models.HistoryPoint(
+            return models_market_data.HistoryPoint(
                 timestamp=point.name.timestamp(),
                 timestamp_str=point.name.isoformat(sep=" ", timespec="seconds"),
                 open=point["Open"],
@@ -127,7 +128,7 @@ def get_stock_quote_at_date(symbol: str, date_str: str) -> models.HistoryPoint |
     return None
 
 
-def get_symbol_history(symbol: str, days: int = 100) -> list[models.HistoryPoint] | None:
+def get_symbol_history(symbol: str, days: int = 100) -> list[models_market_data.HistoryPoint] | None:
     """
     Fetches historical stock price data for a given ticker symbol.
 
@@ -136,7 +137,7 @@ def get_symbol_history(symbol: str, days: int = 100) -> list[models.HistoryPoint
         days (int): The number of days of historical data to retrieve (default is 100).
 
     Returns:
-        list[models.HistoryPoint] | None: A list of models.HistoryPoint objects representing the historical prices, or None if the prices could not be retrieved.
+        list[models_market_data.HistoryPoint] | None: Historical prices, or None.
     """
     yf_symbol = conv.to_yf_symbol_format(symbol)
     ticker = yf.Ticker(yf_symbol)
@@ -145,7 +146,7 @@ def get_symbol_history(symbol: str, days: int = 100) -> list[models.HistoryPoint
         num_days = 100 if days <= 0 else days
         hist = ticker.history(period=f"{num_days}d", interval="1d", auto_adjust=False)
         points = [
-            models.HistoryPoint(
+            models_market_data.HistoryPoint(
                 timestamp=int(hist.index[i].timestamp()),
                 timestamp_str=hist.index[i].isoformat(sep=" ", timespec="seconds"),
                 open=hist.iloc[i]["Open"],

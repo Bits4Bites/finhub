@@ -124,57 +124,6 @@ class DividendEventAnalysis(EventBase):
         default=0.0,
         description="Relevant peer-group trend over 60 trading days.",
     )
-    # ====== analysis result from AI
-    llm_error: bool = Field(default=False, description="Whether the AI assessment failed.")
-    llm_error_msg: str | None = Field(
-        default=None,
-        description="AI failure detail, or null when assessment succeeded.",
-    )
-    # llm_response: str | None = None
-    search_summary: str | None = Field(
-        default=None,
-        description="Summary of external research used by the legacy assessment.",
-    )
-    strategy: str | None = Field(
-        default=None,
-        description="Legacy strategy recommendation.",
-    )
-    reasoning: str | None = Field(
-        default=None,
-        description="Reasoning supporting the legacy recommendation.",
-    )
-    sentiment_score: float = Field(
-        default=0.0,
-        description="Legacy sentiment score derived by the AI assessment.",
-    )
-    recovery_probability_adj: float = Field(
-        default=0.0,
-        description="AI-adjusted recovery probability.",
-    )
-    recovery_days_adj: str | None = Field(
-        default=None,
-        description="AI-adjusted recovery-time estimate.",
-    )
-    drop_price_adj: str | None = Field(
-        default=None,
-        description="AI-adjusted ex-dividend price-drop estimate.",
-    )
-    recovery_price_adj: str | None = Field(
-        default=None,
-        description="AI-adjusted recovery-price estimate.",
-    )
-    expected_pl: float = Field(
-        default=0.0,
-        description="Estimated profit or loss per share.",
-    )
-    confidence_level: float = Field(
-        default=0.0,
-        description="Confidence level assigned to the legacy analysis.",
-    )
-    risk_level: float = Field(
-        default=0.0,
-        description="Risk score assigned to the legacy analysis.",
-    )
 
 
 class UpcomingDividendEvent(EventBase):

@@ -1,4 +1,3 @@
-import json
 import logging
 
 from . import config
@@ -75,52 +74,3 @@ for task_name, llm_cfg in list(config.settings_llm_task.tasks.items()):
             f"Removing LLM task config for task '{task_name}' due to missing task name, vendor, tier, or model."
         )
         del config.settings_llm_task.tasks[task_name]
-
-
-def read_file_as_single_string(file_path) -> str:
-    try:
-        with open(file_path, encoding="utf-8") as file:
-            return file.read()
-    except FileNotFoundError:
-        logging.error("Error: File '%s' not found.", file_path)
-    except PermissionError:
-        logging.error("Error: Permission denied for file '%s'.", file_path)
-    except Exception as e:
-        logging.exception("An unexpected error occurred while reading file '%s': '%s'", file_path, e)
-    return ""
-
-
-# populate config.market_indices
-indices_files = [
-    ("ASX20", "./resources/indices/asx20.json"),
-    ("ASX50", "./resources/indices/asx50.json"),
-    ("ASX100", "./resources/indices/asx100.json"),
-    ("ASX200", "./resources/indices/asx200.json"),
-    ("ASX300", "./resources/indices/asx300.json"),
-    ("NASDAQ100", "./resources/indices/nasdaq100.json"),
-    ("SP500", "./resources/indices/sp500.json"),
-    ("SP400", "./resources/indices/spmidcap400.json"),
-    ("SP600", "./resources/indices/spsmallcap600.json"),
-    ("HNX30", "./resources/indices/hnx30.json"),
-    ("VN30", "./resources/indices/vn30.json"),
-    ("VN100", "./resources/indices/vn100.json"),
-]
-for index, from_file in indices_files:
-    logging.info("Loading index '%s' data from file '%s'...", index, from_file)
-    json_content = read_file_as_single_string(from_file)
-    if json_content:
-        # parse json data as a list of objects
-        index_data = json.loads(json_content)
-        config.market_indices.raw_json[index.upper()] = json_content
-        config.market_indices.indices[index.upper()] = {}
-        for entry in index_data["data"]:
-            symbol = entry["symbol"].upper()
-            company_info = config.CompanyBriefInfo(
-                symbol=symbol,
-                name=entry.get("company", symbol),
-                sector=entry.get("sector", symbol),
-                market_cap=int(entry.get("market_cap", 0)),
-            )
-            config.market_indices.indices[index.upper()][symbol.upper()] = company_info
-    else:
-        logging.error("Failed to load prompt template from file '%s'", from_file)

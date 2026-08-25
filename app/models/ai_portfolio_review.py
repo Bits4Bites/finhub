@@ -14,7 +14,6 @@ from pydantic import (
 
 from ..utils import ai_reference as ai_reference_utils
 from . import ai as models_ai
-from . import ai_portfolio_construction as models_construction
 from . import portfolio as models_portfolio
 from . import types as models_types
 
@@ -458,7 +457,7 @@ class PortfolioReviewActionPlan(models_ai.StrictAIModel):
     """Prioritized Growth or Rebalance actions for one funded iteration."""
 
     plan_type: PortfolioReviewPlanType = Field(description="Whether actions implement growth or a major rebalance.")
-    budget: models_construction.PortfolioBudget = Field(
+    budget: models_portfolio.PortfolioBudget = Field(
         description="Normalized new-money budget used for this action-plan iteration."
     )
     cash_ledger: PortfolioReviewCashLedger = Field(
@@ -523,7 +522,7 @@ class PortfolioReview(models_ai.StrictAIModel):
         description="Investor goals, constraints, horizon, and risk context used by the review.",
     )
     snapshot: PortfolioReviewSnapshot = Field(description="Verified current portfolio state.")
-    budget: models_construction.PortfolioBudget = Field(
+    budget: models_portfolio.PortfolioBudget = Field(
         description="Supplied or inferred new-money budget for one action-plan iteration."
     )
     summary: models_types.NonEmptyString = Field(
