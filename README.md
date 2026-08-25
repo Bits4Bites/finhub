@@ -96,12 +96,20 @@ FINHUB_LLM_TASK__ANALYZE_TICKER_EXEC__USE_WEB_SEARCH=True
 
 #### Node chaining (`finhub_proxy_config.env`)
 
-When `FINHUB_PROXY_MODE` is not `None`, API calls to this FinHub node are redirected or forwarded to the next FinHub node configured by `FINHUB_URL_WEB_CRAWL_NODE`.
+Node chaining can route supported APIs to the configured web-crawl or AI-task node. `Redirect` returns HTTP `307`
+and the client calls the next node. `Forward` makes the call from this server, relaying the request method, path,
+query, body, and end-to-end headers, then returns the upstream status, body, and end-to-end headers. `None` executes
+the request locally.
 
-| Variable                    | Default | Description                                                                                                                                                      |
-|-----------------------------|---------|------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `FINHUB_PROXY_MODE`         | `None`  | Node-chaining mode: `None`, `Redirect`, or `Forward`. If set (not `None`), API calls to this node are redirected/forwarded to the next FinHub node in the chain. |
-| `FINHUB_URL_WEB_CRAWL_NODE` | _empty_ | URL of the next FinHub node in the chain (used when `FINHUB_PROXY_MODE` is set).                                                                                 |
+| Variable                    | Default | Description                                           |
+|-----------------------------|---------|-------------------------------------------------------|
+| `FINHUB_PROXY_MODE`         | `None`  | Node-chaining mode: `None`, `Redirect`, or `Forward`. |
+| `FINHUB_URL_WEB_CRAWL_NODE` | _empty_ | Next-node base URL for web-crawl event APIs.          |
+| `FINHUB_URL_AI_TASK_NODE`   | _empty_ | Next-node base URL for AI-task APIs.                  |
+
+Forwarded requests use a 600-second read timeout by default. A client can set
+`X-FinHub-Forward-Timeout-Seconds` to a finite value greater than zero and no more than 86400 seconds. Connection,
+write, and connection-pool timeouts remain server-controlled.
 
 ## 📚 API
 

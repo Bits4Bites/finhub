@@ -1,7 +1,6 @@
 import logging
 
 from fastapi import APIRouter, BackgroundTasks, Query, Request, Response, status
-from fastapi.responses import RedirectResponse
 
 from .. import config
 from ..schemas import async_task
@@ -60,11 +59,11 @@ async def get_upcoming_dividends_event(
         "",
         description="Optional stock index to filter events by (support 'ASX20', 'ASX50', 'ASX100', 'ASX200', 'ASX300', 'NASDAQ100', 'SP500', 'SP400', 'SP600', 'VN30', 'VN100', 'HNX30').",
     ),
-) -> schemas_event.UpcomingDividendsResponse | RedirectResponse:
+) -> schemas_event.UpcomingDividendsResponse | Response:
     """
     Check for upcoming dividend/distribution events for a market.
     """
-    proxy_response = proxy_handler.handle_if_proxy(
+    proxy_response = await proxy_handler.handle_if_proxy(
         config.settings_finhub_proxy.proxy_mode,
         config.settings_finhub_proxy.url_web_crawl_node,
         request,
@@ -108,11 +107,11 @@ async def get_upcoming_dividends_event_async(
         description="Optional stock index to filter events by (support 'ASX20', 'ASX50', 'ASX100', 'ASX200', 'ASX300', 'NASDAQ100', 'SP500', 'SP400', 'SP600', 'VN30', 'VN100', 'HNX30').",
     ),
     task_id: str = Query("", description="Task ID returned by a previous call to this endpoint."),
-) -> schemas_event.UpcomingDividendsAsyncResponse | RedirectResponse:
+) -> schemas_event.UpcomingDividendsAsyncResponse | Response:
     """
     Start an upcoming-dividends task or poll a previously started task.
     """
-    proxy_response = proxy_handler.handle_if_proxy(
+    proxy_response = await proxy_handler.handle_if_proxy(
         config.settings_finhub_proxy.proxy_mode,
         config.settings_finhub_proxy.url_web_crawl_node,
         request,
@@ -197,11 +196,11 @@ async def get_upcoming_earnings_event(
         "",
         description="Optional stock index to filter events by (support 'ASX20', 'ASX50', 'ASX100', 'ASX200', 'ASX300', 'NASDAQ100', 'SP500', 'SP400', 'SP600').",
     ),
-) -> schemas_event.UpcomingEarningsResponse | RedirectResponse:
+) -> schemas_event.UpcomingEarningsResponse | Response:
     """
     Check for upcoming earnings events for a market.
     """
-    proxy_response = proxy_handler.handle_if_proxy(
+    proxy_response = await proxy_handler.handle_if_proxy(
         config.settings_finhub_proxy.proxy_mode,
         config.settings_finhub_proxy.url_web_crawl_node,
         request,
@@ -245,11 +244,11 @@ async def get_upcoming_earnings_event_async(
         description="Optional stock index to filter events by (support 'ASX20', 'ASX50', 'ASX100', 'ASX200', 'ASX300', 'NASDAQ100', 'SP500', 'SP400', 'SP600').",
     ),
     task_id: str = Query("", description="Task ID returned by a previous call to this endpoint."),
-) -> schemas_event.UpcomingEarningsAsyncResponse | RedirectResponse:
+) -> schemas_event.UpcomingEarningsAsyncResponse | Response:
     """
     Start an upcoming-earnings task or poll a previously started task.
     """
-    proxy_response = proxy_handler.handle_if_proxy(
+    proxy_response = await proxy_handler.handle_if_proxy(
         config.settings_finhub_proxy.proxy_mode,
         config.settings_finhub_proxy.url_web_crawl_node,
         request,

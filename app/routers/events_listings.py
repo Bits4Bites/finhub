@@ -1,13 +1,14 @@
 import logging
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Response, status
-from fastapi.responses import RedirectResponse
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request, Response, status
 
+from .. import config
 from ..schemas import async_task
 from ..schemas import events_listings as schemas_events_listings
 from ..services import msai_asx_listings as services_asx_listings
 from ..utils import conv
 from . import async_task as router_async_task
+from . import proxy_handler
 
 router = APIRouter(prefix="/events", tags=["events"])
 
@@ -34,12 +35,21 @@ async def _get_new_listings_result(country: str) -> schemas_events_listings.List
     response_model_exclude_none=True,
 )
 async def get_new_listings(
+    request: Request,
     country: str = Query("", description="Country code to filter events by (only 'AU' is supported)."),
-) -> schemas_events_listings.ListingsResponse | RedirectResponse:
+) -> schemas_events_listings.ListingsResponse | Response:
     """
     Check for new listing events for a market, using AI assistance.
     Note: currently only AU is supported.
     """
+    proxy_response = await proxy_handler.handle_if_proxy(
+        config.settings_finhub_proxy.proxy_mode,
+        config.settings_finhub_proxy.url_ai_task_node,
+        request,
+    )
+    if proxy_response is not None:
+        return proxy_response
+
     return await _get_new_listings_result(country)
 
 
@@ -65,16 +75,25 @@ async def _run_new_listings_task(task_id: str, country: str) -> None:
 )
 async def get_new_listings_async(
     background_tasks: BackgroundTasks,
+    request: Request,
     response: Response,
     country: str = Query(
         "",
         description="Country code used when starting a task. Required when starting; only 'AU' is supported.",
     ),
     task_id: str = Query("", description="Task ID returned by a previous call to this endpoint."),
-) -> schemas_events_listings.ListingsAsyncResponse:
+) -> schemas_events_listings.ListingsAsyncResponse | Response:
     """
     Start a new-listings task or poll a previously started task.
     """
+    proxy_response = await proxy_handler.handle_if_proxy(
+        config.settings_finhub_proxy.proxy_mode,
+        config.settings_finhub_proxy.url_ai_task_node,
+        request,
+    )
+    if proxy_response is not None:
+        return proxy_response
+
     task_id = task_id.strip()
     if task_id:
         task_entry = await router_async_task.load_task(task_id, _NEW_LISTINGS_TASK_TYPE)
@@ -114,6 +133,7 @@ async def get_new_listings_async(
     if not is_new:
         return await get_new_listings_async(
             background_tasks=background_tasks,
+            request=request,
             response=response,
             country=country,
             task_id=task_id,
