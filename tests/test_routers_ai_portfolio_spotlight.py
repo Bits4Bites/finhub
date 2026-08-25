@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
+from app import config
 from app.main import app
 from app.schemas import async_task
 from app.services import portfolio_verification
@@ -27,6 +28,39 @@ def _request_body() -> dict[str, object]:
             }
         ],
     }
+
+
+def test_sync_redirects_through_ai_proxy_handler():
+    with (
+        patch.object(config.settings_finhub_proxy, "proxy_mode", "Redirect"),
+        patch.object(config.settings_finhub_proxy, "url_ai_task_node", "https://proxy.example/finhub/"),
+    ):
+        response = client.post(
+            "/ai/spotlight_portfolio",
+            json=_request_body(),
+            follow_redirects=False,
+        )
+
+    assert response.status_code == 307
+    assert response.headers["location"] == "https://proxy.example/finhub/ai/spotlight_portfolio"
+
+
+def test_async_poll_redirects_through_ai_proxy_handler():
+    with (
+        patch.object(config.settings_finhub_proxy, "proxy_mode", "Redirect"),
+        patch.object(config.settings_finhub_proxy, "url_ai_task_node", "https://proxy.example/finhub/"),
+    ):
+        response = client.post(
+            "/ai/spotlight_portfolio_async",
+            params={"task_id": "task-spotlight"},
+            follow_redirects=False,
+        )
+
+    assert response.status_code == 307
+    assert (
+        response.headers["location"]
+        == "https://proxy.example/finhub/ai/spotlight_portfolio_async?task_id=task-spotlight"
+    )
 
 
 def test_post_returns_structured_spotlight_analysis():

@@ -1,7 +1,8 @@
 import logging
 
-from fastapi import APIRouter, BackgroundTasks, Body, HTTPException, Query, Response, status
+from fastapi import APIRouter, BackgroundTasks, Body, HTTPException, Query, Request, Response, status
 
+from .. import config
 from ..schemas import ai_portfolio_review as schemas_review
 from ..schemas import async_task
 from ..schemas.base_req_resp import BaseResponse
@@ -9,6 +10,7 @@ from ..services import msai_build_portfolio as services_construction
 from ..services import msai_review_portfolio as services_review
 from ..services import portfolio_verification
 from . import async_task as router_async_task
+from . import proxy_handler
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 
@@ -78,9 +80,18 @@ async def _analyze(
     },
 )
 async def analyze_portfolio(
+    http_request: Request,
     request: schemas_review.AnalyzePortfolioRequest = Body(description="The portfolio construction-or-review request."),
-) -> schemas_review.AnalyzePortfolioResponse:
+) -> schemas_review.AnalyzePortfolioResponse | Response:
     """Construct a sparse portfolio or return a structured review of an established portfolio."""
+
+    proxy_response = await proxy_handler.handle_if_proxy(
+        config.settings_finhub_proxy.proxy_mode,
+        config.settings_finhub_proxy.url_ai_task_node,
+        http_request,
+    )
+    if proxy_response is not None:
+        return proxy_response
 
     return await _analyze(request)
 
@@ -144,13 +155,22 @@ async def _run_task(
 async def analyze_portfolio_async(
     background_tasks: BackgroundTasks,
     response: Response,
+    http_request: Request,
     request: schemas_review.AnalyzePortfolioRequest | None = Body(
         None,
         description="The analyze portfolio request. Required when starting a task; omitted when polling.",
     ),
     task_id: str = Query("", description="Task ID returned by a previous call to this endpoint."),
-) -> schemas_review.AnalyzePortfolioAsyncResponse:
+) -> schemas_review.AnalyzePortfolioAsyncResponse | Response:
     """Start an analyze-portfolio task or poll a previously started task."""
+
+    proxy_response = await proxy_handler.handle_if_proxy(
+        config.settings_finhub_proxy.proxy_mode,
+        config.settings_finhub_proxy.url_ai_task_node,
+        http_request,
+    )
+    if proxy_response is not None:
+        return proxy_response
 
     normalized_task_id = task_id.strip()
     if normalized_task_id:
@@ -192,6 +212,7 @@ async def analyze_portfolio_async(
         return await analyze_portfolio_async(
             background_tasks=background_tasks,
             response=response,
+            http_request=http_request,
             request=request,
             task_id=new_task_id,
         )

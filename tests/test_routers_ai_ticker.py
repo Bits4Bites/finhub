@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 
+from app import config
 from app.main import app
 from app.routers import ai_ticker as router_ticker
 from app.schemas import ai_ticker as schemas_ticker
@@ -13,6 +14,25 @@ from app.services import msai_analyze_ticker as services_ticker
 from tests import ticker_fixtures
 
 client = TestClient(app)
+
+
+def test_sync_redirects_through_ai_proxy_handler():
+    with (
+        patch.object(config.settings_finhub_proxy, "proxy_mode", "Redirect"),
+        patch.object(
+            config.settings_finhub_proxy,
+            "url_ai_task_node",
+            "https://proxy.example/finhub/",
+        ),
+    ):
+        response = client.post(
+            "/ai/analyze_ticker",
+            json={"symbol": "NASDAQ:AAPL"},
+            follow_redirects=False,
+        )
+
+    assert response.status_code == 307
+    assert response.headers["location"] == "https://proxy.example/finhub/ai/analyze_ticker"
 
 
 def test_sync_returns_structured_analysis_and_passes_holding():
@@ -94,6 +114,25 @@ def test_async_starts_with_normalized_request():
     task_request = run_task.await_args.args[1]
     assert task_request.symbol == "NASDAQ:AAPL"
     assert task_request.intent == "Growth"
+
+
+def test_async_poll_redirects_through_ai_proxy_handler():
+    with (
+        patch.object(config.settings_finhub_proxy, "proxy_mode", "Redirect"),
+        patch.object(
+            config.settings_finhub_proxy,
+            "url_ai_task_node",
+            "https://proxy.example/finhub/",
+        ),
+    ):
+        response = client.post(
+            "/ai/analyze_ticker_async",
+            params={"task_id": "task-456"},
+            follow_redirects=False,
+        )
+
+    assert response.status_code == 307
+    assert response.headers["location"] == "https://proxy.example/finhub/ai/analyze_ticker_async?task_id=task-456"
 
 
 def test_async_requires_body_when_starting():

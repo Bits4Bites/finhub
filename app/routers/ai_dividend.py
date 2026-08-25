@@ -1,11 +1,13 @@
 import logging
 
-from fastapi import APIRouter, BackgroundTasks, Body, HTTPException, Query, Response, status
+from fastapi import APIRouter, BackgroundTasks, Body, HTTPException, Query, Request, Response, status
 
+from .. import config
 from ..schemas import ai_dividend as schemas_ai_dividend
 from ..schemas import async_task
 from ..services import msai_analyze_div_event as services_dividend
 from . import async_task as router_async_task
+from . import proxy_handler
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 
@@ -48,9 +50,18 @@ async def _analyze(
     response_model_exclude_none=True,
 )
 async def analyze_dividend_event(
+    http_request: Request,
     request: schemas_ai_dividend.AnalyzeDividendEventRequest,
     response: Response,
-) -> schemas_ai_dividend.AnalyzeDividendEventResponse:
+) -> schemas_ai_dividend.AnalyzeDividendEventResponse | Response:
+    proxy_response = await proxy_handler.handle_if_proxy(
+        config.settings_finhub_proxy.proxy_mode,
+        config.settings_finhub_proxy.url_ai_task_node,
+        http_request,
+    )
+    if proxy_response is not None:
+        return proxy_response
+
     result = await _analyze(request)
     response.status_code = result.status
     return result
@@ -105,12 +116,21 @@ async def _run_task(
 async def analyze_dividend_event_async(
     background_tasks: BackgroundTasks,
     response: Response,
+    http_request: Request,
     request: schemas_ai_dividend.AnalyzeDividendEventRequest | None = Body(
         None,
         description="The dividend-event analysis request. Required when starting a task; omitted when polling.",
     ),
     task_id: str = Query("", description="Task ID returned by a previous call to this endpoint."),
-) -> schemas_ai_dividend.AnalyzeDividendEventAsyncResponse:
+) -> schemas_ai_dividend.AnalyzeDividendEventAsyncResponse | Response:
+    proxy_response = await proxy_handler.handle_if_proxy(
+        config.settings_finhub_proxy.proxy_mode,
+        config.settings_finhub_proxy.url_ai_task_node,
+        http_request,
+    )
+    if proxy_response is not None:
+        return proxy_response
+
     normalized_task_id = task_id.strip()
     if normalized_task_id:
         task_entry = await router_async_task.load_task(normalized_task_id, _TASK_TYPE)
@@ -159,6 +179,7 @@ async def analyze_dividend_event_async(
         return await analyze_dividend_event_async(
             background_tasks=background_tasks,
             response=response,
+            http_request=http_request,
             request=request,
             task_id=new_task_id,
         )

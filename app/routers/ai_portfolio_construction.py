@@ -1,13 +1,15 @@
 import logging
 
-from fastapi import APIRouter, BackgroundTasks, Body, HTTPException, Query, Response, status
+from fastapi import APIRouter, BackgroundTasks, Body, HTTPException, Query, Request, Response, status
 
+from .. import config
 from ..schemas import ai_portfolio_construction as schemas_construction
 from ..schemas import async_task
 from ..schemas.base_req_resp import BaseResponse
 from ..services import msai_build_portfolio as service_build_portfolio
 from ..services import portfolio_verification
 from . import async_task as router_async_task
+from . import proxy_handler
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 
@@ -55,9 +57,18 @@ async def _get_build_portfolio_result(
     },
 )
 async def build_portfolio(
+    http_request: Request,
     req: schemas_construction.BuildPortfolioRequest = Body(description="The build portfolio request."),
-) -> schemas_construction.BuildPortfolioResponse:
+) -> schemas_construction.BuildPortfolioResponse | Response:
     """Build a research-backed target portfolio and an action plan when funding is available."""
+
+    proxy_response = await proxy_handler.handle_if_proxy(
+        config.settings_finhub_proxy.proxy_mode,
+        config.settings_finhub_proxy.url_ai_task_node,
+        http_request,
+    )
+    if proxy_response is not None:
+        return proxy_response
 
     return await _get_build_portfolio_result(req)
 
@@ -119,13 +130,22 @@ async def _run_build_portfolio_task(
 async def build_portfolio_async(
     background_tasks: BackgroundTasks,
     response: Response,
+    http_request: Request,
     req: schemas_construction.BuildPortfolioRequest | None = Body(
         None,
         description="The build portfolio request. Required when starting a task; not required when polling.",
     ),
     task_id: str = Query("", description="Task ID returned by a previous call to this endpoint."),
-) -> schemas_construction.BuildPortfolioAsyncResponse:
+) -> schemas_construction.BuildPortfolioAsyncResponse | Response:
     """Start a portfolio-construction task or poll a previously started task."""
+
+    proxy_response = await proxy_handler.handle_if_proxy(
+        config.settings_finhub_proxy.proxy_mode,
+        config.settings_finhub_proxy.url_ai_task_node,
+        http_request,
+    )
+    if proxy_response is not None:
+        return proxy_response
 
     task_id = task_id.strip()
     if task_id:
@@ -167,6 +187,7 @@ async def build_portfolio_async(
         return await build_portfolio_async(
             background_tasks=background_tasks,
             response=response,
+            http_request=http_request,
             req=req,
             task_id=task_id,
         )

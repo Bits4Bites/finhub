@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 
+from app import config
 from app.main import app
 from app.schemas import ai_portfolio_construction as schemas_construction
 from app.schemas import async_task
@@ -39,6 +40,23 @@ class TestGetVendors:
 
 class TestBuildPortfolio:
     """Tests for POST /ai/build_portfolio endpoint."""
+
+    def test_redirects_through_ai_proxy_handler(self):
+        with (
+            patch.object(config.settings_finhub_proxy, "proxy_mode", "Redirect"),
+            patch.object(config.settings_finhub_proxy, "url_ai_task_node", "https://proxy.example/finhub/"),
+        ):
+            response = client.post(
+                "/ai/build_portfolio",
+                json={
+                    "country": "US",
+                    "investor_theme": "Durable growth with moderate risk.",
+                },
+                follow_redirects=False,
+            )
+
+        assert response.status_code == 307
+        assert response.headers["location"] == "https://proxy.example/finhub/ai/build_portfolio"
 
     @patch(
         "app.routers.ai_portfolio_construction.service_build_portfolio.ai_build_portfolio",
@@ -171,6 +189,20 @@ class TestBuildPortfolio:
 
 class TestBuildPortfolioAsync:
     """Tests for POST /ai/build_portfolio_async endpoint."""
+
+    def test_poll_redirects_through_ai_proxy_handler(self):
+        with (
+            patch.object(config.settings_finhub_proxy, "proxy_mode", "Redirect"),
+            patch.object(config.settings_finhub_proxy, "url_ai_task_node", "https://proxy.example/finhub/"),
+        ):
+            response = client.post(
+                "/ai/build_portfolio_async",
+                params={"task_id": "task-789"},
+                follow_redirects=False,
+            )
+
+        assert response.status_code == 307
+        assert response.headers["location"] == "https://proxy.example/finhub/ai/build_portfolio_async?task_id=task-789"
 
     def test_starts_task(self):
         with (

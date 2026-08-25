@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 
+from app import config
 from app.main import app
 from app.schemas import ai_portfolio_review as schemas_review
 from app.schemas import async_task
@@ -22,6 +23,24 @@ def _holding_payload(index: int, *, positive: bool) -> dict[str, object]:
 
 
 class TestAnalyzePortfolioRouting:
+    def test_redirects_through_ai_proxy_handler(self):
+        with (
+            patch.object(config.settings_finhub_proxy, "proxy_mode", "Redirect"),
+            patch.object(config.settings_finhub_proxy, "url_ai_task_node", "https://proxy.example/finhub/"),
+        ):
+            response = client.post(
+                "/ai/analyze_portfolio",
+                json={
+                    "country": "US",
+                    "investor_theme": "Long-term quality growth",
+                    "current_allocation": [],
+                },
+                follow_redirects=False,
+            )
+
+        assert response.status_code == 307
+        assert response.headers["location"] == "https://proxy.example/finhub/ai/analyze_portfolio"
+
     @patch(
         "app.routers.ai_portfolio_review.services_construction.ai_build_portfolio",
         new_callable=AsyncMock,
@@ -129,6 +148,23 @@ class TestAnalyzePortfolioRouting:
 
 
 class TestAnalyzePortfolioAsync:
+    def test_poll_redirects_through_ai_proxy_handler(self):
+        with (
+            patch.object(config.settings_finhub_proxy, "proxy_mode", "Redirect"),
+            patch.object(config.settings_finhub_proxy, "url_ai_task_node", "https://proxy.example/finhub/"),
+        ):
+            response = client.post(
+                "/ai/analyze_portfolio_async",
+                params={"task_id": "task-review"},
+                follow_redirects=False,
+            )
+
+        assert response.status_code == 307
+        assert (
+            response.headers["location"]
+            == "https://proxy.example/finhub/ai/analyze_portfolio_async?task_id=task-review"
+        )
+
     def test_starts_task(self):
         with (
             patch("app.routers.async_task._generate_task_id", return_value="task-review"),

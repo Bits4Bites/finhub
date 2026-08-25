@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 
+from app import config
 from app.main import app
 from app.models import events_dividends as models_dividends
 from app.routers import ai_dividend
@@ -20,6 +21,38 @@ def _request_body() -> dict[str, object]:
         "ex_date": dividend_fixtures.EX_DATE.isoformat(),
         "dividend_amount": 2.0,
     }
+
+
+def test_sync_redirects_through_ai_proxy_handler():
+    with (
+        patch.object(config.settings_finhub_proxy, "proxy_mode", "Redirect"),
+        patch.object(config.settings_finhub_proxy, "url_ai_task_node", "https://proxy.example/finhub/"),
+    ):
+        response = client.post(
+            "/ai/analyze_dividend_event",
+            json=_request_body(),
+            follow_redirects=False,
+        )
+
+    assert response.status_code == 307
+    assert response.headers["location"] == "https://proxy.example/finhub/ai/analyze_dividend_event"
+
+
+def test_async_poll_redirects_through_ai_proxy_handler():
+    with (
+        patch.object(config.settings_finhub_proxy, "proxy_mode", "Redirect"),
+        patch.object(config.settings_finhub_proxy, "url_ai_task_node", "https://proxy.example/finhub/"),
+    ):
+        response = client.post(
+            "/ai/analyze_dividend_event_async",
+            params={"task_id": "task-123"},
+            follow_redirects=False,
+        )
+
+    assert response.status_code == 307
+    assert (
+        response.headers["location"] == "https://proxy.example/finhub/ai/analyze_dividend_event_async?task_id=task-123"
+    )
 
 
 def test_request_schema_has_class_and_field_documentation():
