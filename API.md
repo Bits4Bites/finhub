@@ -12,12 +12,13 @@ Most responses follow a standard envelope format:
 }
 ```
 
-`GET /market/index/{index_id}` is the exception: it returns the cached static JSON file directly.
+`GET /market/index/{index_id}` returns the cached static JSON file directly. Redirect-mode proxy responses are
+HTTP `307` responses rather than standard envelopes.
 
-All `*_async` endpoints derive a process-local keyed task ID from the application version, task type, and normalized
-start input. Retrying an identical start while its record exists returns the same running or terminal task without
-scheduling duplicate work. Task records expire after one hour. Restarting the single-process server loses existing
-tasks and changes the generated IDs.
+When executing locally, all `*_async` endpoints derive a process-local keyed task ID from the application version,
+task type, and normalized start input. Retrying an identical start while its record exists returns the same running
+or terminal task without scheduling duplicate work. Task records expire after one hour. Restarting the node that
+executes a task loses its process-local task records and changes the generated IDs.
 
 ---
 
@@ -45,6 +46,32 @@ is case-insensitive). A missing or incorrect key returns `401`:
 ```bash
 curl -H 'X-API-Key: your-api-key' 'http://localhost:8000/stocks/quotes?symbols=AAPL'
 ```
+
+---
+
+## Node Chaining
+
+Supported event and AI task APIs can execute locally or use another FinHub node. Node chaining is configured with
+`FINHUB_PROXY_MODE` (`None`, `Redirect`, or `Forward`) and the node URLs in `finhub_proxy_config.env`.
+
+| Configured node             | Routed endpoints                                                                                                                                   |
+|-----------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------|
+| `FINHUB_URL_WEB_CRAWL_NODE` | Synchronous and asynchronous upcoming-dividend and upcoming-earnings endpoints.                                                                    |
+| `FINHUB_URL_AI_TASK_NODE`   | Synchronous and asynchronous new-listings, ticker, dividend-analysis, portfolio-construction, portfolio-review, and portfolio-spotlight endpoints. |
+
+`GET /ai/vendors` always executes locally. A request also executes locally when its corresponding node URL is empty.
+
+- `None` executes the request locally.
+- `Redirect` returns HTTP `307` with the original path and query on the configured node. The client is responsible
+  for following the redirect while preserving the method, body, and required authentication header.
+- `Forward` sends the method, path, query, body, and safe end-to-end headers from this server, then relays the
+  upstream status, body, and safe end-to-end response headers. The client receives the remote node's task state
+  and result as though it had called that node directly.
+
+Forward mode uses a 600-second read timeout by default. Clients may override it with
+`X-FinHub-Forward-Timeout-Seconds`, which must be finite, greater than zero, and no more than 86400 seconds.
+Invalid values return HTTP `422`. An upstream connection or timeout failure returns HTTP `502`. Connect, write,
+and connection-pool timeouts remain server-controlled.
 
 ---
 
@@ -221,11 +248,11 @@ curl 'http://localhost:8000/events/upcoming_dividends?country=AU&index=ASX200'
 Run the upcoming-dividends request in the background. Start a task with the same `country` and
 `index` parameters, then poll using the returned task ID. Task state and results expire after one hour.
 
-| Parameter | Type  | Required    | Description                                                                                                   |
-|-----------|-------|-------------|---------------------------------------------------------------------------------------------------------------|
+| Parameter | Type  | Required    | Description                                                                                                    |
+|-----------|-------|-------------|----------------------------------------------------------------------------------------------------------------|
 | `country` | query | No          | Country code used when starting: `AU`, `US`, or `VN`; defaults to an empty string and is ignored when polling. |
-| `index`   | query | No          | Optional stock-index filter used when starting a task; supports the same indices as the synchronous endpoint. |
-| `task_id` | query | Conditional | Task ID returned when starting a task. Required when polling.                                                 |
+| `index`   | query | No          | Optional stock-index filter used when starting a task; supports the same indices as the synchronous endpoint.  |
+| `task_id` | query | Conditional | Task ID returned when starting a task. Required when polling.                                                  |
 
 ```bash
 # Start a task
@@ -282,11 +309,11 @@ curl 'http://localhost:8000/events/upcoming_earnings?country=US&index=SP500'
 Run the upcoming-earnings request in the background using the same one-hour task lifecycle as
 `/events/upcoming_dividends_async`.
 
-| Parameter | Type  | Required    | Description                                                                                  |
-|-----------|-------|-------------|----------------------------------------------------------------------------------------------|
+| Parameter | Type  | Required    | Description                                                                                             |
+|-----------|-------|-------------|---------------------------------------------------------------------------------------------------------|
 | `country` | query | No          | Country code used when starting: `AU` or `US`; defaults to an empty string and is ignored when polling. |
-| `index`   | query | No          | Optional stock-index filter used when starting a task.                                       |
-| `task_id` | query | Conditional | Task ID returned when starting a task. Required when polling.                                |
+| `index`   | query | No          | Optional stock-index filter used when starting a task.                                                  |
+| `task_id` | query | Conditional | Task ID returned when starting a task. Required when polling.                                           |
 
 ```bash
 # Start a task
@@ -328,8 +355,8 @@ data; polling returns HTTP `200` with envelope `status=501` and an unsupported-c
 Get up to five confirmed current or upcoming listing events for a market, ordered by listing date and enriched with
 structured AI analysis.
 
-| Parameter | Type  | Required | Description                                                                 |
-|-----------|-------|----------|-----------------------------------------------------------------------------|
+| Parameter | Type  | Required | Description                                                                  |
+|-----------|-------|----------|------------------------------------------------------------------------------|
 | `country` | query | No       | Country code; defaults to an empty string. Currently only `AU` is supported. |
 
 **Example:**
@@ -343,51 +370,51 @@ unsupported-country message, and no `data`.
 
 For a successful request, `data` is an array of `ListingEvent` objects:
 
-| Field                     | Description                                                                                       |
-|---------------------------|---------------------------------------------------------------------------------------------------|
-| `symbol`                  | Canonical exchange-qualified listing symbol.                                                      |
-| `exchange`                | Exchange code, when available.                                                                    |
-| `company_name`            | Issuer name, when available.                                                                      |
-| `timestamp`               | Unix timestamp corresponding to the listing date.                                                 |
-| `date`                    | Scheduled or actual listing date as an ISO datetime string.                                       |
-| `event_category`          | Event category supplied by the source, when available.                                            |
-| `source_name`             | Source name, when available.                                                                      |
-| `link`                    | Source URL containing listing details, when available.                                            |
-| `issue_price`             | Positive offer price per security, when available.                                                |
-| `currency`                | Currency used for the offer price and capital raise.                                              |
-| `capital_to_raise`        | Positive target capital raise, when available.                                                    |
-| `issue_type`              | Security or offer type, when available.                                                           |
-| `sector` / `industry`     | Issuer sector and industry, when available.                                                       |
-| `principal_activities`    | Summary of the issuer's principal business activities, when available.                            |
-| `public_offer_close_date` | Public-offer closing date, when applicable.                                                        |
-| `is_underwritten`         | Whether underwriting was disclosed.                                                               |
-| `underwriters`            | Disclosed underwriting organizations.                                                             |
-| `lead_managers`           | Disclosed lead managers.                                                                          |
-| `analysis_status`         | `NotStarted`, `Completed`, or `Failed`.                                                           |
-| `analysis_error`          | Analysis failure detail when `analysis_status=Failed`.                                            |
-| `analysis`                | Structured `ListingAnalysis` when analysis completes.                                             |
+| Field                     | Description                                                            |
+|---------------------------|------------------------------------------------------------------------|
+| `symbol`                  | Canonical exchange-qualified listing symbol.                           |
+| `exchange`                | Exchange code, when available.                                         |
+| `company_name`            | Issuer name, when available.                                           |
+| `timestamp`               | Unix timestamp corresponding to the listing date.                      |
+| `date`                    | Scheduled or actual listing date as an ISO datetime string.            |
+| `event_category`          | Event category supplied by the source, when available.                 |
+| `source_name`             | Source name, when available.                                           |
+| `link`                    | Source URL containing listing details, when available.                 |
+| `issue_price`             | Positive offer price per security, when available.                     |
+| `currency`                | Currency used for the offer price and capital raise.                   |
+| `capital_to_raise`        | Positive target capital raise, when available.                         |
+| `issue_type`              | Security or offer type, when available.                                |
+| `sector` / `industry`     | Issuer sector and industry, when available.                            |
+| `principal_activities`    | Summary of the issuer's principal business activities, when available. |
+| `public_offer_close_date` | Public-offer closing date, when applicable.                            |
+| `is_underwritten`         | Whether underwriting was disclosed.                                    |
+| `underwriters`            | Disclosed underwriting organizations.                                  |
+| `lead_managers`           | Disclosed lead managers.                                               |
+| `analysis_status`         | `NotStarted`, `Completed`, or `Failed`.                                |
+| `analysis_error`          | Analysis failure detail when `analysis_status=Failed`.                 |
+| `analysis`                | Structured `ListingAnalysis` when analysis completes.                  |
 
 Nullable fields are omitted when unavailable because this endpoint excludes `null` response properties.
 
 `ListingAnalysis` contains:
 
-| Field                   | Description                                                                                         |
-|-------------------------|-----------------------------------------------------------------------------------------------------|
-| `symbol`                | Canonical symbol analyzed.                                                                          |
-| `as_of`                 | Analysis finalization timestamp.                                                                    |
-| `listing_status`        | `Upcoming` or `Listed`.                                                                              |
-| `overall_data_quality`  | `High`, `Medium`, `Low`, or `Insufficient`.                                                         |
-| `executive_summary`     | Evidence-linked summary, assumptions, data gaps, and data quality.                                  |
-| `overall_stance`        | `Bullish`, `Neutral`, `Bearish`, or `InsufficientData`.                                             |
-| `overall_confidence`    | Confidence score from zero through 100.                                                             |
-| `offer`                 | Issue-price, capital-raise, underwriting, use-of-funds, dilution, and escrow assessment.            |
-| `business`              | Business model, revenue sources, competitive position, and sector context.                          |
-| `financials`            | Historical performance, profitability, cash flow, balance sheet, funding, and forecast assessment. |
-| `valuation`             | Valuation view, optional implied market capitalization, peer comparison, and sensitivity.          |
-| `governance`            | Board, management, ownership, escrow, and governance assessment.                                   |
-| `risks_and_catalysts`   | Evidence-linked risks and catalysts with likelihood and horizon; risks also include severity.       |
-| `outlook`               | IPO-day, first-week, first-two-weeks, and first-month outlooks.                                     |
-| `references`            | Canonical source registry used by every nested `reference_ids` field.                               |
+| Field                  | Description                                                                                        |
+|------------------------|----------------------------------------------------------------------------------------------------|
+| `symbol`               | Canonical symbol analyzed.                                                                         |
+| `as_of`                | Analysis finalization timestamp.                                                                   |
+| `listing_status`       | `Upcoming` or `Listed`.                                                                            |
+| `overall_data_quality` | `High`, `Medium`, `Low`, or `Insufficient`.                                                        |
+| `executive_summary`    | Evidence-linked summary, assumptions, data gaps, and data quality.                                 |
+| `overall_stance`       | `Bullish`, `Neutral`, `Bearish`, or `InsufficientData`.                                            |
+| `overall_confidence`   | Confidence score from zero through 100.                                                            |
+| `offer`                | Issue-price, capital-raise, underwriting, use-of-funds, dilution, and escrow assessment.           |
+| `business`             | Business model, revenue sources, competitive position, and sector context.                         |
+| `financials`           | Historical performance, profitability, cash flow, balance sheet, funding, and forecast assessment. |
+| `valuation`            | Valuation view, optional implied market capitalization, peer comparison, and sensitivity.          |
+| `governance`           | Board, management, ownership, escrow, and governance assessment.                                   |
+| `risks_and_catalysts`  | Evidence-linked risks and catalysts with likelihood and horizon; risks also include severity.      |
+| `outlook`              | IPO-day, first-week, first-two-weeks, and first-month outlooks.                                    |
+| `references`           | Canonical source registry used by every nested `reference_ids` field.                              |
 
 Each analysis section includes a summary, data quality, sourced facts, assumptions, data gaps, and source IDs. Each
 outlook period identifies whether it is observed, forecast, or unavailable; its period end, direction, optional
@@ -398,8 +425,8 @@ includes source metadata, publication and access timestamps, its canonical HTTPS
 
 Run the new-listings request in the background. Task state and results expire after one hour.
 
-| Parameter | Type  | Required    | Description                                                                                             |
-|-----------|-------|-------------|---------------------------------------------------------------------------------------------------------|
+| Parameter | Type  | Required    | Description                                                                                               |
+|-----------|-------|-------------|-----------------------------------------------------------------------------------------------------------|
 | `country` | query | Conditional | Country code used when starting. Required for starts and currently limited to `AU`; ignored when polling. |
 | `task_id` | query | Conditional | Task ID returned when starting a task. Required when polling; `country` is ignored when this is supplied. |
 
@@ -426,12 +453,12 @@ Starting a task returns HTTP `202`:
 
 Polling returns:
 
-| HTTP status | Task state  | Result                                             |
-|-------------|-------------|----------------------------------------------------|
-| `202`       | `RUNNING`   | The task is still running.                         |
-| `200`       | `COMPLETED` | The standard new-listings payload in `data`.       |
-| `500`       | `FAILED`    | The background task failed.                        |
-| `404`       | —           | The task ID is unknown or its cache entry expired. |
+| HTTP status | Task state  | Result                                                                                |
+|-------------|-------------|---------------------------------------------------------------------------------------|
+| `202`       | `RUNNING`   | The task is still running.                                                            |
+| `200`       | `COMPLETED` | The standard new-listings payload in `data`.                                          |
+| `500`       | `FAILED`    | The background task failed.                                                           |
+| `404`       | —           | The task ID is unknown or its cache entry expired.                                    |
 | `422`       | —           | A start omitted `country` or supplied a country other than `AU`; no task was created. |
 
 Missing or unsupported countries are rejected before task creation.
@@ -535,17 +562,17 @@ holding-aware `BUY`, `HOLD`, or `SELL` recommendation.
 
 **Request Body (JSON):**
 
-| Field             | Type                 | Required | Description |
-|-------------------|----------------------|----------|-------------|
-| `symbol`          | `string`             | Yes      | Security symbol in Yahoo Finance or `EXCHANGE:CODE` format; normalized to uppercase, maximum 32 characters, and no whitespace. |
-| `intent`          | `string \| null`     | No       | Optional analysis focus, from 1 through 4,000 characters after trimming. It cannot override the required output contract. |
-| `current_holding` | `TickerHoldingInput \| null` | No | Optional holding context used only by the recommendation stage. |
+| Field             | Type                         | Required | Description                                                                                                                    |
+|-------------------|------------------------------|----------|--------------------------------------------------------------------------------------------------------------------------------|
+| `symbol`          | `string`                     | Yes      | Security symbol in Yahoo Finance or `EXCHANGE:CODE` format; normalized to uppercase, maximum 32 characters, and no whitespace. |
+| `intent`          | `string \| null`             | No       | Optional analysis focus, from 1 through 4,000 characters after trimming. It cannot override the required output contract.      |
+| `current_holding` | `TickerHoldingInput \| null` | No       | Optional holding context used only by the recommendation stage.                                                                |
 
 `TickerHoldingInput` contains:
 
-| Field        | Type    | Required | Description |
-|--------------|---------|----------|-------------|
-| `num_shares` | `float` | Yes      | Positive finite number of shares or units held. |
+| Field        | Type    | Required | Description                                                                   |
+|--------------|---------|----------|-------------------------------------------------------------------------------|
+| `num_shares` | `float` | Yes      | Positive finite number of shares or units held.                               |
 | `avg_price`  | `float` | Yes      | Positive finite average acquisition price in the security's trading currency. |
 
 **Example:**
@@ -578,11 +605,11 @@ Forecast price ranges are constrained to empirical historical-return envelopes. 
 The market baseline, research, forecast, recommendation, and final result are independently cached for one hour.
 Research and forecast caches exclude holding data; recommendation and final caches include it.
 
-| HTTP status | Meaning |
-|-------------|---------|
-| `200` | Structured analysis completed. |
-| `422` | Request validation failed, or the symbol/security type is invalid or unsupported. |
-| `502` | Market verification, an AI stage, cached structured data, or final structured validation failed. |
+| HTTP status | Meaning                                                                                          |
+|-------------|--------------------------------------------------------------------------------------------------|
+| `200`       | Structured analysis completed.                                                                   |
+| `422`       | Request validation failed, or the symbol/security type is invalid or unsupported.                |
+| `502`       | Market verification, an AI stage, cached structured data, or final structured validation failed. |
 
 ### `POST /ai/analyze_ticker_async`
 
@@ -610,14 +637,14 @@ curl -X POST 'http://localhost:8000/ai/analyze_ticker_async?task_id=<TASK_ID>'
 
 Polling returns:
 
-| HTTP status | Task state  | Result |
-|-------------|-------------|--------|
-| `202`       | `RUNNING`   | The task started or is still running. |
-| `200`       | `COMPLETED` | The standard structured ticker-analysis payload in `data`. |
-| `422`       | `FAILED`    | Symbol or security input validation failed during execution. |
+| HTTP status | Task state  | Result                                                              |
+|-------------|-------------|---------------------------------------------------------------------|
+| `202`       | `RUNNING`   | The task started or is still running.                               |
+| `200`       | `COMPLETED` | The standard structured ticker-analysis payload in `data`.          |
+| `422`       | `FAILED`    | Symbol or security input validation failed during execution.        |
 | `502`       | `FAILED`    | Market verification, AI execution, or structured validation failed. |
-| `500`       | `FAILED`    | The background task failed unexpectedly. |
-| `404`       | —           | The task ID is unknown or its cache entry expired. |
+| `500`       | `FAILED`    | The background task failed unexpectedly.                            |
+| `404`       | —           | The task ID is unknown or its cache entry expired.                  |
 
 ---
 
@@ -628,22 +655,22 @@ flow constructs from scratch; otherwise it verifies positive starting holdings a
 
 **Request Body (JSON):**
 
-| Field                | Type                 | Required | Description                                                                                  |
-|----------------------|----------------------|----------|----------------------------------------------------------------------------------------------|
-| `country`            | `string`             | Yes      | ISO code or country name, from 2 through 64 characters.                                      |
+| Field                | Type                 | Required | Description                                                                                                                                    |
+|----------------------|----------------------|----------|------------------------------------------------------------------------------------------------------------------------------------------------|
+| `country`            | `string`             | Yes      | ISO code or country name, from 2 through 64 characters.                                                                                        |
 | `investor_theme`     | `string`             | Yes      | Non-blank goals, constraints, preferences, horizon, risk context, and optional total or recurring investment budget; maximum 4,000 characters. |
-| `current_allocation` | `PortfolioHolding[]` | No       | Up to 50 starting positions; defaults to `[]`, and zero-share positions are ignored.         |
+| `current_allocation` | `PortfolioHolding[]` | No       | Up to 50 starting positions; defaults to `[]`, and zero-share positions are ignored.                                                           |
 
 Each `PortfolioHolding` object:
 
-| Field               | Type   | Description                                     |
-|---------------------|--------|-------------------------------------------------|
-| `ticker`            | string | Required stock symbol, limited to 32 characters.                    |
+| Field               | Type   | Description                                                                           |
+|---------------------|--------|---------------------------------------------------------------------------------------|
+| `ticker`            | string | Required stock symbol, limited to 32 characters.                                      |
 | `num_shares`        | float  | Non-negative finite share count; positive construction holdings must be whole shares. |
-| `avg_price`         | float  | Non-negative finite average purchase price; defaults to zero.       |
-| `market_price`      | float  | Optional positive current market price per share.                   |
-| `target_allocation` | float  | Optional target allocation from `0` through `1`.                    |
-| `tags`              | string | Optional holding metadata, limited to 500 characters.               |
+| `avg_price`         | float  | Non-negative finite average purchase price; defaults to zero.                         |
+| `market_price`      | float  | Optional positive current market price per share.                                     |
+| `target_allocation` | float  | Optional target allocation from `0` through `1`.                                      |
+| `tags`              | string | Optional holding metadata, limited to 500 characters.                                 |
 
 **Example:**
 
@@ -693,13 +720,13 @@ Each target position contains `ticker`, optional `company_name`, `allocation`, `
 
 The `action_plan` contains:
 
-| Field                | Type                    | Description                                                                                       |
-|----------------------|-------------------------|---------------------------------------------------------------------------------------------------|
-| `budget`             | `PortfolioBudget`       | Deterministically normalized supplied or application-inferred new-money budget.                   |
-| `summary`            | `string`                | Brief implementation sequence.                                                                    |
-| `budget_utilized`    | `float`                 | New-money budget spent on whole-share purchases.                                                   |
-| `unallocated_amount` | `float`                 | New-money budget remaining after whole-share sizing.                                               |
-| `steps`              | `PortfolioActionStep[]` | One action per target or verified seed ticker, highest priority first.                             |
+| Field                | Type                    | Description                                                                     |
+|----------------------|-------------------------|---------------------------------------------------------------------------------|
+| `budget`             | `PortfolioBudget`       | Deterministically normalized supplied or application-inferred new-money budget. |
+| `summary`            | `string`                | Brief implementation sequence.                                                  |
+| `budget_utilized`    | `float`                 | New-money budget spent on whole-share purchases.                                |
+| `unallocated_amount` | `float`                 | New-money budget remaining after whole-share sizing.                            |
+| `steps`              | `PortfolioActionStep[]` | One action per target or verified seed ticker, highest priority first.          |
 
 `PortfolioBudget` contains `budget_type` (`NotProvided`, `Total`, or `Recurring`), `is_inferred`, optional positive
 `amount`, three-letter `currency`, optional supplied `frequency` (`Weekly`, `Fortnightly`, `Monthly`, `Quarterly`, or
@@ -751,14 +778,14 @@ curl -X POST 'http://localhost:8000/ai/build_portfolio_async?task_id=<TASK_ID>'
 
 Polling returns:
 
-| HTTP status | Task state  | Result                                             |
-|-------------|-------------|----------------------------------------------------|
-| `202`       | `RUNNING`   | The task is still running.                         |
-| `200`       | `COMPLETED` | The standard build-portfolio payload in `data`.    |
-| `422`       | `FAILED`    | Request semantics or verified seed holdings are invalid. |
+| HTTP status | Task state  | Result                                                          |
+|-------------|-------------|-----------------------------------------------------------------|
+| `202`       | `RUNNING`   | The task is still running.                                      |
+| `200`       | `COMPLETED` | The standard build-portfolio payload in `data`.                 |
+| `422`       | `FAILED`    | Request semantics or verified seed holdings are invalid.        |
 | `502`       | `FAILED`    | Market verification, AI execution, or structured output failed. |
-| `500`       | `FAILED`    | An unexpected background error occurred.           |
-| `404`       | —           | The task ID is unknown or its cache entry expired. |
+| `500`       | `FAILED`    | An unexpected background error occurred.                        |
+| `404`       | —           | The task ID is unknown or its cache entry expired.              |
 
 ---
 
@@ -769,11 +796,11 @@ return up to four ranked, structured risk actions. Risk levels are limited to `C
 
 **Request Body (JSON):**
 
-| Field                | Type                 | Required | Description                                                                                          |
-|----------------------|----------------------|----------|------------------------------------------------------------------------------------------------------|
-| `country`            | `string`             | Yes      | ISO code or country name, from 2 through 64 characters.                                              |
+| Field                | Type                 | Required | Description                                                                                             |
+|----------------------|----------------------|----------|---------------------------------------------------------------------------------------------------------|
+| `country`            | `string`             | Yes      | ISO code or country name, from 2 through 64 characters.                                                 |
 | `current_allocation` | `PortfolioHolding[]` | No       | Up to 50 positions; defaults to `[]`. Empty or all-zero positions skip verification and every AI stage. |
-| `investor_theme`     | `string \| null`     | No       | Optional risk tolerance, horizon, goals, and preferences. Omitted, null, or blank means no theme.    |
+| `investor_theme`     | `string \| null`     | No       | Optional risk tolerance, horizon, goals, and preferences. Omitted, null, or blank means no theme.       |
 
 Each `PortfolioHolding` object:
 
@@ -807,18 +834,18 @@ curl -X POST 'http://localhost:8000/ai/spotlight_portfolio' \
 
 The `data` object contains:
 
-| Field                     | Description                                                                                         |
-|---------------------------|-----------------------------------------------------------------------------------------------------|
-| `as_of`                   | Timezone-aware analysis timestamp.                                                                  |
-| `analysis_status`         | `Complete` or `CompleteWithWarnings`.                                                               |
-| `portfolio_empty`         | Whether the request contained no positive-share positions.                                          |
-| `overall_data_quality`    | `High`, `Medium`, `Low`, or `Insufficient`.                                                         |
-| `snapshot`                | Verified holdings, allocations, valuation, price source, P/L, target drift, and verification gaps. |
-| `risks`                   | Up to four ranked `PortfolioSpotlightRiskAction` objects.                                           |
-| `rebalance_recommended`   | Deterministic `YES` when any risk requires rebalancing; otherwise `NO`.                              |
-| `data_gaps`               | Analysis-level evidence gaps.                                                                       |
-| `validation_warnings`     | Application validation or source-verification warnings.                                             |
-| `references`              | Canonical HTTPS sources cited by the returned risks.                                                 |
+| Field                   | Description                                                                                        |
+|-------------------------|----------------------------------------------------------------------------------------------------|
+| `as_of`                 | Timezone-aware analysis timestamp.                                                                 |
+| `analysis_status`       | `Complete` or `CompleteWithWarnings`.                                                              |
+| `portfolio_empty`       | Whether the request contained no positive-share positions.                                         |
+| `overall_data_quality`  | `High`, `Medium`, `Low`, or `Insufficient`.                                                        |
+| `snapshot`              | Verified holdings, allocations, valuation, price source, P/L, target drift, and verification gaps. |
+| `risks`                 | Up to four ranked `PortfolioSpotlightRiskAction` objects.                                          |
+| `rebalance_recommended` | Deterministic `YES` when any risk requires rebalancing; otherwise `NO`.                            |
+| `data_gaps`             | Analysis-level evidence gaps.                                                                      |
+| `validation_warnings`   | Application validation or source-verification warnings.                                            |
+| `references`            | Canonical HTTPS sources cited by the returned risks.                                               |
 
 Each risk includes `rank`, `level`, `action_timing`, `risk`, `action`, `affected_tickers`,
 `requires_rebalance`, `confidence`, `data_gaps`, and `reference_ids`. Timing is fixed by risk level:
@@ -844,10 +871,10 @@ stages are cached independently for one hour. Datetimes in downstream cache iden
 
 Starting without a request body and without `task_id` returns immediate HTTP `400` and does not create a task.
 
-| Parameter            | Location  | Required    | Description                                                   |
-|----------------------|-----------|-------------|---------------------------------------------------------------|
-| Request body         | JSON body | Conditional | Spotlight request. Required when starting and omitted when polling. |
-| `task_id`            | query     | Conditional | Task ID returned when starting a task. Required when polling. |
+| Parameter    | Location  | Required    | Description                                                         |
+|--------------|-----------|-------------|---------------------------------------------------------------------|
+| Request body | JSON body | Conditional | Spotlight request. Required when starting and omitted when polling. |
+| `task_id`    | query     | Conditional | Task ID returned when starting a task. Required when polling.       |
 
 ```bash
 # Start a task
@@ -886,23 +913,23 @@ existing-portfolio review flow.
 
 **Request Body (JSON):**
 
-| Field                | Type                 | Required | Description                                                                                         |
-|----------------------|----------------------|----------|-----------------------------------------------------------------------------------------------------|
-| `current_allocation` | `PortfolioHolding[]` | No       | Up to 50 submitted positions, including zero-share positions used by the dispatcher.                |
-| `country`            | `string`             | Yes      | Market country as an ISO code or country name.                                                      |
+| Field                | Type                 | Required | Description                                                                                          |
+|----------------------|----------------------|----------|------------------------------------------------------------------------------------------------------|
+| `current_allocation` | `PortfolioHolding[]` | No       | Up to 50 submitted positions, including zero-share positions used by the dispatcher.                 |
+| `country`            | `string`             | Yes      | Market country as an ISO code or country name.                                                       |
 | `investor_theme`     | `string`             | Yes      | Non-blank goals, strategy, constraints, risk context, and optional budget; maximum 4,000 characters. |
-| `rebalance_plan`     | `boolean`            | No       | Include execution actions when a major rebalance is recommended; defaults to `false`.               |
+| `rebalance_plan`     | `boolean`            | No       | Include execution actions when a major rebalance is recommended; defaults to `false`.                |
 
 Each `PortfolioHolding` object:
 
-| Field               | Type             | Description                                                           |
-|---------------------|------------------|-----------------------------------------------------------------------|
-| `ticker`            | `string`         | Required Yahoo Finance or `EXCHANGE:CODE` symbol; maximum 32 characters. |
-| `num_shares`        | `number`         | Non-negative whole-share count; defaults to zero.                     |
-| `avg_price`         | `number`         | Non-negative finite average purchase price; defaults to zero.         |
+| Field               | Type             | Description                                                               |
+|---------------------|------------------|---------------------------------------------------------------------------|
+| `ticker`            | `string`         | Required Yahoo Finance or `EXCHANGE:CODE` symbol; maximum 32 characters.  |
+| `num_shares`        | `number`         | Non-negative whole-share count; defaults to zero.                         |
+| `avg_price`         | `number`         | Non-negative finite average purchase price; defaults to zero.             |
 | `market_price`      | `number \| null` | Optional positive fallback price when current market data is unavailable. |
-| `target_allocation` | `number \| null` | Optional caller target from zero through one.                         |
-| `tags`              | `string \| null` | Optional holding metadata; maximum 500 characters.                    |
+| `target_allocation` | `number \| null` | Optional caller target from zero through one.                             |
+| `tags`              | `string \| null` | Optional holding metadata; maximum 500 characters.                        |
 
 **Example:**
 
@@ -933,12 +960,12 @@ curl -X POST 'http://localhost:8000/ai/analyze_portfolio' \
 A review recommends a major rebalance when the target exits a holding, introduces a holding, or has at least 20%
 one-way turnover. The application derives this decision rather than accepting an AI-authored flag.
 
-| `rebalance_plan` | `rebalance_recommended` | `action_plan` |
-|------------------|-------------------------|---------------|
-| `false`          | `YES`                   | `null`        |
+| `rebalance_plan` | `rebalance_recommended` | `action_plan`    |
+|------------------|-------------------------|------------------|
+| `false`          | `YES`                   | `null`           |
 | `true`           | `YES`                   | `Rebalance` plan |
-| `false`          | `NO`                    | `Growth` plan |
-| `true`           | `NO`                    | `Growth` plan |
+| `false`          | `NO`                    | `Growth` plan    |
+| `true`           | `NO`                    | `Growth` plan    |
 
 Action plans contain a normalized budget, balanced new-money/sale/purchase/cash ledger, and prioritized typed actions:
 `HOLD`, `TRIM`, `EXIT`, `BUY_MORE`, `INTRODUCE`, or `ACCUMULATE`. Every action includes reasoning. Long-term reviews
@@ -963,7 +990,7 @@ Starting without a request body and without `task_id` returns immediate HTTP `40
 |----------------------|-----------|-------------|---------------------------------------------------------------|
 | `current_allocation` | JSON body | No          | Holdings to review; when empty, a new portfolio is built.     |
 | `country`            | JSON body | Conditional | Country context. Required when starting a task.               |
-| `investor_theme`     | JSON body | Conditional | Non-blank investor context. Required when starting a task.     |
+| `investor_theme`     | JSON body | Conditional | Non-blank investor context. Required when starting a task.    |
 | `rebalance_plan`     | JSON body | No          | Whether to generate a major-rebalance plan when needed.       |
 | `task_id`            | query     | Conditional | Task ID returned when starting a task. Required when polling. |
 
@@ -986,14 +1013,14 @@ curl -X POST 'http://localhost:8000/ai/analyze_portfolio_async?task_id=<TASK_ID>
 
 Polling returns:
 
-| HTTP status | Task state  | Result                                             |
-|-------------|-------------|----------------------------------------------------|
-| `202`       | `RUNNING`   | The task is still running.                         |
-| `200`       | `COMPLETED` | The standard analyze-portfolio payload in `data`.  |
+| HTTP status | Task state  | Result                                              |
+|-------------|-------------|-----------------------------------------------------|
+| `202`       | `RUNNING`   | The task is still running.                          |
+| `200`       | `COMPLETED` | The standard analyze-portfolio payload in `data`.   |
 | `422`       | `FAILED`    | Request, strategy, budget, or holdings are invalid. |
-| `502`       | `FAILED`    | Market verification or an AI stage failed.         |
-| `500`       | `FAILED`    | The background task failed.                        |
-| `404`       | —           | The task ID is unknown or its cache entry expired. |
+| `502`       | `FAILED`    | Market verification or an AI stage failed.          |
+| `500`       | `FAILED`    | The background task failed.                         |
+| `404`       | —           | The task ID is unknown or its cache entry expired.  |
 
 ---
 

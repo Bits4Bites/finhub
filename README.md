@@ -7,7 +7,7 @@ A developer-first financial API hub for stock market data and AI-assisted invest
 ## ✨ Features
 
 - 📈 Stock quotes, detailed info, overviews, and historical data (via Yahoo Finance).
-- 📅 Upcoming market events: dividends, earnings, and new listings (AU, US, VN markets).
+- 📅 Upcoming dividends (AU, US, VN), earnings (AU, US), and new listings (AU).
 - 🤖 AI-powered ticker and dividend analysis, portfolio construction and review, risk spotlighting, and need-based rebalance plans.
 - 🥇 Precious metals: gold/silver prices and historical data in multiple currencies.
 
@@ -20,7 +20,14 @@ A developer-first financial API hub for stock market data and AI-assisted invest
 - [Playwright](https://playwright.dev/) WebKit browser (used by the event crawlers).
 
 ```bash
-pip install -r requirements.txt
+python -m venv .venv
+```
+
+Activate it with `.\.venv\Scripts\Activate.ps1` in Windows PowerShell or
+`source .venv/bin/activate` on Linux/macOS, then install the runtime dependencies:
+
+```bash
+python -m pip install -r requirements.txt
 playwright install webkit
 ```
 
@@ -52,54 +59,67 @@ docker run --rm -p 8000:8000 btnguyen2k/finhub:release
 
 Configuration is provided via environment variables, conventionally grouped into `.env` files.
 
+#### Server runtime
+
+`server.py` reads these variables directly from the process environment; they are not loaded from
+`app_config.env`.
+
+| Variable      | Default | Description                                            |
+|---------------|---------|--------------------------------------------------------|
+| `LISTEN_PORT` | `8000`  | Port the server listens on.                            |
+| `RELOAD`      | `false` | Enable auto-reload on code changes (development only). |
+
 #### Application (`app_config.env`)
 
-| Variable         | Default | Description                                                                |
-|------------------|---------|----------------------------------------------------------------------------|
-| `LISTEN_PORT`    | `8000`  | Port the server listens on.                                                |
-| `RELOAD`         | `false` | Enable auto-reload on code changes (development only).                     |
-| `FINHUB_API_KEY` | _empty_ | API key protecting all endpoints. If empty, no authentication is required. |
+| Variable         | Default | Description                                                                                                                           |
+|------------------|---------|---------------------------------------------------------------------------------------------------------------------------------------|
+| `FINHUB_API_KEY` | _empty_ | API key protecting `/stocks`, `/events`, `/ai`, and `/toz`. Root, health, and `/market` remain public. Empty disables authentication. |
 
 #### AI vendors (`ai_vendors.env`)
 
 Configure LLM vendor credentials and available models. Keys follow the pattern
 `FINHUB_LLM__<VENDOR>__<TIER>__<SETTING>`, where:
 
-- `<VENDOR>`: `GEMINI`, `AZURE_OPENAI`, or `OPENROUTER`.
+- `<VENDOR>`: `GEMINI`, `OPENAI`, `AZURE_OPENAI`, or `OPENROUTER`.
 - `<TIER>`: `FREE`, `LOWCOST`, or `PREMIUM`.
 - `<SETTING>`: `API_KEY`, `ENDPOINT`, or `MODELS` (comma-separated list).
 
-A tier is disabled when its `API_KEY` is empty. Example:
+Gemini, OpenAI, and OpenRouter use API-key authentication. Azure OpenAI uses its endpoint plus Azure
+`EnvironmentCredential`; configure `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, and `AZURE_CLIENT_SECRET`.
+`ENDPOINT` applies to Azure OpenAI and OpenRouter; Gemini and direct OpenAI use their standard endpoints.
+Only route tasks to vendor tiers with the required credentials and models configured. Example:
 
 ```env
-FINHUB_LLM__AZURE_OPENAI__PREMIUM__API_KEY="..."
-FINHUB_LLM__AZURE_OPENAI__PREMIUM__ENDPOINT="https://..."
-FINHUB_LLM__AZURE_OPENAI__PREMIUM__MODELS="gpt-5.4, gpt-5.5"
+FINHUB_LLM__OPENAI__PREMIUM__API_KEY="..."
+FINHUB_LLM__OPENAI__PREMIUM__MODELS="gpt-5.4, gpt-5.6-sol"
 ```
 
 #### AI task routing (`ai_tasks.env`)
 
 Map each AI task to a vendor/tier/model using the pattern
 `FINHUB_LLM_TASK__<TASK>__<SETTING>`, where `<SETTING>` is `VENDOR`, `TIER`, `MODEL`,
-`REASONING_EFFORT`, or `USE_WEB_SEARCH`. `REASONING_EFFORT` is optional (`High`, `Medium`, or
-`Low`) and uses the model default when omitted. `USE_WEB_SEARCH` is optional and defaults to `false`.
+`REASONING_EFFORT`, `USE_WEB_SEARCH`, or `MAX_TOOL_CALLS`. `REASONING_EFFORT` is optional (`High`,
+`Medium`, or `Low`) and uses the model default when omitted. `USE_WEB_SEARCH` is optional and defaults
+to `false`. A positive `MAX_TOOL_CALLS` overrides the reasoning-dependent web-search limit.
 Tasks include `ANALYZE_TICKER_*`, `BUILD_PORTFOLIO_*`, `REVIEW_PORTFOLIO_*`,
 `SPOTLIGHT_PORTFOLIO_*`, `ANALYZE_DIV_EVENT_*`, and `ASX_LISTTINGS_*`. Example:
 
 ```env
-FINHUB_LLM_TASK__ANALYZE_TICKER_EXEC__VENDOR="Azure OpenAI"
-FINHUB_LLM_TASK__ANALYZE_TICKER_EXEC__TIER="Premium"
-FINHUB_LLM_TASK__ANALYZE_TICKER_EXEC__MODEL="gpt-5.4"
-FINHUB_LLM_TASK__ANALYZE_TICKER_EXEC__REASONING_EFFORT="High"
-FINHUB_LLM_TASK__ANALYZE_TICKER_EXEC__USE_WEB_SEARCH=True
+FINHUB_LLM_TASK__ANALYZE_TICKER_RESEARCH__VENDOR="OpenAI"
+FINHUB_LLM_TASK__ANALYZE_TICKER_RESEARCH__TIER="Premium"
+FINHUB_LLM_TASK__ANALYZE_TICKER_RESEARCH__MODEL="gpt-5.4"
+FINHUB_LLM_TASK__ANALYZE_TICKER_RESEARCH__REASONING_EFFORT="High"
+FINHUB_LLM_TASK__ANALYZE_TICKER_RESEARCH__USE_WEB_SEARCH=True
+FINHUB_LLM_TASK__ANALYZE_TICKER_RESEARCH__MAX_TOOL_CALLS=25
 ```
 
 #### Node chaining (`finhub_proxy_config.env`)
 
-Node chaining can route supported APIs to the configured web-crawl or AI-task node. `Redirect` returns HTTP `307`
-and the client calls the next node. `Forward` makes the call from this server, relaying the request method, path,
-query, body, and end-to-end headers, then returns the upstream status, body, and end-to-end headers. `None` executes
-the request locally.
+Node chaining routes dividend and earnings event APIs to the configured web-crawl node, and routes new-listings
+plus AI task APIs to the configured AI-task node. `/ai/vendors` always executes locally. When the corresponding
+node URL is empty, the request also executes locally. `Redirect` returns HTTP `307` and the client calls the next
+node. `Forward` makes the call from this server, relaying the request method, path, query, body, and end-to-end
+headers, then returns the upstream status, body, and end-to-end headers. `None` executes the request locally.
 
 | Variable                    | Default | Description                                           |
 |-----------------------------|---------|-------------------------------------------------------|
@@ -109,7 +129,8 @@ the request locally.
 
 Forwarded requests use a 600-second read timeout by default. A client can set
 `X-FinHub-Forward-Timeout-Seconds` to a finite value greater than zero and no more than 86400 seconds. Connection,
-write, and connection-pool timeouts remain server-controlled.
+write, and connection-pool timeouts remain server-controlled. An invalid timeout header returns HTTP `422`;
+an upstream connection or timeout failure returns HTTP `502`.
 
 ## 📚 API
 
@@ -147,9 +168,16 @@ If you find a bug or have a suggestion:
    git checkout -b fix/your-bug-fix
    ```
 
-4. **Make your changes** following the project's coding standards
+4. **Create and activate a virtual environment** as shown under [Requirements](#requirements), then install
+   development dependencies:
+   ```bash
+   python -m pip install -r requirements-dev.txt
+   playwright install webkit
+   ```
 
-5. **Test your changes** thoroughly:
+5. **Make your changes** following the project's coding standards
+
+6. **Test your changes** thoroughly:
    ```bash
    # Run tests
    pytest
@@ -159,18 +187,18 @@ If you find a bug or have a suggestion:
    ruff format --check --diff .
    ```
 
-6. **Commit your changes** with clear, descriptive messages:
+7. **Commit your changes** with clear, descriptive messages:
    ```bash
    git add .
    git commit -m "Add: brief description of your changes"
    ```
 
-7. **Push to your fork**:
+8. **Push to your fork**:
    ```bash
    git push origin feature/your-feature-name
    ```
 
-8. **Create a Pull Request**:
+9. **Create a Pull Request**:
    - Go to the original repository
    - Click "New Pull Request"
    - Select your fork and branch
