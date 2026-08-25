@@ -39,6 +39,56 @@ var response = JsonSerializer.Deserialize<GetMarketIndexResponse>(json);
 `DateOnly`; constituents expose nullable `Sector` and `MarketCap` fields because the cached index families use
 different source shapes. Market capitalization is represented as a nullable `long`.
 
+## Stocks
+
+Stock contracts cover:
+
+```http
+GET /stocks/quotes
+GET /stocks/{symbol}/overview
+GET /stocks/{symbol}/info
+GET /stocks/{symbol}/history
+GET /stocks/{symbol}/quote_at/{date_str}
+GET /stocks/{symbol}/info_debug
+GET /stocks/index/{index}/companies
+```
+
+```csharp
+using System.Text.Json;
+using FinHub.Client.Schemas.Stocks;
+
+var quotes = JsonSerializer.Deserialize<GetStockQuotesResponse>(quotesJson);
+var info = JsonSerializer.Deserialize<GetSymbolInfoResponse>(infoJson);
+```
+
+`GetStockQuotesResponse.Data` is keyed by requested symbol. The overview and info contracts reuse
+`TickerAssetType` because its strict wire values exactly match the stock API's asset classification. Market
+capitalization, financial totals, volumes, and Unix timestamps use `long`; unformatted timestamp display values
+remain strings. Optional fields preserve their OpenAPI nullability and defaults. `GetSymbolInfoDebugResponse.Data`
+is a nullable `JsonElement` because that debug payload is intentionally unstructured.
+
+## Precious metals
+
+Gold and silver endpoints reuse the stock quote and history contracts:
+
+```http
+GET /toz/gold/quote
+GET /toz/gold/history
+GET /toz/silver/quote
+GET /toz/silver/history
+```
+
+```csharp
+using System.Text.Json;
+using FinHub.Client.Schemas.Stocks;
+
+var goldQuote = JsonSerializer.Deserialize<GetStockQuoteResponse>(goldJson);
+var silverHistory = JsonSerializer.Deserialize<GetStockHistoryResponse>(silverJson);
+```
+
+Both quote endpoints use `GetStockQuoteResponse`; both history endpoints use `GetStockHistoryResponse`. The optional
+`currency` query defaults to `USD`, and the history endpoints' optional `days` query defaults to `30`.
+
 ## New listings
 
 The new-listings contracts cover:
@@ -217,6 +267,7 @@ optional and has no client default. Risk levels are limited to `Critical`, `High
 - `FinHub.Client.Models.Listings`: listing-domain contracts shared by listing APIs.
 - `FinHub.Client.Models.Markets`: reusable market-index constituent contracts.
 - `FinHub.Client.Models.Portfolios`: reusable holdings, construction, analysis-union, snapshot, risk, and spotlight contracts.
+- `FinHub.Client.Models.Stocks`: reusable quote, history, symbol-profile, dividend, and index-company contracts.
 - `FinHub.Client.Models.Tickers`: reusable ticker research, forecast, market snapshot, and recommendation contracts.
 - `FinHub.Client.Schemas`: reusable synchronous/async API response envelopes and async task metadata.
 - `FinHub.Client.Schemas.AIVendors`: response schemas for AI vendor discovery.
@@ -226,4 +277,5 @@ optional and has no client default. Risk levels are limited to `Critical`, `High
 - `FinHub.Client.Schemas.PortfolioAnalysis`: request and response schemas for the review-or-construction dispatcher.
 - `FinHub.Client.Schemas.PortfolioConstruction`: request and response schemas for portfolio construction.
 - `FinHub.Client.Schemas.PortfolioSpotlight`: request and response schemas for portfolio spotlight.
+- `FinHub.Client.Schemas.Stocks`: stock responses, also reused by gold and silver quote/history endpoints.
 - `FinHub.Client.Schemas.TickerAnalysis`: request and response schemas for ticker analysis.

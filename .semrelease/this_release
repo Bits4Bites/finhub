@@ -22,3 +22,4 @@
 - refactor(proxy): Centralize FinHub proxy mode handler.
 - feat(client/dotnet): Add AI-vendor API contracts.
 - feat(client/dotnet): Add market-index API contracts.
+- feat(client/dotnet): Add stock and precious-metals API contracts.
