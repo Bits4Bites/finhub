@@ -2,6 +2,43 @@
 
 This .NET 8 class library contains models and response schemas only. It does not implement HTTP transport.
 
+## AI vendors
+
+Vendor discovery covers:
+
+```http
+GET /ai/vendors
+```
+
+```csharp
+using System.Text.Json;
+using FinHub.Client.Schemas.AIVendors;
+
+var response = JsonSerializer.Deserialize<GetAIVendorsResponse>(json);
+```
+
+`Data` is keyed by vendor identifier, and each vendor maps tier identifiers to model-name lists. Only configured
+entries are returned; vendor and tier keys are normalized to uppercase.
+
+## Market indices
+
+Static market-index snapshots cover:
+
+```http
+GET /market/index/{index_id}
+```
+
+```csharp
+using System.Text.Json;
+using FinHub.Client.Schemas.MarketIndex;
+
+var response = JsonSerializer.Deserialize<GetMarketIndexResponse>(json);
+```
+
+`GetMarketIndexResponse` is a direct response and does not derive from `ApiResponse<TData>`. Its snapshot `Date` is a
+`DateOnly`; constituents expose nullable `Sector` and `MarketCap` fields because the cached index families use
+different source shapes. Market capitalization is represented as a nullable `long`.
+
 ## New listings
 
 The new-listings contracts cover:
@@ -174,14 +211,17 @@ optional and has no client default. Risk levels are limited to `Critical`, `High
 
 ## Contract namespaces
 
-- `FinHub.Client.Models.AI`: reusable AI contracts for data quality, evidence, and reference sources.
+- `FinHub.Client.Models.AI`: reusable AI contracts for vendor discovery, data quality, evidence, and reference sources.
 - `FinHub.Client.Models.Dividends`: reusable dividend-event analysis domain contracts.
 - `FinHub.Client.Models.Events`: reusable event contracts.
 - `FinHub.Client.Models.Listings`: listing-domain contracts shared by listing APIs.
+- `FinHub.Client.Models.Markets`: reusable market-index constituent contracts.
 - `FinHub.Client.Models.Portfolios`: reusable holdings, construction, analysis-union, snapshot, risk, and spotlight contracts.
 - `FinHub.Client.Models.Tickers`: reusable ticker research, forecast, market snapshot, and recommendation contracts.
 - `FinHub.Client.Schemas`: reusable synchronous/async API response envelopes and async task metadata.
+- `FinHub.Client.Schemas.AIVendors`: response schemas for AI vendor discovery.
 - `FinHub.Client.Schemas.DividendAnalysis`: request and response schemas for dividend-event analysis.
+- `FinHub.Client.Schemas.MarketIndex`: direct response schemas for cached market-index snapshots.
 - `FinHub.Client.Schemas.NewListings`: schemas specific to the new-listings API.
 - `FinHub.Client.Schemas.PortfolioAnalysis`: request and response schemas for the review-or-construction dispatcher.
 - `FinHub.Client.Schemas.PortfolioConstruction`: request and response schemas for portfolio construction.

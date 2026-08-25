@@ -20,3 +20,5 @@
 - feat(async): Deduplicate identical task starts.
 - fix(AI/new-listings/async): Reject unsupported country before task creation.
 - refactor(proxy): Centralize FinHub proxy mode handler.
+- feat(client/dotnet): Add AI-vendor API contracts.
+- feat(client/dotnet): Add market-index API contracts.
