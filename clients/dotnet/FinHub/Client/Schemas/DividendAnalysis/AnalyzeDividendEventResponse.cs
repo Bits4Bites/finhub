@@ -3,4 +3,4 @@ using FinHub.Client.Schemas;
 
 namespace FinHub.Client.Schemas.DividendAnalysis;
 
-public sealed record AnalyzeDividendEventResponse : ApiResponseWithExtra<DividendEventAnalysis>;
+public sealed record AnalyzeDividendEventResponse : ApiResponseWithExtra<DividendEventAnalysis?>;

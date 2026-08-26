@@ -43,6 +43,23 @@ jobs:
           # Run unit tests
           pytest
 
+  BuildAndTestDotNet:
+    name: Build and Test .NET 8 Contracts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.x'
+      - name: Restore .NET projects
+        run: dotnet restore clients/dotnet/FinHub.Client.Contracts.Tests/FinHub.Client.Contracts.Tests.csproj --nologo
+      - name: Build .NET projects
+        run: dotnet build clients/dotnet/FinHub.Client.Contracts.Tests/FinHub.Client.Contracts.Tests.csproj --configuration Release --no-restore --nologo --warnaserror
+      - name: Run .NET contract tests
+        run: dotnet test clients/dotnet/FinHub.Client.Contracts.Tests/FinHub.Client.Contracts.Tests.csproj --configuration Release --no-build --no-restore --nologo
+
   BuildDockerAndQuickTest:
     runs-on: ubuntu-latest
     strategy:
@@ -88,7 +105,7 @@ jobs:
     if: |
       github.event_name == 'workflow_dispatch' &&
       startsWith(github.ref_name, 'cache-static-data-')
-    needs: [BuildAndTest, BuildDockerAndQuickTest]
+    needs: [BuildAndTest, BuildAndTestDotNet, BuildDockerAndQuickTest]
     runs-on: ubuntu-latest
     permissions:
       actions: write
@@ -113,7 +130,7 @@ jobs:
 
   ReleaseDryRun:
     if: github.event_name == 'push'
-    needs: [BuildAndTest, BuildDockerAndQuickTest]
+    needs: [BuildAndTest, BuildAndTestDotNet, BuildDockerAndQuickTest]
     runs-on: ubuntu-latest
     outputs:
       RESULT: ${{ steps.release_dry_run.outputs.result }}

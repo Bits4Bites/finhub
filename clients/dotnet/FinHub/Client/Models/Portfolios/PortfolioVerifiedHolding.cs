@@ -8,7 +8,7 @@ public sealed record PortfolioVerifiedHolding
     public required string Ticker { get; init; }
 
     [JsonPropertyName("company_name")]
-    public string? CompanyName { get; init; }
+    public required string? CompanyName { get; init; }
 
     [JsonPropertyName("exchange")]
     public required string Exchange { get; init; }
@@ -35,14 +35,14 @@ public sealed record PortfolioVerifiedHolding
     public required double CurrentAllocation { get; init; }
 
     [JsonPropertyName("target_allocation")]
-    public double? TargetAllocation { get; init; }
+    public required double? TargetAllocation { get; init; }
 
     [JsonPropertyName("allocation_drift")]
-    public double? AllocationDrift { get; init; }
+    public required double? AllocationDrift { get; init; }
 
     [JsonPropertyName("unrealized_profit_loss")]
-    public double? UnrealizedProfitLoss { get; init; }
+    public required double? UnrealizedProfitLoss { get; init; }
 
     [JsonPropertyName("tags")]
-    public string? Tags { get; init; }
+    public required string? Tags { get; init; }
 }

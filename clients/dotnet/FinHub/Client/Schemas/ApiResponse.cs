@@ -11,5 +11,5 @@ public abstract record ApiResponse<TData>
     public required string Message { get; init; }
 
     [JsonPropertyName("data")]
-    public TData? Data { get; init; }
+    public virtual TData Data { get; init; } = default!;
 }

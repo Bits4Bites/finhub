@@ -81,6 +81,8 @@ target/
 # .NET build output
 clients/dotnet/bin/
 clients/dotnet/obj/
+clients/dotnet/**/bin/
+clients/dotnet/**/obj/
 
 # Jupyter Notebook
 .ipynb_checkpoints

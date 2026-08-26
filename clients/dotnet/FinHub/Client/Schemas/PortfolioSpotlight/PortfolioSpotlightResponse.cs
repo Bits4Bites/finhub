@@ -3,4 +3,4 @@ using FinHub.Client.Schemas;
 
 namespace FinHub.Client.Schemas.PortfolioSpotlight;
 
-public sealed record PortfolioSpotlightResponse : ApiResponseWithExtra<PortfolioSpotlightAnalysis>;
+public sealed record PortfolioSpotlightResponse : ApiResponseWithExtra<PortfolioSpotlightAnalysis?>;

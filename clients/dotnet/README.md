@@ -2,6 +2,22 @@
 
 This .NET 8 class library contains models and response schemas only. It does not implement HTTP transport.
 
+## Restore, build, and test
+
+From the repository root with the .NET 8 SDK installed:
+
+```text
+dotnet restore clients/dotnet/FinHub.Client.Contracts.Tests/FinHub.Client.Contracts.Tests.csproj
+dotnet build clients/dotnet/FinHub.Client.Contracts.Tests/FinHub.Client.Contracts.Tests.csproj --configuration Release --no-restore --warnaserror
+dotnet test clients/dotnet/FinHub.Client.Contracts.Tests/FinHub.Client.Contracts.Tests.csproj --configuration Release --no-build --no-restore
+```
+
+Building the test project builds its reference to `FinHub.Client.Contracts.csproj`, so the contracts are not built
+twice. The tests use the repository-root `openapi.json` as their authority. They map all 29 public router operations
+to request and response contracts, compare every client component's JSON names, requiredness, nullability, types,
+integer widths, string formats, and enum wire values, and exercise non-obvious converters and raw market-index
+payloads. The root and health operations remain intentionally outside the client contract surface.
+
 ## AI vendors
 
 Vendor discovery covers:
@@ -18,7 +34,8 @@ var response = JsonSerializer.Deserialize<GetAIVendorsResponse>(json);
 ```
 
 `Data` is keyed by vendor identifier, and each vendor maps tier identifiers to model-name lists. Only configured
-entries are returned; vendor and tier keys are normalized to uppercase.
+entries are returned; vendor and tier keys are normalized to uppercase. When omitted, `Data` defaults to an empty
+dictionary, matching the OpenAPI default.
 
 ## Market indices
 
@@ -243,6 +260,9 @@ var request = new BuildPortfolioRequest
 positions, an optional budget-aware action plan, data-quality metadata, canonical references, and the
 `PortfolioConstruction` result discriminator. Synchronous calls use `BuildPortfolioResponse`; async start and
 query-poll calls use `BuildPortfolioAsyncResponse`.
+
+Nullable budget details and nullable enriched holding values remain required members where OpenAPI requires their
+presence; a JSON `null` is distinct from an omitted property.
 
 The dispatcher endpoints:
 

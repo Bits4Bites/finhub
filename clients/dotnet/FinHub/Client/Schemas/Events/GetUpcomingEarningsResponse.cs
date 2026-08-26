@@ -4,4 +4,4 @@ using FinHub.Client.Schemas;
 namespace FinHub.Client.Schemas.Events;
 
 public sealed record GetUpcomingEarningsResponse
-    : ApiResponseWithExtra<IReadOnlyList<UpcomingEarningsEvent>>;
+    : ApiResponseWithExtra<IReadOnlyList<UpcomingEarningsEvent>?>;
