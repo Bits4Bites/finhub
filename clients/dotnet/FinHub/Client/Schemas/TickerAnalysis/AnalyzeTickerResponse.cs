@@ -1,6 +1,6 @@
-using FinHub.Client.Schemas;
+using MyPo.Shared.Api;
 using TickerAnalysisModel = FinHub.Client.Models.Tickers.TickerAnalysis;
 
 namespace FinHub.Client.Schemas.TickerAnalysis;
 
-public sealed record AnalyzeTickerResponse : ApiResponseWithExtra<TickerAnalysisModel?>;
+public sealed class AnalyzeTickerResponse : ApiResp<TickerAnalysisModel?>;

@@ -1,6 +1,6 @@
 using FinHub.Client.Models.Portfolios;
-using FinHub.Client.Schemas;
+using MyPo.Shared.Api;
 
 namespace FinHub.Client.Schemas.PortfolioSpotlight;
 
-public sealed record PortfolioSpotlightResponse : ApiResponseWithExtra<PortfolioSpotlightAnalysis?>;
+public sealed class PortfolioSpotlightResponse : ApiResp<PortfolioSpotlightAnalysis?>;

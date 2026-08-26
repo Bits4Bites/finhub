@@ -1,6 +1,6 @@
 using System.Text.Json;
-using FinHub.Client.Schemas;
+using MyPo.Shared.Api;
 
 namespace FinHub.Client.Schemas.Stocks;
 
-public sealed record GetSymbolInfoDebugResponse : ApiResponseWithExtra<JsonElement?>;
+public sealed class GetSymbolInfoDebugResponse : ApiResp<JsonElement?>;

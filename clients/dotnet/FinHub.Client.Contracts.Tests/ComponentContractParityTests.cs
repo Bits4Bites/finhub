@@ -5,6 +5,7 @@ using System.Text.Json.Serialization;
 using FinHub.Client.Models.Markets;
 using FinHub.Client.Models.Portfolios;
 using FinHub.Client.Schemas.MarketIndex;
+using MyPo.Shared.Api;
 using Xunit;
 
 namespace FinHub.Client.Contracts.Tests;
@@ -83,6 +84,8 @@ public sealed class ComponentContractParityTests
         {
             typeof(GetMarketIndexResponse),
             typeof(MarketIndexConstituent),
+            typeof(ApiResp),
+            typeof(ApiResp<>),
         };
         var uncoveredTypes = ContractMappings
             .ContractsAssembly.GetExportedTypes()
@@ -348,11 +351,16 @@ public sealed class ComponentContractParityTests
             }
 
             var path = $"{componentName}.{jsonName}";
+            // ApiResp owns these annotations; endpoint schemas still verify
+            // their JSON names and underlying CLR types.
             var isRequired = property.IsDefined(
                 typeof(RequiredMemberAttribute),
                 inherit: true
             );
-            if (isRequired != required.Contains(jsonName))
+            if (
+                !UsesSharedEnvelopeRequiredness(property)
+                && isRequired != required.Contains(jsonName)
+            )
             {
                 errors.Add(
                     $"{path}: .NET required={isRequired}, "
@@ -364,7 +372,10 @@ public sealed class ComponentContractParityTests
                 Nullable.GetUnderlyingType(property.PropertyType) is not null
                 || Nullability.Create(property).ReadState == NullabilityState.Nullable;
             var openApiNullable = OpenApiContract.AllowsNull(propertySchema);
-            if (isNullable != openApiNullable)
+            if (
+                !UsesSharedEnvelopeNullability(property)
+                && isNullable != openApiNullable
+            )
             {
                 errors.Add(
                     $"{path}: .NET nullable={isNullable}, "
@@ -372,12 +383,24 @@ public sealed class ComponentContractParityTests
                 );
             }
 
-            ComparePropertyType(
-                path,
-                propertySchema,
-                property.PropertyType,
-                errors
-            );
+            if (IsSharedUntypedExtra(property))
+            {
+                CompareSharedUntypedExtra(
+                    path,
+                    propertySchema,
+                    property.PropertyType,
+                    errors
+                );
+            }
+            else
+            {
+                ComparePropertyType(
+                    path,
+                    propertySchema,
+                    property.PropertyType,
+                    errors
+                );
+            }
         }
     }
 
@@ -388,8 +411,21 @@ public sealed class ComponentContractParityTests
     {
         var properties = new Dictionary<string, PropertyInfo>(StringComparer.Ordinal);
 
-        foreach (var property in contractType.GetProperties(BindingFlags.Instance | BindingFlags.Public))
+        foreach (
+            var property in contractType.GetProperties(
+                BindingFlags.Instance | BindingFlags.Public
+            )
+        )
         {
+            if (
+                property.GetCustomAttribute<JsonIgnoreAttribute>(inherit: true)
+                    ?.Condition == JsonIgnoreCondition.Always
+                || IsSharedDebugInfo(property)
+            )
+            {
+                continue;
+            }
+
             var attribute = property.GetCustomAttribute<JsonPropertyNameAttribute>(
                 inherit: true
             );
@@ -404,6 +440,18 @@ public sealed class ComponentContractParityTests
 
             if (!properties.TryAdd(attribute.Name, property))
             {
+                var existing = properties[attribute.Name];
+                if (IsSharedUntypedExtra(existing))
+                {
+                    properties[attribute.Name] = property;
+                    continue;
+                }
+
+                if (IsSharedUntypedExtra(property))
+                {
+                    continue;
+                }
+
                 errors.Add(
                     $"{contractType.FullName}: duplicate JSON property name "
                         + $"'{attribute.Name}'."
@@ -412,6 +460,43 @@ public sealed class ComponentContractParityTests
         }
 
         return properties;
+    }
+
+    private static bool UsesSharedEnvelopeRequiredness(PropertyInfo property) =>
+        property.DeclaringType == typeof(ApiResp)
+        && property.Name is nameof(ApiResp.Status) or nameof(ApiResp.Message);
+
+    private static bool UsesSharedEnvelopeNullability(PropertyInfo property) =>
+        property.DeclaringType == typeof(ApiResp)
+        && property.Name == nameof(ApiResp.Message);
+
+    private static bool IsSharedUntypedExtra(PropertyInfo property) =>
+        property.DeclaringType == typeof(ApiResp)
+        && property.Name == nameof(ApiResp.Extra);
+
+    private static bool IsSharedDebugInfo(PropertyInfo property) =>
+        property.DeclaringType == typeof(ApiResp)
+        && property.Name == nameof(ApiResp.DebugInfo);
+
+    private static void CompareSharedUntypedExtra(
+        string path,
+        JsonElement schema,
+        Type propertyType,
+        ICollection<string> errors
+    )
+    {
+        var alternatives = OpenApiContract.GetNonNullAlternatives(schema);
+        var isUntypedJson =
+            alternatives.Count == 1
+            && alternatives[0].ValueKind == JsonValueKind.Object
+            && !alternatives[0].EnumerateObject().Any();
+
+        if (!isUntypedJson)
+        {
+            errors.Add($"{path}: shared ApiResp.Extra no longer maps to untyped JSON.");
+        }
+
+        CompareExpectedType(path, typeof(object), propertyType, errors);
     }
 
     private static void ComparePropertyType(

@@ -1,9 +1,14 @@
 using System.Text.Json.Serialization;
+using MyPo.Shared.Api;
 
 namespace FinHub.Client.Schemas;
 
-public abstract record AsyncApiResponse<TData> : ApiResponse<TData>
+public abstract class AsyncApiResponse<TData> : ApiResp<TData>
 {
     [JsonPropertyName("extra")]
-    public required AsyncTaskInfo Extra { get; init; }
+    public new required AsyncTaskInfo Extra
+    {
+        get => (AsyncTaskInfo)base.Extra!;
+        init => base.Extra = value;
+    }
 }

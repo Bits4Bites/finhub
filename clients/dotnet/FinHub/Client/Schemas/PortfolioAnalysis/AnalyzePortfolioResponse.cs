@@ -1,6 +1,6 @@
 using FinHub.Client.Models.Portfolios;
-using FinHub.Client.Schemas;
+using MyPo.Shared.Api;
 
 namespace FinHub.Client.Schemas.PortfolioAnalysis;
 
-public sealed record AnalyzePortfolioResponse : ApiResponseWithExtra<IPortfolioAnalysisResult?>;
+public sealed class AnalyzePortfolioResponse : ApiResp<IPortfolioAnalysisResult?>;

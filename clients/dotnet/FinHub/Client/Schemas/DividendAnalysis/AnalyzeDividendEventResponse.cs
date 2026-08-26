@@ -1,6 +1,6 @@
 using FinHub.Client.Models.Dividends;
-using FinHub.Client.Schemas;
+using MyPo.Shared.Api;
 
 namespace FinHub.Client.Schemas.DividendAnalysis;
 
-public sealed record AnalyzeDividendEventResponse : ApiResponseWithExtra<DividendEventAnalysis?>;
+public sealed class AnalyzeDividendEventResponse : ApiResp<DividendEventAnalysis?>;

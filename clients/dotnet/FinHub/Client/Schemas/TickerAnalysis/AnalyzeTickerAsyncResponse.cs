@@ -3,4 +3,4 @@ using TickerAnalysisModel = FinHub.Client.Models.Tickers.TickerAnalysis;
 
 namespace FinHub.Client.Schemas.TickerAnalysis;
 
-public sealed record AnalyzeTickerAsyncResponse : AsyncApiResponse<TickerAnalysisModel?>;
+public sealed class AnalyzeTickerAsyncResponse : AsyncApiResponse<TickerAnalysisModel?>;

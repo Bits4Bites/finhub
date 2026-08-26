@@ -13,6 +13,7 @@ using FinHub.Client.Schemas.PortfolioConstruction;
 using FinHub.Client.Schemas.PortfolioSpotlight;
 using FinHub.Client.Schemas.Stocks;
 using FinHub.Client.Schemas.TickerAnalysis;
+using MyPo.Shared.Api;
 
 namespace FinHub.Client.Contracts.Tests;
 
@@ -36,7 +37,7 @@ internal sealed record EndpointContract(
 
 internal static class ContractMappings
 {
-    public static Assembly ContractsAssembly => typeof(ApiResponse<>).Assembly;
+    public static Assembly ContractsAssembly => typeof(ApiResp<>).Assembly;
 
     // FastAPI's framework validation payloads are outside this contracts-only client.
     public static IReadOnlySet<string> IgnoredOpenApiComponents { get; } =

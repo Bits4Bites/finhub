@@ -3,4 +3,4 @@ using FinHub.Client.Schemas;
 
 namespace FinHub.Client.Schemas.PortfolioAnalysis;
 
-public sealed record AnalyzePortfolioAsyncResponse : AsyncApiResponse<IPortfolioAnalysisResult?>;
+public sealed class AnalyzePortfolioAsyncResponse : AsyncApiResponse<IPortfolioAnalysisResult?>;

@@ -34,18 +34,21 @@ guessing.
 
 ## Directory and namespace design
 
-All namespaces must begin with `FinHub.Client` and mirror the directory structure below
-`clients/dotnet/FinHub/Client/`.
+Client-specific namespaces must begin with `FinHub.Client` and mirror the directory structure below
+`clients/dotnet/FinHub/Client/`. Shared API envelopes retain the `MyPo.Shared.Api` namespace.
 
 ```text
-clients/dotnet/FinHub/Client/
-|-- Models/
-|   |-- AI/                 # Reusable AI domain contracts
-|   |-- Events/             # Reusable event contracts
-|   `-- <Domain>/           # Reusable feature/domain contracts
-`-- Schemas/
-    |-- ApiResponse.cs      # Reusable transport envelopes and metadata
-    `-- <ApiFeature>/       # Request/response contracts for specific APIs
+clients/dotnet/
+|-- MyPo/Shared/Api/
+|   `-- ApiResp.cs          # Canonical synchronous response envelopes
+`-- FinHub/Client/
+    |-- Models/
+    |   |-- AI/             # Reusable AI domain contracts
+    |   |-- Events/         # Reusable event contracts
+    |   `-- <Domain>/       # Reusable feature/domain contracts
+    `-- Schemas/
+        |-- AsyncApiResponse.cs # Typed FinHub async envelope
+        `-- <ApiFeature>/       # Request/response contracts for specific APIs
 ```
 
 Apply these ownership rules:
@@ -53,7 +56,11 @@ Apply these ownership rules:
 - Put a type in `Models/<Domain>` when it represents domain data independent of one HTTP operation or can be reused by
   multiple requests/responses.
 - Put cross-domain models in the narrowest existing reusable namespace, such as `Models.AI` or `Models.Events`.
-- Put generic transport envelopes and metadata used by multiple APIs directly in `Schemas`.
+- Derive synchronous response schemas directly from `MyPo.Shared.Api.ApiResp<TData>`; do not create a duplicate
+  FinHub response envelope.
+- Keep `AsyncApiResponse<TData>` in `Schemas` for responses that require typed `AsyncTaskInfo` metadata, and derive it
+  from `ApiResp<TData>`.
+- Put other metadata used by multiple FinHub APIs directly in `Schemas`.
 - Put endpoint request bodies, start/poll schemas, response wrappers, and shapes meaningful only to one API in
   `Schemas/<ApiFeature>`.
 - API-specific nested data is also a schema when it has no independent domain meaning; do not create a misleading

@@ -3,5 +3,5 @@ using FinHub.Client.Schemas;
 
 namespace FinHub.Client.Schemas.Events;
 
-public sealed record GetUpcomingDividendsAsyncResponse
+public sealed class GetUpcomingDividendsAsyncResponse
     : AsyncApiResponse<IReadOnlyList<UpcomingDividendEvent>?>;

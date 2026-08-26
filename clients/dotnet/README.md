@@ -18,6 +18,11 @@ to request and response contracts, compare every client component's JSON names, 
 integer widths, string formats, and enum wire values, and exercise non-obvious converters and raw market-index
 payloads. The root and health operations remain intentionally outside the client contract surface.
 
+Envelope responses derive from `MyPo.Shared.Api.ApiResp<TData>`. Synchronous `Extra` values use the shared
+`object` contract; `System.Text.Json` materializes JSON objects as `JsonElement`, and callers can use `ExtraAs<T>()`
+for a typed view. `AsyncApiResponse<TData>` remains the shared FinHub async envelope and exposes the same underlying
+`extra` value as required `AsyncTaskInfo`.
+
 ## AI vendors
 
 Vendor discovery covers:
@@ -52,7 +57,7 @@ using FinHub.Client.Schemas.MarketIndex;
 var response = JsonSerializer.Deserialize<GetMarketIndexResponse>(json);
 ```
 
-`GetMarketIndexResponse` is a direct response and does not derive from `ApiResponse<TData>`. Its snapshot `Date` is a
+`GetMarketIndexResponse` is a direct response and does not derive from `ApiResp<TData>`. Its snapshot `Date` is a
 `DateOnly`; constituents expose nullable `Sector` and `MarketCap` fields because the cached index families use
 different source shapes. Market capitalization is represented as a nullable `long`.
 
@@ -323,7 +328,8 @@ optional and has no client default. Risk levels are limited to `Critical`, `High
 - `FinHub.Client.Models.Portfolios`: reusable holdings, construction, analysis-union, snapshot, risk, and spotlight contracts.
 - `FinHub.Client.Models.Stocks`: reusable quote, history, symbol-profile, dividend, and index-company contracts.
 - `FinHub.Client.Models.Tickers`: reusable ticker research, forecast, market snapshot, and recommendation contracts.
-- `FinHub.Client.Schemas`: reusable synchronous/async API response envelopes and async task metadata.
+- `MyPo.Shared.Api`: reusable `ApiResp` and `ApiResp<TData>` response envelopes.
+- `FinHub.Client.Schemas`: the typed async response envelope and async task metadata.
 - `FinHub.Client.Schemas.AIVendors`: response schemas for AI vendor discovery.
 - `FinHub.Client.Schemas.DividendAnalysis`: request and response schemas for dividend-event analysis.
 - `FinHub.Client.Schemas.Events`: response schemas for upcoming dividend and earnings events.

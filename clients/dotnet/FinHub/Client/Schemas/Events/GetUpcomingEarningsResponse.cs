@@ -1,7 +1,7 @@
 using FinHub.Client.Models.Events;
-using FinHub.Client.Schemas;
+using MyPo.Shared.Api;
 
 namespace FinHub.Client.Schemas.Events;
 
-public sealed record GetUpcomingEarningsResponse
-    : ApiResponseWithExtra<IReadOnlyList<UpcomingEarningsEvent>?>;
+public sealed class GetUpcomingEarningsResponse
+    : ApiResp<IReadOnlyList<UpcomingEarningsEvent>?>;

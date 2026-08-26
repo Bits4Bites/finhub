@@ -1,6 +1,7 @@
 using System.Text.Json;
 using FinHub.Client.Schemas;
 using FinHub.Client.Schemas.MarketIndex;
+using MyPo.Shared.Api;
 using Xunit;
 
 namespace FinHub.Client.Contracts.Tests;
@@ -168,8 +169,7 @@ public sealed class EndpointContractParityTests
             }
 
             if (
-                HasGenericBase(endpoint.ResponseType, typeof(ApiResponse<>))
-                || HasGenericBase(endpoint.ResponseType, typeof(AsyncApiResponse<>))
+                HasGenericBase(endpoint.ResponseType, typeof(ApiResp<>))
             )
             {
                 errors.Add(
@@ -250,6 +250,14 @@ public sealed class EndpointContractParityTests
                 );
             }
 
+            if (!HasGenericBase(endpoint.ResponseType, typeof(ApiResp<>)))
+            {
+                errors.Add(
+                    $"{operationName}: async response '{endpoint.ResponseType.FullName}' "
+                        + "does not inherit the shared ApiResp<T> contract."
+                );
+            }
+
             if (!required.Contains("extra"))
             {
                 errors.Add(
@@ -268,11 +276,14 @@ public sealed class EndpointContractParityTests
         }
         else
         {
-            if (!HasGenericBase(endpoint.ResponseType, typeof(ApiResponseWithExtra<>)))
+            if (
+                !HasImmediateGenericBase(endpoint.ResponseType, typeof(ApiResp<>))
+                || HasGenericBase(endpoint.ResponseType, typeof(AsyncApiResponse<>))
+            )
             {
                 errors.Add(
                     $"{operationName}: synchronous response '{endpoint.ResponseType.FullName}' "
-                        + "does not derive from ApiResponseWithExtra<T>."
+                        + "does not derive directly from ApiResp<T>."
                 );
             }
 
@@ -304,6 +315,13 @@ public sealed class EndpointContractParityTests
             yield return (response.Name, schema);
         }
     }
+
+    private static bool HasImmediateGenericBase(
+        Type type,
+        Type genericTypeDefinition
+    ) =>
+        type.BaseType is { IsGenericType: true } baseType
+        && baseType.GetGenericTypeDefinition() == genericTypeDefinition;
 
     private static bool HasGenericBase(Type type, Type genericTypeDefinition)
     {

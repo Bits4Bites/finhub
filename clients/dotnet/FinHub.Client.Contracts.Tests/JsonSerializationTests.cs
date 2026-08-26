@@ -1,4 +1,5 @@
 using System.Text.Json;
+using FinHub.Client.Models.AI;
 using FinHub.Client.Models.Listings;
 using FinHub.Client.Models.Portfolios;
 using FinHub.Client.Models.Stocks;
@@ -7,7 +8,9 @@ using FinHub.Client.Schemas;
 using FinHub.Client.Schemas.AIVendors;
 using FinHub.Client.Schemas.DividendAnalysis;
 using FinHub.Client.Schemas.MarketIndex;
+using FinHub.Client.Schemas.Stocks;
 using FinHub.Client.Schemas.TickerAnalysis;
+using MyPo.Shared.Api;
 using Xunit;
 
 namespace FinHub.Client.Contracts.Tests;
@@ -22,7 +25,34 @@ public sealed class JsonSerializationTests
         var response = JsonSerializer.Deserialize<GetAIVendorsResponse>(json);
 
         Assert.NotNull(response);
+        Assert.IsAssignableFrom<ApiResp<IReadOnlyDictionary<string, AIVendorInfo>>>(
+            response
+        );
         Assert.Empty(response.Data);
+    }
+
+    [Fact]
+    public void Synchronous_response_uses_the_shared_untyped_extra_contract()
+    {
+        const string json =
+            """
+            {
+              "status": 200,
+              "message": "OK",
+              "extra": {
+                "source": "cache"
+              }
+            }
+            """;
+
+        var response = JsonSerializer.Deserialize<GetStockQuoteResponse>(json);
+
+        Assert.NotNull(response);
+        Assert.IsType<JsonElement>(response.Extra);
+        Assert.Equal(
+            "cache",
+            response.ExtraAs<Dictionary<string, string>>()?["source"]
+        );
     }
 
     [Fact]
@@ -47,6 +77,16 @@ public sealed class JsonSerializationTests
         Assert.Null(response.Data);
         Assert.Equal("task-123", response.Extra.TaskId);
         Assert.Equal(TaskState.Running, response.Extra.State);
+
+        var sharedResponse = Assert.IsAssignableFrom<ApiResp>(response);
+        Assert.Same(response.Extra, sharedResponse.Extra);
+        Assert.Equal("task-123", response.ExtraAs<AsyncTaskInfo>()?.TaskId);
+
+        using var serialized = JsonDocument.Parse(JsonSerializer.Serialize(response));
+        Assert.Single(
+            serialized.RootElement.EnumerateObject(),
+            property => property.NameEquals("extra")
+        );
     }
 
     [Fact]

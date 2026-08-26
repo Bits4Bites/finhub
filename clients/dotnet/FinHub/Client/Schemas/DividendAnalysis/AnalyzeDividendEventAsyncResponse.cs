@@ -3,4 +3,4 @@ using FinHub.Client.Schemas;
 
 namespace FinHub.Client.Schemas.DividendAnalysis;
 
-public sealed record AnalyzeDividendEventAsyncResponse : AsyncApiResponse<DividendEventAnalysis?>;
+public sealed class AnalyzeDividendEventAsyncResponse : AsyncApiResponse<DividendEventAnalysis?>;

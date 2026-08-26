@@ -1,6 +1,6 @@
 using FinHub.Client.Models.Stocks;
-using FinHub.Client.Schemas;
+using MyPo.Shared.Api;
 
 namespace FinHub.Client.Schemas.Stocks;
 
-public sealed record GetSymbolOverviewResponse : ApiResponseWithExtra<SymbolOverview?>;
+public sealed class GetSymbolOverviewResponse : ApiResp<SymbolOverview?>;

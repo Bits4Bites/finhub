@@ -1,7 +1,7 @@
 using FinHub.Client.Models.Events;
-using FinHub.Client.Schemas;
+using MyPo.Shared.Api;
 
 namespace FinHub.Client.Schemas.Events;
 
-public sealed record GetUpcomingDividendsResponse
-    : ApiResponseWithExtra<IReadOnlyList<UpcomingDividendEvent>?>;
+public sealed class GetUpcomingDividendsResponse
+    : ApiResp<IReadOnlyList<UpcomingDividendEvent>?>;

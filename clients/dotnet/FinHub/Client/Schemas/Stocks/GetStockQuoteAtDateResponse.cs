@@ -1,6 +1,6 @@
 using FinHub.Client.Models.Stocks;
-using FinHub.Client.Schemas;
+using MyPo.Shared.Api;
 
 namespace FinHub.Client.Schemas.Stocks;
 
-public sealed record GetStockQuoteAtDateResponse : ApiResponseWithExtra<HistoryPoint?>;
+public sealed class GetStockQuoteAtDateResponse : ApiResp<HistoryPoint?>;

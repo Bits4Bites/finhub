@@ -1,7 +1,7 @@
 using FinHub.Client.Models.Stocks;
-using FinHub.Client.Schemas;
+using MyPo.Shared.Api;
 
 namespace FinHub.Client.Schemas.Stocks;
 
-public sealed record GetIndexCompaniesResponse
-    : ApiResponseWithExtra<IReadOnlyList<CompanyBriefInfo>?>;
+public sealed class GetIndexCompaniesResponse
+    : ApiResp<IReadOnlyList<CompanyBriefInfo>?>;
