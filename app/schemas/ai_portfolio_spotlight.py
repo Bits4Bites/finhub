@@ -19,35 +19,28 @@ class PortfolioSpotlightRequest(BaseRequest):
         description="Portfolio market country as an ISO code or country name.",
     )
     current_allocation: list[models_portfolio.PortfolioHolding] = Field(
-        default_factory=list,
+        min_length=1,
         max_length=50,
-        description="Current positions. An empty list or only zero-share positions returns a deterministic empty result.",
+        description="Current positions. At least one position must have a positive share count.",
     )
-    investor_theme: str | None = Field(
-        default=None,
+    investor_theme: str = Field(
         min_length=1,
         max_length=4000,
-        description="Optional investor risk tolerance, horizon, goals, and relevant portfolio preferences.",
+        description="Required investor risk tolerance, horizon, goals, and relevant portfolio preferences.",
     )
 
-    @field_validator("country")
+    @field_validator("country", "investor_theme", mode="before")
     @classmethod
-    def strip_text(cls, value: str) -> str:
-        return value.strip()
-
-    @field_validator("investor_theme", mode="before")
-    @classmethod
-    def normalize_investor_theme(cls, value: object) -> object:
-        if not isinstance(value, str):
-            return value
-        normalized = value.strip()
-        return normalized or None
+    def strip_text(cls, value: object) -> object:
+        return value.strip() if isinstance(value, str) else value
 
     @model_validator(mode="after")
-    def validate_tickers(self) -> Self:
+    def validate_holdings(self) -> Self:
         tickers = [holding.ticker for holding in self.current_allocation]
         if len(tickers) != len(set(tickers)):
             raise ValueError("current_allocation tickers must be unique")
+        if not any(holding.num_shares > 0 for holding in self.current_allocation):
+            raise ValueError("current_allocation must contain at least one positive-share position")
         return self
 
 

@@ -80,26 +80,38 @@ def test_post_returns_structured_spotlight_analysis():
     assert "analysis" not in data
 
 
-def test_post_empty_portfolio_returns_structured_empty_flag():
+@pytest.mark.parametrize("portfolio_case", ["missing", "empty", "zero-share"])
+def test_post_rejects_portfolio_without_positive_share_positions(portfolio_case):
+    request = _request_body()
+    if portfolio_case == "missing":
+        request.pop("current_allocation")
+    elif portfolio_case == "empty":
+        request["current_allocation"] = []
+    else:
+        request["current_allocation"][0]["num_shares"] = 0
+
     with patch(
         "app.routers.ai_portfolio_spotlight.services_spotlight.ai_spotlight_portfolio",
         new_callable=AsyncMock,
-        return_value=portfolio_spotlight_fixtures.analysis(portfolio_empty=True),
     ) as mock_spotlight:
-        response = client.post(
-            "/ai/spotlight_portfolio",
-            json={"country": "AU", "current_allocation": []},
-        )
+        response = client.post("/ai/spotlight_portfolio", json=request)
 
-    assert response.status_code == 200
-    assert response.json()["data"]["portfolio_empty"] is True
-    mock_spotlight.assert_awaited_once()
+    assert response.status_code == 422
+    mock_spotlight.assert_not_awaited()
 
 
-@pytest.mark.parametrize("investor_theme", [None, "", "   "])
-def test_post_accepts_missing_or_blank_investor_theme(investor_theme):
+@pytest.mark.parametrize(
+    ("include_theme", "investor_theme"),
+    [
+        (False, None),
+        (True, None),
+        (True, ""),
+        (True, "   "),
+    ],
+)
+def test_post_rejects_missing_null_or_blank_investor_theme(include_theme, investor_theme):
     request = _request_body()
-    if investor_theme is None:
+    if not include_theme:
         request.pop("investor_theme")
     else:
         request["investor_theme"] = investor_theme
@@ -107,12 +119,11 @@ def test_post_accepts_missing_or_blank_investor_theme(investor_theme):
     with patch(
         "app.routers.ai_portfolio_spotlight.services_spotlight.ai_spotlight_portfolio",
         new_callable=AsyncMock,
-        return_value=portfolio_spotlight_fixtures.analysis(),
     ) as mock_spotlight:
         response = client.post("/ai/spotlight_portfolio", json=request)
 
-    assert response.status_code == 200
-    assert mock_spotlight.await_args.kwargs["investor_theme"] is None
+    assert response.status_code == 422
+    mock_spotlight.assert_not_awaited()
 
 
 def test_post_rejects_overlong_country_and_ticker():

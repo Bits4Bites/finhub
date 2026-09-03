@@ -275,7 +275,7 @@ class ListingEvent(event.EventBase):
         description="Summary of the issuer's principal business activities.",
     )
     currency: models_types.NonEmptyString = Field(description="Currency of issue price and capital raised.")
-    capital_to_raise: float | None = Field(
+    capital_to_raise: int | None = Field(
         gt=0,
         description="Target capital raise, or null when unavailable.",
     )

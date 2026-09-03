@@ -42,8 +42,7 @@ class PortfolioSpotlightAIError(RuntimeError):
 
 class _PortfolioAnalysisPlan(models_ai.StrictAIModel):
     portfolio_id: models_types.NonEmptyString = Field(max_length=128)
-    investor_theme_present: bool
-    investor_context_summary: models_types.NonEmptyString | None = Field(max_length=2000)
+    investor_context_summary: models_types.NonEmptyString = Field(max_length=2000)
     research_priorities: list[_ResearchCategory] = Field(min_length=1, max_length=6)
     assessment_focus: list[
         Annotated[
@@ -72,11 +71,6 @@ class _PortfolioAnalysisPlan(models_ai.StrictAIModel):
             raise ValueError("assessment_focus must be unique")
         if len(self.investor_constraints) != len(set(self.investor_constraints)):
             raise ValueError("investor_constraints must be unique")
-        if self.investor_theme_present:
-            if self.investor_context_summary is None:
-                raise ValueError("investor theme requires an investor context summary")
-        elif self.investor_context_summary is not None or self.investor_constraints:
-            raise ValueError("absent investor theme cannot produce investor context or constraints")
         return self
 
 
@@ -140,24 +134,28 @@ async def ai_spotlight_portfolio(
     *,
     portfolio: list[models_portfolio.PortfolioHolding],
     country: str,
-    investor_theme: str | None = None,
+    investor_theme: str,
 ) -> models_spotlight.PortfolioSpotlightAnalysis:
     """Verify and perform a quick structured review of current portfolio risks."""
 
     normalized_country = conv.country_to_iso2(country.strip())
     if not normalized_country:
         raise portfolio_verification.PortfolioInputError("Unsupported or unknown country")
+    normalized_theme = investor_theme.strip()
+    if not normalized_theme:
+        raise portfolio_verification.PortfolioInputError("Investor theme must not be empty")
 
     active_positions = [position.model_copy(deep=True) for position in portfolio if position.num_shares > 0]
     if not active_positions:
-        return _empty_portfolio_analysis()
+        raise portfolio_verification.PortfolioInputError(
+            "Portfolio spotlight requires at least one positive-share position"
+        )
 
     verified_portfolio = await portfolio_verification.verify_portfolio(
         active_positions,
         country=normalized_country,
     )
     snapshot = models_spotlight.PortfolioSpotlightSnapshot.model_validate(verified_portfolio.model_dump())
-    normalized_theme = (investor_theme or "").strip() or None
 
     analysis_cache_key = _analysis_cache_key(snapshot, normalized_theme)
     cached_analysis = await cache.get(analysis_cache_key)
@@ -192,24 +190,7 @@ async def ai_spotlight_portfolio(
     return analysis
 
 
-def _empty_portfolio_analysis() -> models_spotlight.PortfolioSpotlightAnalysis:
-    return models_spotlight.PortfolioSpotlightAnalysis(
-        as_of=datetime.now(UTC),
-        analysis_status="Complete",
-        portfolio_empty=True,
-        overall_data_quality="Insufficient",
-        snapshot=None,
-        risks=[],
-        rebalance_recommended="NO",
-        data_gaps=["Portfolio has no positions with positive holdings."],
-        validation_warnings=[],
-        references=[],
-    )
-
-
-def _investor_theme_context(investor_theme: str | None) -> str:
-    if investor_theme is None:
-        return "NO_INVESTOR_THEME_SUPPLIED"
+def _investor_theme_context(investor_theme: str) -> str:
     return f"BEGIN_VALIDATED_UNTRUSTED_INVESTOR_THEME\n{investor_theme}\nEND_VALIDATED_UNTRUSTED_INVESTOR_THEME"
 
 
@@ -217,14 +198,12 @@ async def _build_analysis_plan(
     portfolio_id: str,
     snapshot: models_spotlight.PortfolioSpotlightSnapshot,
     *,
-    investor_theme: str | None,
+    investor_theme: str,
 ) -> _PortfolioAnalysisPlan:
-    theme_present = investor_theme is not None
     prompt = ai_prompt_utils.render_prompt(
         _PLAN_PROMPT,
         {
             "PORTFOLIO_ID": portfolio_id,
-            "INVESTOR_THEME_PRESENT": json.dumps(theme_present),
             "INVESTOR_THEME_CONTEXT": _investor_theme_context(investor_theme),
             "PORTFOLIO_JSON": snapshot.model_dump_json(),
         },
@@ -258,8 +237,6 @@ async def _build_analysis_plan(
         plan = _PortfolioAnalysisPlan.model_validate_json(response.completion)
         if plan.portfolio_id != portfolio_id:
             raise ValueError("planning returned a different portfolio ID")
-        if plan.investor_theme_present != theme_present:
-            raise ValueError("planning returned an inconsistent investor theme state")
     except (ValueError, ValidationError) as exc:
         raise PortfolioSpotlightAIError("Portfolio spotlight planning returned invalid structured data") from exc
 
@@ -276,7 +253,7 @@ async def _research_portfolio(
     snapshot: models_spotlight.PortfolioSpotlightSnapshot,
     plan: _PortfolioAnalysisPlan,
     *,
-    investor_theme: str | None,
+    investor_theme: str,
 ) -> _PortfolioResearch:
     prompt = ai_prompt_utils.render_prompt(
         _RESEARCH_PROMPT,
@@ -408,7 +385,7 @@ async def _assess_portfolio(
     research: _PortfolioResearch,
     plan: _PortfolioAnalysisPlan,
     *,
-    investor_theme: str | None,
+    investor_theme: str,
 ) -> _PortfolioAssessmentDraft:
     prompt = ai_prompt_utils.render_prompt(
         _ASSESSMENT_PROMPT,
@@ -540,7 +517,7 @@ def _build_analysis(
 
 def _analysis_cache_key(
     snapshot: models_spotlight.PortfolioSpotlightSnapshot,
-    investor_theme: str | None,
+    investor_theme: str,
 ) -> str:
     return cache.generate_hourly_key(
         _ANALYSIS_CACHE_NAMESPACE,

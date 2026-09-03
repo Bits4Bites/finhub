@@ -142,18 +142,13 @@ def research(portfolio_id: str = "portfolio-id") -> service._PortfolioResearch:
     )
 
 
-def plan(
-    portfolio_id: str = "portfolio-id",
-    *,
-    investor_theme_present: bool = True,
-) -> service._PortfolioAnalysisPlan:
+def plan(portfolio_id: str = "portfolio-id") -> service._PortfolioAnalysisPlan:
     return service._PortfolioAnalysisPlan(
         portfolio_id=portfolio_id,
-        investor_theme_present=investor_theme_present,
-        investor_context_summary="Growth-focused investor context." if investor_theme_present else None,
+        investor_context_summary="Growth-focused investor context.",
         research_priorities=["Issuer", "Portfolio", "Valuation"],
         assessment_focus=["Assess concentration and alignment with the available investor context."],
-        investor_constraints=["Prioritize growth."] if investor_theme_present else [],
+        investor_constraints=["Prioritize growth."],
         data_gaps=[],
     )
 

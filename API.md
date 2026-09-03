@@ -796,11 +796,11 @@ return up to four ranked, structured risk actions. Risk levels are limited to `C
 
 **Request Body (JSON):**
 
-| Field                | Type                 | Required | Description                                                                                             |
-|----------------------|----------------------|----------|---------------------------------------------------------------------------------------------------------|
-| `country`            | `string`             | Yes      | ISO code or country name, from 2 through 64 characters.                                                 |
-| `current_allocation` | `PortfolioHolding[]` | No       | Up to 50 positions; defaults to `[]`. Empty or all-zero positions skip verification and every AI stage. |
-| `investor_theme`     | `string \| null`     | No       | Optional risk tolerance, horizon, goals, and preferences. Omitted, null, or blank means no theme.       |
+| Field                | Type                 | Required | Description                                                                                |
+|----------------------|----------------------|----------|--------------------------------------------------------------------------------------------|
+| `country`            | `string`             | Yes      | ISO code or country name, from 2 through 64 characters.                                    |
+| `current_allocation` | `PortfolioHolding[]` | Yes      | One through 50 positions; at least one position must have a positive share count.          |
+| `investor_theme`     | `string`             | Yes      | Non-blank risk tolerance, horizon, goals, constraints, and relevant portfolio preferences. |
 
 Each `PortfolioHolding` object:
 
@@ -814,7 +814,7 @@ Each `PortfolioHolding` object:
 | `tags`              | No       | Optional holding metadata, limited to 500 characters.                                                |
 
 Duplicate request tickers, unknown securities, duplicate canonical symbols, and mixed-currency portfolios are
-rejected. Zero-share positions are ignored.
+rejected. Zero-share positions are ignored, but at least one positive-share position is required.
 
 **Example:**
 
@@ -838,7 +838,7 @@ The `data` object contains:
 |-------------------------|----------------------------------------------------------------------------------------------------|
 | `as_of`                 | Timezone-aware analysis timestamp.                                                                 |
 | `analysis_status`       | `Complete` or `CompleteWithWarnings`.                                                              |
-| `portfolio_empty`       | Whether the request contained no positive-share positions.                                         |
+| `portfolio_empty`       | `false` for successful analyses; requests without positive-share positions are rejected.          |
 | `overall_data_quality`  | `High`, `Medium`, `Low`, or `Insufficient`.                                                        |
 | `snapshot`              | Verified holdings, allocations, valuation, price source, P/L, target drift, and verification gaps. |
 | `risks`                 | Up to four ranked `PortfolioSpotlightRiskAction` objects.                                          |
@@ -852,12 +852,12 @@ Each risk includes `rank`, `level`, `action_timing`, `risk`, `action`, `affected
 `Critical` means `AsSoonAsPossibleWithinOneWeek`, `High` means `WithinOneToTwoWeeks`, and `Medium` means `Monitor`.
 The API returns only the `YES`/`NO` rebalance recommendation, not a rebalance plan.
 
-An empty or all-zero portfolio returns HTTP `200` with `portfolio_empty=true`, `snapshot=null`, no risks,
-`rebalance_recommended=NO`, and `overall_data_quality=Insufficient`, without invoking AI.
+An omitted or empty portfolio, or a portfolio containing only zero-share positions, returns HTTP `422` without
+invoking portfolio verification or AI.
 
 For a non-empty portfolio, the flow is verify, build a structured plan, perform sourced research, assess the validated
-research, and deterministically finalize the response. The plan adapts to a supplied investor theme; without one, it
-derives priorities only from the verified holdings.
+research, and deterministically finalize the response. Every planning and assessment stage uses the required investor
+theme while recording any context that the theme leaves ambiguous or unspecified.
 
 Invalid input returns HTTP `422`. Portfolio-verification, AI-provider, and invalid structured-output failures return
 HTTP `502`.
@@ -882,6 +882,7 @@ curl -X POST 'http://localhost:8000/ai/spotlight_portfolio_async' \
   -H 'Content-Type: application/json' \
   -d '{
     "country": "AU",
+    "investor_theme": "growth with moderate risk",
     "current_allocation": [
       {"ticker": "CBA.AX", "num_shares": 10, "avg_price": 150.0, "target_allocation": 1.0}
     ]

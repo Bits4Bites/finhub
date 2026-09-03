@@ -74,18 +74,13 @@ def _research_response_data(portfolio_id: str = "portfolio-id") -> dict[str, obj
     }
 
 
-def _plan_response_data(
-    portfolio_id: str = "portfolio-id",
-    *,
-    investor_theme_present: bool = True,
-) -> dict[str, object]:
+def _plan_response_data(portfolio_id: str = "portfolio-id") -> dict[str, object]:
     return {
         "portfolio_id": portfolio_id,
-        "investor_theme_present": investor_theme_present,
-        "investor_context_summary": "Growth-focused investor context." if investor_theme_present else None,
+        "investor_context_summary": "Growth-focused investor context.",
         "research_priorities": ["Issuer", "Portfolio", "Valuation"],
         "assessment_focus": ["Assess concentration and alignment with the available investor context."],
-        "investor_constraints": ["Prioritize growth."] if investor_theme_present else [],
+        "investor_constraints": ["Prioritize growth."],
         "data_gaps": [],
     }
 
@@ -100,35 +95,69 @@ def _assessment_response_data(portfolio_id: str = "portfolio-id") -> dict[str, o
     }
 
 
-def test_empty_portfolio_skips_verification_and_ai():
+def test_empty_portfolio_is_rejected_before_verification_and_ai():
     with (
-        patch.object(verification.yf, "Ticker") as mock_ticker,
+        patch.object(
+            service.portfolio_verification,
+            "verify_portfolio",
+            new_callable=AsyncMock,
+        ) as mock_verify,
         patch.object(service.ai_helper, "ai_exec_task", new_callable=AsyncMock) as mock_ai_exec,
+        pytest.raises(verification.PortfolioInputError, match="positive-share position"),
     ):
-        result = asyncio.run(
+        asyncio.run(
             service.ai_spotlight_portfolio(
                 portfolio=[],
                 country="AU",
+                investor_theme="Growth focused",
             )
         )
 
-    assert result.portfolio_empty is True
-    assert result.rebalance_recommended == "NO"
-    mock_ticker.assert_not_called()
+    mock_verify.assert_not_awaited()
     mock_ai_exec.assert_not_awaited()
 
 
-def test_zero_share_positions_return_empty_without_ai():
-    with patch.object(service.ai_helper, "ai_exec_task", new_callable=AsyncMock) as mock_ai_exec:
-        result = asyncio.run(
+def test_zero_share_positions_are_rejected_before_verification_and_ai():
+    with (
+        patch.object(
+            service.portfolio_verification,
+            "verify_portfolio",
+            new_callable=AsyncMock,
+        ) as mock_verify,
+        patch.object(service.ai_helper, "ai_exec_task", new_callable=AsyncMock) as mock_ai_exec,
+        pytest.raises(verification.PortfolioInputError, match="positive-share position"),
+    ):
+        asyncio.run(
             service.ai_spotlight_portfolio(
                 portfolio=[portfolio_spotlight_fixtures.request_holding(num_shares=0)],
                 country="US",
+                investor_theme="Growth focused",
             )
         )
 
-    assert result.portfolio_empty is True
+    mock_verify.assert_not_awaited()
     mock_ai_exec.assert_not_awaited()
+
+
+@pytest.mark.parametrize("investor_theme", ["", "   "])
+def test_blank_investor_theme_is_rejected_before_verification(investor_theme):
+    with (
+        patch.object(
+            service.portfolio_verification,
+            "verify_portfolio",
+            new_callable=AsyncMock,
+        ) as mock_verify,
+        pytest.raises(verification.PortfolioInputError, match="Investor theme must not be empty"),
+    ):
+        asyncio.run(
+            service.ai_spotlight_portfolio(
+                portfolio=[portfolio_spotlight_fixtures.request_holding()],
+                country="US",
+                investor_theme=investor_theme,
+            )
+        )
+
+    mock_verify.assert_not_awaited()
 
 
 def test_verification_uses_current_market_data_and_calculates_snapshot():
@@ -209,29 +238,8 @@ def test_verification_rejects_mixed_currency_portfolio():
         asyncio.run(verification.verify_portfolio(positions, country="US"))
 
 
-@pytest.mark.parametrize(
-    ("investor_theme", "investor_theme_present", "expected_context"),
-    [
-        (
-            "Growth focused",
-            True,
-            "BEGIN_VALIDATED_UNTRUSTED_INVESTOR_THEME\nGrowth focused\nEND_VALIDATED_UNTRUSTED_INVESTOR_THEME",
-        ),
-        (None, False, "NO_INVESTOR_THEME_SUPPLIED"),
-    ],
-)
-def test_planning_uses_optional_theme_and_structured_output(
-    investor_theme,
-    investor_theme_present,
-    expected_context,
-):
-    llm_response = ai_helper.LLMResponse(
-        completion=json.dumps(
-            _plan_response_data(
-                investor_theme_present=investor_theme_present,
-            )
-        )
-    )
+def test_planning_uses_required_theme_and_structured_output():
+    llm_response = ai_helper.LLMResponse(completion=json.dumps(_plan_response_data()))
     with (
         patch.object(service.cache, "get", new_callable=AsyncMock, return_value=None),
         patch.object(service.cache, "set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
@@ -246,12 +254,14 @@ def test_planning_uses_optional_theme_and_structured_output(
             service._build_analysis_plan(
                 "portfolio-id",
                 portfolio_spotlight_fixtures.snapshot(),
-                investor_theme=investor_theme,
+                investor_theme="Growth focused",
             )
         )
 
-    assert plan.investor_theme_present is investor_theme_present
-    assert expected_context in mock_ai_exec.await_args.args[1]
+    assert plan.investor_context_summary == "Growth-focused investor context."
+    assert (
+        "BEGIN_VALIDATED_UNTRUSTED_INVESTOR_THEME\nGrowth focused\nEND_VALIDATED_UNTRUSTED_INVESTOR_THEME"
+    ) in mock_ai_exec.await_args.args[1]
     assert mock_ai_exec.await_args.args[0] == "SPOTLIGHT_PORTFOLIO_PLAN"
     assert mock_ai_exec.await_args.kwargs["schema_name"] == "portfolio_spotlight_plan"
     assert mock_ai_exec.await_args.kwargs["response_json_schema"] == service._PortfolioAnalysisPlan.model_json_schema()
@@ -285,34 +295,15 @@ def test_planning_reuses_cached_validated_stage():
 
 
 @pytest.mark.parametrize(
-    ("response_updates", "investor_theme"),
+    "response_updates",
     [
-        ({"portfolio_id": "different-portfolio"}, "Growth focused"),
-        (
-            {
-                "investor_theme_present": False,
-                "investor_context_summary": None,
-                "investor_constraints": [],
-            },
-            "Growth focused",
-        ),
-        (
-            {
-                "investor_theme_present": False,
-                "investor_context_summary": "Invented context",
-                "investor_constraints": [],
-            },
-            None,
-        ),
+        {"portfolio_id": "different-portfolio"},
+        {"investor_context_summary": None},
+        {"investor_constraints": ["Prioritize growth.", "Prioritize growth."]},
     ],
 )
-def test_planning_rejects_inconsistent_structured_output(
-    response_updates,
-    investor_theme,
-):
-    response_data = _plan_response_data(
-        investor_theme_present=investor_theme is not None,
-    )
+def test_planning_rejects_inconsistent_structured_output(response_updates):
+    response_data = _plan_response_data()
     response_data.update(response_updates)
     with (
         patch.object(service.cache, "get", new_callable=AsyncMock, return_value=None),
@@ -332,7 +323,7 @@ def test_planning_rejects_inconsistent_structured_output(
             service._build_analysis_plan(
                 "portfolio-id",
                 portfolio_spotlight_fixtures.snapshot(),
-                investor_theme=investor_theme,
+                investor_theme="Growth focused",
             )
         )
 
@@ -499,6 +490,7 @@ def test_full_flow_reuses_final_analysis_cache_after_verification():
             service.ai_spotlight_portfolio(
                 portfolio=[portfolio_spotlight_fixtures.request_holding()],
                 country="US",
+                investor_theme="Growth focused",
             )
         )
 
@@ -508,9 +500,8 @@ def test_full_flow_reuses_final_analysis_cache_after_verification():
     mock_assess.assert_not_awaited()
 
 
-@pytest.mark.parametrize("investor_theme", [None, "   "])
-def test_full_flow_without_theme_uses_theme_neutral_plan(investor_theme):
-    plan = portfolio_spotlight_fixtures.plan(investor_theme_present=False)
+def test_full_flow_normalizes_theme_before_ai_stages():
+    plan = portfolio_spotlight_fixtures.plan()
     research = portfolio_spotlight_fixtures.research()
     assessment = portfolio_spotlight_fixtures.assessment()
     with (
@@ -550,7 +541,7 @@ def test_full_flow_without_theme_uses_theme_neutral_plan(investor_theme):
             service.ai_spotlight_portfolio(
                 portfolio=[portfolio_spotlight_fixtures.request_holding()],
                 country="US",
-                investor_theme=investor_theme,
+                investor_theme="  Growth focused  ",
             )
         )
 
@@ -561,10 +552,10 @@ def test_full_flow_without_theme_uses_theme_neutral_plan(investor_theme):
         "research",
         "assess",
     ]
-    assert mock_plan.await_args.kwargs["investor_theme"] is None
-    assert mock_research.await_args.kwargs["investor_theme"] is None
+    assert mock_plan.await_args.kwargs["investor_theme"] == "Growth focused"
+    assert mock_research.await_args.kwargs["investor_theme"] == "Growth focused"
     assert mock_research.await_args.args[2] == plan
-    assert mock_assess.await_args.kwargs["investor_theme"] is None
+    assert mock_assess.await_args.kwargs["investor_theme"] == "Growth focused"
     assert mock_assess.await_args.args[3] == plan
 
 
