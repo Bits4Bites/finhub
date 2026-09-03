@@ -5,10 +5,10 @@ namespace FinHub.Client.Models.Stocks;
 public sealed record StockHistory
 {
     [JsonPropertyName("recent_high_price")]
-    public double RecentHighPrice { get; init; } = 0.0;
+    public decimal RecentHighPrice { get; init; } = 0.0m;
 
     [JsonPropertyName("pull_pack_percent")]
-    public double PullPackPercent { get; init; } = 0.0;
+    public decimal PullPackPercent { get; init; } = 0.0m;
 
     [JsonPropertyName("current_volume")]
     public long CurrentVolume { get; init; } = 0;
@@ -20,22 +20,22 @@ public sealed record StockHistory
     public long AverageVolume30D { get; init; } = 0;
 
     [JsonPropertyName("ma10")]
-    public double Ma10 { get; init; } = 0.0;
+    public decimal Ma10 { get; init; } = 0.0m;
 
     [JsonPropertyName("ma20")]
-    public double Ma20 { get; init; } = 0.0;
+    public decimal Ma20 { get; init; } = 0.0m;
 
     [JsonPropertyName("ma50")]
-    public double Ma50 { get; init; } = 0.0;
+    public decimal Ma50 { get; init; } = 0.0m;
 
     [JsonPropertyName("ma100")]
-    public double Ma100 { get; init; } = 0.0;
+    public decimal Ma100 { get; init; } = 0.0m;
 
     [JsonPropertyName("ma200")]
-    public double Ma200 { get; init; } = 0.0;
+    public decimal Ma200 { get; init; } = 0.0m;
 
     [JsonPropertyName("rsi14")]
-    public double Rsi14 { get; init; } = 0.0;
+    public decimal Rsi14 { get; init; } = 0.0m;
 
     [JsonPropertyName("history_90d")]
     public IReadOnlyList<HistoryPoint> History90D { get; init; } = [];

@@ -3,4 +3,4 @@ using MyPo.Shared.Api;
 
 namespace FinHub.Client.Schemas.NewListings;
 
-public sealed class GetNewListingsResponse : ApiResp<IReadOnlyList<ListingEvent>?>;
+public sealed class GetNewListingsResponse : ApiResp<IReadOnlyList<ListingEvent>>;

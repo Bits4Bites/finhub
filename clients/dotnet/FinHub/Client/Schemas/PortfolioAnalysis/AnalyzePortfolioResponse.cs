@@ -3,4 +3,4 @@ using MyPo.Shared.Api;
 
 namespace FinHub.Client.Schemas.PortfolioAnalysis;
 
-public sealed class AnalyzePortfolioResponse : ApiResp<IPortfolioAnalysisResult?>;
+public sealed class AnalyzePortfolioResponse : ApiResp<IPortfolioAnalysisResult>;

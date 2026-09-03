@@ -5,8 +5,8 @@ namespace FinHub.Client.Models.Dividends;
 public sealed record DividendTransactionCosts
 {
     [JsonPropertyName("dividend_capture_per_share")]
-    public double DividendCapturePerShare { get; init; } = 0.0;
+    public decimal DividendCapturePerShare { get; init; } = 0.0m;
 
     [JsonPropertyName("post_dividend_discount_per_share")]
-    public double PostDividendDiscountPerShare { get; init; } = 0.0;
+    public decimal PostDividendDiscountPerShare { get; init; } = 0.0m;
 }

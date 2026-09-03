@@ -7,24 +7,29 @@ public abstract record EventBase
     [JsonPropertyName("symbol")]
     public required string Symbol { get; init; }
 
-    [JsonPropertyName("exchange")]
+    [JsonPropertyName("exchange"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Exchange { get; init; }
 
-    [JsonPropertyName("company_name")]
+    [JsonPropertyName("company_name"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? CompanyName { get; init; }
 
     [JsonPropertyName("timestamp")]
     public long Timestamp { get; init; } = 0;
 
-    [JsonPropertyName("date")]
-    public virtual string? Date { get; init; }
+    [JsonPropertyName("date"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? TimestampStr { get; set; }
 
-    [JsonPropertyName("event_category")]
+    [JsonIgnore]
+    public DateTimeOffset Date => !string.IsNullOrEmpty(TimestampStr)
+        ? DateTimeOffset.TryParse(TimestampStr, out var dt) ? dt.ToUniversalTime() : DateTimeOffset.FromUnixTimeSeconds(Timestamp).ToUniversalTime()
+        : DateTimeOffset.FromUnixTimeSeconds(Timestamp).ToUniversalTime();
+
+    [JsonPropertyName("event_category"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? EventCategory { get; init; }
 
-    [JsonPropertyName("source_name")]
+    [JsonPropertyName("source_name"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? SourceName { get; init; }
 
-    [JsonPropertyName("link")]
+    [JsonPropertyName("link"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Link { get; init; }
 }

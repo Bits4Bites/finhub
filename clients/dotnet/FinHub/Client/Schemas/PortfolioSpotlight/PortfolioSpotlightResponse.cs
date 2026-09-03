@@ -3,4 +3,4 @@ using MyPo.Shared.Api;
 
 namespace FinHub.Client.Schemas.PortfolioSpotlight;
 
-public sealed class PortfolioSpotlightResponse : ApiResp<PortfolioSpotlightAnalysis?>;
+public sealed class PortfolioSpotlightResponse : ApiResp<PortfolioSpotlightAnalysis>;

@@ -8,16 +8,16 @@ public sealed record PortfolioHolding
     public required string Ticker { get; init; }
 
     [JsonPropertyName("num_shares")]
-    public double NumShares { get; init; } = 0.0;
+    public decimal NumShares { get; init; } = 0.0m;
 
     [JsonPropertyName("avg_price")]
-    public double AvgPrice { get; init; } = 0.0;
+    public decimal AvgPrice { get; init; } = 0.0m;
 
     [JsonPropertyName("market_price")]
-    public double? MarketPrice { get; init; }
+    public decimal? MarketPrice { get; init; }
 
     [JsonPropertyName("target_allocation")]
-    public double? TargetAllocation { get; init; }
+    public decimal? TargetAllocation { get; init; }
 
     [JsonPropertyName("tags")]
     public string? Tags { get; init; }

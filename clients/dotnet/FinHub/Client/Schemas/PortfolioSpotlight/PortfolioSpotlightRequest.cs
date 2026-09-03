@@ -12,5 +12,5 @@ public sealed record PortfolioSpotlightRequest
     public IReadOnlyList<PortfolioHolding> CurrentAllocation { get; init; } = [];
 
     [JsonPropertyName("investor_theme")]
-    public string? InvestorTheme { get; init; }
+    public required string InvestorTheme { get; init; }
 }

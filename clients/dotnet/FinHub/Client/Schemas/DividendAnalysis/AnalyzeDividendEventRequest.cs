@@ -12,7 +12,7 @@ public sealed record AnalyzeDividendEventRequest
     public required DateOnly ExDate { get; init; }
 
     [JsonPropertyName("dividend_amount")]
-    public required double DividendAmount { get; init; }
+    public required decimal DividendAmount { get; init; }
 
     [JsonPropertyName("transaction_costs")]
     public DividendTransactionCosts TransactionCosts { get; init; } = new();

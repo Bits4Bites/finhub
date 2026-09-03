@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Serialization;
 using FinHub.Client.Models.Events;
 
@@ -6,12 +5,8 @@ namespace FinHub.Client.Models.Listings;
 
 public sealed record ListingEvent : EventBase
 {
-    [JsonPropertyName("date")]
-    [AllowNull]
-    public required override string Date { get; init; }
-
     [JsonPropertyName("issue_price")]
-    public required double? IssuePrice { get; init; }
+    public required decimal? IssuePrice { get; init; }
 
     [JsonPropertyName("issue_type")]
     public string? IssueType { get; init; }
@@ -29,7 +24,7 @@ public sealed record ListingEvent : EventBase
     public required string Currency { get; init; }
 
     [JsonPropertyName("capital_to_raise")]
-    public required double? CapitalToRaise { get; init; }
+    public required long? CapitalToRaise { get; init; }
 
     [JsonPropertyName("public_offer_close_date")]
     public string? PublicOfferCloseDate { get; init; }

@@ -14,26 +14,26 @@ public sealed record HistoryPoint
     public string Currency { get; init; } = string.Empty;
 
     [JsonPropertyName("open")]
-    public double Open { get; init; } = 0.0;
+    public decimal Open { get; init; } = 0.0m;
 
     [JsonPropertyName("high")]
-    public double High { get; init; } = 0.0;
+    public decimal High { get; init; } = 0.0m;
 
     [JsonPropertyName("low")]
-    public double Low { get; init; } = 0.0;
+    public decimal Low { get; init; } = 0.0m;
 
     [JsonPropertyName("close")]
-    public double Close { get; init; } = 0.0;
+    public decimal Close { get; init; } = 0.0m;
 
     [JsonPropertyName("volume")]
     public long Volume { get; init; } = 0;
 
     [JsonPropertyName("dividends")]
-    public double? Dividends { get; init; }
+    public decimal? Dividends { get; init; }
 
     [JsonPropertyName("rsi14")]
-    public double? Rsi14 { get; init; }
+    public decimal? Rsi14 { get; init; }
 
     [JsonPropertyName("dvt")]
-    public double? Dvt { get; init; }
+    public decimal? Dvt { get; init; }
 }

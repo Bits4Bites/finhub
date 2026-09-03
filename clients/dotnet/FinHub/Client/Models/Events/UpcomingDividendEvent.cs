@@ -8,10 +8,10 @@ public sealed record UpcomingDividendEvent : EventBase
     public string Status { get; init; } = string.Empty;
 
     [JsonPropertyName("amount")]
-    public double Amount { get; init; } = 0.0;
+    public decimal Amount { get; init; } = 0.0m;
 
     [JsonPropertyName("dividend_yield")]
-    public double DividendYield { get; init; } = 0.0;
+    public decimal DividendYield { get; init; } = 0.0m;
 
     [JsonPropertyName("currency")]
     public string Currency { get; init; } = string.Empty;

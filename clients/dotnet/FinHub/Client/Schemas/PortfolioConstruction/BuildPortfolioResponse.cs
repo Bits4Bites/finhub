@@ -3,4 +3,4 @@ using PortfolioConstructionModel = FinHub.Client.Models.Portfolios.PortfolioCons
 
 namespace FinHub.Client.Schemas.PortfolioConstruction;
 
-public sealed class BuildPortfolioResponse : ApiResp<PortfolioConstructionModel?>;
+public sealed class BuildPortfolioResponse : ApiResp<PortfolioConstructionModel>;
