@@ -1,5 +1,5 @@
 {
-    "date": "2026-08-22",
+    "date": "2026-08-29",
     "data": [
         {
             "symbol": "NYSE:AA",
@@ -1697,6 +1697,11 @@
             "sector": "Financials"
         },
         {
+            "symbol": "NYSE:SUI",
+            "company": "Sun Communities",
+            "sector": "Real Estate"
+        },
+        {
             "symbol": "NYSE:SWX",
             "company": "Southwest Gas Corp",
             "sector": "Utilities"
@@ -1899,11 +1904,6 @@
         {
             "symbol": "NYSE:WAL",
             "company": "Western Alliance Bancorporation",
-            "sector": "Financials"
-        },
-        {
-            "symbol": "NYSE:WBS",
-            "company": "Webster Bank",
             "sector": "Financials"
         },
         {
