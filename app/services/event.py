@@ -133,8 +133,8 @@ async def _get_upcoming_dividends_events(
     events = models_event.parse_upcoming_dividend_events_from_json(raw_data_json, default_vals)
     for event in events:
         event.symbol = f"{event.exchange}:{event.symbol}"
-        event.date = conv.yyyymmdd_to_iso(event.date or "", tz=tz)
-        event.timestamp = int(datetime.fromisoformat(event.date or "").timestamp())
+        event.timestamp_str = conv.yyyymmdd_to_iso(event.timestamp_str or "", tz=tz)
+        event.timestamp = int(datetime.fromisoformat(event.timestamp_str or "").timestamp())
         if event.payment_date:
             event.payment_date = conv.yyyymmdd_to_iso(event.payment_date, tz=tz)
     return events
@@ -290,8 +290,8 @@ async def _get_upcoming_earnings_events(
     events = models_event.parse_upcoming_earnings_events_from_json(raw_data_json, default_vals)
     for event in events:
         event.symbol = f"{event.exchange}:{event.symbol}"
-        event.date = conv.yyyymmdd_to_iso(event.date or "", tz)
-        event.timestamp = int(datetime.fromisoformat(event.date or "").timestamp())
+        event.timestamp_str = conv.yyyymmdd_to_iso(event.timestamp_str or "", tz)
+        event.timestamp = int(datetime.fromisoformat(event.timestamp_str or "").timestamp())
     return events
 
 
@@ -400,7 +400,7 @@ async def analyse_dividend_event(
         exchange=conv.normalize_exchange_code(info.get("fullExchangeName") or info.get("exchange") or ""),
         company_name=info.get("longName") or info.get("shortName") or "(n/a)",
         # timestamp: int = 0
-        date=conv.yyyymmdd_to_iso(ex_date, tz=tz),
+        timestamp_str=conv.yyyymmdd_to_iso(ex_date, tz=tz),
         # event_category: str | None = None
         # source_name: str | None = None
         # link: str | None = None
@@ -410,7 +410,7 @@ async def analyse_dividend_event(
         # ex_div_date=conv.yyyymmdd_to_iso(ex_date, tz=tz),
     )
     # result.ex_div_date_timestamp = int(datetime.fromisoformat(result.ex_div_date or "").timestamp())
-    result.timestamp = int(datetime.fromisoformat(result.date or "").timestamp())
+    result.timestamp = int(datetime.fromisoformat(result.timestamp_str or "").timestamp())
 
     history = ticker.history(period="5y", interval="1d", auto_adjust=False)
     history5y = history[:-1]

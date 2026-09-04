@@ -136,8 +136,8 @@ async def ai_get_asx_new_listings() -> list[models_events_listings.ListingEvent]
 
     events = await _analyze_asx_listings(events)
     for event in events:
-        event.date = conv.yyyymmdd_to_iso(event.date, _SYDNEY_TZ) or _INVALID_DATETIME
-        event.timestamp = int(datetime.fromisoformat(event.date).timestamp())
+        event.timestamp_str = conv.yyyymmdd_to_iso(event.timestamp_str, _SYDNEY_TZ) or _INVALID_DATETIME
+        event.timestamp = int(datetime.fromisoformat(event.timestamp_str).timestamp())
 
     if all(event.analysis_status == "Completed" for event in events):
         await cache.set(
@@ -158,8 +158,8 @@ def _select_current_and_future_listings(
     today: date,
 ) -> list[models_events_listings.ListingEvent]:
     return sorted(
-        (event for event in events if datetime.fromisoformat(event.date).date() >= today),
-        key=lambda event: (datetime.fromisoformat(event.date).date(), event.symbol),
+        (event for event in events if datetime.fromisoformat(event.timestamp_str).date() >= today),
+        key=lambda event: (datetime.fromisoformat(event.timestamp_str).date(), event.symbol),
     )
 
 
@@ -215,7 +215,7 @@ def _listing_cache_ttl(
     *,
     today: date,
 ) -> int:
-    days_until_listing = (datetime.fromisoformat(event.date).date() - today).days
+    days_until_listing = (datetime.fromisoformat(event.timestamp_str).date() - today).days
     if days_until_listing <= 1:
         return 60 * 60
     if days_until_listing <= 7:
@@ -344,7 +344,7 @@ def _validated_listing_event(
             exchange=_ASX_EXCHANGE,
             company_name=candidate.company_name.strip(),
             timestamp=int(listing_at.timestamp()),
-            date=candidate.listing_date.isoformat(),
+            timestamp_str=candidate.listing_date.isoformat(),
             event_category="listing",
             source_name=_ASX_EXCHANGE,
             link=_ASX_LISTINGS_URL,
@@ -553,7 +553,7 @@ async def _assess_asx_listing(
         else ""
     )
     today = _current_asx_date()
-    listing_date = datetime.fromisoformat(event.date).date()
+    listing_date = datetime.fromisoformat(event.timestamp_str).date()
     expected_status = "Listed" if listing_date < today else "Upcoming"
     event_json = event.model_dump_json(
         exclude={"analysis", "analysis_error", "analysis_status"},

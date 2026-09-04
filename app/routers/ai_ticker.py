@@ -21,7 +21,6 @@ async def _analyze(
     try:
         result = await services_ticker.ai_analyze_ticker(
             symbol=request.symbol,
-            intent=request.intent,
             current_holding=request.current_holding,
         )
     except services_ticker.TickerInputError as exc:

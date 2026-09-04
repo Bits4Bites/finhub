@@ -36,12 +36,6 @@ class AnalyzeTickerRequest(BaseRequest):
         max_length=32,
         description="Security symbol in Yahoo Finance or EXCHANGE:CODE format.",
     )
-    intent: str | None = Field(
-        default=None,
-        min_length=1,
-        max_length=4000,
-        description="Optional analysis focus that cannot override required output behavior.",
-    )
     current_holding: TickerHoldingInput | None = Field(
         default=None,
         description="Optional current holding used only for recommendation context.",
@@ -51,14 +45,6 @@ class AnalyzeTickerRequest(BaseRequest):
     @classmethod
     def normalize_symbol(cls, value: object) -> object:
         return value.strip().upper() if isinstance(value, str) else value
-
-    @field_validator("intent", mode="before")
-    @classmethod
-    def normalize_intent(cls, value: object) -> object:
-        if not isinstance(value, str):
-            return value
-        normalized = value.strip()
-        return normalized or None
 
     @model_validator(mode="after")
     def validate_symbol(self) -> Self:

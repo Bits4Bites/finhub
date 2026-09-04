@@ -273,17 +273,14 @@ def test_final_cache_key_isolated_by_holding_but_research_is_shared():
     ):
         no_holding_key = services_ticker._final_cache_key(
             baseline=baseline,
-            intent=None,
             holding_snapshot=None,
         )
         holding_a_key = services_ticker._final_cache_key(
             baseline=baseline,
-            intent=None,
             holding_snapshot=holding_a,
         )
         holding_b_key = services_ticker._final_cache_key(
             baseline=baseline,
-            intent=None,
             holding_snapshot=holding_b,
         )
 
@@ -312,8 +309,8 @@ def test_stage_cache_reuses_research_and_forecast_but_isolates_holding():
             new_callable=AsyncMock,
             return_value=research,
         ) as cache_get:
-            await services_ticker._research_ticker(baseline, intent="Growth")
-            await services_ticker._research_ticker(baseline, intent="Growth")
+            await services_ticker._research_ticker(baseline)
+            await services_ticker._research_ticker(baseline)
         research_keys = [call.args[0] for call in cache_get.await_args_list]
 
         with patch(

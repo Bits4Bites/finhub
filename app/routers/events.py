@@ -32,7 +32,7 @@ async def _get_upcoming_dividends_event_result(country: str, index: str) -> sche
     for event in events:
         for major_index in ["ASX300", "NASDAQ100", "SP500", "SP400", "VN100"]:
             if asset_utils.is_in_index(index=major_index, symbol=event.symbol):
-                event_date = event.date[:10] if event.date else ""
+                event_date = event.timestamp_str[:10] if event.timestamp_str else ""
                 logging.info(
                     "Upcoming dividend event: %s (%s) / %s / %s (%.2f%%)",
                     event.symbol,

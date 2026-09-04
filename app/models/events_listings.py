@@ -259,7 +259,6 @@ class ListingEvent(event.EventBase):
     symbol: models_types.NonEmptyString = Field(
         description="Canonical exchange-qualified symbol assigned to the listing."
     )
-    date: str = Field(description="Scheduled or actual listing date.")
     issue_price: float | None = Field(
         gt=0,
         description="Offer price per security, or null when unavailable.",

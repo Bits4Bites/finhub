@@ -90,7 +90,11 @@ class TestAsxUpcomingDividendsEvents:
         from app.models.event import UpcomingDividendEvent
 
         mock_event = UpcomingDividendEvent(
-            symbol="ASX:CBA", exchange="ASX", company_name="CBA", payment_date="2026-02-01"
+            symbol="ASX:CBA",
+            exchange="ASX",
+            company_name="CBA",
+            timestamp_str="2026-01-15",
+            payment_date="2026-02-01",
         )
         mock_get_events.return_value = [mock_event]
 
@@ -129,7 +133,11 @@ class TestUsUpcomingDividendsEvents:
         from app.models.event import UpcomingDividendEvent
 
         mock_event = UpcomingDividendEvent(
-            symbol="NASDAQ:AAPL", exchange="NASDAQ", company_name="Apple", payment_date="2026-02-01"
+            symbol="NASDAQ:AAPL",
+            exchange="NASDAQ",
+            company_name="Apple",
+            timestamp_str="2026-01-15",
+            payment_date="2026-02-01",
         )
         mock_get_events.return_value = [mock_event]
 
@@ -163,7 +171,11 @@ class TestVnUpcomingDividendsEvents:
         from app.models.event import UpcomingDividendEvent
 
         mock_event = UpcomingDividendEvent(
-            symbol="HOSE:VNM", exchange="HOSE", company_name="VNM", payment_date="2026-02-01"
+            symbol="HOSE:VNM",
+            exchange="HOSE",
+            company_name="VNM",
+            timestamp_str="2026-01-15",
+            payment_date="2026-02-01",
         )
         mock_get_events.return_value = [mock_event]
 
@@ -195,7 +207,12 @@ class TestAsxUpcomingEarningsEvents:
     def test_adds_tipranks_link(self, mock_get_events, mock_is_in_index):
         from app.models.event import UpcomingEarningsEvent
 
-        mock_event = UpcomingEarningsEvent(symbol="ASX:CBA", exchange="ASX", company_name="CBA")
+        mock_event = UpcomingEarningsEvent(
+            symbol="ASX:CBA",
+            exchange="ASX",
+            company_name="CBA",
+            timestamp_str="2026-01-15",
+        )
         mock_get_events.return_value = [mock_event]
 
         result = asyncio.run(get_asx_upcoming_earnings_events("ASX200"))
@@ -227,7 +244,12 @@ class TestUsUpcomingEarningsEvents:
     def test_adds_tipranks_link(self, mock_get_events, mock_is_in_index):
         from app.models.event import UpcomingEarningsEvent
 
-        mock_event = UpcomingEarningsEvent(symbol="NASDAQ:AAPL", exchange="NASDAQ", company_name="Apple")
+        mock_event = UpcomingEarningsEvent(
+            symbol="NASDAQ:AAPL",
+            exchange="NASDAQ",
+            company_name="Apple",
+            timestamp_str="2026-01-15",
+        )
         mock_get_events.return_value = [mock_event]
 
         result = asyncio.run(get_us_upcoming_earnings_events("SP500"))
@@ -274,6 +296,8 @@ class TestGetUpcomingDividendsEvents:
         assert len(result) == 1
         assert result[0].symbol == "ASX:CBA"
         assert result[0].company_name == "Commonwealth Bank"
+        assert result[0].timestamp_str.startswith("2025-08-15")
+        assert result[0].timestamp > 0
         assert result[0].amount == 2.5
         assert result[0].event_category == "dividend"
 
@@ -405,6 +429,8 @@ class TestGetUpcomingEarningsEvents:
         assert len(result) == 1
         assert result[0].symbol == "ASX:CBA"
         assert result[0].company_name == "Commonwealth Bank"
+        assert result[0].timestamp_str.startswith("2025-08-15")
+        assert result[0].timestamp > 0
 
     @patch("app.services.event.services_crawler.scrape_earnings_us", new_callable=AsyncMock)
     def test_us_filters_non_major_exchanges(self, mock_scrape):

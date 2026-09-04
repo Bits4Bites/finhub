@@ -57,16 +57,16 @@ class TestGetSymbolInfoRaw:
 
 def _make_listing_event(
     symbol: str = "ASX:XYZ",
-    date: str = "2026-06-15",
+    timestamp_str: str = "2026-06-15",
     *,
     issue_price: float | None = 2.5,
-    capital_to_raise: float | None = 5_000_000,
+    capital_to_raise: int | None = 5_000_000,
     analysis_status: str = "NotStarted",
 ) -> models_events_listings.ListingEvent:
     return models_events_listings.ListingEvent(
         symbol=symbol,
         exchange="ASX",
-        date=date,
+        timestamp_str=timestamp_str,
         issue_price=issue_price,
         currency="AUD",
         capital_to_raise=capital_to_raise,
@@ -111,7 +111,7 @@ class TestAiGetAsxNewListings:
 
         result = asyncio.run(ai_get_asx_new_listings())
         assert len(result) == 1
-        assert result[0].date.startswith("2026-06-15")
+        assert result[0].timestamp_str.startswith("2026-06-15")
         assert result[0].timestamp > 0
         self.mock_cache_set.assert_awaited_once()
         assert self.mock_cache_set.await_args.kwargs["ttl"] == 3600
@@ -136,7 +136,7 @@ class TestAiGetAsxNewListings:
         extracted_event = _make_listing_event()
         cached_events = [
             _make_listing_event(
-                date="2026-06-15T00:00:00+10:00",
+                timestamp_str="2026-06-15T00:00:00+10:00",
                 analysis_status="Completed",
             )
         ]
@@ -159,14 +159,14 @@ class TestAiGetAsxNewListings:
         events = [
             _make_listing_event(
                 symbol="ASX:ZZZ",
-                date="2026-08-02",
+                timestamp_str="2026-08-02",
                 issue_price=2.5,
                 capital_to_raise=10_000_000,
                 analysis_status="Completed",
             ),
             _make_listing_event(
                 symbol="ASX:AAA",
-                date="2026-08-01",
+                timestamp_str="2026-08-01",
                 issue_price=1.25,
                 capital_to_raise=5_000_000,
                 analysis_status="Completed",
@@ -212,7 +212,11 @@ class TestAiGetAsxNewListings:
         from app.services.msai_asx_listings import ai_get_asx_new_listings
 
         events = [
-            _make_listing_event(symbol=f"ASX:A{day}", date=f"2026-09-0{day}", analysis_status="Completed")
+            _make_listing_event(
+                symbol=f"ASX:A{day}",
+                timestamp_str=f"2026-09-0{day}",
+                analysis_status="Completed",
+            )
             for day in range(6, 0, -1)
         ]
         mock_get.return_value = events
@@ -235,19 +239,19 @@ class TestAiGetAsxNewListings:
         from app.services.msai_asx_listings import ai_get_asx_new_listings
 
         events = [
-            _make_listing_event(symbol="ASX:F5", date="2026-06-20", analysis_status="Completed"),
-            _make_listing_event(symbol="ASX:F1", date="2026-06-16", analysis_status="Completed"),
-            _make_listing_event(symbol="ASX:PAST", date="2026-06-14", analysis_status="Completed"),
+            _make_listing_event(symbol="ASX:F5", timestamp_str="2026-06-20", analysis_status="Completed"),
+            _make_listing_event(symbol="ASX:F1", timestamp_str="2026-06-16", analysis_status="Completed"),
+            _make_listing_event(symbol="ASX:PAST", timestamp_str="2026-06-14", analysis_status="Completed"),
             _make_listing_event(
                 symbol="ASX:EF2",
-                date="2026-06-15",
+                timestamp_str="2026-06-15",
                 issue_price=None,
                 capital_to_raise=None,
                 analysis_status="Completed",
             ),
-            _make_listing_event(symbol="ASX:F4", date="2026-06-19", analysis_status="Completed"),
-            _make_listing_event(symbol="ASX:F3", date="2026-06-18", analysis_status="Completed"),
-            _make_listing_event(symbol="ASX:F2", date="2026-06-17", analysis_status="Completed"),
+            _make_listing_event(symbol="ASX:F4", timestamp_str="2026-06-19", analysis_status="Completed"),
+            _make_listing_event(symbol="ASX:F3", timestamp_str="2026-06-18", analysis_status="Completed"),
+            _make_listing_event(symbol="ASX:F2", timestamp_str="2026-06-17", analysis_status="Completed"),
         ]
         mock_get.return_value = events
         mock_analyze.side_effect = lambda selected: selected

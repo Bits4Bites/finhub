@@ -376,13 +376,13 @@ For a successful request, `data` is an array of `ListingEvent` objects:
 | `exchange`                | Exchange code, when available.                                         |
 | `company_name`            | Issuer name, when available.                                           |
 | `timestamp`               | Unix timestamp corresponding to the listing date.                      |
-| `date`                    | Scheduled or actual listing date as an ISO datetime string.            |
+| `timestamp_str`           | String representation of the listing timestamp.                        |
 | `event_category`          | Event category supplied by the source, when available.                 |
 | `source_name`             | Source name, when available.                                           |
 | `link`                    | Source URL containing listing details, when available.                 |
 | `issue_price`             | Positive offer price per security, when available.                     |
 | `currency`                | Currency used for the offer price and capital raise.                   |
-| `capital_to_raise`        | Positive target capital raise, when available.                         |
+| `capital_to_raise`        | Positive whole-unit target capital raise, when available.              |
 | `issue_type`              | Security or offer type, when available.                                |
 | `sector` / `industry`     | Issuer sector and industry, when available.                            |
 | `principal_activities`    | Summary of the issuer's principal business activities, when available. |
@@ -565,7 +565,6 @@ holding-aware `BUY`, `HOLD`, or `SELL` recommendation.
 | Field             | Type                         | Required | Description                                                                                                                    |
 |-------------------|------------------------------|----------|--------------------------------------------------------------------------------------------------------------------------------|
 | `symbol`          | `string`                     | Yes      | Security symbol in Yahoo Finance or `EXCHANGE:CODE` format; normalized to uppercase, maximum 32 characters, and no whitespace. |
-| `intent`          | `string \| null`             | No       | Optional analysis focus, from 1 through 4,000 characters after trimming. It cannot override the required output contract.      |
 | `current_holding` | `TickerHoldingInput \| null` | No       | Optional holding context used only by the recommendation stage.                                                                |
 
 `TickerHoldingInput` contains:
@@ -582,7 +581,6 @@ curl -X POST 'http://localhost:8000/ai/analyze_ticker' \
   -H 'Content-Type: application/json' \
   -d '{
     "symbol": "NASDAQ:AAPL",
-    "intent": "Focus on margins, valuation, and product-cycle risk",
     "current_holding": {"num_shares": 10, "avg_price": 185.50}
   }'
 ```
@@ -629,7 +627,7 @@ case creates a task.
 # Start a task
 curl -X POST 'http://localhost:8000/ai/analyze_ticker_async' \
   -H 'Content-Type: application/json' \
-  -d '{"symbol": "NASDAQ:AAPL", "intent": "Focus on margins and valuation"}'
+  -d '{"symbol": "NASDAQ:AAPL"}'
 
 # Poll a task
 curl -X POST 'http://localhost:8000/ai/analyze_ticker_async?task_id=<TASK_ID>'

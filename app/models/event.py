@@ -26,11 +26,10 @@ class EventBase(BaseModel):
     )
     timestamp: int = Field(
         default=0,
-        description="Unix timestamp representing the event date or time.",
+        description="Unix timestamp in seconds representing the event date or time.",
     )
-    date: str | None = Field(
-        default=None,
-        description="Event date as supplied by the source.",
+    timestamp_str: str = Field(
+        description="Human-readable string representation of the event timestamp.",
     )
     event_category: str | None = Field(
         default=None,
@@ -155,7 +154,7 @@ def parse_upcoming_dividend_events_from_json(
             symbol=item.get("sym", default_vals.get("sym")),
             exchange=item.get("exchange", default_vals.get("exchange")),
             company_name=item.get("corp", default_vals.get("corp")),
-            date=item.get("date", default_vals.get("date")),
+            timestamp_str=item.get("date", default_vals.get("date")),
             payment_date=item.get("pdate", default_vals.get("pdate")),
             event_category=item.get("cat", default_vals.get("cat", "Dividend")),
             source_name=item.get("src", default_vals.get("src")),
@@ -165,8 +164,7 @@ def parse_upcoming_dividend_events_from_json(
             dividend_yield=item.get("yield", default_vals.get("yield", 0.0)),
             currency=item.get("currency", default_vals.get("currency", "")),
         )
-        # parse yyyy-MM-dd from event.date into event.timestamp
-        event.timestamp = int(datetime.strptime(event.date or "", "%Y-%m-%d").timestamp())
+        event.timestamp = int(datetime.strptime(event.timestamp_str or "", "%Y-%m-%d").timestamp())
         result.append(event)
 
     return result
@@ -197,15 +195,14 @@ def parse_upcoming_earnings_events_from_json(
             symbol=item.get("sym", default_vals.get("sym")),
             exchange=item.get("exchange", default_vals.get("exchange")),
             company_name=item.get("corp", default_vals.get("corp")),
-            date=item.get("date", default_vals.get("date")),
+            timestamp_str=item.get("date", default_vals.get("date")),
             event_category="earnings",
             source_name=item.get("src", default_vals.get("src")),
             link=item.get("link", default_vals.get("link")),
             report_period=item.get("report_period", default_vals.get("report_period")),
             status=item.get("status", default_vals.get("status")),
         )
-        # parse yyyy-MM-dd from event.date into event.timestamp
-        event.timestamp = int(datetime.strptime(event.date or "", "%Y-%m-%d").timestamp())
+        event.timestamp = int(datetime.strptime(event.timestamp_str or "", "%Y-%m-%d").timestamp())
         result.append(event)
 
     return result

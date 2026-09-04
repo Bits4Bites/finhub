@@ -1,6 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
+from app.models import event as models_event
 from app.models import events_listings as models_events_listings
 
 
@@ -23,11 +24,16 @@ def _outlook_data() -> dict[str, object]:
     }
 
 
+def test_event_base_requires_timestamp_str():
+    with pytest.raises(ValidationError, match="timestamp_str"):
+        models_event.UpcomingEarningsEvent(symbol="NASDAQ:AAPL")
+
+
 def test_listing_event_is_market_neutral_and_uses_positive_monetary_fields():
     event = models_events_listings.ListingEvent(
         symbol="NASDAQ:ABCD",
         exchange="NASDAQ",
-        date="2026-09-01",
+        timestamp_str="2026-09-01",
         issue_price=1.5,
         currency="USD",
         capital_to_raise=10_000_000,
@@ -37,6 +43,8 @@ def test_listing_event_is_market_neutral_and_uses_positive_monetary_fields():
     assert event.currency == "USD"
     assert event.issue_price == 1.5
     assert event.capital_to_raise == 10_000_000
+    assert event.model_dump()["timestamp_str"] == "2026-09-01"
+    assert "date" not in event.model_dump()
     assert "price" not in event.model_dump()
     assert "capital" not in event.model_dump()
 
@@ -45,7 +53,7 @@ def test_listing_event_retains_unavailable_monetary_fields_as_none():
     event = models_events_listings.ListingEvent(
         symbol="ASX:EF2",
         exchange="ASX",
-        date="2026-08-20",
+        timestamp_str="2026-08-20",
         issue_price=None,
         currency="AUD",
         capital_to_raise=None,
@@ -53,6 +61,18 @@ def test_listing_event_retains_unavailable_monetary_fields_as_none():
 
     assert event.issue_price is None
     assert event.capital_to_raise is None
+
+
+def test_listing_event_requires_whole_unit_capital_to_raise():
+    with pytest.raises(ValidationError):
+        models_events_listings.ListingEvent(
+            symbol="ASX:EF2",
+            exchange="ASX",
+            timestamp_str="2026-08-20",
+            issue_price=None,
+            currency="AUD",
+            capital_to_raise=1.5,
+        )
 
 
 @pytest.mark.parametrize(
@@ -67,7 +87,7 @@ def test_listing_event_retains_unavailable_monetary_fields_as_none():
 def test_listing_event_rejects_non_positive_monetary_fields(field, value):
     data = {
         "symbol": "NASDAQ:ABCD",
-        "date": "2026-09-01",
+        "timestamp_str": "2026-09-01",
         "issue_price": 1.5,
         "currency": "USD",
         "capital_to_raise": 10_000_000,
@@ -82,7 +102,7 @@ def test_listing_event_requires_explicit_currency():
     with pytest.raises(ValidationError, match="currency"):
         models_events_listings.ListingEvent(
             symbol="NASDAQ:ABCD",
-            date="2026-09-01",
+            timestamp_str="2026-09-01",
             issue_price=1.5,
             capital_to_raise=10_000_000,
         )

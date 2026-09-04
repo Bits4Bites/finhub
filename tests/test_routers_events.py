@@ -48,7 +48,7 @@ class TestUpcomingDividends:
         event = UpcomingDividendEvent.model_construct(
             symbol="ASX:CBA",
             company_name="CBA",
-            date="2026-06-10",
+            timestamp_str="2026-06-10",
             amount=2.0,
             dividend_yield=0.03,
             payment_date="2026-07-01",
@@ -62,6 +62,8 @@ class TestUpcomingDividends:
         assert body["message"] == "ok"
         assert len(body["data"]) == 1
         assert body["data"][0]["symbol"] == "ASX:CBA"
+        assert body["data"][0]["timestamp_str"] == "2026-06-10"
+        assert "date" not in body["data"][0]
         mock_get.assert_called_once_with("")
 
     @patch("app.routers.events.services_event.get_us_upcoming_dividends_events", new_callable=AsyncMock)
@@ -178,7 +180,7 @@ class TestUpcomingDividendsAsync:
                     {
                         "symbol": "ASX:CBA",
                         "company_name": "CBA",
-                        "date": "2026-06-10",
+                        "timestamp_str": "2026-06-10",
                         "amount": 2.0,
                         "payment_date": "2026-07-01",
                     }
@@ -251,7 +253,7 @@ class TestUpcomingEarnings:
         event = UpcomingEarningsEvent.model_construct(
             symbol="ASX:BHP",
             company_name="BHP Group",
-            date="2026-08-15",
+            timestamp_str="2026-08-15",
         )
         mock_get.return_value = [event]
 
@@ -261,6 +263,8 @@ class TestUpcomingEarnings:
         assert body["status"] == 200
         assert len(body["data"]) == 1
         assert body["data"][0]["symbol"] == "ASX:BHP"
+        assert body["data"][0]["timestamp_str"] == "2026-08-15"
+        assert "date" not in body["data"][0]
         mock_get.assert_called_once_with("")
 
     @patch("app.routers.events.services_event.get_us_upcoming_earnings_events", new_callable=AsyncMock)
@@ -367,7 +371,7 @@ class TestUpcomingEarningsAsync:
                     {
                         "symbol": "NASDAQ:AAPL",
                         "company_name": "Apple Inc.",
-                        "date": "2026-08-15",
+                        "timestamp_str": "2026-08-15",
                     }
                 ],
             },
@@ -418,7 +422,7 @@ class TestNewListings:
         event = models_events_listings.ListingEvent.model_construct(
             symbol="ASX:XYZ",
             company_name="XYZ Corp",
-            date="2026-06-20",
+            timestamp_str="2026-06-20",
             issue_price=2.5,
             capital_to_raise=5_000_000,
         )
@@ -431,6 +435,8 @@ class TestNewListings:
         assert body["message"] == "ok"
         assert len(body["data"]) == 1
         assert body["data"][0]["symbol"] == "ASX:XYZ"
+        assert body["data"][0]["timestamp_str"] == "2026-06-20"
+        assert "date" not in body["data"][0]
         mock_get.assert_called_once()
 
     def test_unsupported_country_returns_501(self):
@@ -550,7 +556,7 @@ class TestNewListingsAsync:
                     {
                         "symbol": "ASX:XYZ",
                         "company_name": "XYZ Corp",
-                        "date": "2026-06-20",
+                        "timestamp_str": "2026-06-20",
                         "issue_price": 2.5,
                         "currency": "AUD",
                         "capital_to_raise": 5_000_000,

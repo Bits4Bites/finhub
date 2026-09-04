@@ -46,7 +46,6 @@ def test_sync_returns_structured_analysis_and_passes_holding():
             "/ai/analyze_ticker",
             json={
                 "symbol": "nasdaq:aapl",
-                "intent": " Focus on margins ",
                 "current_holding": {"num_shares": 10, "avg_price": 80},
             },
         )
@@ -55,8 +54,19 @@ def test_sync_returns_structured_analysis_and_passes_holding():
     assert response.json()["data"]["symbol"] == "NASDAQ:AAPL"
     request = analyze.await_args.kwargs
     assert request["symbol"] == "NASDAQ:AAPL"
-    assert request["intent"] == "Focus on margins"
     assert request["current_holding"].num_shares == 10
+
+
+def test_request_rejects_removed_intent():
+    response = client.post(
+        "/ai/analyze_ticker",
+        json={
+            "symbol": "NASDAQ:AAPL",
+            "intent": "Focus on margins",
+        },
+    )
+
+    assert response.status_code == 422
 
 
 def test_sync_maps_input_error_to_422():
@@ -103,7 +113,7 @@ def test_async_starts_with_normalized_request():
     ):
         response = client.post(
             "/ai/analyze_ticker_async",
-            json={"symbol": "nasdaq:aapl", "intent": " Growth "},
+            json={"symbol": "nasdaq:aapl"},
         )
 
     assert response.status_code == 202
@@ -113,7 +123,6 @@ def test_async_starts_with_normalized_request():
     }
     task_request = run_task.await_args.args[1]
     assert task_request.symbol == "NASDAQ:AAPL"
-    assert task_request.intent == "Growth"
 
 
 def test_async_poll_redirects_through_ai_proxy_handler():

@@ -279,7 +279,6 @@ class _TickerRecommendationDraft(models_ai.StrictAIModel):
 async def ai_analyze_ticker(
     *,
     symbol: str,
-    intent: str | None = None,
     current_holding: schemas_ticker.TickerHoldingInput | None = None,
 ) -> models_ticker.TickerAnalysis:
     """Return structured research, forecasts, and a generic recommendation for one security."""
@@ -287,23 +286,18 @@ async def ai_analyze_ticker(
     normalized_symbol = symbol.strip().upper()
     if not normalized_symbol:
         raise TickerInputError("Ticker symbol is required")
-    normalized_intent = (intent or "").strip() or None
 
     baseline = await _get_market_baseline(normalized_symbol)
     holding_snapshot = _build_holding_snapshot(current_holding, baseline.snapshot)
     final_cache_key = _final_cache_key(
         baseline=baseline,
-        intent=normalized_intent,
         holding_snapshot=holding_snapshot,
     )
     cached_analysis = await cache.get(final_cache_key)
     if cached_analysis is not None:
         return _cached_analysis(cached_analysis)
 
-    research = await _research_ticker(
-        baseline,
-        intent=normalized_intent,
-    )
+    research = await _research_ticker(baseline)
     forecasts = await _forecast_ticker(
         baseline,
         research,
@@ -691,16 +685,11 @@ def _build_holding_snapshot(
     )
 
 
-async def _research_ticker(
-    baseline: _TickerMarketBaseline,
-    *,
-    intent: str | None,
-) -> _TickerResearch:
+async def _research_ticker(baseline: _TickerMarketBaseline) -> _TickerResearch:
     prompt = ai_prompt_utils.render_prompt(
         _RESEARCH_PROMPT,
         {
             "SYMBOL": baseline.snapshot.symbol,
-            "ANALYSIS_FOCUS_JSON": json.dumps(intent),
             "MARKET_SNAPSHOT_JSON": baseline.snapshot.model_dump_json(),
         },
     )
@@ -1168,7 +1157,6 @@ def _stage_cache_key(
 def _final_cache_key(
     *,
     baseline: _TickerMarketBaseline,
-    intent: str | None,
     holding_snapshot: models_ticker.TickerHoldingSnapshot | None,
 ) -> str:
     return cache.generate_hourly_key(
@@ -1176,7 +1164,6 @@ def _final_cache_key(
         json.dumps(
             {
                 "baseline": baseline.model_dump(mode="json"),
-                "intent": intent,
                 "holding_snapshot": holding_snapshot.model_dump(mode="json") if holding_snapshot else None,
             },
             sort_keys=True,

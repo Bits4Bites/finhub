@@ -48,7 +48,7 @@ def _event(
         symbol=symbol,
         exchange="ASX",
         company_name="Alpha Ltd",
-        date="2099-09-01",
+        timestamp_str="2099-09-01",
         issue_price=1.5,
         issue_type="Ordinary fully paid shares",
         currency="AUD",
@@ -600,7 +600,7 @@ def test_assessment_reuses_cached_validated_result(mock_listings_cache):
 )
 def test_listing_cache_ttl_shortens_near_listing_date(listing_date, expected_ttl):
     event = _event()
-    event.date = listing_date
+    event.timestamp_str = listing_date
 
     assert msai_asx_listings._listing_cache_ttl(event, today=date(2026, 6, 15)) == expected_ttl
 
