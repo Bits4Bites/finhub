@@ -86,7 +86,8 @@ var info = JsonSerializer.Deserialize<GetSymbolInfoResponse>(infoJson);
 `GetStockQuotesResponse.Data` is keyed by requested symbol. The overview and info contracts reuse
 `TickerAssetType` because its strict wire values exactly match the stock API's asset classification. Market
 capitalization, financial totals, volumes, and Unix timestamps use `long`; unformatted timestamp display values
-remain strings. Optional fields preserve their OpenAPI nullability and defaults. `GetSymbolInfoDebugResponse.Data`
+remain strings. Optional fields preserve their OpenAPI nullability and defaults. `StockQuote.MarketPrice` is
+`decimal?`: an omitted value uses `0.0m`, while an explicit JSON `null` remains null. `GetSymbolInfoDebugResponse.Data`
 is a nullable `JsonElement` because that debug payload is intentionally unstructured.
 
 ## Precious metals
@@ -136,9 +137,12 @@ response type. Start and running responses use HTTP `202`, completed polls can c
 `Data`, and failed polls use HTTP `500`. Async responses require the shared `AsyncTaskInfo` metadata and strict
 `TaskState`; cached tasks expire after one hour.
 
-`EventBase.Date`, dividend `PaymentDate`, and earnings `ReportPeriod` remain strings because OpenAPI does not assign
-date formats. `UpcomingDividendEvent.PaymentDate` is required but nullable. Unix timestamps, traded-value metrics,
-and volume metrics use `long`; sample counts, recovery-day ranges, and `Rsi14` use `int`.
+`EventBase.TimestampStr` is required and non-null for every event. It maps the unformatted `timestamp_str` wire value
+and is the human-readable display label paired with the canonical Unix-seconds `Timestamp`. Its `[JsonIgnore]` computed
+`DateUTC` is a UTC `DateTimeOffset` parsed from `TimestampStr` when valid and otherwise derived from `Timestamp`.
+Dividend `PaymentDate` and earnings `ReportPeriod` remain strings because OpenAPI does not assign date formats.
+`UpcomingDividendEvent.PaymentDate` is required but nullable. Unix timestamps, traded-value metrics, and volume
+metrics use `long`; sample counts, recovery-day ranges, and `Rsi14` use `int`.
 
 An upcoming dividend can contain nullable `DividendEventMetrics` in its `Analysis` property. This Events-domain type
 contains only the current event identity, historical recovery, and technical metrics. It is intentionally distinct
@@ -169,10 +173,11 @@ Call `GET /events/new_listings_async?country=AU` to start a task and poll the sa
 the shared `AsyncTaskInfo` and `TaskState` contracts. Completed polls can include the standard listing collection in
 `Data`.
 
-Nullable response properties may be absent because the API excludes `null` values. OpenAPI marks
-`ListingEvent.IssuePrice` and `ListingEvent.CapitalToRaise` as required but nullable. `ListingEvent.Date` and
-`ListingEvent.PublicOfferCloseDate` remain strings to match the current OpenAPI contract; formatted analysis dates use
-`DateOnly` or `DateTimeOffset`.
+Nullable response properties may be absent because the API excludes `null` values. `ListingEvent` inherits the shared
+required, non-null `EventBase.TimestampStr` (`timestamp_str`) contract, while `ListingEvent.IssuePrice` and
+`ListingEvent.CapitalToRaise` are required but nullable. The inherited `ListingEvent.DateUTC` is the ignored computed
+UTC value described above; `ListingEvent.PublicOfferCloseDate` remains a string to match the current OpenAPI contract,
+while formatted analysis dates use `DateOnly` or `DateTimeOffset`.
 
 ## Dividend-event analysis
 
@@ -220,7 +225,7 @@ var request = new AnalyzeTickerRequest
     CurrentHolding = new TickerHoldingInput
     {
         NumShares = 10,
-        AvgPrice = 150.0,
+        AvgPrice = 150.0m,
     },
 };
 ```
@@ -228,8 +233,10 @@ var request = new AnalyzeTickerRequest
 Results contain a verified market snapshot, an optional holding snapshot, source-linked research, exactly four fixed
 forecast horizons, and a holding-aware recommendation. `TickerAssetType` and `TickerRecommendationAction` use strict
 converters for their exact wire values, including `MUTUAL FUND` and `BUY`. Unformatted OpenAPI integer fields for
-market volume and capitalization use `long` to accommodate real market values. Synchronous calls use
-`AnalyzeTickerResponse`; async start and poll calls use `AnalyzeTickerAsyncResponse` with shared task metadata.
+market volume and capitalization use `long` to accommodate real market values. Analyze Ticker `number` fields use
+`decimal` or `decimal?` for financial precision, while integer counts and confidence scores remain `int`.
+Synchronous calls use `AnalyzeTickerResponse`; async start and poll calls use `AnalyzeTickerAsyncResponse` with
+shared task metadata.
 
 ## Portfolio construction and analysis
 
@@ -314,8 +321,9 @@ var request = new PortfolioSpotlightRequest
 
 The synchronous endpoint uses `PortfolioSpotlightResponse`. Async start and poll calls both use
 `PortfolioSpotlightAsyncResponse` with shared `AsyncTaskInfo`/`TaskState` metadata. Results contain verified holdings
-through the reusable `PortfolioVerifiedHolding` contract and up to four structured risk actions. `InvestorTheme` is
-optional and has no client default. Risk levels are limited to `Critical`, `High`, and `Medium`;
+through the reusable `PortfolioVerifiedHolding` contract and up to four structured risk actions. `InvestorTheme` and
+`CurrentAllocation` are required and have no client defaults; the allocation must contain at least one positive-share
+position. Risk levels are limited to `Critical`, `High`, and `Medium`;
 `PortfolioSpotlightRebalanceFlag` strictly maps the wire values `YES` and `NO`.
 
 ## Contract namespaces

@@ -14,12 +14,31 @@ public sealed class ComponentContractParityTests
 {
     private static readonly NullabilityInfoContext Nullability = new();
 
+    private static readonly IReadOnlyList<string> AnalyzeTickerRootComponents =
+    [
+        "AnalyzeTickerRequest",
+        "AnalyzeTickerResponse",
+        "AnalyzeTickerAsyncResponse",
+        "BaseResponse",
+    ];
+
+    private static readonly IReadOnlySet<string> AnalyzeTickerDecimalComponents =
+        new HashSet<string>(StringComparer.Ordinal)
+        {
+            "TickerHoldingInput",
+            "TickerHoldingSnapshot",
+            "TickerMarketSnapshot",
+            "TickerPriceForecast",
+            "TickerPriceRange",
+        };
+
     private static readonly IReadOnlySet<string> UnformattedInt64Properties =
         new HashSet<string>(StringComparer.Ordinal)
         {
             "CompanyBriefInfo.market_cap",
             "HistoryPoint.timestamp",
             "HistoryPoint.volume",
+            "ListingEvent.capital_to_raise",
             "ListingEvent.timestamp",
             "StockHistory.average_volume_30d",
             "StockHistory.current_volume",
@@ -127,6 +146,29 @@ public sealed class ComponentContractParityTests
         }
 
         AssertNoErrors("OpenAPI object parity failures", errors);
+    }
+
+    [Fact]
+    public void Analyze_ticker_transitive_components_match_OpenAPI()
+    {
+        var errors = new List<string>();
+
+        foreach (
+            var componentName in GetTransitiveComponents(
+                AnalyzeTickerRootComponents
+            ).Order(StringComparer.Ordinal)
+        )
+        {
+            CompareObjectComponent(
+                componentName,
+                OpenApiContract.GetSchema(componentName),
+                ContractMappings.ResolveComponentType(componentName),
+                errors,
+                requireAnalyzeTickerDecimals: true
+            );
+        }
+
+        AssertNoErrors("Analyze Ticker OpenAPI parity failures", errors);
     }
 
     [Fact]
@@ -289,7 +331,8 @@ public sealed class ComponentContractParityTests
         string componentName,
         JsonElement schema,
         Type contractType,
-        ICollection<string> errors
+        ICollection<string> errors,
+        bool requireAnalyzeTickerDecimals = false
     )
     {
         var schemaTypeName =
@@ -398,7 +441,8 @@ public sealed class ComponentContractParityTests
                     path,
                     propertySchema,
                     property.PropertyType,
-                    errors
+                    errors,
+                    requireAnalyzeTickerDecimals
                 );
             }
         }
@@ -503,7 +547,8 @@ public sealed class ComponentContractParityTests
         string path,
         JsonElement schema,
         Type propertyType,
-        ICollection<string> errors
+        ICollection<string> errors,
+        bool requireAnalyzeTickerDecimals
     )
     {
         var actualType = Nullable.GetUnderlyingType(propertyType) ?? propertyType;
@@ -604,7 +649,8 @@ public sealed class ComponentContractParityTests
                     $"{path}[]",
                     schema.GetProperty("items"),
                     actualType.GetGenericArguments()[0],
-                    errors
+                    errors,
+                    requireAnalyzeTickerDecimals
                 );
                 break;
             case "boolean":
@@ -622,7 +668,21 @@ public sealed class ComponentContractParityTests
                 CompareExpectedType(path, expectedIntegerType, actualType, errors);
                 break;
             case "number":
-                CompareExpectedType(path, typeof(double), actualType, errors);
+                var componentName = path.Split('.', 2)[0];
+                if (
+                    requireAnalyzeTickerDecimals
+                    && AnalyzeTickerDecimalComponents.Contains(componentName)
+                )
+                {
+                    CompareExpectedType(path, typeof(decimal), actualType, errors);
+                }
+                else if (actualType != typeof(decimal) && actualType != typeof(double))
+                {
+                    errors.Add(
+                        $"{path}: .NET type is '{FormatType(actualType)}', "
+                            + "expected System.Decimal or System.Double for an OpenAPI number."
+                    );
+                }
                 break;
             case "object":
                 if (!schema.TryGetProperty("additionalProperties", out var valueSchema))
@@ -653,7 +713,8 @@ public sealed class ComponentContractParityTests
                     $"{path}{{value}}",
                     valueSchema,
                     actualType.GetGenericArguments()[1],
-                    errors
+                    errors,
+                    requireAnalyzeTickerDecimals
                 );
                 break;
             case "string":
@@ -702,6 +763,33 @@ public sealed class ComponentContractParityTests
                     + $"expected '{FormatType(expected)}'."
             );
         }
+    }
+
+    private static IReadOnlySet<string> GetTransitiveComponents(
+        IEnumerable<string> rootComponents
+    )
+    {
+        var components = new HashSet<string>(StringComparer.Ordinal);
+        var pending = new Queue<string>(rootComponents);
+
+        while (pending.TryDequeue(out var componentName))
+        {
+            if (!components.Add(componentName))
+            {
+                continue;
+            }
+
+            foreach (
+                var reference in OpenApiContract.GetSchemaReferences(
+                    OpenApiContract.GetSchema(componentName)
+                )
+            )
+            {
+                pending.Enqueue(reference);
+            }
+        }
+
+        return components;
     }
 
     private static void AssertNoErrors(string heading, IReadOnlyCollection<string> errors)

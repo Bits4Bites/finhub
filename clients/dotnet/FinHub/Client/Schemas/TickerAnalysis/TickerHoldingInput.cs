@@ -5,8 +5,8 @@ namespace FinHub.Client.Schemas.TickerAnalysis;
 public sealed record TickerHoldingInput
 {
     [JsonPropertyName("num_shares")]
-    public required double NumShares { get; init; }
+    public required decimal NumShares { get; init; }
 
     [JsonPropertyName("avg_price")]
-    public required double AvgPrice { get; init; }
+    public required decimal AvgPrice { get; init; }
 }

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using FinHub.Client.Models.AI;
+using FinHub.Client.Models.Events;
 using FinHub.Client.Models.Listings;
 using FinHub.Client.Models.Portfolios;
 using FinHub.Client.Models.Stocks;
@@ -90,13 +91,22 @@ public sealed class JsonSerializationTests
     }
 
     [Fact]
-    public void Required_nullable_listing_members_accept_null_but_not_omission()
+    public void Required_listing_members_accept_nullable_values_but_not_omission()
     {
         const string withNulls =
             """
             {
               "symbol": "ASX:TEST",
-              "date": "2026-09-01",
+              "timestamp_str": "2026-09-01",
+              "issue_price": null,
+              "currency": "AUD",
+              "capital_to_raise": null
+            }
+            """;
+        const string missingTimestampStr =
+            """
+            {
+              "symbol": "ASX:TEST",
               "issue_price": null,
               "currency": "AUD",
               "capital_to_raise": null
@@ -106,20 +116,86 @@ public sealed class JsonSerializationTests
             """
             {
               "symbol": "ASX:TEST",
-              "date": "2026-09-01",
+              "timestamp_str": "2026-09-01",
               "currency": "AUD",
               "capital_to_raise": null
+            }
+            """;
+        const string missingCapitalToRaise =
+            """
+            {
+              "symbol": "ASX:TEST",
+              "timestamp_str": "2026-09-01",
+              "issue_price": null,
+              "currency": "AUD"
             }
             """;
 
         var listing = JsonSerializer.Deserialize<ListingEvent>(withNulls);
 
         Assert.NotNull(listing);
+        Assert.Equal("2026-09-01", listing.TimestampStr);
         Assert.Null(listing.IssuePrice);
         Assert.Null(listing.CapitalToRaise);
         Assert.Throws<JsonException>(
+            () => JsonSerializer.Deserialize<ListingEvent>(missingTimestampStr)
+        );
+        Assert.Throws<JsonException>(
             () => JsonSerializer.Deserialize<ListingEvent>(missingIssuePrice)
         );
+        Assert.Throws<JsonException>(
+            () => JsonSerializer.Deserialize<ListingEvent>(missingCapitalToRaise)
+        );
+    }
+
+    [Fact]
+    public void Event_DateUTC_parses_timestamp_str_and_normalizes_to_UTC()
+    {
+        const string json =
+            """
+            {
+              "symbol": "NASDAQ:TEST",
+              "timestamp": 0,
+              "timestamp_str": "2026-09-01T10:30:00+10:00"
+            }
+            """;
+
+        var marketEvent = JsonSerializer.Deserialize<UpcomingEarningsEvent>(json);
+
+        Assert.NotNull(marketEvent);
+        Assert.Equal(
+            new DateTimeOffset(2026, 9, 1, 0, 30, 0, TimeSpan.Zero),
+            marketEvent.DateUTC
+        );
+        Assert.Equal(TimeSpan.Zero, marketEvent.DateUTC.Offset);
+    }
+
+    [Fact]
+    public void Event_requires_timestamp_str_and_DateUTC_falls_back_to_timestamp_when_invalid()
+    {
+        const long timestamp = 1_725_148_800;
+        const string withoutTimestampStr =
+            """{"symbol":"NASDAQ:TEST","timestamp":1725148800}""";
+        const string withInvalidTimestampStr =
+            """
+            {
+              "symbol": "NASDAQ:TEST",
+              "timestamp": 1725148800,
+              "timestamp_str": "not-a-timestamp"
+            }
+            """;
+
+        Assert.Throws<JsonException>(
+            () => JsonSerializer.Deserialize<UpcomingEarningsEvent>(withoutTimestampStr)
+        );
+        var withInvalidString = JsonSerializer.Deserialize<UpcomingEarningsEvent>(
+            withInvalidTimestampStr
+        );
+        var expected = DateTimeOffset.FromUnixTimeSeconds(timestamp).ToUniversalTime();
+
+        Assert.NotNull(withInvalidString);
+        Assert.Equal(expected, withInvalidString.DateUTC);
+        Assert.Equal(TimeSpan.Zero, withInvalidString.DateUTC.Offset);
     }
 
     [Fact]

@@ -8,7 +8,7 @@ public sealed record StockQuote
     public string? Currency { get; init; } = string.Empty;
 
     [JsonPropertyName("market_price")]
-    public decimal MarketPrice { get; init; }
+    public decimal? MarketPrice { get; init; } = 0.0m;
 
     [JsonPropertyName("market_price_change")]
     public decimal? MarketPriceChange { get; init; }

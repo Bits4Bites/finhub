@@ -9,7 +9,7 @@ public sealed record PortfolioSpotlightRequest
     public required string Country { get; init; }
 
     [JsonPropertyName("current_allocation")]
-    public IReadOnlyList<PortfolioHolding> CurrentAllocation { get; init; } = [];
+    public required IReadOnlyList<PortfolioHolding> CurrentAllocation { get; init; }
 
     [JsonPropertyName("investor_theme")]
     public required string InvestorTheme { get; init; }

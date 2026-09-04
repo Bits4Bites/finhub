@@ -32,31 +32,31 @@ public sealed record TickerMarketSnapshot
     public string? Industry { get; init; }
 
     [JsonPropertyName("market_price")]
-    public required double MarketPrice { get; init; }
+    public required decimal MarketPrice { get; init; }
 
     [JsonPropertyName("previous_close")]
-    public double? PreviousClose { get; init; }
+    public decimal? PreviousClose { get; init; }
 
     [JsonPropertyName("market_day_low")]
-    public double? MarketDayLow { get; init; }
+    public decimal? MarketDayLow { get; init; }
 
     [JsonPropertyName("market_day_high")]
-    public double? MarketDayHigh { get; init; }
+    public decimal? MarketDayHigh { get; init; }
 
     [JsonPropertyName("fifty_two_week_low")]
-    public double? FiftyTwoWeekLow { get; init; }
+    public decimal? FiftyTwoWeekLow { get; init; }
 
     [JsonPropertyName("fifty_two_week_high")]
-    public double? FiftyTwoWeekHigh { get; init; }
+    public decimal? FiftyTwoWeekHigh { get; init; }
 
     [JsonPropertyName("bid")]
-    public double? Bid { get; init; }
+    public decimal? Bid { get; init; }
 
     [JsonPropertyName("ask")]
-    public double? Ask { get; init; }
+    public decimal? Ask { get; init; }
 
     [JsonPropertyName("bid_ask_spread_pct")]
-    public double? BidAskSpreadPct { get; init; }
+    public decimal? BidAskSpreadPct { get; init; }
 
     [JsonPropertyName("market_volume")]
     public long? MarketVolume { get; init; }
@@ -65,55 +65,55 @@ public sealed record TickerMarketSnapshot
     public long? MarketCap { get; init; }
 
     [JsonPropertyName("beta")]
-    public double? Beta { get; init; }
+    public decimal? Beta { get; init; }
 
     [JsonPropertyName("analyst_recommendation")]
     public string? AnalystRecommendation { get; init; }
 
     [JsonPropertyName("analyst_target_low")]
-    public double? AnalystTargetLow { get; init; }
+    public decimal? AnalystTargetLow { get; init; }
 
     [JsonPropertyName("analyst_target_mean")]
-    public double? AnalystTargetMean { get; init; }
+    public decimal? AnalystTargetMean { get; init; }
 
     [JsonPropertyName("analyst_target_median")]
-    public double? AnalystTargetMedian { get; init; }
+    public decimal? AnalystTargetMedian { get; init; }
 
     [JsonPropertyName("analyst_target_high")]
-    public double? AnalystTargetHigh { get; init; }
+    public decimal? AnalystTargetHigh { get; init; }
 
     [JsonPropertyName("return_5d_pct")]
-    public double? Return5DPct { get; init; }
+    public decimal? Return5DPct { get; init; }
 
     [JsonPropertyName("return_10d_pct")]
-    public double? Return10DPct { get; init; }
+    public decimal? Return10DPct { get; init; }
 
     [JsonPropertyName("return_21d_pct")]
-    public double? Return21DPct { get; init; }
+    public decimal? Return21DPct { get; init; }
 
     [JsonPropertyName("return_63d_pct")]
-    public double? Return63DPct { get; init; }
+    public decimal? Return63DPct { get; init; }
 
     [JsonPropertyName("realized_volatility_20d_pct")]
-    public double? RealizedVolatility20DPct { get; init; }
+    public decimal? RealizedVolatility20DPct { get; init; }
 
     [JsonPropertyName("realized_volatility_60d_pct")]
-    public double? RealizedVolatility60DPct { get; init; }
+    public decimal? RealizedVolatility60DPct { get; init; }
 
     [JsonPropertyName("rsi14")]
-    public double? Rsi14 { get; init; }
+    public decimal? Rsi14 { get; init; }
 
     [JsonPropertyName("ema_trend_pct")]
-    public double? EmaTrendPct { get; init; }
+    public decimal? EmaTrendPct { get; init; }
 
     [JsonPropertyName("atr14")]
-    public double? Atr14 { get; init; }
+    public decimal? Atr14 { get; init; }
 
     [JsonPropertyName("benchmark_return_21d_pct")]
-    public double? BenchmarkReturn21DPct { get; init; }
+    public decimal? BenchmarkReturn21DPct { get; init; }
 
     [JsonPropertyName("peer_return_21d_pct")]
-    public double? PeerReturn21DPct { get; init; }
+    public decimal? PeerReturn21DPct { get; init; }
 
     [JsonPropertyName("history_sample_count")]
     public required int HistorySampleCount { get; init; }

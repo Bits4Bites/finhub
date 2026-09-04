@@ -16,12 +16,12 @@ public abstract record EventBase
     [JsonPropertyName("timestamp")]
     public long Timestamp { get; init; } = 0;
 
-    [JsonPropertyName("date"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public string? TimestampStr { get; set; }
+    [JsonPropertyName("timestamp_str")]
+    public required string TimestampStr { get; init; }
 
     [JsonIgnore]
-    public DateTimeOffset Date => !string.IsNullOrEmpty(TimestampStr)
-        ? DateTimeOffset.TryParse(TimestampStr, out var dt) ? dt.ToUniversalTime() : DateTimeOffset.FromUnixTimeSeconds(Timestamp).ToUniversalTime()
+    public virtual DateTimeOffset DateUTC => DateTimeOffset.TryParse(TimestampStr, out var dt)
+        ? dt.ToUniversalTime()
         : DateTimeOffset.FromUnixTimeSeconds(Timestamp).ToUniversalTime();
 
     [JsonPropertyName("event_category"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

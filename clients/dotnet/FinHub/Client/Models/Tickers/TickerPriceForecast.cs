@@ -20,16 +20,16 @@ public sealed record TickerPriceForecast
     public required TickerPriceDirection Direction { get; init; }
 
     [JsonPropertyName("expected_price_min")]
-    public double? ExpectedPriceMin { get; init; }
+    public decimal? ExpectedPriceMin { get; init; }
 
     [JsonPropertyName("expected_price_max")]
-    public double? ExpectedPriceMax { get; init; }
+    public decimal? ExpectedPriceMax { get; init; }
 
     [JsonPropertyName("expected_return_min_pct")]
-    public double? ExpectedReturnMinPct { get; init; }
+    public decimal? ExpectedReturnMinPct { get; init; }
 
     [JsonPropertyName("expected_return_max_pct")]
-    public double? ExpectedReturnMaxPct { get; init; }
+    public decimal? ExpectedReturnMaxPct { get; init; }
 
     [JsonPropertyName("confidence")]
     public required int Confidence { get; init; }
