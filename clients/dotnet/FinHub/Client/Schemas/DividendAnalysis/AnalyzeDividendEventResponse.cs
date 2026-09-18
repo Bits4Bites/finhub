@@ -3,4 +3,4 @@ using MyPo.Shared.Api;
 
 namespace FinHub.Client.Schemas.DividendAnalysis;
 
-public sealed class AnalyzeDividendEventResponse : ApiResp<DividendEventAnalysis?>;
+public sealed class AnalyzeDividendEventResponse : ApiResp<DividendEventAnalysis>;
