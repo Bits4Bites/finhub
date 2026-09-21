@@ -1,5 +1,6 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.Json.Serialization;
+using MyPo.Shared.Helpers;
 
 namespace MyPo.Shared.Api;
 
@@ -49,12 +50,12 @@ public class ApiResp
 /// <summary>
 /// Typed version of <see cref="ApiResp"/>.
 /// </summary>
-/// <typeparam name="T"></typeparam>
-public class ApiResp<T> : ApiResp
+/// <typeparam name="TData"></typeparam>
+public class ApiResp<TData> : ApiResp
 {
 	/// <summary>
 	/// The data returned by the API call (specific to individual API).
 	/// </summary>
 	[JsonPropertyName("data"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-	public virtual T? Data { get; set; }
+	public virtual TData? Data { get; set; }
 }
