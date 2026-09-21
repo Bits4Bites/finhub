@@ -1,5 +1,5 @@
 {
-    "date": "2026-09-05",
+    "date": "2026-09-19",
     "data": [
         {
             "symbol": "ASX:360",
@@ -489,7 +489,7 @@
         {
             "symbol": "ASX:KAR",
             "company": "KAROON ENERGY LIMITED",
-            "sector": "NatGas, Crude Oil"
+            "sector": "Crude Oil, NatGas"
         },
         {
             "symbol": "ASX:KCN",
@@ -663,7 +663,7 @@
         },
         {
             "symbol": "ASX:PDI",
-            "company": "PREDICTIVE DISCOVERY LIMITED",
+            "company": "PDI GOLD LIMITED",
             "sector": "Gold & Silver"
         },
         {
@@ -799,7 +799,7 @@
         {
             "symbol": "ASX:SGH",
             "company": "SGH LIMITED",
-            "sector": "Mining Sector Contracting, Diversified Financials"
+            "sector": "Diversified Financials, Mining Sector Contracting"
         },
         {
             "symbol": "ASX:SGM",
