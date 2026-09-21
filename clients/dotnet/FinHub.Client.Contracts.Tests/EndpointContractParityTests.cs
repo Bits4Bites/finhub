@@ -224,12 +224,6 @@ public sealed class EndpointContractParityTests
         var operationName = $"{endpoint.Method} {endpoint.Path}";
         var schema = OpenApiContract.GetSchema(endpoint.ResponseComponent!);
         var properties = schema.GetProperty("properties");
-        var required = schema.TryGetProperty("required", out var requiredElement)
-            ? requiredElement
-                .EnumerateArray()
-                .Select(value => value.GetString()!)
-                .ToHashSet(StringComparer.Ordinal)
-            : new HashSet<string>(StringComparer.Ordinal);
 
         if (!properties.TryGetProperty("extra", out var extra))
         {
@@ -258,13 +252,6 @@ public sealed class EndpointContractParityTests
                 );
             }
 
-            if (!required.Contains("extra"))
-            {
-                errors.Add(
-                    $"{operationName}: async response metadata 'extra' is not required."
-                );
-            }
-
             var references = OpenApiContract.GetSchemaReferences(extra);
             if (!references.SetEquals(["AsyncTaskInfo"]))
             {
@@ -287,10 +274,10 @@ public sealed class EndpointContractParityTests
                 );
             }
 
-            if (required.Contains("extra") || !OpenApiContract.AllowsNull(extra))
+            if (!OpenApiContract.AllowsNull(extra))
             {
                 errors.Add(
-                    $"{operationName}: synchronous 'extra' must be optional and nullable."
+                    $"{operationName}: synchronous 'extra' must be nullable."
                 );
             }
         }

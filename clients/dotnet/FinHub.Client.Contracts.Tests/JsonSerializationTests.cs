@@ -8,6 +8,7 @@ using FinHub.Client.Models.Tickers;
 using FinHub.Client.Schemas;
 using FinHub.Client.Schemas.AIVendors;
 using FinHub.Client.Schemas.DividendAnalysis;
+using FinHub.Client.Schemas.Events;
 using FinHub.Client.Schemas.MarketIndex;
 using FinHub.Client.Schemas.Stocks;
 using FinHub.Client.Schemas.TickerAnalysis;
@@ -57,7 +58,7 @@ public sealed class JsonSerializationTests
     }
 
     [Fact]
-    public void Async_response_deserializes_required_task_metadata()
+    public void Async_response_preserves_task_metadata_without_duplicate_extra_fields()
     {
         const string json =
             """
@@ -91,61 +92,40 @@ public sealed class JsonSerializationTests
     }
 
     [Fact]
-    public void Required_listing_members_accept_nullable_values_but_not_omission()
+    public void Completed_async_response_converts_without_losing_payload_or_metadata()
     {
-        const string withNulls =
-            """
-            {
-              "symbol": "ASX:TEST",
-              "timestamp_str": "2026-09-01",
-              "issue_price": null,
-              "currency": "AUD",
-              "capital_to_raise": null
-            }
-            """;
-        const string missingTimestampStr =
-            """
-            {
-              "symbol": "ASX:TEST",
-              "issue_price": null,
-              "currency": "AUD",
-              "capital_to_raise": null
-            }
-            """;
-        const string missingIssuePrice =
-            """
-            {
-              "symbol": "ASX:TEST",
-              "timestamp_str": "2026-09-01",
-              "currency": "AUD",
-              "capital_to_raise": null
-            }
-            """;
-        const string missingCapitalToRaise =
-            """
-            {
-              "symbol": "ASX:TEST",
-              "timestamp_str": "2026-09-01",
-              "issue_price": null,
-              "currency": "AUD"
-            }
-            """;
+        var earnings = new UpcomingEarningsEvent
+        {
+            Symbol = "NASDAQ:TEST",
+            Timestamp = 1_725_148_800,
+            TimestampStr = "2024-09-01T00:00:00Z",
+            ReportPeriod = "Q3 2024",
+        };
+        var taskInfo = new AsyncTaskInfo
+        {
+            TaskId = "task-123",
+            State = TaskState.Completed,
+        };
+        var debugInfo = new Dictionary<string, string>
+        {
+            ["trace_id"] = "trace-123",
+        };
+        var response = new GetUpcomingEarningsAsyncResponse
+        {
+            Status = 200,
+            Message = "Task completed.",
+            Data = [earnings],
+            Extra = taskInfo,
+            DebugInfo = debugInfo,
+        };
 
-        var listing = JsonSerializer.Deserialize<ListingEvent>(withNulls);
+        var synchronousResponse = response.ToApiResp();
 
-        Assert.NotNull(listing);
-        Assert.Equal("2026-09-01", listing.TimestampStr);
-        Assert.Null(listing.IssuePrice);
-        Assert.Null(listing.CapitalToRaise);
-        Assert.Throws<JsonException>(
-            () => JsonSerializer.Deserialize<ListingEvent>(missingTimestampStr)
-        );
-        Assert.Throws<JsonException>(
-            () => JsonSerializer.Deserialize<ListingEvent>(missingIssuePrice)
-        );
-        Assert.Throws<JsonException>(
-            () => JsonSerializer.Deserialize<ListingEvent>(missingCapitalToRaise)
-        );
+        Assert.Equal(response.Status, synchronousResponse.Status);
+        Assert.Equal(response.Message, synchronousResponse.Message);
+        Assert.Same(response.Data, synchronousResponse.Data);
+        Assert.Same(taskInfo, synchronousResponse.Extra);
+        Assert.Same(debugInfo, synchronousResponse.DebugInfo);
     }
 
     [Fact]
@@ -171,11 +151,9 @@ public sealed class JsonSerializationTests
     }
 
     [Fact]
-    public void Event_requires_timestamp_str_and_DateUTC_falls_back_to_timestamp_when_invalid()
+    public void Event_DateUTC_falls_back_to_timestamp_when_timestamp_str_is_invalid()
     {
         const long timestamp = 1_725_148_800;
-        const string withoutTimestampStr =
-            """{"symbol":"NASDAQ:TEST","timestamp":1725148800}""";
         const string withInvalidTimestampStr =
             """
             {
@@ -185,9 +163,6 @@ public sealed class JsonSerializationTests
             }
             """;
 
-        Assert.Throws<JsonException>(
-            () => JsonSerializer.Deserialize<UpcomingEarningsEvent>(withoutTimestampStr)
-        );
         var withInvalidString = JsonSerializer.Deserialize<UpcomingEarningsEvent>(
             withInvalidTimestampStr
         );

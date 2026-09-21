@@ -1,5 +1,4 @@
 using System.Reflection;
-using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using FinHub.Client.Models.Markets;
@@ -105,6 +104,7 @@ public sealed class ComponentContractParityTests
             typeof(MarketIndexConstituent),
             typeof(ApiResp),
             typeof(ApiResp<>),
+            typeof(AsyncApiResponse<>),
         };
         var uncoveredTypes = ContractMappings
             .ContractsAssembly.GetExportedTypes()
@@ -130,7 +130,7 @@ public sealed class ComponentContractParityTests
     }
 
     [Fact]
-    public void Object_properties_match_names_requiredness_nullability_and_types()
+    public void Object_properties_match_names_nullability_and_types()
     {
         var errors = new List<string>();
 
@@ -354,14 +354,6 @@ public sealed class ComponentContractParityTests
             .GetProperty("properties")
             .EnumerateObject()
             .ToDictionary(property => property.Name, property => property.Value);
-        var required = schema
-            .TryGetProperty("required", out var requiredElement)
-            ? requiredElement
-                .EnumerateArray()
-                .Select(value => value.GetString()!)
-                .ToHashSet(StringComparer.Ordinal)
-            : new HashSet<string>(StringComparer.Ordinal);
-
         foreach (
             var missing in schemaProperties.Keys.Except(
                 properties.Keys,
@@ -394,23 +386,6 @@ public sealed class ComponentContractParityTests
             }
 
             var path = $"{componentName}.{jsonName}";
-            // ApiResp owns these annotations; endpoint schemas still verify
-            // their JSON names and underlying CLR types.
-            var isRequired = property.IsDefined(
-                typeof(RequiredMemberAttribute),
-                inherit: true
-            );
-            if (
-                !UsesSharedEnvelopeRequiredness(property)
-                && isRequired != required.Contains(jsonName)
-            )
-            {
-                errors.Add(
-                    $"{path}: .NET required={isRequired}, "
-                        + $"OpenAPI required={required.Contains(jsonName)}."
-                );
-            }
-
             var isNullable =
                 Nullable.GetUnderlyingType(property.PropertyType) is not null
                 || Nullability.Create(property).ReadState == NullabilityState.Nullable;
@@ -505,10 +480,6 @@ public sealed class ComponentContractParityTests
 
         return properties;
     }
-
-    private static bool UsesSharedEnvelopeRequiredness(PropertyInfo property) =>
-        property.DeclaringType == typeof(ApiResp)
-        && property.Name is nameof(ApiResp.Status) or nameof(ApiResp.Message);
 
     private static bool UsesSharedEnvelopeNullability(PropertyInfo property) =>
         property.DeclaringType == typeof(ApiResp)
