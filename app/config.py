@@ -115,6 +115,21 @@ class LLMTaskConfig(BaseSettings):
         return v
 
 
+class OpenAIExecutionSettings(BaseSettings):
+    """Runtime controls shared by OpenAI-compatible providers."""
+
+    max_concurrent_requests: int = Field(default=2, ge=1)
+    rate_limit_max_wait_seconds: float = Field(default=10 * 60, ge=0)
+    rate_limit_initial_backoff_seconds: float = Field(default=5, gt=0)
+    rate_limit_max_backoff_seconds: float = Field(default=60, gt=0)
+    model_config = SettingsConfigDict(
+        env_file="ai_vendors.env",
+        env_file_encoding="utf-8",
+        env_prefix="FINHUB_OPENAI_EXECUTION_",
+        extra="ignore",
+    )
+
+
 class LLMVendorSettings(BaseSettings):
     vendors: dict[str, dict[str, LLMConfig]] = Field(alias="FINHUB_LLM", default={})
     client_factories: dict[str, dict[str, LLMClientFactory]] = {}
@@ -171,6 +186,7 @@ class LLMTaskSettings(BaseSettings):
     )
 
 
+settings_openai_execution = OpenAIExecutionSettings()
 settings_llm_vendor = LLMVendorSettings()
 settings_llm_task = LLMTaskSettings()
 

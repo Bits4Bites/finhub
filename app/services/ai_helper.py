@@ -1,7 +1,12 @@
+import asyncio
 import logging
 import os
+import random
 import time
+import weakref
 from collections.abc import Mapping
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 
 import openai
 from pydantic import BaseModel, Field
@@ -9,6 +14,10 @@ from pydantic import BaseModel, Field
 from .. import config
 
 # ----------------------------------------------------------------------#
+
+
+class LLMRateLimitError(RuntimeError):
+    """An OpenAI-compatible provider remained rate limited beyond the retry budget."""
 
 
 class LLMResponse(BaseModel):
@@ -267,6 +276,139 @@ _SEARCH_CONTEXT_SIZE_BY_REASONING: dict[config.ReasoningEffort | None, str] = {
     "High": "high",
 }
 
+_NON_RETRYABLE_RATE_LIMIT_CODES = frozenset(
+    {
+        "billing_hard_limit_reached",
+        "insufficient_quota",
+        "quota_exceeded",
+    }
+)
+_OPENAI_LIMITERS: weakref.WeakKeyDictionary[
+    asyncio.AbstractEventLoop,
+    dict[tuple[str, str, str], asyncio.Semaphore],
+] = weakref.WeakKeyDictionary()
+
+
+def _openai_provider_name(vendor: str) -> str:
+    normalized = vendor.upper().replace("-", "").replace("_", "").replace(" ", "")
+    if normalized == "AZUREOPENAI":
+        return "AZURE_OPENAI"
+    if normalized == "OPENROUTER":
+        return "OPEN_ROUTER"
+    return normalized
+
+
+def _openai_limiter(task_cfg: config.LLMTaskConfig) -> asyncio.Semaphore:
+    loop = asyncio.get_running_loop()
+    loop_limiters = _OPENAI_LIMITERS.setdefault(loop, {})
+    key = (
+        _openai_provider_name(task_cfg.vendor),
+        task_cfg.tier.upper(),
+        task_cfg.model,
+    )
+    limiter = loop_limiters.get(key)
+    if limiter is None:
+        limiter = asyncio.Semaphore(config.settings_openai_execution.max_concurrent_requests)
+        loop_limiters[key] = limiter
+    return limiter
+
+
+def _rate_limit_error_code(exc: openai.RateLimitError) -> str | None:
+    if not isinstance(exc.body, Mapping):
+        return None
+    error = exc.body.get("error")
+    if isinstance(error, Mapping):
+        code = error.get("code") or error.get("type")
+    else:
+        code = exc.body.get("code") or exc.body.get("type")
+    return code.lower() if isinstance(code, str) else None
+
+
+def _is_retryable_rate_limit(exc: openai.RateLimitError) -> bool:
+    return _rate_limit_error_code(exc) not in _NON_RETRYABLE_RATE_LIMIT_CODES
+
+
+def _parse_retry_after(value: str) -> float | None:
+    try:
+        seconds = float(value)
+    except ValueError:
+        try:
+            retry_at = parsedate_to_datetime(value)
+        except (TypeError, ValueError):
+            return None
+        if retry_at.tzinfo is None:
+            retry_at = retry_at.replace(tzinfo=UTC)
+        seconds = (retry_at - datetime.now(UTC)).total_seconds()
+    return max(0.0, seconds)
+
+
+def _provider_retry_delay(exc: openai.RateLimitError) -> float | None:
+    headers = exc.response.headers
+    for header_name in ("retry-after-ms", "x-ms-retry-after-ms"):
+        value = headers.get(header_name)
+        if value is None:
+            continue
+        try:
+            return max(0.0, float(value) / 1000)
+        except ValueError:
+            continue
+    retry_after = headers.get("retry-after")
+    return _parse_retry_after(retry_after) if retry_after is not None else None
+
+
+def _fallback_retry_delay(retry_count: int) -> float:
+    settings = config.settings_openai_execution
+    delay_cap = min(
+        settings.rate_limit_max_backoff_seconds,
+        settings.rate_limit_initial_backoff_seconds * (2 ** min(retry_count, 30)),
+    )
+    return random.uniform(0, delay_cap)
+
+
+async def _execute_openai_request(
+    client: openai.AsyncOpenAI,
+    task_cfg: config.LLMTaskConfig,
+    request_kwargs: dict[str, object],
+    *,
+    is_openrouter: bool,
+) -> object:
+    started_at = time.monotonic()
+    retry_count = 0
+
+    while True:
+        try:
+            async with _openai_limiter(task_cfg):
+                if is_openrouter:
+                    return await client.chat.completions.create(**request_kwargs)
+                return await client.responses.create(**request_kwargs)
+        except openai.RateLimitError as exc:
+            if not _is_retryable_rate_limit(exc):
+                raise
+
+            elapsed = time.monotonic() - started_at
+            remaining = config.settings_openai_execution.rate_limit_max_wait_seconds - elapsed
+            delay = _provider_retry_delay(exc)
+            if delay is None:
+                delay = _fallback_retry_delay(retry_count)
+            if remaining <= 0 or delay > remaining:
+                raise LLMRateLimitError(
+                    f"{_openai_provider_name(task_cfg.vendor)} model '{task_cfg.model}' "
+                    f"remained rate limited for {elapsed:.1f} seconds."
+                ) from exc
+
+            retry_count += 1
+            logging.warning(
+                "_exec_prompt_openai_client('%s') - Rate limited by {%s - %s - %s}; "
+                "retrying in %.2f seconds (retry %d).",
+                task_cfg.task_name,
+                task_cfg.vendor,
+                task_cfg.tier,
+                task_cfg.model,
+                delay,
+                retry_count,
+            )
+            await asyncio.sleep(delay)
+
 
 async def _exec_prompt_openai_client(
     client: openai.AsyncOpenAI,
@@ -326,7 +468,6 @@ async def _exec_prompt_openai_client(
                     "schema": openai_json_schema,
                 },
             }
-        ai_resp = await client.chat.completions.create(**request_kwargs)
     else:
         request_kwargs: dict[str, object] = {
             "model": model,
@@ -357,7 +498,12 @@ async def _exec_prompt_openai_client(
                     "schema": openai_json_schema,
                 }
             }
-        ai_resp = await client.responses.create(**request_kwargs)
+    ai_resp = await _execute_openai_request(
+        client,
+        task_cfg,
+        request_kwargs,
+        is_openrouter=is_openrouter,
+    )
 
     timer_end = time.perf_counter()
     token_usage_input = 0

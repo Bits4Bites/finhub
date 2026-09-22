@@ -337,6 +337,37 @@ def test_ai_failure_preserves_deterministic_baseline():
     assert mock_cache_set.await_args.kwargs["ttl"] == 5 * 60
 
 
+def test_rate_limit_exhaustion_is_not_cached_as_failed_analysis():
+    context = dividend_fixtures.event_context()
+    baseline = dividend_fixtures.historical_baseline()
+    ticker = MagicMock()
+    ticker.info = {"quoteType": "EQUITY"}
+    ticker.history.return_value = MagicMock()
+
+    with (
+        patch.object(service.yf, "Ticker", return_value=ticker),
+        patch.object(service, "_resolve_exchange_timezone", return_value=ZoneInfo("Australia/Sydney")),
+        patch.object(service, "_normalize_history", return_value=pd.DataFrame()),
+        patch.object(service, "_build_event_context", return_value=context),
+        patch.object(service, "_calculate_historical_baseline", return_value=baseline),
+        patch.object(service, "_research_dividend_event", new_callable=AsyncMock) as mock_research,
+        patch.object(service.cache, "generate_key", return_value="cache-key"),
+        patch.object(service.cache, "get", new_callable=AsyncMock, return_value=None),
+        patch.object(service.cache, "set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
+    ):
+        mock_research.side_effect = ai_helper.LLMRateLimitError("Provider remained rate limited")
+        with pytest.raises(ai_helper.LLMRateLimitError):
+            asyncio.run(
+                service.ai_analyze_div_event(
+                    symbol="ASX:CBA",
+                    ex_date=dividend_fixtures.EX_DATE,
+                    dividend_amount=2.0,
+                )
+            )
+
+    mock_cache_set.assert_not_awaited()
+
+
 def test_success_adds_required_assumptions_and_recommendation():
     context = dividend_fixtures.event_context()
     baseline = dividend_fixtures.historical_baseline()

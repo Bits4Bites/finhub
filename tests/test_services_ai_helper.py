@@ -3,6 +3,9 @@ import inspect
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
+import openai
+import pytest
 from google.genai import types as genai_types
 
 from app import config
@@ -37,6 +40,29 @@ def _make_gemini_response():
         ),
         prompt_feedback=None,
         candidates=[SimpleNamespace()],
+    )
+
+
+def _make_rate_limit_error(
+    *,
+    code: str = "rate_limit_exceeded",
+    headers: dict[str, str] | None = None,
+) -> openai.RateLimitError:
+    response = httpx.Response(
+        429,
+        headers=headers,
+        request=httpx.Request("POST", "https://api.openai.com/v1/responses"),
+    )
+    return openai.RateLimitError(
+        "Rate limit exceeded",
+        response=response,
+        body={
+            "error": {
+                "message": "Rate limit exceeded",
+                "type": "too_many_requests",
+                "code": code,
+            }
+        },
     )
 
 
@@ -213,6 +239,176 @@ class TestAiExecTask:
 
 
 class TestExecPromptOpenAiClient:
+    def test_rate_limit_waits_for_provider_delay_then_returns_response(self):
+        task_cfg = config.LLMTaskConfig(
+            task_name="demo",
+            vendor="AZURE_OPENAI",
+            tier="cheap",
+            model="gpt-5.6-sol",
+        )
+        client = MagicMock()
+        client.responses.create = AsyncMock(
+            side_effect=[
+                _make_rate_limit_error(headers={"retry-after-ms": "2500"}),
+                _make_openai_response(),
+            ]
+        )
+
+        with patch.object(ai_helper.asyncio, "sleep", new_callable=AsyncMock) as mock_sleep:
+            result = asyncio.run(
+                ai_helper._exec_prompt_openai_client(
+                    client,
+                    task_cfg,
+                    "prompt",
+                    schema_name="json_responses",
+                )
+            )
+
+        assert result.completion == "ok"
+        assert client.responses.create.await_count == 2
+        mock_sleep.assert_awaited_once_with(2.5)
+
+    def test_rate_limit_without_provider_delay_uses_jittered_backoff(self):
+        task_cfg = config.LLMTaskConfig(
+            task_name="demo",
+            vendor="OPENAI",
+            tier="cheap",
+            model="gpt-5.6-sol",
+        )
+        client = MagicMock()
+        client.responses.create = AsyncMock(
+            side_effect=[
+                _make_rate_limit_error(),
+                _make_openai_response(),
+            ]
+        )
+
+        with (
+            patch.object(ai_helper.random, "uniform", return_value=0.75) as mock_uniform,
+            patch.object(ai_helper.asyncio, "sleep", new_callable=AsyncMock) as mock_sleep,
+        ):
+            result = asyncio.run(
+                ai_helper._exec_prompt_openai_client(
+                    client,
+                    task_cfg,
+                    "prompt",
+                    schema_name="json_responses",
+                )
+            )
+
+        assert result.completion == "ok"
+        mock_uniform.assert_called_once_with(0, 5)
+        mock_sleep.assert_awaited_once_with(0.75)
+
+    def test_permanent_quota_error_is_not_retried(self):
+        task_cfg = config.LLMTaskConfig(
+            task_name="demo",
+            vendor="OPENAI",
+            tier="cheap",
+            model="gpt-5.6-sol",
+        )
+        client = MagicMock()
+        error = _make_rate_limit_error(code="insufficient_quota")
+        client.responses.create = AsyncMock(side_effect=error)
+
+        with (
+            patch.object(ai_helper.asyncio, "sleep", new_callable=AsyncMock) as mock_sleep,
+            pytest.raises(openai.RateLimitError),
+        ):
+            asyncio.run(
+                ai_helper._exec_prompt_openai_client(
+                    client,
+                    task_cfg,
+                    "prompt",
+                    schema_name="json_responses",
+                )
+            )
+
+        client.responses.create.assert_awaited_once()
+        mock_sleep.assert_not_awaited()
+
+    def test_retry_budget_exhaustion_raises_transient_rate_limit_error(self):
+        task_cfg = config.LLMTaskConfig(
+            task_name="demo",
+            vendor="OPENAI",
+            tier="cheap",
+            model="gpt-5.6-sol",
+        )
+        client = MagicMock()
+        client.responses.create = AsyncMock(side_effect=_make_rate_limit_error())
+        settings = config.settings_openai_execution.model_copy(update={"rate_limit_max_wait_seconds": 0})
+
+        with (
+            patch.object(ai_helper.config, "settings_openai_execution", settings),
+            pytest.raises(ai_helper.LLMRateLimitError),
+        ):
+            asyncio.run(
+                ai_helper._exec_prompt_openai_client(
+                    client,
+                    task_cfg,
+                    "prompt",
+                    schema_name="json_responses",
+                )
+            )
+
+        client.responses.create.assert_awaited_once()
+
+    def test_same_provider_model_requests_are_admission_limited(self):
+        async def run_requests() -> int:
+            task_cfg = config.LLMTaskConfig(
+                task_name="demo",
+                vendor="AZURE_OPENAI",
+                tier="cheap",
+                model="gpt-5.6-sol",
+            )
+            client = MagicMock()
+            first_request_started = asyncio.Event()
+            release_first_request = asyncio.Event()
+            active_requests = 0
+            maximum_active_requests = 0
+            request_count = 0
+
+            async def create_response(**_: object):
+                nonlocal active_requests, maximum_active_requests, request_count
+                request_count += 1
+                active_requests += 1
+                maximum_active_requests = max(maximum_active_requests, active_requests)
+                if request_count == 1:
+                    first_request_started.set()
+                    await release_first_request.wait()
+                active_requests -= 1
+                return _make_openai_response()
+
+            client.responses.create = AsyncMock(side_effect=create_response)
+            first = asyncio.create_task(
+                ai_helper._exec_prompt_openai_client(
+                    client,
+                    task_cfg,
+                    "first",
+                    schema_name="json_responses",
+                )
+            )
+            await first_request_started.wait()
+            second = asyncio.create_task(
+                ai_helper._exec_prompt_openai_client(
+                    client,
+                    task_cfg,
+                    "second",
+                    schema_name="json_responses",
+                )
+            )
+            await asyncio.sleep(0)
+            assert client.responses.create.await_count == 1
+            release_first_request.set()
+            await asyncio.gather(first, second)
+            return maximum_active_requests
+
+        settings = config.settings_openai_execution.model_copy(update={"max_concurrent_requests": 1})
+        with patch.object(ai_helper.config, "settings_openai_execution", settings):
+            maximum_active_requests = asyncio.run(run_requests())
+
+        assert maximum_active_requests == 1
+
     def test_responses_collects_provider_url_citations(self):
         task_cfg = config.LLMTaskConfig(vendor="OPENAI", model="gpt-5", use_web_search=True)
         client = MagicMock()
