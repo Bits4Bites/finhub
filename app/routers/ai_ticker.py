@@ -13,6 +13,25 @@ from . import proxy_handler
 router = APIRouter(prefix="/ai", tags=["ai"])
 
 _TASK_TYPE = "analyze_ticker"
+_ASYNC_RESPONSES = {
+    202: {
+        "model": schemas_ticker.AnalyzeTickerAsyncResponse,
+        "description": "The ticker-analysis task started or is still running.",
+    },
+    404: {"model": BaseResponse, "description": "The task was not found."},
+    422: {
+        "model": schemas_ticker.AnalyzeTickerAsyncResponse | BaseResponse,
+        "description": "The ticker symbol or optional holding is invalid.",
+    },
+    500: {
+        "model": schemas_ticker.AnalyzeTickerAsyncResponse | BaseResponse,
+        "description": "The background task failed unexpectedly.",
+    },
+    502: {
+        "model": schemas_ticker.AnalyzeTickerAsyncResponse,
+        "description": "Market verification, AI execution, or structured output failed.",
+    },
+}
 
 
 async def _analyze(
@@ -108,41 +127,54 @@ async def _run_task(
     )
 
 
+async def _poll_task(
+    task_id: str,
+    response: Response,
+) -> schemas_ticker.AnalyzeTickerAsyncResponse:
+    task_entry = await router_async_task.load_task(task_id, _TASK_TYPE)
+    task_state = task_entry.state
+    task_info = async_task.AsyncTaskInfo(task_id=task_id, state=task_state)
+    if task_state == async_task.TASK_STATE_RUNNING:
+        response.status_code = status.HTTP_202_ACCEPTED
+        return schemas_ticker.AnalyzeTickerAsyncResponse(
+            status=status.HTTP_202_ACCEPTED,
+            message="Task is running",
+            extra=task_info,
+        )
+    if task_state == async_task.TASK_STATE_FAILED:
+        failure_status = router_async_task.failure_status(task_entry)
+        response.status_code = failure_status
+        return schemas_ticker.AnalyzeTickerAsyncResponse(
+            status=failure_status,
+            message=task_entry.message or "Task failed",
+            extra=task_info,
+        )
+
+    result = schemas_ticker.AnalyzeTickerResponse.model_validate(task_entry.result)
+    return schemas_ticker.AnalyzeTickerAsyncResponse(
+        status=result.status,
+        message=result.message,
+        data=result.data,
+        extra=task_info,
+    )
+
+
 @router.post(
-    "/analyze_ticker_async",
+    "/start_analyze_ticker_async",
     response_model=schemas_ticker.AnalyzeTickerAsyncResponse,
     response_model_exclude_none=True,
-    responses={
-        202: {
-            "model": schemas_ticker.AnalyzeTickerAsyncResponse,
-            "description": "The ticker-analysis task started or is still running.",
-        },
-        404: {"model": BaseResponse, "description": "The task was not found."},
-        422: {
-            "model": schemas_ticker.AnalyzeTickerAsyncResponse | BaseResponse,
-            "description": "The ticker symbol or optional holding is invalid.",
-        },
-        500: {
-            "model": schemas_ticker.AnalyzeTickerAsyncResponse | BaseResponse,
-            "description": "The background task failed unexpectedly.",
-        },
-        502: {
-            "model": schemas_ticker.AnalyzeTickerAsyncResponse,
-            "description": "Market verification, AI execution, or structured output failed.",
-        },
-    },
+    responses=_ASYNC_RESPONSES,
 )
-async def analyze_ticker_async(
+async def start_analyze_ticker_async(
     background_tasks: BackgroundTasks,
     response: Response,
     http_request: Request,
     request: schemas_ticker.AnalyzeTickerRequest | None = Body(
         None,
-        description="The ticker analysis request. Required when starting a task; omitted when polling.",
+        description="The ticker analysis request.",
     ),
-    task_id: str = Query("", description="Task ID returned by a previous call to this endpoint."),
 ) -> schemas_ticker.AnalyzeTickerAsyncResponse | Response:
-    """Start a ticker-analysis task or poll a previously started task."""
+    """Start a ticker-analysis task."""
 
     proxy_response = await proxy_handler.handle_if_proxy(
         config.settings_finhub_proxy.proxy_mode,
@@ -152,35 +184,6 @@ async def analyze_ticker_async(
     if proxy_response is not None:
         return proxy_response
 
-    normalized_task_id = task_id.strip()
-    if normalized_task_id:
-        task_entry = await router_async_task.load_task(normalized_task_id, _TASK_TYPE)
-        task_state = task_entry.state
-        task_info = async_task.AsyncTaskInfo(task_id=normalized_task_id, state=task_state)
-        if task_state == async_task.TASK_STATE_RUNNING:
-            response.status_code = status.HTTP_202_ACCEPTED
-            return schemas_ticker.AnalyzeTickerAsyncResponse(
-                status=status.HTTP_202_ACCEPTED,
-                message="Task is running",
-                extra=task_info,
-            )
-        if task_state == async_task.TASK_STATE_FAILED:
-            failure_status = router_async_task.failure_status(task_entry)
-            response.status_code = failure_status
-            return schemas_ticker.AnalyzeTickerAsyncResponse(
-                status=failure_status,
-                message=task_entry.message or "Task failed",
-                extra=task_info,
-            )
-
-        result = schemas_ticker.AnalyzeTickerResponse.model_validate(task_entry.result)
-        return schemas_ticker.AnalyzeTickerAsyncResponse(
-            status=result.status,
-            message=result.message,
-            data=result.data,
-            extra=task_info,
-        )
-
     if request is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -189,13 +192,7 @@ async def analyze_ticker_async(
 
     new_task_id, is_new = await router_async_task.start_task(_TASK_TYPE, request)
     if not is_new:
-        return await analyze_ticker_async(
-            background_tasks=background_tasks,
-            response=response,
-            http_request=http_request,
-            request=request,
-            task_id=new_task_id,
-        )
+        return await _poll_task(new_task_id, response)
 
     background_tasks.add_task(_run_task, new_task_id, request)
     response.status_code = status.HTTP_202_ACCEPTED
@@ -207,3 +204,27 @@ async def analyze_ticker_async(
             state=async_task.TASK_STATE_RUNNING,
         ),
     )
+
+
+@router.post(
+    "/poll_analyze_ticker_async",
+    response_model=schemas_ticker.AnalyzeTickerAsyncResponse,
+    response_model_exclude_none=True,
+    responses=_ASYNC_RESPONSES,
+)
+async def poll_analyze_ticker_async(
+    response: Response,
+    http_request: Request,
+    task_id: str = Query(description="Task ID returned by the corresponding start endpoint."),
+) -> schemas_ticker.AnalyzeTickerAsyncResponse | Response:
+    """Poll a ticker-analysis task."""
+
+    proxy_response = await proxy_handler.handle_if_proxy(
+        config.settings_finhub_proxy.proxy_mode,
+        config.settings_finhub_proxy.url_ai_task_node,
+        http_request,
+    )
+    if proxy_response is not None:
+        return proxy_response
+
+    return await _poll_task(task_id.strip(), response)

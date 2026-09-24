@@ -51,7 +51,7 @@ def test_async_poll_redirects_through_ai_proxy_handler():
         patch.object(config.settings_finhub_proxy, "url_ai_task_node", "https://proxy.example/finhub/"),
     ):
         response = client.post(
-            "/ai/spotlight_portfolio_async",
+            "/ai/poll_spotlight_portfolio_async",
             params={"task_id": "task-spotlight"},
             follow_redirects=False,
         )
@@ -59,7 +59,7 @@ def test_async_poll_redirects_through_ai_proxy_handler():
     assert response.status_code == 307
     assert (
         response.headers["location"]
-        == "https://proxy.example/finhub/ai/spotlight_portfolio_async?task_id=task-spotlight"
+        == "https://proxy.example/finhub/ai/poll_spotlight_portfolio_async?task_id=task-spotlight"
     )
 
 
@@ -184,7 +184,7 @@ def test_async_start_passes_validated_request_to_task():
             new_callable=AsyncMock,
         ) as mock_run_task,
     ):
-        response = client.post("/ai/spotlight_portfolio_async", json=_request_body())
+        response = client.post("/ai/start_spotlight_portfolio_async", json=_request_body())
 
     assert response.status_code == 202
     assert response.json() == {
@@ -219,7 +219,7 @@ def test_async_poll_returns_running_state():
         return_value=task_entry,
     ):
         response = client.post(
-            "/ai/spotlight_portfolio_async",
+            "/ai/poll_spotlight_portfolio_async",
             params={"task_id": "task-spotlight"},
         )
 
@@ -246,7 +246,7 @@ def test_async_poll_returns_completed_structured_result():
         return_value=task_entry,
     ):
         response = client.post(
-            "/ai/spotlight_portfolio_async",
+            "/ai/poll_spotlight_portfolio_async",
             params={"task_id": "task-spotlight"},
         )
 
@@ -268,7 +268,7 @@ def test_async_poll_preserves_failure_status():
         return_value=task_entry,
     ):
         response = client.post(
-            "/ai/spotlight_portfolio_async",
+            "/ai/poll_spotlight_portfolio_async",
             params={"task_id": "task-spotlight"},
         )
 

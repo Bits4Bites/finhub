@@ -101,22 +101,53 @@ async def _run_task(
     )
 
 
+async def _poll_task(
+    task_id: str,
+    response: Response,
+) -> schemas_spotlight.PortfolioSpotlightAsyncResponse:
+    task_entry = await router_async_task.load_task(task_id, _TASK_TYPE)
+    task_state = task_entry.state
+    task_info = async_task.AsyncTaskInfo(task_id=task_id, state=task_state)
+    if task_state == async_task.TASK_STATE_RUNNING:
+        response.status_code = status.HTTP_202_ACCEPTED
+        return schemas_spotlight.PortfolioSpotlightAsyncResponse(
+            status=status.HTTP_202_ACCEPTED,
+            message="Task is running",
+            extra=task_info,
+        )
+    if task_state == async_task.TASK_STATE_FAILED:
+        failure_status = router_async_task.failure_status(task_entry)
+        response.status_code = failure_status
+        return schemas_spotlight.PortfolioSpotlightAsyncResponse(
+            status=failure_status,
+            message=task_entry.message or "Task failed",
+            extra=task_info,
+        )
+
+    result = schemas_spotlight.PortfolioSpotlightResponse.model_validate(task_entry.result)
+    return schemas_spotlight.PortfolioSpotlightAsyncResponse(
+        status=result.status,
+        message=result.message,
+        data=result.data,
+        extra=task_info,
+    )
+
+
 @router.post(
-    "/spotlight_portfolio_async",
+    "/start_spotlight_portfolio_async",
     response_model=schemas_spotlight.PortfolioSpotlightAsyncResponse,
     response_model_exclude_none=True,
 )
-async def spotlight_portfolio_async(
+async def start_spotlight_portfolio_async(
     background_tasks: BackgroundTasks,
     response: Response,
     http_request: Request,
     request: schemas_spotlight.PortfolioSpotlightRequest | None = Body(
         None,
-        description="The portfolio spotlight request. Required when starting a task; omitted when polling.",
+        description="The portfolio spotlight request.",
     ),
-    task_id: str = Query("", description="Task ID returned by a previous call to this endpoint."),
 ) -> schemas_spotlight.PortfolioSpotlightAsyncResponse | Response:
-    """Start a portfolio-spotlight task or poll a previously started task."""
+    """Start a portfolio-spotlight task."""
 
     proxy_response = await proxy_handler.handle_if_proxy(
         config.settings_finhub_proxy.proxy_mode,
@@ -126,35 +157,6 @@ async def spotlight_portfolio_async(
     if proxy_response is not None:
         return proxy_response
 
-    normalized_task_id = task_id.strip()
-    if normalized_task_id:
-        task_entry = await router_async_task.load_task(normalized_task_id, _TASK_TYPE)
-        task_state = task_entry.state
-        task_info = async_task.AsyncTaskInfo(task_id=normalized_task_id, state=task_state)
-        if task_state == async_task.TASK_STATE_RUNNING:
-            response.status_code = status.HTTP_202_ACCEPTED
-            return schemas_spotlight.PortfolioSpotlightAsyncResponse(
-                status=status.HTTP_202_ACCEPTED,
-                message="Task is running",
-                extra=task_info,
-            )
-        if task_state == async_task.TASK_STATE_FAILED:
-            failure_status = router_async_task.failure_status(task_entry)
-            response.status_code = failure_status
-            return schemas_spotlight.PortfolioSpotlightAsyncResponse(
-                status=failure_status,
-                message=task_entry.message or "Task failed",
-                extra=task_info,
-            )
-
-        result = schemas_spotlight.PortfolioSpotlightResponse.model_validate(task_entry.result)
-        return schemas_spotlight.PortfolioSpotlightAsyncResponse(
-            status=result.status,
-            message=result.message,
-            data=result.data,
-            extra=task_info,
-        )
-
     if request is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -163,13 +165,7 @@ async def spotlight_portfolio_async(
 
     new_task_id, is_new = await router_async_task.start_task(_TASK_TYPE, request)
     if not is_new:
-        return await spotlight_portfolio_async(
-            background_tasks=background_tasks,
-            response=response,
-            http_request=http_request,
-            request=request,
-            task_id=new_task_id,
-        )
+        return await _poll_task(new_task_id, response)
 
     background_tasks.add_task(_run_task, new_task_id, request)
     response.status_code = status.HTTP_202_ACCEPTED
@@ -181,3 +177,26 @@ async def spotlight_portfolio_async(
             state=async_task.TASK_STATE_RUNNING,
         ),
     )
+
+
+@router.post(
+    "/poll_spotlight_portfolio_async",
+    response_model=schemas_spotlight.PortfolioSpotlightAsyncResponse,
+    response_model_exclude_none=True,
+)
+async def poll_spotlight_portfolio_async(
+    response: Response,
+    http_request: Request,
+    task_id: str = Query(description="Task ID returned by the corresponding start endpoint."),
+) -> schemas_spotlight.PortfolioSpotlightAsyncResponse | Response:
+    """Poll a portfolio-spotlight task."""
+
+    proxy_response = await proxy_handler.handle_if_proxy(
+        config.settings_finhub_proxy.proxy_mode,
+        config.settings_finhub_proxy.url_ai_task_node,
+        http_request,
+    )
+    if proxy_response is not None:
+        return proxy_response
+
+    return await _poll_task(task_id.strip(), response)

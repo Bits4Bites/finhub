@@ -102,9 +102,19 @@ internal static class ContractMappings
         ),
         new(
             "POST",
-            "/ai/analyze_dividend_event_async",
+            "/ai/start_analyze_dividend_event_async",
             typeof(AnalyzeDividendEventRequest),
             "AnalyzeDividendEventRequest",
+            false,
+            typeof(AnalyzeDividendEventAsyncResponse),
+            "AnalyzeDividendEventAsyncResponse",
+            ResponseEnvelopeKind.Asynchronous
+        ),
+        new(
+            "POST",
+            "/ai/poll_analyze_dividend_event_async",
+            null,
+            null,
             false,
             typeof(AnalyzeDividendEventAsyncResponse),
             "AnalyzeDividendEventAsyncResponse",
@@ -122,9 +132,19 @@ internal static class ContractMappings
         ),
         new(
             "POST",
-            "/ai/build_portfolio_async",
+            "/ai/start_build_portfolio_async",
             typeof(BuildPortfolioRequest),
             "BuildPortfolioRequest",
+            false,
+            typeof(BuildPortfolioAsyncResponse),
+            "BuildPortfolioAsyncResponse",
+            ResponseEnvelopeKind.Asynchronous
+        ),
+        new(
+            "POST",
+            "/ai/poll_build_portfolio_async",
+            null,
+            null,
             false,
             typeof(BuildPortfolioAsyncResponse),
             "BuildPortfolioAsyncResponse",
@@ -142,9 +162,19 @@ internal static class ContractMappings
         ),
         new(
             "POST",
-            "/ai/analyze_portfolio_async",
+            "/ai/start_analyze_portfolio_async",
             typeof(AnalyzePortfolioRequest),
             "AnalyzePortfolioRequest",
+            false,
+            typeof(AnalyzePortfolioAsyncResponse),
+            "AnalyzePortfolioAsyncResponse",
+            ResponseEnvelopeKind.Asynchronous
+        ),
+        new(
+            "POST",
+            "/ai/poll_analyze_portfolio_async",
+            null,
+            null,
             false,
             typeof(AnalyzePortfolioAsyncResponse),
             "AnalyzePortfolioAsyncResponse",
@@ -162,9 +192,19 @@ internal static class ContractMappings
         ),
         new(
             "POST",
-            "/ai/spotlight_portfolio_async",
+            "/ai/start_spotlight_portfolio_async",
             typeof(PortfolioSpotlightRequest),
             "PortfolioSpotlightRequest",
+            false,
+            typeof(PortfolioSpotlightAsyncResponse),
+            "PortfolioSpotlightAsyncResponse",
+            ResponseEnvelopeKind.Asynchronous
+        ),
+        new(
+            "POST",
+            "/ai/poll_spotlight_portfolio_async",
+            null,
+            null,
             false,
             typeof(PortfolioSpotlightAsyncResponse),
             "PortfolioSpotlightAsyncResponse",
@@ -182,9 +222,19 @@ internal static class ContractMappings
         ),
         new(
             "POST",
-            "/ai/analyze_ticker_async",
+            "/ai/start_analyze_ticker_async",
             typeof(AnalyzeTickerRequest),
             "AnalyzeTickerRequest",
+            false,
+            typeof(AnalyzeTickerAsyncResponse),
+            "AnalyzeTickerAsyncResponse",
+            ResponseEnvelopeKind.Asynchronous
+        ),
+        new(
+            "POST",
+            "/ai/poll_analyze_ticker_async",
+            null,
+            null,
             false,
             typeof(AnalyzeTickerAsyncResponse),
             "AnalyzeTickerAsyncResponse",
@@ -202,7 +252,17 @@ internal static class ContractMappings
         ),
         new(
             "GET",
-            "/events/upcoming_dividends_async",
+            "/events/start_upcoming_dividends_async",
+            null,
+            null,
+            false,
+            typeof(GetUpcomingDividendsAsyncResponse),
+            "UpcomingDividendsAsyncResponse",
+            ResponseEnvelopeKind.Asynchronous
+        ),
+        new(
+            "GET",
+            "/events/poll_upcoming_dividends_async",
             null,
             null,
             false,
@@ -222,7 +282,17 @@ internal static class ContractMappings
         ),
         new(
             "GET",
-            "/events/upcoming_earnings_async",
+            "/events/start_upcoming_earnings_async",
+            null,
+            null,
+            false,
+            typeof(GetUpcomingEarningsAsyncResponse),
+            "UpcomingEarningsAsyncResponse",
+            ResponseEnvelopeKind.Asynchronous
+        ),
+        new(
+            "GET",
+            "/events/poll_upcoming_earnings_async",
             null,
             null,
             false,
@@ -242,7 +312,17 @@ internal static class ContractMappings
         ),
         new(
             "GET",
-            "/events/new_listings_async",
+            "/events/start_new_listings_async",
+            null,
+            null,
+            false,
+            typeof(GetNewListingsAsyncResponse),
+            "ListingsAsyncResponse",
+            ResponseEnvelopeKind.Asynchronous
+        ),
+        new(
+            "GET",
+            "/events/poll_new_listings_async",
             null,
             null,
             false,

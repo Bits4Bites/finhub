@@ -112,7 +112,7 @@ def test_async_starts_with_normalized_request():
         patch("app.routers.ai_ticker._run_task", new_callable=AsyncMock) as run_task,
     ):
         response = client.post(
-            "/ai/analyze_ticker_async",
+            "/ai/start_analyze_ticker_async",
             json={"symbol": "nasdaq:aapl"},
         )
 
@@ -135,17 +135,17 @@ def test_async_poll_redirects_through_ai_proxy_handler():
         ),
     ):
         response = client.post(
-            "/ai/analyze_ticker_async",
+            "/ai/poll_analyze_ticker_async",
             params={"task_id": "task-456"},
             follow_redirects=False,
         )
 
     assert response.status_code == 307
-    assert response.headers["location"] == "https://proxy.example/finhub/ai/analyze_ticker_async?task_id=task-456"
+    assert response.headers["location"] == "https://proxy.example/finhub/ai/poll_analyze_ticker_async?task_id=task-456"
 
 
 def test_async_requires_body_when_starting():
-    response = client.post("/ai/analyze_ticker_async")
+    response = client.post("/ai/start_analyze_ticker_async")
 
     assert response.status_code == 400
     assert response.json() == {
@@ -166,7 +166,7 @@ def test_async_poll_preserves_502_failure_status():
         new_callable=AsyncMock,
         return_value=task_entry,
     ):
-        response = client.post("/ai/analyze_ticker_async", params={"task_id": "task-456"})
+        response = client.post("/ai/poll_analyze_ticker_async", params={"task_id": "task-456"})
 
     assert response.status_code == 502
     assert response.json()["status"] == 502
@@ -191,7 +191,7 @@ def test_async_poll_returns_structured_completed_result():
         new_callable=AsyncMock,
         return_value=task_entry,
     ):
-        response = client.post("/ai/analyze_ticker_async", params={"task_id": "task-456"})
+        response = client.post("/ai/poll_analyze_ticker_async", params={"task_id": "task-456"})
 
     assert response.status_code == 200
     assert response.json()["data"]["forecasts"][3]["horizon"] == "ThreeMonths"

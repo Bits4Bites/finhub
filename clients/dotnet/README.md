@@ -13,7 +13,7 @@ dotnet test clients/dotnet/FinHub.Client.Contracts.Tests/FinHub.Client.Contracts
 ```
 
 Building the test project builds its reference to `FinHub.Client.Contracts.csproj`, so the contracts are not built
-twice. The tests use the repository-root `openapi.json` as their authority. They map all 29 public router operations
+twice. The tests use the repository-root `openapi.json` as their authority. They map all 37 public router operations
 to request and response contracts, compare every client component's JSON names, requiredness, nullability, types,
 integer widths, string formats, and enum wire values, and exercise non-obvious converters and raw market-index
 payloads. The root and health operations remain intentionally outside the client contract surface.
@@ -118,9 +118,11 @@ Upcoming dividend and earnings contracts cover:
 
 ```http
 GET /events/upcoming_dividends
-GET /events/upcoming_dividends_async
+GET /events/start_upcoming_dividends_async
+GET /events/poll_upcoming_dividends_async
 GET /events/upcoming_earnings
-GET /events/upcoming_earnings_async
+GET /events/start_upcoming_earnings_async
+GET /events/poll_upcoming_earnings_async
 ```
 
 ```csharp
@@ -131,9 +133,10 @@ var dividends = JsonSerializer.Deserialize<GetUpcomingDividendsResponse>(dividen
 var asyncEarnings = JsonSerializer.Deserialize<GetUpcomingEarningsAsyncResponse>(asyncEarningsJson);
 ```
 
-Synchronous calls use `GetUpcomingDividendsResponse` or `GetUpcomingEarningsResponse`. Start an async task with
-`country` and optional `index`, then poll the same endpoint with `task_id=<TASK_ID>`; each endpoint has its own async
-response type. Start and running responses use HTTP `202`, completed polls can contain the event collection in
+Synchronous calls use `GetUpcomingDividendsResponse` or `GetUpcomingEarningsResponse`. Start an async task through
+the corresponding `start_*_async` endpoint with `country` and optional `index`, then call the matching
+`poll_*_async` endpoint with `task_id=<TASK_ID>`; each feature has its own async response type. Start and running
+responses use HTTP `202`, completed polls can contain the event collection in
 `Data`, and failed polls use HTTP `500`. Async responses require the shared `AsyncTaskInfo` metadata and strict
 `TaskState`; cached tasks expire after one hour.
 
@@ -155,7 +158,8 @@ The new-listings contracts cover:
 
 ```http
 GET /events/new_listings
-GET /events/new_listings_async
+GET /events/start_new_listings_async
+GET /events/poll_new_listings_async
 ```
 
 Deserialize synchronous and async start/poll responses with `System.Text.Json`:
@@ -168,10 +172,10 @@ var response = JsonSerializer.Deserialize<GetNewListingsResponse>(json);
 var asyncResponse = JsonSerializer.Deserialize<GetNewListingsAsyncResponse>(asyncJson);
 ```
 
-Call `GET /events/new_listings_async?country=AU` to start a task and poll the same endpoint with
-`task_id=<TASK_ID>`. Both operations deserialize as `GetNewListingsAsyncResponse`; its required `Extra` property uses
-the shared `AsyncTaskInfo` and `TaskState` contracts. Completed polls can include the standard listing collection in
-`Data`.
+Call `GET /events/start_new_listings_async?country=AU` to start a task and
+`GET /events/poll_new_listings_async?task_id=<TASK_ID>` to poll it. Both operations deserialize as
+`GetNewListingsAsyncResponse`; its required `Extra` property uses the shared `AsyncTaskInfo` and `TaskState`
+contracts. Completed polls can include the standard listing collection in `Data`.
 
 Nullable response properties may be absent because the API excludes `null` values. `ListingEvent` inherits the shared
 required, non-null `EventBase.TimestampStr` (`timestamp_str`) contract, while `ListingEvent.IssuePrice` and
@@ -185,7 +189,8 @@ The dividend-analysis contracts cover:
 
 ```http
 POST /ai/analyze_dividend_event
-POST /ai/analyze_dividend_event_async
+POST /ai/start_analyze_dividend_event_async
+POST /ai/poll_analyze_dividend_event_async
 ```
 
 ```csharp
@@ -205,7 +210,7 @@ var response = JsonSerializer.Deserialize<AnalyzeDividendEventAsyncResponse>(jso
 `TransactionCosts` defaults both per-share costs to zero, and `HoldingPeriodDays` defaults to 28. Synchronous results
 use `AnalyzeDividendEventResponse`; async start and poll responses share `AnalyzeDividendEventAsyncResponse` and
 reusable `AsyncTaskInfo`/`TaskState` metadata. Poll with
-`POST /ai/analyze_dividend_event_async?task_id=<TASK_ID>`.
+`POST /ai/poll_analyze_dividend_event_async?task_id=<TASK_ID>`.
 
 ## Ticker analysis
 
@@ -213,7 +218,8 @@ The ticker-analysis contracts cover:
 
 ```http
 POST /ai/analyze_ticker
-POST /ai/analyze_ticker_async
+POST /ai/start_analyze_ticker_async
+POST /ai/poll_analyze_ticker_async
 ```
 
 ```csharp
@@ -244,7 +250,8 @@ The construction contracts cover:
 
 ```http
 POST /ai/build_portfolio
-POST /ai/build_portfolio_async
+POST /ai/start_build_portfolio_async
+POST /ai/poll_build_portfolio_async
 ```
 
 ```csharp
@@ -280,7 +287,8 @@ The dispatcher endpoints:
 
 ```http
 POST /ai/analyze_portfolio
-POST /ai/analyze_portfolio_async
+POST /ai/start_analyze_portfolio_async
+POST /ai/poll_analyze_portfolio_async
 ```
 
 use `AnalyzePortfolioResponse` and `AnalyzePortfolioAsyncResponse`. Their `Data` property is
@@ -296,7 +304,8 @@ The portfolio-spotlight contracts cover:
 
 ```http
 POST /ai/spotlight_portfolio
-POST /ai/spotlight_portfolio_async
+POST /ai/start_spotlight_portfolio_async
+POST /ai/poll_spotlight_portfolio_async
 ```
 
 ```csharp

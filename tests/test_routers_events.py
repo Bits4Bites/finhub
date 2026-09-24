@@ -100,7 +100,7 @@ class TestUpcomingDividends:
 
 
 # ===========================================================================
-# Tests for GET /events/upcoming_dividends_async
+# Tests for GET /events/start_upcoming_dividends_async and /events/poll_upcoming_dividends_async
 # ===========================================================================
 
 
@@ -115,15 +115,15 @@ class TestUpcomingDividendsAsync:
             ),
         ):
             resp = client.get(
-                "/events/upcoming_dividends_async",
-                params={"country": "AU", "index": "ASX200", "task_id": "task-123"},
+                "/events/poll_upcoming_dividends_async",
+                params={"task_id": "task-123"},
                 follow_redirects=False,
             )
 
         assert resp.status_code == 307
         assert (
-            resp.headers["location"] == "https://proxy.example/finhub/events/upcoming_dividends_async"
-            "?country=AU&index=ASX200&task_id=task-123"
+            resp.headers["location"]
+            == "https://proxy.example/finhub/events/poll_upcoming_dividends_async?task_id=task-123"
         )
 
     def test_starts_task(self):
@@ -133,7 +133,7 @@ class TestUpcomingDividendsAsync:
             patch("app.routers.events._run_upcoming_dividends_event_task", new_callable=AsyncMock) as mock_run_task,
         ):
             resp = client.get(
-                "/events/upcoming_dividends_async",
+                "/events/start_upcoming_dividends_async",
                 params={"country": "AU", "index": "ASX200"},
             )
 
@@ -155,7 +155,7 @@ class TestUpcomingDividendsAsync:
         with patch(
             "app.routers.async_task.cache.get", new_callable=AsyncMock, return_value=task_entry
         ) as mock_cache_get:
-            resp = client.get("/events/upcoming_dividends_async", params={"task_id": "task-123"})
+            resp = client.get("/events/poll_upcoming_dividends_async", params={"task_id": "task-123"})
 
         assert resp.status_code == 202
         assert resp.json()["message"] == "Task is running"
@@ -164,7 +164,7 @@ class TestUpcomingDividendsAsync:
 
     def test_poll_returns_404_for_missing_task(self):
         with patch("app.routers.async_task.cache.get", new_callable=AsyncMock, return_value=None):
-            resp = client.get("/events/upcoming_dividends_async", params={"task_id": "missing"})
+            resp = client.get("/events/poll_upcoming_dividends_async", params={"task_id": "missing"})
 
         assert resp.status_code == 404
         assert resp.json() == {"status": 404, "message": "Task not found"}
@@ -188,7 +188,7 @@ class TestUpcomingDividendsAsync:
             },
         }
         with patch("app.routers.async_task.cache.get", new_callable=AsyncMock, return_value=task_entry):
-            resp = client.get("/events/upcoming_dividends_async", params={"task_id": "task-123"})
+            resp = client.get("/events/poll_upcoming_dividends_async", params={"task_id": "task-123"})
 
         assert resp.status_code == 200
         body = resp.json()
@@ -291,7 +291,7 @@ class TestUpcomingEarnings:
 
 
 # ===========================================================================
-# Tests for GET /events/upcoming_earnings_async
+# Tests for GET /events/start_upcoming_earnings_async and /events/poll_upcoming_earnings_async
 # ===========================================================================
 
 
@@ -306,15 +306,15 @@ class TestUpcomingEarningsAsync:
             ),
         ):
             resp = client.get(
-                "/events/upcoming_earnings_async",
-                params={"country": "US", "index": "SP500", "task_id": "task-456"},
+                "/events/poll_upcoming_earnings_async",
+                params={"task_id": "task-456"},
                 follow_redirects=False,
             )
 
         assert resp.status_code == 307
         assert (
-            resp.headers["location"] == "https://proxy.example/finhub/events/upcoming_earnings_async"
-            "?country=US&index=SP500&task_id=task-456"
+            resp.headers["location"]
+            == "https://proxy.example/finhub/events/poll_upcoming_earnings_async?task_id=task-456"
         )
 
     def test_starts_task(self):
@@ -324,7 +324,7 @@ class TestUpcomingEarningsAsync:
             patch("app.routers.events._run_upcoming_earnings_event_task", new_callable=AsyncMock) as mock_run_task,
         ):
             resp = client.get(
-                "/events/upcoming_earnings_async",
+                "/events/start_upcoming_earnings_async",
                 params={"country": "US", "index": "SP500"},
             )
 
@@ -346,7 +346,7 @@ class TestUpcomingEarningsAsync:
         with patch(
             "app.routers.async_task.cache.get", new_callable=AsyncMock, return_value=task_entry
         ) as mock_cache_get:
-            resp = client.get("/events/upcoming_earnings_async", params={"task_id": "task-456"})
+            resp = client.get("/events/poll_upcoming_earnings_async", params={"task_id": "task-456"})
 
         assert resp.status_code == 202
         assert resp.json()["message"] == "Task is running"
@@ -355,7 +355,7 @@ class TestUpcomingEarningsAsync:
 
     def test_poll_returns_404_for_missing_task(self):
         with patch("app.routers.async_task.cache.get", new_callable=AsyncMock, return_value=None):
-            resp = client.get("/events/upcoming_earnings_async", params={"task_id": "missing"})
+            resp = client.get("/events/poll_upcoming_earnings_async", params={"task_id": "missing"})
 
         assert resp.status_code == 404
         assert resp.json() == {"status": 404, "message": "Task not found"}
@@ -377,7 +377,7 @@ class TestUpcomingEarningsAsync:
             },
         }
         with patch("app.routers.async_task.cache.get", new_callable=AsyncMock, return_value=task_entry):
-            resp = client.get("/events/upcoming_earnings_async", params={"task_id": "task-456"})
+            resp = client.get("/events/poll_upcoming_earnings_async", params={"task_id": "task-456"})
 
         assert resp.status_code == 200
         body = resp.json()
@@ -455,7 +455,7 @@ class TestNewListings:
 
 
 # ===========================================================================
-# Tests for GET /events/new_listings_async
+# Tests for GET /events/start_new_listings_async and /events/poll_new_listings_async
 # ===========================================================================
 
 
@@ -469,7 +469,7 @@ class TestNewListingsAsync:
             patch("app.routers.async_task.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
             patch("app.routers.events_listings._run_new_listings_task", new_callable=AsyncMock) as mock_run_task,
         ):
-            resp = client.get("/events/new_listings_async", params={"country": "AU"})
+            resp = client.get("/events/start_new_listings_async", params={"country": "AU"})
 
         assert resp.status_code == 202
         assert resp.json() == {
@@ -493,7 +493,7 @@ class TestNewListingsAsync:
             ) as mock_start_task,
             patch("app.routers.events_listings._run_new_listings_task", new_callable=AsyncMock) as mock_run_task,
         ):
-            resp = client.get("/events/new_listings_async", params={"country": country})
+            resp = client.get("/events/start_new_listings_async", params={"country": country})
 
         assert resp.status_code == 422
         assert resp.json()["message"] == "New listings supports only country 'AU'"
@@ -512,7 +512,7 @@ class TestNewListingsAsync:
             patch("app.routers.async_task.cache.set", new_callable=AsyncMock) as mock_cache_set,
             patch("app.routers.events_listings._run_new_listings_task", new_callable=AsyncMock) as mock_run_task,
         ):
-            resp = client.get("/events/new_listings_async", params={"country": "AU"})
+            resp = client.get("/events/start_new_listings_async", params={"country": "AU"})
 
         assert resp.status_code == 202
         assert resp.json()["message"] == "Task is running"
@@ -531,7 +531,7 @@ class TestNewListingsAsync:
             new_callable=AsyncMock,
             return_value=task_entry,
         ) as mock_cache_get:
-            resp = client.get("/events/new_listings_async", params={"task_id": "task-789"})
+            resp = client.get("/events/poll_new_listings_async", params={"task_id": "task-789"})
 
         assert resp.status_code == 202
         assert resp.json()["message"] == "Task is running"
@@ -540,7 +540,7 @@ class TestNewListingsAsync:
 
     def test_poll_returns_404_for_missing_task(self):
         with patch("app.routers.async_task.cache.get", new_callable=AsyncMock, return_value=None):
-            resp = client.get("/events/new_listings_async", params={"task_id": "missing"})
+            resp = client.get("/events/poll_new_listings_async", params={"task_id": "missing"})
 
         assert resp.status_code == 404
         assert resp.json() == {"status": 404, "message": "Task not found"}
@@ -565,7 +565,7 @@ class TestNewListingsAsync:
             },
         }
         with patch("app.routers.async_task.cache.get", new_callable=AsyncMock, return_value=task_entry):
-            resp = client.get("/events/new_listings_async", params={"task_id": "task-789"})
+            resp = client.get("/events/poll_new_listings_async", params={"task_id": "task-789"})
 
         assert resp.status_code == 200
         body = resp.json()

@@ -68,24 +68,52 @@ async def _run_new_listings_task(task_id: str, country: str) -> None:
     )
 
 
+async def _poll_task(
+    task_id: str,
+    response: Response,
+) -> schemas_events_listings.ListingsAsyncResponse:
+    task_entry = await router_async_task.load_task(task_id, _NEW_LISTINGS_TASK_TYPE)
+    task_state = task_entry.state
+    task_info = async_task.AsyncTaskInfo(task_id=task_id, state=task_state)
+    if task_state == async_task.TASK_STATE_RUNNING:
+        response.status_code = status.HTTP_202_ACCEPTED
+        return schemas_events_listings.ListingsAsyncResponse(
+            status=status.HTTP_202_ACCEPTED,
+            message="Task is running",
+            extra=task_info,
+        )
+    if task_state == async_task.TASK_STATE_FAILED:
+        response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+        return schemas_events_listings.ListingsAsyncResponse(
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            message=task_entry.message or "Task failed",
+            extra=task_info,
+        )
+
+    result = schemas_events_listings.ListingsResponse.model_validate(task_entry.result)
+    return schemas_events_listings.ListingsAsyncResponse(
+        status=result.status,
+        message=result.message,
+        data=result.data,
+        extra=task_info,
+    )
+
+
 @router.get(
-    "/new_listings_async",
+    "/start_new_listings_async",
     response_model=schemas_events_listings.ListingsAsyncResponse,
     response_model_exclude_none=True,
 )
-async def get_new_listings_async(
+async def start_new_listings_async(
     background_tasks: BackgroundTasks,
     request: Request,
     response: Response,
     country: str = Query(
         "",
-        description="Country code used when starting a task. Required when starting; only 'AU' is supported.",
+        description="Country code used to start the task; only 'AU' is supported.",
     ),
-    task_id: str = Query("", description="Task ID returned by a previous call to this endpoint."),
 ) -> schemas_events_listings.ListingsAsyncResponse | Response:
-    """
-    Start a new-listings task or poll a previously started task.
-    """
+    """Start a new-listings task."""
     proxy_response = await proxy_handler.handle_if_proxy(
         config.settings_finhub_proxy.proxy_mode,
         config.settings_finhub_proxy.url_ai_task_node,
@@ -93,34 +121,6 @@ async def get_new_listings_async(
     )
     if proxy_response is not None:
         return proxy_response
-
-    task_id = task_id.strip()
-    if task_id:
-        task_entry = await router_async_task.load_task(task_id, _NEW_LISTINGS_TASK_TYPE)
-        task_state = task_entry.state
-        task_info = async_task.AsyncTaskInfo(task_id=task_id, state=task_state)
-        if task_state == async_task.TASK_STATE_RUNNING:
-            response.status_code = status.HTTP_202_ACCEPTED
-            return schemas_events_listings.ListingsAsyncResponse(
-                status=status.HTTP_202_ACCEPTED,
-                message="Task is running",
-                extra=task_info,
-            )
-        if task_state == async_task.TASK_STATE_FAILED:
-            response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
-            return schemas_events_listings.ListingsAsyncResponse(
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                message=task_entry.message or "Task failed",
-                extra=task_info,
-            )
-
-        result = schemas_events_listings.ListingsResponse.model_validate(task_entry.result)
-        return schemas_events_listings.ListingsAsyncResponse(
-            status=result.status,
-            message=result.message,
-            data=result.data,
-            extra=task_info,
-        )
 
     country = conv.country_to_iso2(country)
     if country != "AU":
@@ -131,13 +131,7 @@ async def get_new_listings_async(
 
     task_id, is_new = await router_async_task.start_task(_NEW_LISTINGS_TASK_TYPE, country)
     if not is_new:
-        return await get_new_listings_async(
-            background_tasks=background_tasks,
-            request=request,
-            response=response,
-            country=country,
-            task_id=task_id,
-        )
+        return await _poll_task(task_id, response)
 
     background_tasks.add_task(_run_new_listings_task, task_id, country)
     response.status_code = status.HTTP_202_ACCEPTED
@@ -149,3 +143,25 @@ async def get_new_listings_async(
             state=async_task.TASK_STATE_RUNNING,
         ),
     )
+
+
+@router.get(
+    "/poll_new_listings_async",
+    response_model=schemas_events_listings.ListingsAsyncResponse,
+    response_model_exclude_none=True,
+)
+async def poll_new_listings_async(
+    request: Request,
+    response: Response,
+    task_id: str = Query(description="Task ID returned by the corresponding start endpoint."),
+) -> schemas_events_listings.ListingsAsyncResponse | Response:
+    """Poll a new-listings task."""
+    proxy_response = await proxy_handler.handle_if_proxy(
+        config.settings_finhub_proxy.proxy_mode,
+        config.settings_finhub_proxy.url_ai_task_node,
+        request,
+    )
+    if proxy_response is not None:
+        return proxy_response
+
+    return await _poll_task(task_id.strip(), response)

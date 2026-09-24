@@ -14,6 +14,25 @@ from . import proxy_handler
 router = APIRouter(prefix="/ai", tags=["ai"])
 
 _TASK_TYPE = "build_portfolio"
+_ASYNC_RESPONSES = {
+    202: {
+        "model": schemas_construction.BuildPortfolioAsyncResponse,
+        "description": "The portfolio-construction task started or is still running.",
+    },
+    404: {"model": BaseResponse, "description": "The task was not found."},
+    422: {
+        "model": schemas_construction.BuildPortfolioAsyncResponse | BaseResponse,
+        "description": "The start request or verified seed holdings are invalid.",
+    },
+    500: {
+        "model": schemas_construction.BuildPortfolioAsyncResponse | BaseResponse,
+        "description": "The background task failed unexpectedly.",
+    },
+    502: {
+        "model": schemas_construction.BuildPortfolioAsyncResponse,
+        "description": "Market verification, AI execution, or structured output failed.",
+    },
+}
 
 
 async def _get_build_portfolio_result(
@@ -103,41 +122,54 @@ async def _run_build_portfolio_task(
     )
 
 
+async def _poll_task(
+    task_id: str,
+    response: Response,
+) -> schemas_construction.BuildPortfolioAsyncResponse:
+    task_entry = await router_async_task.load_task(task_id, _TASK_TYPE)
+    task_state = task_entry.state
+    task_info = async_task.AsyncTaskInfo(task_id=task_id, state=task_state)
+    if task_state == async_task.TASK_STATE_RUNNING:
+        response.status_code = status.HTTP_202_ACCEPTED
+        return schemas_construction.BuildPortfolioAsyncResponse(
+            status=status.HTTP_202_ACCEPTED,
+            message="Task is running",
+            extra=task_info,
+        )
+    if task_state == async_task.TASK_STATE_FAILED:
+        failure_status = router_async_task.failure_status(task_entry)
+        response.status_code = failure_status
+        return schemas_construction.BuildPortfolioAsyncResponse(
+            status=failure_status,
+            message=task_entry.message or "Task failed",
+            extra=task_info,
+        )
+
+    result = schemas_construction.BuildPortfolioResponse.model_validate(task_entry.result)
+    return schemas_construction.BuildPortfolioAsyncResponse(
+        status=result.status,
+        message=result.message,
+        data=result.data,
+        extra=task_info,
+    )
+
+
 @router.post(
-    "/build_portfolio_async",
+    "/start_build_portfolio_async",
     response_model=schemas_construction.BuildPortfolioAsyncResponse,
     response_model_exclude_none=True,
-    responses={
-        202: {
-            "model": schemas_construction.BuildPortfolioAsyncResponse,
-            "description": "The portfolio-construction task started or is still running.",
-        },
-        404: {"model": BaseResponse, "description": "The task was not found."},
-        422: {
-            "model": schemas_construction.BuildPortfolioAsyncResponse | BaseResponse,
-            "description": "The start request or verified seed holdings are invalid.",
-        },
-        500: {
-            "model": schemas_construction.BuildPortfolioAsyncResponse | BaseResponse,
-            "description": "The background task failed unexpectedly.",
-        },
-        502: {
-            "model": schemas_construction.BuildPortfolioAsyncResponse,
-            "description": "Market verification, AI execution, or structured output failed.",
-        },
-    },
+    responses=_ASYNC_RESPONSES,
 )
-async def build_portfolio_async(
+async def start_build_portfolio_async(
     background_tasks: BackgroundTasks,
     response: Response,
     http_request: Request,
     req: schemas_construction.BuildPortfolioRequest | None = Body(
         None,
-        description="The build portfolio request. Required when starting a task; not required when polling.",
+        description="The build portfolio request.",
     ),
-    task_id: str = Query("", description="Task ID returned by a previous call to this endpoint."),
 ) -> schemas_construction.BuildPortfolioAsyncResponse | Response:
-    """Start a portfolio-construction task or poll a previously started task."""
+    """Start a portfolio-construction task."""
 
     proxy_response = await proxy_handler.handle_if_proxy(
         config.settings_finhub_proxy.proxy_mode,
@@ -147,35 +179,6 @@ async def build_portfolio_async(
     if proxy_response is not None:
         return proxy_response
 
-    task_id = task_id.strip()
-    if task_id:
-        task_entry = await router_async_task.load_task(task_id, _TASK_TYPE)
-        task_state = task_entry.state
-        task_info = async_task.AsyncTaskInfo(task_id=task_id, state=task_state)
-        if task_state == async_task.TASK_STATE_RUNNING:
-            response.status_code = status.HTTP_202_ACCEPTED
-            return schemas_construction.BuildPortfolioAsyncResponse(
-                status=status.HTTP_202_ACCEPTED,
-                message="Task is running",
-                extra=task_info,
-            )
-        if task_state == async_task.TASK_STATE_FAILED:
-            failure_status = router_async_task.failure_status(task_entry)
-            response.status_code = failure_status
-            return schemas_construction.BuildPortfolioAsyncResponse(
-                status=failure_status,
-                message=task_entry.message or "Task failed",
-                extra=task_info,
-            )
-
-        result = schemas_construction.BuildPortfolioResponse.model_validate(task_entry.result)
-        return schemas_construction.BuildPortfolioAsyncResponse(
-            status=result.status,
-            message=result.message,
-            data=result.data,
-            extra=task_info,
-        )
-
     if req is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -184,13 +187,7 @@ async def build_portfolio_async(
 
     task_id, is_new = await router_async_task.start_task(_TASK_TYPE, req)
     if not is_new:
-        return await build_portfolio_async(
-            background_tasks=background_tasks,
-            response=response,
-            http_request=http_request,
-            req=req,
-            task_id=task_id,
-        )
+        return await _poll_task(task_id, response)
 
     background_tasks.add_task(_run_build_portfolio_task, task_id, req)
     response.status_code = status.HTTP_202_ACCEPTED
@@ -199,3 +196,27 @@ async def build_portfolio_async(
         message="Task started",
         extra=async_task.AsyncTaskInfo(task_id=task_id, state=async_task.TASK_STATE_RUNNING),
     )
+
+
+@router.post(
+    "/poll_build_portfolio_async",
+    response_model=schemas_construction.BuildPortfolioAsyncResponse,
+    response_model_exclude_none=True,
+    responses=_ASYNC_RESPONSES,
+)
+async def poll_build_portfolio_async(
+    response: Response,
+    http_request: Request,
+    task_id: str = Query(description="Task ID returned by the corresponding start endpoint."),
+) -> schemas_construction.BuildPortfolioAsyncResponse | Response:
+    """Poll a portfolio-construction task."""
+
+    proxy_response = await proxy_handler.handle_if_proxy(
+        config.settings_finhub_proxy.proxy_mode,
+        config.settings_finhub_proxy.url_ai_task_node,
+        http_request,
+    )
+    if proxy_response is not None:
+        return proxy_response
+
+    return await _poll_task(task_id.strip(), response)

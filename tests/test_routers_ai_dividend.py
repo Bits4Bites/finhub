@@ -44,14 +44,15 @@ def test_async_poll_redirects_through_ai_proxy_handler():
         patch.object(config.settings_finhub_proxy, "url_ai_task_node", "https://proxy.example/finhub/"),
     ):
         response = client.post(
-            "/ai/analyze_dividend_event_async",
+            "/ai/poll_analyze_dividend_event_async",
             params={"task_id": "task-123"},
             follow_redirects=False,
         )
 
     assert response.status_code == 307
     assert (
-        response.headers["location"] == "https://proxy.example/finhub/ai/analyze_dividend_event_async?task_id=task-123"
+        response.headers["location"]
+        == "https://proxy.example/finhub/ai/poll_analyze_dividend_event_async?task_id=task-123"
     )
 
 
@@ -156,7 +157,7 @@ def test_async_start_uses_post_body():
         patch("app.routers.async_task.cache.set", new_callable=AsyncMock, return_value=True),
         patch.object(ai_dividend, "_run_task", new_callable=AsyncMock) as mock_run,
     ):
-        response = client.post("/ai/analyze_dividend_event_async", json=_request_body())
+        response = client.post("/ai/start_analyze_dividend_event_async", json=_request_body())
 
     assert response.status_code == 202
     assert response.json()["extra"] == {
@@ -168,7 +169,7 @@ def test_async_start_uses_post_body():
 
 
 def test_async_start_requires_request_body():
-    response = client.post("/ai/analyze_dividend_event_async")
+    response = client.post("/ai/start_analyze_dividend_event_async")
 
     assert response.status_code == 400
     assert response.json()["message"] == "Request body is required when starting a task"
@@ -185,7 +186,7 @@ def test_poll_returns_running_task():
         return_value=task_entry,
     ):
         response = client.post(
-            "/ai/analyze_dividend_event_async",
+            "/ai/poll_analyze_dividend_event_async",
             params={"task_id": "task-123"},
         )
 
@@ -210,7 +211,7 @@ def test_poll_returns_completed_result():
         return_value=task_entry,
     ):
         response = client.post(
-            "/ai/analyze_dividend_event_async",
+            "/ai/poll_analyze_dividend_event_async",
             params={"task_id": "task-123"},
         )
 
@@ -237,7 +238,7 @@ def test_poll_returns_failed_result_with_baseline():
         return_value=task_entry,
     ):
         response = client.post(
-            "/ai/analyze_dividend_event_async",
+            "/ai/poll_analyze_dividend_event_async",
             params={"task_id": "task-123"},
         )
 

@@ -154,7 +154,7 @@ class TestAnalyzePortfolioAsync:
             patch.object(config.settings_finhub_proxy, "url_ai_task_node", "https://proxy.example/finhub/"),
         ):
             response = client.post(
-                "/ai/analyze_portfolio_async",
+                "/ai/poll_analyze_portfolio_async",
                 params={"task_id": "task-review"},
                 follow_redirects=False,
             )
@@ -162,7 +162,7 @@ class TestAnalyzePortfolioAsync:
         assert response.status_code == 307
         assert (
             response.headers["location"]
-            == "https://proxy.example/finhub/ai/analyze_portfolio_async?task_id=task-review"
+            == "https://proxy.example/finhub/ai/poll_analyze_portfolio_async?task_id=task-review"
         )
 
     def test_starts_task(self):
@@ -179,7 +179,7 @@ class TestAnalyzePortfolioAsync:
             ) as mock_run_task,
         ):
             response = client.post(
-                "/ai/analyze_portfolio_async",
+                "/ai/start_analyze_portfolio_async",
                 json={
                     "country": "US",
                     "investor_theme": "Long-term growth",
@@ -196,7 +196,7 @@ class TestAnalyzePortfolioAsync:
         mock_run_task.assert_awaited_once()
 
     def test_requires_body_when_starting_task(self):
-        response = client.post("/ai/analyze_portfolio_async")
+        response = client.post("/ai/start_analyze_portfolio_async")
 
         assert response.status_code == 400
         assert response.json()["message"] == "Request body is required when starting a task"
@@ -220,7 +220,7 @@ class TestAnalyzePortfolioAsync:
             return_value=task_entry,
         ):
             response = client.post(
-                "/ai/analyze_portfolio_async",
+                "/ai/poll_analyze_portfolio_async",
                 params={"task_id": "task-review"},
             )
 
@@ -241,7 +241,7 @@ class TestAnalyzePortfolioAsync:
             return_value=task_entry,
         ):
             response = client.post(
-                "/ai/analyze_portfolio_async",
+                "/ai/poll_analyze_portfolio_async",
                 params={"task_id": "task-review"},
             )
 

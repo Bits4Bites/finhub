@@ -183,12 +183,12 @@ class TestBuildPortfolio:
 
 
 # ===========================================================================
-# POST /ai/build_portfolio_async
+# POST /ai/start_build_portfolio_async and /ai/poll_build_portfolio_async
 # ===========================================================================
 
 
 class TestBuildPortfolioAsync:
-    """Tests for POST /ai/build_portfolio_async endpoint."""
+    """Tests for the asynchronous build-portfolio endpoints."""
 
     def test_poll_redirects_through_ai_proxy_handler(self):
         with (
@@ -196,13 +196,16 @@ class TestBuildPortfolioAsync:
             patch.object(config.settings_finhub_proxy, "url_ai_task_node", "https://proxy.example/finhub/"),
         ):
             response = client.post(
-                "/ai/build_portfolio_async",
+                "/ai/poll_build_portfolio_async",
                 params={"task_id": "task-789"},
                 follow_redirects=False,
             )
 
         assert response.status_code == 307
-        assert response.headers["location"] == "https://proxy.example/finhub/ai/build_portfolio_async?task_id=task-789"
+        assert (
+            response.headers["location"]
+            == "https://proxy.example/finhub/ai/poll_build_portfolio_async?task_id=task-789"
+        )
 
     def test_starts_task(self):
         with (
@@ -214,7 +217,7 @@ class TestBuildPortfolioAsync:
             ) as mock_run_task,
         ):
             resp = client.post(
-                "/ai/build_portfolio_async",
+                "/ai/start_build_portfolio_async",
                 json={
                     "country": "US",
                     "investor_theme": "Growth focused",
@@ -248,7 +251,7 @@ class TestBuildPortfolioAsync:
         assert task_req.current_allocation[0].ticker == "AAPL"
 
     def test_requires_body_when_starting_task(self):
-        resp = client.post("/ai/build_portfolio_async")
+        resp = client.post("/ai/start_build_portfolio_async")
 
         assert resp.status_code == 400
         assert resp.json() == {
@@ -257,7 +260,7 @@ class TestBuildPortfolioAsync:
         }
 
     def test_requires_country_when_starting_task(self):
-        resp = client.post("/ai/build_portfolio_async", json={})
+        resp = client.post("/ai/start_build_portfolio_async", json={})
 
         assert resp.status_code == 422
 
@@ -266,7 +269,7 @@ class TestBuildPortfolioAsync:
         with patch(
             "app.routers.async_task.cache.get", new_callable=AsyncMock, return_value=task_entry
         ) as mock_cache_get:
-            resp = client.post("/ai/build_portfolio_async", params={"task_id": "task-789"})
+            resp = client.post("/ai/poll_build_portfolio_async", params={"task_id": "task-789"})
 
         assert resp.status_code == 202
         assert resp.json()["message"] == "Task is running"
@@ -275,7 +278,7 @@ class TestBuildPortfolioAsync:
 
     def test_poll_returns_404_for_missing_task(self):
         with patch("app.routers.async_task.cache.get", new_callable=AsyncMock, return_value=None):
-            resp = client.post("/ai/build_portfolio_async", params={"task_id": "missing"})
+            resp = client.post("/ai/poll_build_portfolio_async", params={"task_id": "missing"})
 
         assert resp.status_code == 404
         assert resp.json() == {"status": 404, "message": "Task not found"}
@@ -292,7 +295,7 @@ class TestBuildPortfolioAsync:
             },
         }
         with patch("app.routers.async_task.cache.get", new_callable=AsyncMock, return_value=task_entry):
-            resp = client.post("/ai/build_portfolio_async", params={"task_id": "task-789"})
+            resp = client.post("/ai/poll_build_portfolio_async", params={"task_id": "task-789"})
 
         assert resp.status_code == 200
         body = resp.json()
@@ -309,7 +312,7 @@ class TestBuildPortfolioAsync:
             "message": "Unknown ticker",
         }
         with patch("app.routers.async_task.cache.get", new_callable=AsyncMock, return_value=task_entry):
-            resp = client.post("/ai/build_portfolio_async", params={"task_id": "task-789"})
+            resp = client.post("/ai/poll_build_portfolio_async", params={"task_id": "task-789"})
 
         assert resp.status_code == 422
         assert resp.json() == {

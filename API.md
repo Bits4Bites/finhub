@@ -15,10 +15,11 @@ Most responses follow a standard envelope format:
 `GET /market/index/{index_id}` returns the cached static JSON file directly. Redirect-mode proxy responses are
 HTTP `307` responses rather than standard envelopes.
 
-When executing locally, all `*_async` endpoints derive a process-local keyed task ID from the application version,
-task type, and normalized start input. Retrying an identical start while its record exists returns the same running
-or terminal task without scheduling duplicate work. Task records expire after one hour. Restarting the node that
-executes a task loses its process-local task records and changes the generated IDs.
+When executing locally, all `start_*_async` endpoints derive a process-local keyed task ID from the application
+version, task type, and normalized start input. Retrying an identical start while its record exists returns the same
+running or terminal task without scheduling duplicate work. Poll the matching `poll_*_async` endpoint with the
+returned task ID. Task records expire after one hour. Restarting the node that executes a task loses its process-local
+task records and changes the generated IDs.
 
 ---
 
@@ -243,23 +244,23 @@ Events for stocks in major indices (ASX300, NASDAQ100, SP500, SP400, VN100) incl
 curl 'http://localhost:8000/events/upcoming_dividends?country=AU&index=ASX200'
 ```
 
-### `GET /events/upcoming_dividends_async`
+### `GET /events/start_upcoming_dividends_async` and `GET /events/poll_upcoming_dividends_async`
 
-Run the upcoming-dividends request in the background. Start a task with the same `country` and
-`index` parameters, then poll using the returned task ID. Task state and results expire after one hour.
+Run the upcoming-dividends request in the background. Call the start endpoint with the same `country` and `index`
+parameters, then call the poll endpoint with the returned task ID. Task state and results expire after one hour.
 
-| Parameter | Type  | Required    | Description                                                                                                    |
-|-----------|-------|-------------|----------------------------------------------------------------------------------------------------------------|
-| `country` | query | No          | Country code used when starting: `AU`, `US`, or `VN`; defaults to an empty string and is ignored when polling. |
-| `index`   | query | No          | Optional stock-index filter used when starting a task; supports the same indices as the synchronous endpoint.  |
-| `task_id` | query | Conditional | Task ID returned when starting a task. Required when polling.                                                  |
+| Endpoint | Parameter | Type  | Required | Description                                                                                                   |
+|----------|-----------|-------|----------|---------------------------------------------------------------------------------------------------------------|
+| Start    | `country` | query | No       | Country code used when starting: `AU`, `US`, or `VN`; defaults to an empty string.                            |
+| Start    | `index`   | query | No       | Optional stock-index filter used when starting a task; supports the same indices as the synchronous endpoint. |
+| Poll     | `task_id` | query | Yes      | Task ID returned by the start endpoint.                                                                       |
 
 ```bash
 # Start a task
-curl 'http://localhost:8000/events/upcoming_dividends_async?country=AU&index=ASX200'
+curl 'http://localhost:8000/events/start_upcoming_dividends_async?country=AU&index=ASX200'
 
 # Poll a task
-curl 'http://localhost:8000/events/upcoming_dividends_async?task_id=<TASK_ID>'
+curl 'http://localhost:8000/events/poll_upcoming_dividends_async?task_id=<TASK_ID>'
 ```
 
 Starting a task returns HTTP `202`:
@@ -304,23 +305,23 @@ Get upcoming earnings events for a market.
 curl 'http://localhost:8000/events/upcoming_earnings?country=US&index=SP500'
 ```
 
-### `GET /events/upcoming_earnings_async`
+### `GET /events/start_upcoming_earnings_async` and `GET /events/poll_upcoming_earnings_async`
 
 Run the upcoming-earnings request in the background using the same one-hour task lifecycle as
-`/events/upcoming_dividends_async`.
+the upcoming-dividends async endpoints.
 
-| Parameter | Type  | Required    | Description                                                                                             |
-|-----------|-------|-------------|---------------------------------------------------------------------------------------------------------|
-| `country` | query | No          | Country code used when starting: `AU` or `US`; defaults to an empty string and is ignored when polling. |
-| `index`   | query | No          | Optional stock-index filter used when starting a task.                                                  |
-| `task_id` | query | Conditional | Task ID returned when starting a task. Required when polling.                                           |
+| Endpoint | Parameter | Type  | Required | Description                                                                    |
+|----------|-----------|-------|----------|--------------------------------------------------------------------------------|
+| Start    | `country` | query | No       | Country code used when starting: `AU` or `US`; defaults to an empty string.    |
+| Start    | `index`   | query | No       | Optional stock-index filter used when starting a task.                         |
+| Poll     | `task_id` | query | Yes      | Task ID returned by the start endpoint.                                        |
 
 ```bash
 # Start a task
-curl 'http://localhost:8000/events/upcoming_earnings_async?country=US&index=SP500'
+curl 'http://localhost:8000/events/start_upcoming_earnings_async?country=US&index=SP500'
 
 # Poll a task
-curl 'http://localhost:8000/events/upcoming_earnings_async?task_id=<TASK_ID>'
+curl 'http://localhost:8000/events/poll_upcoming_earnings_async?task_id=<TASK_ID>'
 ```
 
 Starting a task returns HTTP `202`:
@@ -421,21 +422,21 @@ outlook period identifies whether it is observed, forecast, or unavailable; its 
 price and return ranges, confidence, rationale, drivers, risks, assumptions, gaps, and source IDs. Each reference
 includes source metadata, publication and access timestamps, its canonical HTTPS URL, and `is_verified`.
 
-### `GET /events/new_listings_async`
+### `GET /events/start_new_listings_async` and `GET /events/poll_new_listings_async`
 
 Run the new-listings request in the background. Task state and results expire after one hour.
 
-| Parameter | Type  | Required    | Description                                                                                               |
-|-----------|-------|-------------|-----------------------------------------------------------------------------------------------------------|
-| `country` | query | Conditional | Country code used when starting. Required for starts and currently limited to `AU`; ignored when polling. |
-| `task_id` | query | Conditional | Task ID returned when starting a task. Required when polling; `country` is ignored when this is supplied. |
+| Endpoint | Parameter | Type  | Required | Description                                                        |
+|----------|-----------|-------|----------|--------------------------------------------------------------------|
+| Start    | `country` | query | Yes      | Country code used when starting; currently limited to `AU`.        |
+| Poll     | `task_id` | query | Yes      | Task ID returned by the start endpoint.                            |
 
 ```bash
 # Start a task
-curl 'http://localhost:8000/events/new_listings_async?country=AU'
+curl 'http://localhost:8000/events/start_new_listings_async?country=AU'
 
 # Poll a task
-curl 'http://localhost:8000/events/new_listings_async?task_id=<TASK_ID>'
+curl 'http://localhost:8000/events/poll_new_listings_async?task_id=<TASK_ID>'
 ```
 
 Starting a task returns HTTP `202`:
@@ -467,9 +468,9 @@ Missing or unsupported countries are rejected before task creation.
 
 ## AI
 
-AI features use one HTTP verb consistently across each endpoint pair: `VERB /endpoint` runs synchronously,
-`VERB /endpoint_async` starts a background task, and `VERB /endpoint_async?task_id=<TASK_ID>` polls it. The
-AI-assisted new-listings endpoints under `/events` follow the same convention.
+AI features use one HTTP verb consistently across each endpoint group: `VERB /endpoint` runs synchronously,
+`VERB /start_<feature>_async` starts a background task, and
+`VERB /poll_<feature>_async?task_id=<TASK_ID>` polls it. The event endpoints follow the same convention.
 
 For asynchronous POST endpoints, malformed or schema-invalid start bodies return immediate HTTP `422` without
 creating a task. The polling tables below describe requests that passed HTTP request validation and created a task.
@@ -523,22 +524,22 @@ Repairable assessment arithmetic mismatches return HTTP `200` with `analysis_sta
 `validation_warnings` identifies each application correction, and the affected strategy repeats the warning in
 `data_gaps`.
 
-### `POST /ai/analyze_dividend_event_async`
+### `POST /ai/start_analyze_dividend_event_async` and `POST /ai/poll_analyze_dividend_event_async`
 
-Start dividend-event analysis in the background using the same JSON body as the synchronous endpoint, or poll the
-same endpoint with the returned task ID in the `task_id` query parameter. Task state and results expire after one
+Start dividend-event analysis in the background using the same JSON body as the synchronous endpoint, then call the
+poll endpoint with the returned task ID in the `task_id` query parameter. Task state and results expire after one
 hour. Completed analysis cache freshness varies from one hour to 72 hours based on event phase and proximity.
 
-Starting without a request body and without `task_id` returns immediate HTTP `400` and does not create a task.
+Starting without a request body returns immediate HTTP `400` and does not create a task.
 
 ```bash
 # Start a task
-curl -X POST 'http://localhost:8000/ai/analyze_dividend_event_async' \
+curl -X POST 'http://localhost:8000/ai/start_analyze_dividend_event_async' \
   -H 'Content-Type: application/json' \
   -d '{"symbol":"NASDAQ:AAPL","ex_date":"2026-08-10","dividend_amount":0.26}'
 
 # Poll a task
-curl -X POST 'http://localhost:8000/ai/analyze_dividend_event_async?task_id=<TASK_ID>'
+curl -X POST 'http://localhost:8000/ai/poll_analyze_dividend_event_async?task_id=<TASK_ID>'
 ```
 
 Polling returns:
@@ -609,28 +610,28 @@ Research and forecast caches exclude holding data; recommendation and final cach
 | `422`       | Request validation failed, or the symbol/security type is invalid or unsupported.                |
 | `502`       | Market verification, an AI stage, cached structured data, or final structured validation failed. |
 
-### `POST /ai/analyze_ticker_async`
+### `POST /ai/start_analyze_ticker_async` and `POST /ai/poll_analyze_ticker_async`
 
 Run ticker analysis in the background. Start a task with the same JSON request body as
-`/ai/analyze_ticker`, then poll by posting to this endpoint with the returned task ID. Task state and
-results expire after one hour.
+`/ai/analyze_ticker`, then post to the poll endpoint with the returned task ID. Task state and results expire after
+one hour.
 
 Starting without a request body returns immediate HTTP `400`; an invalid request body returns HTTP `422`. Neither
 case creates a task.
 
-| Parameter | Location  | Required    | Description                                                   |
-|-----------|-----------|-------------|---------------------------------------------------------------|
-| request body | JSON body | Conditional | `AnalyzeTickerRequest`; required when starting and omitted when polling. |
-| `task_id` | query     | Conditional | Task ID returned when starting a task. Required when polling. |
+| Endpoint | Parameter    | Location  | Required | Description                              |
+|----------|--------------|-----------|----------|------------------------------------------|
+| Start    | request body | JSON body | Yes      | `AnalyzeTickerRequest`.                  |
+| Poll     | `task_id`    | query     | Yes      | Task ID returned by the start endpoint.  |
 
 ```bash
 # Start a task
-curl -X POST 'http://localhost:8000/ai/analyze_ticker_async' \
+curl -X POST 'http://localhost:8000/ai/start_analyze_ticker_async' \
   -H 'Content-Type: application/json' \
   -d '{"symbol": "NASDAQ:AAPL"}'
 
 # Poll a task
-curl -X POST 'http://localhost:8000/ai/analyze_ticker_async?task_id=<TASK_ID>'
+curl -X POST 'http://localhost:8000/ai/poll_analyze_ticker_async?task_id=<TASK_ID>'
 ```
 
 Polling returns:
@@ -749,29 +750,29 @@ final validation. Holding and target-price verification are cached for five minu
 construction, action reasoning, and the final result are independently cached for one hour. Datetimes in downstream
 cache identities use UTC hourly resolution.
 
-### `POST /ai/build_portfolio_async`
+### `POST /ai/start_build_portfolio_async` and `POST /ai/poll_build_portfolio_async`
 
 Build a portfolio in the background. Start a task with the same JSON request body as
-`/ai/build_portfolio`, then poll by posting to this endpoint with the returned task ID. Task state and
-results expire after one hour.
+`/ai/build_portfolio`, then post to the poll endpoint with the returned task ID. Task state and results expire after
+one hour.
 
-Starting without a request body and without `task_id` returns immediate HTTP `400` and does not create a task.
+Starting without a request body returns immediate HTTP `400` and does not create a task.
 
-| Parameter            | Location  | Required    | Description                                                   |
-|----------------------|-----------|-------------|---------------------------------------------------------------|
-| `current_allocation` | JSON body | No          | Optional existing holdings used when starting a task.         |
-| `country`            | JSON body | Conditional | Country context. Required when starting a task.               |
-| `investor_theme`     | JSON body | Conditional | Required non-blank investor theme when starting a task.       |
-| `task_id`            | query     | Conditional | Task ID returned when starting a task. Required when polling. |
+| Endpoint | Parameter            | Location  | Required | Description                                             |
+|----------|----------------------|-----------|----------|---------------------------------------------------------|
+| Start    | `current_allocation` | JSON body | No       | Optional existing holdings used when starting a task.   |
+| Start    | `country`            | JSON body | Yes      | Country context.                                        |
+| Start    | `investor_theme`     | JSON body | Yes      | Required non-blank investor theme.                      |
+| Poll     | `task_id`            | query     | Yes      | Task ID returned by the start endpoint.                 |
 
 ```bash
 # Start a task
-curl -X POST 'http://localhost:8000/ai/build_portfolio_async' \
+curl -X POST 'http://localhost:8000/ai/start_build_portfolio_async' \
   -H 'Content-Type: application/json' \
   -d '{"country": "AU", "investor_theme": "growth with moderate risk"}'
 
 # Poll a task
-curl -X POST 'http://localhost:8000/ai/build_portfolio_async?task_id=<TASK_ID>'
+curl -X POST 'http://localhost:8000/ai/poll_build_portfolio_async?task_id=<TASK_ID>'
 ```
 
 Polling returns:
@@ -860,23 +861,23 @@ theme while recording any context that the theme leaves ambiguous or unspecified
 Invalid input returns HTTP `422`. Portfolio-verification, AI-provider, and invalid structured-output failures return
 HTTP `502`.
 
-### `POST /ai/spotlight_portfolio_async`
+### `POST /ai/start_spotlight_portfolio_async` and `POST /ai/poll_spotlight_portfolio_async`
 
 Run the same structured portfolio spotlight flow in the background. Start a task with the same JSON request body as
-`/ai/spotlight_portfolio`, then poll by posting to this endpoint with the returned task ID. Task state and results
-expire after one hour. Verification is cached for five minutes; planning, research, assessment, and final analysis
-stages are cached independently for one hour. Datetimes in downstream cache identities use UTC hourly resolution.
+`/ai/spotlight_portfolio`, then post to the poll endpoint with the returned task ID. Task state and results expire
+after one hour. Verification is cached for five minutes; planning, research, assessment, and final analysis stages
+are cached independently for one hour. Datetimes in downstream cache identities use UTC hourly resolution.
 
-Starting without a request body and without `task_id` returns immediate HTTP `400` and does not create a task.
+Starting without a request body returns immediate HTTP `400` and does not create a task.
 
-| Parameter    | Location  | Required    | Description                                                         |
-|--------------|-----------|-------------|---------------------------------------------------------------------|
-| Request body | JSON body | Conditional | Spotlight request. Required when starting and omitted when polling. |
-| `task_id`    | query     | Conditional | Task ID returned when starting a task. Required when polling.       |
+| Endpoint | Parameter    | Location  | Required | Description                             |
+|----------|--------------|-----------|----------|-----------------------------------------|
+| Start    | Request body | JSON body | Yes      | Spotlight request.                      |
+| Poll     | `task_id`    | query     | Yes      | Task ID returned by the start endpoint. |
 
 ```bash
 # Start a task
-curl -X POST 'http://localhost:8000/ai/spotlight_portfolio_async' \
+curl -X POST 'http://localhost:8000/ai/start_spotlight_portfolio_async' \
   -H 'Content-Type: application/json' \
   -d '{
     "country": "AU",
@@ -887,7 +888,7 @@ curl -X POST 'http://localhost:8000/ai/spotlight_portfolio_async' \
   }'
 
 # Poll a task
-curl -X POST 'http://localhost:8000/ai/spotlight_portfolio_async?task_id=<TASK_ID>'
+curl -X POST 'http://localhost:8000/ai/poll_spotlight_portfolio_async?task_id=<TASK_ID>'
 ```
 
 Polling returns:
@@ -975,27 +976,27 @@ inferred at 10% of verified market value, rising to 15% only when that enables a
 Invalid themes, conflicting strategy cues, budgets, holdings, or currencies return HTTP `422`. Market verification,
 provider, structured-output, and final-validation failures return HTTP `502`.
 
-### `POST /ai/analyze_portfolio_async`
+### `POST /ai/start_analyze_portfolio_async` and `POST /ai/poll_analyze_portfolio_async`
 
 Run the same construction-or-review flow in the background. Start with the same request body as
-`/ai/analyze_portfolio`, then poll by posting with the returned task ID. Task state expires after one hour. Review
-verification is cached for five minutes; planning, research, assessment, target design, action reasoning, and the
-final review are independently cached for one hour. Datetimes in downstream cache identities use UTC hourly
+`/ai/analyze_portfolio`, then post to the poll endpoint with the returned task ID. Task state expires after one hour.
+Review verification is cached for five minutes; planning, research, assessment, target design, action reasoning, and
+the final review are independently cached for one hour. Datetimes in downstream cache identities use UTC hourly
 resolution.
 
-Starting without a request body and without `task_id` returns immediate HTTP `400` and does not create a task.
+Starting without a request body returns immediate HTTP `400` and does not create a task.
 
-| Parameter            | Location  | Required    | Description                                                   |
-|----------------------|-----------|-------------|---------------------------------------------------------------|
-| `current_allocation` | JSON body | No          | Holdings to review; when empty, a new portfolio is built.     |
-| `country`            | JSON body | Conditional | Country context. Required when starting a task.               |
-| `investor_theme`     | JSON body | Conditional | Non-blank investor context. Required when starting a task.    |
-| `rebalance_plan`     | JSON body | No          | Whether to generate a major-rebalance plan when needed.       |
-| `task_id`            | query     | Conditional | Task ID returned when starting a task. Required when polling. |
+| Endpoint | Parameter            | Location  | Required | Description                                               |
+|----------|----------------------|-----------|----------|-----------------------------------------------------------|
+| Start    | `current_allocation` | JSON body | No       | Holdings to review; when empty, a new portfolio is built. |
+| Start    | `country`            | JSON body | Yes      | Country context.                                          |
+| Start    | `investor_theme`     | JSON body | Yes      | Non-blank investor context.                               |
+| Start    | `rebalance_plan`     | JSON body | No       | Whether to generate a major-rebalance plan when needed.   |
+| Poll     | `task_id`            | query     | Yes      | Task ID returned by the start endpoint.                   |
 
 ```bash
 # Start a task
-curl -X POST 'http://localhost:8000/ai/analyze_portfolio_async' \
+curl -X POST 'http://localhost:8000/ai/start_analyze_portfolio_async' \
   -H 'Content-Type: application/json' \
   -d '{
     "country": "US",
@@ -1007,7 +1008,7 @@ curl -X POST 'http://localhost:8000/ai/analyze_portfolio_async' \
   }'
 
 # Poll a task
-curl -X POST 'http://localhost:8000/ai/analyze_portfolio_async?task_id=<TASK_ID>'
+curl -X POST 'http://localhost:8000/ai/poll_analyze_portfolio_async?task_id=<TASK_ID>'
 ```
 
 Polling returns:
