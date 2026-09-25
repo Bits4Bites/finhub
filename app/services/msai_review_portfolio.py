@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from collections.abc import Collection
 from datetime import UTC, date, datetime
 from decimal import ROUND_FLOOR, Decimal
 from typing import Annotated, Literal, Self
@@ -796,6 +797,7 @@ async def _assess_portfolio(
         assessment = _PortfolioAssessmentDraft.model_validate_json(response.completion)
         if assessment.portfolio_id != portfolio_id:
             raise ValueError("assessment returned a different portfolio ID")
+        assessment = _repair_assessment_references(assessment, research)
         _validate_assessment(assessment, snapshot, research, strategy=strategy)
     except (ValueError, ValidationError) as exc:
         ai_helper.log_structured_validation_failure("Portfolio Review", "Assessment", exc)
@@ -857,6 +859,7 @@ async def _design_target(
         target = _PortfolioTargetDraft.model_validate_json(response.completion)
         if target.portfolio_id != portfolio_id:
             raise ValueError("target design returned a different portfolio ID")
+        target = _repair_target_references(target, snapshot, research)
         _validate_target(target, snapshot, research, assessment)
     except (ValueError, ValidationError) as exc:
         ai_helper.log_structured_validation_failure("Portfolio Review", "Target design", exc)
@@ -1058,6 +1061,84 @@ def _finalize_research_references(
     return _PortfolioResearch.model_validate(research_data)
 
 
+def _repair_assessment_references(
+    assessment: _PortfolioAssessmentDraft,
+    research: _PortfolioResearch,
+) -> _PortfolioAssessmentDraft:
+    assessment_data = assessment.model_dump()
+    evidence_by_ticker = _research_reference_ids_by_ticker(research)
+    removed_ids: set[str] = set()
+    dropped_strengths = 0
+    dropped_risks = 0
+
+    repaired_strengths = []
+    for strength, strength_data in zip(assessment.strengths, assessment_data["strengths"], strict=True):
+        supported_ids = set().union(*(evidence_by_ticker.get(ticker, set()) for ticker in strength.affected_tickers))
+        filtered = ai_reference_utils.filter_reference_ids(strength.reference_ids, supported_ids)
+        removed_ids.update(filtered.removed_ids)
+        if not filtered.reference_ids:
+            dropped_strengths += 1
+            continue
+        strength_data["reference_ids"] = filtered.reference_ids
+        if filtered.removed_ids:
+            strength_data["data_gaps"] = _append_reference_repair_gap(
+                strength_data["data_gaps"],
+                filtered.removed_ids,
+                max_items=10,
+            )
+        repaired_strengths.append(strength_data)
+    assessment_data["strengths"] = repaired_strengths
+
+    repaired_risks = []
+    for risk, risk_data in zip(assessment.risks, assessment_data["risks"], strict=True):
+        supported_ids = set().union(*(evidence_by_ticker.get(ticker, set()) for ticker in risk.affected_tickers))
+        filtered = ai_reference_utils.filter_reference_ids(risk.reference_ids, supported_ids)
+        removed_ids.update(filtered.removed_ids)
+        if not filtered.reference_ids:
+            dropped_risks += 1
+            continue
+        risk_data["reference_ids"] = filtered.reference_ids
+        if filtered.removed_ids:
+            risk_data["data_gaps"] = _append_reference_repair_gap(
+                risk_data["data_gaps"],
+                filtered.removed_ids,
+                max_items=10,
+            )
+        repaired_risks.append(risk_data)
+    assessment_data["risks"] = repaired_risks
+
+    for review, review_data in zip(
+        assessment.holding_reviews,
+        assessment_data["holding_reviews"],
+        strict=True,
+    ):
+        filtered = ai_reference_utils.filter_reference_ids(
+            review.reference_ids,
+            evidence_by_ticker.get(review.ticker, set()),
+        )
+        removed_ids.update(filtered.removed_ids)
+        if not filtered.reference_ids:
+            raise ValueError(f"holding assessment {review.ticker} has no supported reference IDs after orphan repair")
+        review_data["reference_ids"] = filtered.reference_ids
+        if filtered.removed_ids:
+            review_data["data_gaps"] = _append_reference_repair_gap(
+                review_data["data_gaps"],
+                filtered.removed_ids,
+                max_items=10,
+            )
+
+    if removed_ids or dropped_strengths or dropped_risks:
+        warning = f"Ignored unsupported assessment source IDs: {_format_reference_ids(removed_ids)}."
+        if dropped_strengths:
+            warning += f" Removed {dropped_strengths} unsupported strength(s)."
+        if dropped_risks:
+            warning += f" Removed {dropped_risks} unsupported risk(s)."
+        assessment_data["data_gaps"] = [*assessment_data["data_gaps"][:19], warning]
+        logging.warning("[Portfolio Review] %s", warning)
+
+    return _PortfolioAssessmentDraft.model_validate(assessment_data)
+
+
 def _validate_assessment(
     assessment: _PortfolioAssessmentDraft,
     snapshot: models_review.PortfolioReviewSnapshot,
@@ -1110,6 +1191,37 @@ def _validate_assessment(
         raise ValueError(f"assessment contains unresearched additions: {sorted(unknown_additions)}")
 
 
+def _repair_target_references(
+    target: _PortfolioTargetDraft,
+    snapshot: models_review.PortfolioReviewSnapshot,
+    research: _PortfolioResearch,
+) -> _PortfolioTargetDraft:
+    target_data = target.model_dump()
+    current_tickers = {holding.ticker for holding in snapshot.holdings}
+    evidence_by_ticker = _research_reference_ids_by_ticker(research)
+    additions = {addition.ticker: set(addition.reference_ids) for addition in research.additions}
+    removed_ids: set[str] = set()
+
+    for position, position_data in zip(target.positions, target_data["positions"], strict=True):
+        if position.ticker in current_tickers:
+            supported_ids = evidence_by_ticker.get(position.ticker, set())
+        elif position.ticker in additions:
+            supported_ids = additions[position.ticker]
+        else:
+            continue
+        filtered = ai_reference_utils.filter_reference_ids(position.reference_ids, supported_ids)
+        removed_ids.update(filtered.removed_ids)
+        if not filtered.reference_ids:
+            raise ValueError(f"target position {position.ticker} has no supported reference IDs after orphan repair")
+        position_data["reference_ids"] = filtered.reference_ids
+
+    if removed_ids:
+        warning = f"Ignored unsupported target source IDs: {_format_reference_ids(removed_ids)}."
+        target_data["data_gaps"] = [*target_data["data_gaps"][:19], warning]
+        logging.warning("[Portfolio Review] %s", warning)
+    return _PortfolioTargetDraft.model_validate(target_data)
+
+
 def _validate_target(
     target: _PortfolioTargetDraft,
     snapshot: models_review.PortfolioReviewSnapshot,
@@ -1151,6 +1263,25 @@ def _research_reference_ids_by_ticker(research: _PortfolioResearch) -> dict[str,
         for ticker in claim.affected_tickers:
             result.setdefault(ticker, set()).update(claim.reference_ids)
     return result
+
+
+def _append_reference_repair_gap(
+    data_gaps: list[str],
+    removed_ids: Collection[str],
+    *,
+    max_items: int,
+) -> list[str]:
+    warning = f"Ignored unsupported source IDs: {_format_reference_ids(removed_ids)}."
+    return [*data_gaps[: max_items - 1], warning]
+
+
+def _format_reference_ids(reference_ids: Collection[str]) -> str:
+    ordered_ids = sorted(reference_ids)
+    displayed_ids = ordered_ids[:8]
+    summary = ", ".join(displayed_ids) or "none"
+    if len(ordered_ids) > len(displayed_ids):
+        summary += f", plus {len(ordered_ids) - len(displayed_ids)} more"
+    return summary
 
 
 def _build_target_positions(

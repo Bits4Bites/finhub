@@ -27,6 +27,30 @@ def _assert_openai_strict_objects(value):
             _assert_openai_strict_objects(nested_value)
 
 
+def _forecast_draft() -> services_ticker._TickerForecastResponse:
+    return services_ticker._TickerForecastResponse(
+        symbol="NASDAQ:AAPL",
+        forecasts=[
+            {
+                "horizon": horizon,
+                "assessment_status": "Forecast",
+                "expected_price_min": 105 + index,
+                "expected_price_max": 110 + index,
+                "confidence": 70,
+                "rationale": "Sourced forecast.",
+                "key_drivers": ["Growth"],
+                "risk_factors": ["Volatility"],
+                "assumptions": ["Stable market"],
+                "data_gaps": [],
+                "reference_ids": [ticker_fixtures.SOURCE_ID],
+            }
+            for index, horizon in enumerate(services_ticker._HORIZON_ORDER)
+        ],
+        overall_data_quality="High",
+        data_gaps=[],
+    )
+
+
 def test_ai_response_schemas_are_openai_compatible_and_strict():
     for response_model in (
         services_ticker._TickerResearchResponse,
@@ -137,27 +161,7 @@ def test_research_repair_drops_orphan_claim_and_records_gap():
 
 
 def test_finalize_forecasts_recomputes_returns_and_direction():
-    draft = services_ticker._TickerForecastResponse(
-        symbol="NASDAQ:AAPL",
-        forecasts=[
-            {
-                "horizon": horizon,
-                "assessment_status": "Forecast",
-                "expected_price_min": 105 + index,
-                "expected_price_max": 110 + index,
-                "confidence": 70,
-                "rationale": "Sourced forecast.",
-                "key_drivers": ["Growth"],
-                "risk_factors": ["Volatility"],
-                "assumptions": ["Stable market"],
-                "data_gaps": [],
-                "reference_ids": [ticker_fixtures.SOURCE_ID],
-            }
-            for index, horizon in enumerate(services_ticker._HORIZON_ORDER)
-        ],
-        overall_data_quality="High",
-        data_gaps=[],
-    )
+    draft = _forecast_draft()
 
     result = services_ticker._finalize_forecasts(
         draft,
@@ -169,6 +173,68 @@ def test_finalize_forecasts_recomputes_returns_and_direction():
     assert result.forecasts[0].direction == "Up"
     assert result.forecasts[0].expected_return_min_pct == pytest.approx(5)
     assert result.forecasts[0].expected_return_max_pct == pytest.approx(10)
+
+
+def test_forecast_reference_repair_preserves_valid_links_and_records_gap():
+    draft_data = _forecast_draft().model_dump(mode="python")
+    draft_data["forecasts"][0]["reference_ids"].append("src-orphan")
+    draft = services_ticker._TickerForecastResponse.model_validate(draft_data)
+
+    repaired = services_ticker._repair_forecast_references(
+        draft,
+        ticker_fixtures.make_research(),
+    )
+
+    assert repaired.forecasts[0].reference_ids == [ticker_fixtures.SOURCE_ID]
+    assert "src-orphan" in repaired.forecasts[0].data_gaps[-1]
+    assert "src-orphan" in repaired.data_gaps[-1]
+
+
+def test_forecast_reference_repair_downgrades_fully_unsupported_horizon():
+    draft_data = _forecast_draft().model_dump(mode="python")
+    draft_data["forecasts"][0]["reference_ids"] = ["src-orphan"]
+    draft = services_ticker._TickerForecastResponse.model_validate(draft_data)
+
+    repaired = services_ticker._repair_forecast_references(
+        draft,
+        ticker_fixtures.make_research(),
+    )
+    result = services_ticker._finalize_forecasts(
+        repaired,
+        ticker_fixtures.make_baseline(),
+        ticker_fixtures.make_research(),
+    )
+
+    assert repaired.forecasts[0].assessment_status == "InsufficientData"
+    assert repaired.forecasts[0].expected_price_min is None
+    assert repaired.forecasts[0].reference_ids == []
+    assert result.overall_data_quality == "Medium"
+
+
+def test_recommendation_reference_repair_downgrades_unsupported_action():
+    draft = services_ticker._TickerRecommendationDraft(
+        action="BUY",
+        confidence=70,
+        summary="Buy based on cited evidence.",
+        buy_range={"minimum": 95, "maximum": 100, "currency": "USD"},
+        sell_range=None,
+        reasoning=["Evidence supports buying."],
+        key_conditions=["Conditions remain stable."],
+        reassessment_triggers=["Conditions change."],
+        risk_warnings=[],
+        reference_ids=["src-orphan"],
+    )
+
+    repaired = services_ticker._repair_recommendation_references(
+        draft,
+        ticker_fixtures.make_research(),
+    )
+
+    assert repaired.action == "HOLD"
+    assert repaired.buy_range is None
+    assert repaired.confidence == 25
+    assert repaired.reference_ids == []
+    assert "src-orphan" in repaired.risk_warnings[-1]
 
 
 def test_finalize_forecasts_rejects_range_outside_deterministic_envelope():
@@ -426,11 +492,19 @@ def test_ai_stages_and_final_result_cache_for_one_hour():
                 return_value=type("Forecast", (), {"symbol": "NASDAQ:AAPL"})(),
             ),
             patch(
+                "app.services.msai_analyze_ticker._repair_forecast_references",
+                return_value=object(),
+            ),
+            patch(
                 "app.services.msai_analyze_ticker._finalize_recommendation",
                 return_value=recommendation,
             ),
             patch(
                 "app.services.msai_analyze_ticker._TickerRecommendationDraft.model_validate_json",
+                return_value=object(),
+            ),
+            patch(
+                "app.services.msai_analyze_ticker._repair_recommendation_references",
                 return_value=object(),
             ),
             patch(

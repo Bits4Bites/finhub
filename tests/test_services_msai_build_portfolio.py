@@ -358,6 +358,18 @@ def test_construction_rejects_unresearched_ticker():
         service._validate_draft_against_research(draft, fixtures.research())
 
 
+def test_construction_reference_repair_removes_orphan_links():
+    draft_data = fixtures.draft_data()
+    draft_data["positions"][0]["reference_ids"].append("src-orphan")
+    draft = service._PortfolioConstructionDraft.model_validate(draft_data)
+
+    repaired = service._repair_draft_references(draft, fixtures.research())
+
+    assert repaired.positions[0].reference_ids == [fixtures.SOURCE_ID]
+    assert "src-orphan" in repaired.data_gaps[-1]
+    service._validate_draft_against_research(repaired, fixtures.research())
+
+
 def test_research_rejects_noncanonical_ticker():
     research_data = fixtures.research_response_data()
     research_data["candidates"][0]["ticker"] = "AAPL"

@@ -22,6 +22,7 @@ Requirements:
 - Allocation values must be finite, greater than zero, no greater than one, and sum to exactly 1.0.
 - Give each position a distinct portfolio role and theme-aware rationale.
 - Cite only reference IDs attached to that same researched candidate.
+- Copy every reference ID exactly from the validated research; never reconstruct, shorten, or edit an ID.
 - For Seeded mode, use verified holdings as context but return no trades, deltas, or rebalance instructions.
 - Respect the normalized budget as a feasibility constraint, but do not calculate share counts or purchase costs.
 - Treat Total as new cash added on top of verified holdings and Recurring as exactly one next contribution.

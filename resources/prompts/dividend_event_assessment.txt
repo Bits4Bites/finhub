@@ -26,6 +26,7 @@ Assessment requirements:
   break-even recovery values.
 - Recovery dates must equal the ex-date plus the corresponding calendar-day range and remain within the holding window.
 - Use only reference IDs supplied in the validated research.
+- Copy every reference ID exactly from the validated research; never reconstruct, shorten, or edit an ID.
 - Treat is_verified=false sources as unverified evidence and reduce confidence and data quality accordingly.
 - comparison_reference_ids must support the comparison rationale.
 - Do not introduce new facts, infer tax residency, provide after-tax values, or provide personalized investment advice.

@@ -116,6 +116,16 @@ def test_collect_reference_ids_reads_nested_mapping_keys():
     }
 
 
+def test_filter_reference_ids_retains_supported_ids_without_guessing():
+    result = ai_reference_utils.filter_reference_ids(
+        ["source-1", "source-typo", "source-2"],
+        {"source-1", "source-2", "source-3"},
+    )
+
+    assert result.reference_ids == ["source-1", "source-2"]
+    assert result.removed_ids == frozenset({"source-typo"})
+
+
 def test_remap_reference_ids_rejects_unknown_ids():
     with pytest.raises(ValueError, match="unknown reference IDs"):
         ai_reference_utils.remap_reference_ids(

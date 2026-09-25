@@ -24,6 +24,7 @@ Assessment requirements:
   composition or allocation. Do not build a rebalance plan or calculate a complete target portfolio.
 - Use only reference IDs present in the validated research. A risk based solely on deterministic portfolio facts may
   use an empty reference_ids list.
+- Copy every non-empty reference ID exactly from the validated research; never reconstruct, shorten, or edit an ID.
 - Treat is_verified=false references as unverified and reduce confidence and data quality accordingly.
 - Return an empty risks list when there is no material risk; do not invent a risk to fill the response.
 - Record uncertainty and missing information in data_gaps instead of inventing facts or precision.

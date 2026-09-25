@@ -843,16 +843,56 @@ async def _assess_dividend_event(
     if context.phase != "BeforeExDate" and assessment.dividend_capture.eligibility != "Ineligible":
         raise DividendEventAIError("Dividend assessment did not mark capture as ineligible")
 
-    known_reference_ids = {reference.id for reference in research.references}
-    unknown_reference_ids = ai_reference_utils.collect_reference_ids(assessment) - known_reference_ids
-    if unknown_reference_ids:
-        raise DividendEventAIError(f"Dividend assessment used unknown references: {sorted(unknown_reference_ids)}")
-    assessment, validation_warnings = _normalize_strategy_profit_loss(context, assessment)
+    assessment, reference_warnings = _repair_assessment_references(assessment, research)
+    assessment, normalization_warnings = _normalize_strategy_profit_loss(context, assessment)
     _validate_assessment_targets(context, baseline, assessment)
     return _DividendAssessmentResult(
         assessment=assessment,
-        validation_warnings=tuple(validation_warnings),
+        validation_warnings=tuple([*reference_warnings, *normalization_warnings]),
     )
+
+
+def _repair_assessment_references(
+    assessment: _DividendAssessmentDraft,
+    research: _DividendResearch,
+) -> tuple[_DividendAssessmentDraft, list[str]]:
+    known_reference_ids = {reference.id for reference in research.references}
+    assessment_data = assessment.model_dump(mode="python")
+    validation_warnings: list[str] = []
+
+    for field_name, strategy in (
+        ("dividend_capture", assessment.dividend_capture),
+        ("post_dividend_discount", assessment.post_dividend_discount),
+    ):
+        filtered = ai_reference_utils.filter_reference_ids(strategy.reference_ids, known_reference_ids)
+        if not filtered.reference_ids:
+            raise DividendEventAIError(
+                f"Dividend assessment strategy {strategy.strategy} has no supported references after orphan repair"
+            )
+        if not filtered.removed_ids:
+            continue
+        warning = f"Ignored unsupported {strategy.strategy} source IDs: {', '.join(sorted(filtered.removed_ids))}."
+        strategy_data = assessment_data[field_name]
+        strategy_data["reference_ids"] = filtered.reference_ids
+        strategy_data["data_gaps"] = [*strategy_data["data_gaps"][:19], warning]
+        validation_warnings.append(warning)
+
+    comparison = ai_reference_utils.filter_reference_ids(
+        assessment.comparison_reference_ids,
+        known_reference_ids,
+    )
+    if not comparison.reference_ids:
+        raise DividendEventAIError("Dividend assessment comparison has no supported references after orphan repair")
+    if comparison.removed_ids:
+        warning = f"Ignored unsupported comparison source IDs: {', '.join(sorted(comparison.removed_ids))}."
+        assessment_data["comparison_reference_ids"] = comparison.reference_ids
+        validation_warnings.append(warning)
+
+    for warning in validation_warnings:
+        logging.warning("[Dividend Analysis] %s", warning)
+    if not validation_warnings:
+        return assessment, []
+    return _DividendAssessmentDraft.model_validate(assessment_data), validation_warnings
 
 
 def _normalize_strategy_profit_loss(

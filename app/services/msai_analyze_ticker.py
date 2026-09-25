@@ -864,6 +864,7 @@ async def _forecast_ticker(
         draft = _TickerForecastResponse.model_validate_json(response.completion)
         if draft.symbol.strip().upper() != baseline.snapshot.symbol:
             raise ValueError("forecast returned a different symbol")
+        draft = _repair_forecast_references(draft, research)
         forecasts = _finalize_forecasts(draft, baseline, research)
     except (ValueError, ValidationError) as exc:
         ai_helper.log_structured_validation_failure("Ticker Analysis", "Forecast", exc)
@@ -875,6 +876,43 @@ async def _forecast_ticker(
         ttl=_CACHE_TTL,
     )
     return forecasts
+
+
+def _repair_forecast_references(
+    draft: _TickerForecastResponse,
+    research: _TickerResearch,
+) -> _TickerForecastResponse:
+    known_reference_ids = {reference.id for reference in research.references}
+    draft_data = draft.model_dump(mode="python")
+    removed_ids: set[str] = set()
+
+    for forecast, forecast_data in zip(draft.forecasts, draft_data["forecasts"], strict=True):
+        filtered = ai_reference_utils.filter_reference_ids(forecast.reference_ids, known_reference_ids)
+        if not filtered.removed_ids:
+            continue
+        removed_ids.update(filtered.removed_ids)
+        warning = f"Ignored unsupported forecast source IDs: {', '.join(sorted(filtered.removed_ids))}."
+        forecast_data["reference_ids"] = filtered.reference_ids
+        forecast_data["data_gaps"] = [*forecast_data["data_gaps"][:19], warning]
+        if not filtered.reference_ids and forecast.assessment_status == "Forecast":
+            forecast_data.update(
+                {
+                    "assessment_status": "InsufficientData",
+                    "expected_price_min": None,
+                    "expected_price_max": None,
+                    "confidence": min(forecast.confidence, 25),
+                    "rationale": "Insufficient supported evidence remains to produce this forecast.",
+                    "key_drivers": [],
+                    "risk_factors": [],
+                    "assumptions": [],
+                }
+            )
+
+    if removed_ids:
+        warning = f"Ignored unsupported forecast source IDs: {', '.join(sorted(removed_ids))}."
+        draft_data["data_gaps"] = [*draft_data["data_gaps"][:19], warning]
+        logging.warning("[Ticker Analysis] %s", warning)
+    return _TickerForecastResponse.model_validate(draft_data)
 
 
 def _finalize_forecasts(
@@ -1008,6 +1046,7 @@ async def _recommend_ticker(
 
     try:
         draft = _TickerRecommendationDraft.model_validate_json(response.completion)
+        draft = _repair_recommendation_references(draft, research)
         recommendation = _finalize_recommendation(
             draft,
             snapshot,
@@ -1026,6 +1065,37 @@ async def _recommend_ticker(
         ttl=_CACHE_TTL,
     )
     return recommendation
+
+
+def _repair_recommendation_references(
+    draft: _TickerRecommendationDraft,
+    research: _TickerResearch,
+) -> _TickerRecommendationDraft:
+    known_reference_ids = {reference.id for reference in research.references}
+    filtered = ai_reference_utils.filter_reference_ids(draft.reference_ids, known_reference_ids)
+    if not filtered.removed_ids:
+        return draft
+
+    warning = f"Ignored unsupported recommendation source IDs: {', '.join(sorted(filtered.removed_ids))}."
+    draft_data = draft.model_dump(mode="python")
+    draft_data["reference_ids"] = filtered.reference_ids
+    draft_data["risk_warnings"] = [*draft_data["risk_warnings"][:9], warning]
+    if not filtered.reference_ids:
+        draft_data.update(
+            {
+                "action": "HOLD",
+                "confidence": min(draft.confidence, 25),
+                "summary": "No supported source references remain for an actionable recommendation.",
+                "buy_range": None,
+                "sell_range": None,
+                "reasoning": ["Insufficient supported evidence remains to recommend buying or selling."],
+                "key_conditions": [],
+                "reassessment_triggers": [],
+                "risk_warnings": [warning],
+            }
+        )
+    logging.warning("[Ticker Analysis] %s", warning)
+    return _TickerRecommendationDraft.model_validate(draft_data)
 
 
 def _finalize_recommendation(

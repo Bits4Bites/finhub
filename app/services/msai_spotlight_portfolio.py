@@ -433,6 +433,7 @@ async def _assess_portfolio(
         assessment = _PortfolioAssessmentDraft.model_validate_json(response.completion)
         if assessment.portfolio_id != portfolio_id:
             raise ValueError("assessment returned a different portfolio ID")
+        assessment = _repair_assessment_references(assessment, research)
         _validate_assessment(assessment, snapshot, research)
     except (ValueError, ValidationError) as exc:
         ai_helper.log_structured_validation_failure("Portfolio Spotlight", "Assessment", exc)
@@ -462,6 +463,50 @@ def _validate_assessment(
     unknown_reference_ids = ai_reference_utils.collect_reference_ids(assessment) - known_reference_ids
     if unknown_reference_ids:
         raise ValueError(f"assessment contains unknown reference IDs: {sorted(unknown_reference_ids)}")
+
+
+def _repair_assessment_references(
+    assessment: _PortfolioAssessmentDraft,
+    research: _PortfolioResearch,
+) -> _PortfolioAssessmentDraft:
+    assessment_data = assessment.model_dump()
+    evidence_by_ticker: dict[str, set[str]] = {}
+    for claim in research.claims:
+        for ticker in claim.affected_tickers:
+            evidence_by_ticker.setdefault(ticker, set()).update(claim.reference_ids)
+
+    repaired_risks = []
+    removed_ids: set[str] = set()
+    dropped_risks = 0
+    for risk, risk_data in zip(assessment.risks, assessment_data["risks"], strict=True):
+        if not risk.reference_ids:
+            repaired_risks.append(risk_data)
+            continue
+        supported_ids = set().union(*(evidence_by_ticker.get(ticker, set()) for ticker in risk.affected_tickers))
+        filtered = ai_reference_utils.filter_reference_ids(risk.reference_ids, supported_ids)
+        removed_ids.update(filtered.removed_ids)
+        if not filtered.reference_ids:
+            dropped_risks += 1
+            continue
+        risk_data["reference_ids"] = filtered.reference_ids
+        if filtered.removed_ids:
+            warning = f"Ignored unsupported source IDs: {', '.join(sorted(filtered.removed_ids))}."
+            risk_data["data_gaps"] = [*risk_data["data_gaps"][:19], warning]
+        repaired_risks.append(risk_data)
+
+    for rank, risk_data in enumerate(repaired_risks, start=1):
+        risk_data["rank"] = rank
+    assessment_data["risks"] = repaired_risks
+    if dropped_risks and not repaired_risks:
+        assessment_data["overall_data_quality"] = "Insufficient"
+
+    if removed_ids or dropped_risks:
+        warning = f"Ignored unsupported assessment source IDs: {', '.join(sorted(removed_ids)) or 'none'}."
+        if dropped_risks:
+            warning += f" Removed {dropped_risks} unsupported risk(s)."
+        assessment_data["data_gaps"] = [*assessment_data["data_gaps"][:19], warning]
+        logging.warning("[Portfolio Spotlight] %s", warning)
+    return _PortfolioAssessmentDraft.model_validate(assessment_data)
 
 
 def _validate_risk_order(

@@ -28,6 +28,7 @@ For each horizon:
 - Use InsufficientData rather than inventing precision when history or evidence is inadequate.
 - Explain how trend, volatility, valuation, catalysts, risks, and scheduled developments affect the range.
 - Reference only canonical source IDs present in the finalized research.
+- Copy every source ID exactly from the finalized research; never reconstruct, shorten, or edit an ID.
 - Do not calculate percentage returns; the application calculates them from the verified current price.
 - Do not create horizon day counts or period-end dates; the application owns them.
 

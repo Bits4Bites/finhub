@@ -570,6 +570,41 @@ def test_assessment_uses_structured_response_and_preserves_source_verification(
     assert mock_cache_set.await_args.kwargs["ttl"] == 24 * 60 * 60
 
 
+def test_assessment_repairs_mixed_orphan_links_and_drops_unsupported_driver(
+    mock_listings_cache,
+):
+    response_data = _analysis_draft_data()
+    response_data["offer"]["reference_ids"] = ["asx-source", "src-orphan"]
+    response_data["offer"]["facts"] = [
+        {
+            **response_data["offer"]["facts"][0],
+            "reference_ids": ["asx-source", "src-orphan"],
+        }
+    ]
+    response_data["risks_and_catalysts"]["risks"][0]["reference_ids"] = ["src-orphan"]
+    response_data["outlook"]["ipo_day"]["reference_ids"] = ["asx-source", "src-orphan"]
+
+    with patch.object(
+        msai_asx_listings.ai_helper,
+        "ai_exec_task",
+        new_callable=AsyncMock,
+        return_value=ai_helper.LLMResponse(completion=json.dumps(response_data)),
+    ):
+        analysis = asyncio.run(
+            msai_asx_listings._assess_asx_listing(
+                _event(),
+                _research_model(),
+            )
+        )
+
+    assert "src-orphan" not in ai_reference_utils.collect_reference_ids(analysis)
+    assert analysis.offer.reference_ids == ["asx-source"]
+    assert "src-orphan" in analysis.offer.data_gaps[-1]
+    assert analysis.risks_and_catalysts.risks == []
+    assert "Removed 1 unsupported item" in analysis.risks_and_catalysts.data_gaps[-1]
+    assert "unsupported source IDs" in analysis.outlook.ipo_day.data_gaps[-1]
+
+
 def test_assessment_reuses_cached_validated_result(mock_listings_cache):
     mock_cache_get, mock_cache_set = mock_listings_cache
     expected = _analysis_model()

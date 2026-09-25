@@ -182,7 +182,7 @@ def assessment_data(*, portfolio_id: str = "portfolio-id") -> dict[str, object]:
                 "affected_tickers": TICKERS,
                 "confidence": 80,
                 "data_gaps": [],
-                "reference_ids": SOURCE_IDS,
+                "reference_ids": list(SOURCE_IDS),
             }
         ],
         "holding_reviews": [

@@ -21,6 +21,7 @@ Requirements:
 - Return one review for every verified current holding and no other holding.
 - Identify portfolio strengths and risks in depth, ordered with the most severe risks first.
 - Cite only validated research reference IDs relevant to each claim.
+- Copy every reference ID exactly from the validated research; never reconstruct, shorten, or edit an ID.
 - Choose one role_category from CoreGrowth, DefensiveIncome, Diversifier, Hedge, Tactical, and CashReserve; put no emoji in role_description.
 - For LongTerm, never recommend TRIM. Recommend EXIT only for a sourced CriticalRisk or StructuralChange and set exit_reason accordingly. Otherwise use HOLD or BUY_MORE.
 - For Swing, focus on risk-adjusted P&L over a days-to-weeks horizon and consider liquidity, volatility, catalyst timing, downside controls, costs, and tax uncertainty. HOLD, TRIM, EXIT, and BUY_MORE are permitted. Set exit_reason to SwingRiskControl or SwingThesisInvalidated when that is the evidence-backed EXIT basis; CriticalRisk and StructuralChange remain valid when applicable.

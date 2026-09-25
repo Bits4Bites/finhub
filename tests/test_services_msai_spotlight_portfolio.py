@@ -427,20 +427,20 @@ def test_assessment_uses_structured_output_without_new_research():
     assert mock_cache_set.await_args.kwargs["ttl"] == 60 * 60
 
 
-def test_assessment_rejects_unknown_reference_ids():
+def test_assessment_drops_risk_with_only_unknown_reference_ids():
     response_data = _assessment_response_data()
     response_data["risks"][0]["reference_ids"] = ["unknown-source"]
     with (
         patch.object(service.cache, "get", new_callable=AsyncMock, return_value=None),
+        patch.object(service.cache, "set", new_callable=AsyncMock, return_value=True),
         patch.object(
             service.ai_helper,
             "ai_exec_task",
             new_callable=AsyncMock,
             return_value=ai_helper.LLMResponse(completion=json.dumps(response_data)),
         ),
-        pytest.raises(service.PortfolioSpotlightAIError, match="invalid structured data"),
     ):
-        asyncio.run(
+        assessment = asyncio.run(
             service._assess_portfolio(
                 "portfolio-id",
                 portfolio_spotlight_fixtures.snapshot(),
@@ -449,6 +449,10 @@ def test_assessment_rejects_unknown_reference_ids():
                 investor_theme="Growth focused",
             )
         )
+
+    assert assessment.risks == []
+    assert assessment.overall_data_quality == "Insufficient"
+    assert "unknown-source" in assessment.data_gaps[-1]
 
 
 def test_final_analysis_derives_yes_no_rebalance_flag():

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from urllib.parse import urlsplit, urlunsplit
@@ -19,6 +19,14 @@ class CanonicalizedReferences:
 
     references: list[models_ai.ReferenceSource]
     id_map: dict[str, str]
+
+
+@dataclass(frozen=True)
+class FilteredReferenceIds:
+    """Supported reference IDs plus links removed at a trust boundary."""
+
+    reference_ids: list[str]
+    removed_ids: frozenset[str]
 
 
 def normalize_url(url: str) -> str:
@@ -63,6 +71,23 @@ def collect_reference_ids(value: object) -> set[str]:
     if isinstance(value, list | tuple | set):
         return {item for field_value in value for item in collect_reference_ids(field_value)}
     return set()
+
+
+def filter_reference_ids(
+    reference_ids: Sequence[str],
+    allowed_reference_ids: Collection[str],
+) -> FilteredReferenceIds:
+    """Retain allowed IDs in input order without guessing replacements."""
+
+    if isinstance(reference_ids, str) or not all(isinstance(reference_id, str) for reference_id in reference_ids):
+        raise TypeError("reference_ids must be a sequence of strings")
+    allowed_ids = set(allowed_reference_ids)
+    retained_ids = list(dict.fromkeys(reference_id for reference_id in reference_ids if reference_id in allowed_ids))
+    removed_ids = frozenset(reference_id for reference_id in reference_ids if reference_id not in allowed_ids)
+    return FilteredReferenceIds(
+        reference_ids=retained_ids,
+        removed_ids=removed_ids,
+    )
 
 
 def validate_reference_registry(

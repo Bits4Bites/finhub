@@ -38,6 +38,7 @@ Rules:
 - If overall data quality is Insufficient, return a low-confidence HOLD.
 - Explain timing, evidence, conditions, reassessment triggers, and risk warnings.
 - Reference only canonical source IDs present in the finalized research.
+- Copy every source ID exactly from the finalized research; never reconstruct, shorten, or edit an ID.
 - Do not recommend quantities, portfolio weights, leverage, tax treatment, or foreign-exchange actions.
 
 Return only JSON matching the supplied schema. Do not wrap it in Markdown and do not add commentary.

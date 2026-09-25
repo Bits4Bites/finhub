@@ -98,6 +98,37 @@ def _assessment_result() -> service._DividendAssessmentResult:
     )
 
 
+def test_assessment_reference_repair_preserves_supported_links():
+    assessment_data = _assessment().model_dump(mode="python")
+    assessment_data["dividend_capture"]["reference_ids"].append("src-orphan")
+    assessment_data["post_dividend_discount"]["reference_ids"].append("src-orphan")
+    assessment_data["comparison_reference_ids"].append("src-orphan")
+    assessment = service._DividendAssessmentDraft.model_validate(assessment_data)
+
+    repaired, warnings = service._repair_assessment_references(
+        assessment,
+        _private_research(),
+    )
+
+    assert repaired.dividend_capture.reference_ids == [dividend_fixtures.SOURCE_ID]
+    assert repaired.post_dividend_discount.reference_ids == [dividend_fixtures.SOURCE_ID]
+    assert repaired.comparison_reference_ids == [dividend_fixtures.SOURCE_ID]
+    assert len(warnings) == 3
+    assert all("src-orphan" in warning for warning in warnings)
+
+
+def test_assessment_reference_repair_rejects_fully_unsupported_strategy():
+    assessment_data = _assessment().model_dump(mode="python")
+    assessment_data["dividend_capture"]["reference_ids"] = ["src-orphan"]
+    assessment = service._DividendAssessmentDraft.model_validate(assessment_data)
+
+    with pytest.raises(service.DividendEventAIError, match="has no supported references"):
+        service._repair_assessment_references(
+            assessment,
+            _private_research(),
+        )
+
+
 def test_extracts_distinct_drop_and_recovery_metrics():
     samples = service._extract_dividend_samples(
         _history(),

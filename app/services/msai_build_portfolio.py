@@ -532,6 +532,7 @@ async def _construct_portfolio(
     )
     try:
         draft = _PortfolioConstructionDraft.model_validate_json(response.completion)
+        draft = _repair_draft_references(draft, research)
         if len(draft.positions) > plan.target_holding_count:
             raise ValueError("constructed portfolio exceeds the planned holding count")
         _validate_draft_against_research(draft, research)
@@ -737,6 +738,34 @@ def _validate_draft_against_research(
         unknown_ids = set(position.reference_ids) - candidate_reference_ids
         if unknown_ids:
             raise ValueError(f"position {position.ticker} contains unsupported reference IDs: {sorted(unknown_ids)}")
+
+
+def _repair_draft_references(
+    draft: _PortfolioConstructionDraft,
+    research: _PortfolioResearch,
+) -> _PortfolioConstructionDraft:
+    draft_data = draft.model_dump()
+    candidates = {candidate.ticker: set(candidate.reference_ids) for candidate in research.candidates}
+    removed_ids: set[str] = set()
+
+    for position, position_data in zip(draft.positions, draft_data["positions"], strict=True):
+        if position.ticker not in candidates:
+            continue
+        filtered = ai_reference_utils.filter_reference_ids(
+            position.reference_ids,
+            candidates[position.ticker],
+        )
+        removed_ids.update(filtered.removed_ids)
+        if not filtered.reference_ids:
+            raise ValueError(f"position {position.ticker} has no supported reference IDs after orphan repair")
+        position_data["reference_ids"] = filtered.reference_ids
+
+    if removed_ids:
+        removed_text = ", ".join(sorted(removed_ids))
+        warning = f"Ignored unsupported construction source IDs: {removed_text}."
+        draft_data["data_gaps"] = [*draft_data["data_gaps"][:19], warning]
+        logging.warning("[Portfolio Construction] %s", warning)
+    return _PortfolioConstructionDraft.model_validate(draft_data)
 
 
 def _build_target_positions(

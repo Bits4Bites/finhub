@@ -48,6 +48,16 @@ _RESEARCH_SECTION_NAMES = (
     "market_context",
     "risks_and_catalysts",
 )
+_ANALYSIS_SECTION_NAMES = (
+    "executive_summary",
+    "offer",
+    "business",
+    "financials",
+    "valuation",
+    "governance",
+    "risks_and_catalysts",
+)
+_OUTLOOK_PERIOD_NAMES = ("ipo_day", "first_week", "first_two_weeks", "first_month")
 _SYDNEY_TZ = ZoneInfo("Australia/Sydney")
 _INVALID_DATETIME = "1900-01-01 00:00:00+00:00"
 
@@ -608,6 +618,7 @@ async def _assess_asx_listing(
     if draft.listing_status != expected_status:
         raise ValueError("AI assessment returned an invalid listing status.")
 
+    draft = _repair_analysis_references(draft, research)
     used_reference_ids = draft.referenced_source_ids()
     references = [reference for reference in research.references if reference.id in used_reference_ids]
     analysis_data = draft.model_dump()
@@ -619,3 +630,89 @@ async def _assess_asx_listing(
         ttl=_listing_cache_ttl(event, today=today),
     )
     return analysis
+
+
+def _repair_analysis_references(
+    draft: _ListingAnalysisDraft,
+    research: _ListingResearch,
+) -> _ListingAnalysisDraft:
+    known_reference_ids = {reference.id for reference in research.references}
+    draft_data = draft.model_dump(mode="python")
+    removed_ids: set[str] = set()
+
+    for section_name in _ANALYSIS_SECTION_NAMES:
+        section = getattr(draft, section_name)
+        section_data = draft_data[section_name]
+        supported_ids: list[str] = []
+        section_removed_ids: set[str] = set()
+        dropped_items = 0
+
+        section_ids = ai_reference_utils.filter_reference_ids(section.reference_ids, known_reference_ids)
+        supported_ids.extend(section_ids.reference_ids)
+        section_removed_ids.update(section_ids.removed_ids)
+        removed_ids.update(section_ids.removed_ids)
+
+        repaired_facts = []
+        for fact, fact_data in zip(section.facts, section_data["facts"], strict=True):
+            fact_ids = ai_reference_utils.filter_reference_ids(fact.reference_ids, known_reference_ids)
+            section_removed_ids.update(fact_ids.removed_ids)
+            removed_ids.update(fact_ids.removed_ids)
+            if not fact_ids.reference_ids:
+                dropped_items += 1
+                continue
+            fact_data["reference_ids"] = fact_ids.reference_ids
+            supported_ids.extend(fact_ids.reference_ids)
+            repaired_facts.append(fact_data)
+        section_data["facts"] = repaired_facts
+
+        if section_name == "risks_and_catalysts":
+            for field_name in ("risks", "catalysts"):
+                repaired_drivers = []
+                for driver, driver_data in zip(
+                    getattr(section, field_name),
+                    section_data[field_name],
+                    strict=True,
+                ):
+                    driver_ids = ai_reference_utils.filter_reference_ids(
+                        driver.reference_ids,
+                        known_reference_ids,
+                    )
+                    section_removed_ids.update(driver_ids.removed_ids)
+                    removed_ids.update(driver_ids.removed_ids)
+                    if not driver_ids.reference_ids:
+                        dropped_items += 1
+                        continue
+                    driver_data["reference_ids"] = driver_ids.reference_ids
+                    supported_ids.extend(driver_ids.reference_ids)
+                    repaired_drivers.append(driver_data)
+                section_data[field_name] = repaired_drivers
+
+        section_data["reference_ids"] = list(dict.fromkeys(supported_ids))
+        if not section_data["reference_ids"]:
+            raise ValueError(f"AI assessment {section_name} has no supported references after orphan repair.")
+        if section_removed_ids or dropped_items:
+            warning = (
+                f"Ignored unsupported source IDs in {section_name}: {', '.join(sorted(section_removed_ids)) or 'none'}."
+            )
+            if dropped_items:
+                warning += f" Removed {dropped_items} unsupported item(s)."
+            section_data["data_gaps"] = [*section_data["data_gaps"], warning]
+
+    for period_name in _OUTLOOK_PERIOD_NAMES:
+        period = getattr(draft.outlook, period_name)
+        period_data = draft_data["outlook"][period_name]
+        filtered = ai_reference_utils.filter_reference_ids(period.reference_ids, known_reference_ids)
+        removed_ids.update(filtered.removed_ids)
+        if not filtered.reference_ids:
+            raise ValueError(f"AI assessment {period_name} outlook has no supported references after orphan repair.")
+        period_data["reference_ids"] = filtered.reference_ids
+        if filtered.removed_ids:
+            warning = f"Ignored unsupported source IDs in {period_name} outlook."
+            period_data["data_gaps"] = [*period_data["data_gaps"], warning]
+
+    if removed_ids:
+        logging.warning(
+            "[ASX Listings] Ignored unsupported assessment source IDs: %s.",
+            ", ".join(sorted(removed_ids)),
+        )
+    return _ListingAnalysisDraft.model_validate(draft_data)

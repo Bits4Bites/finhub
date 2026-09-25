@@ -130,6 +130,100 @@ def test_research_reference_repair_removes_orphans_and_unsupported_claims():
     assert "Removed 1 unsupported claim" in repaired.data_gaps[-1]
 
 
+def test_assessment_reference_repair_removes_orphan_and_wrong_ticker_links():
+    data = fixtures.assessment_data()
+    data["risks"][0]["reference_ids"] = [
+        *data["risks"][0]["reference_ids"],
+        "src-orphan",
+    ]
+    data["holding_reviews"][0]["reference_ids"].extend(
+        [
+            fixtures.SOURCE_IDS[1],
+            "src-orphan",
+        ]
+    )
+    assessment = service._PortfolioAssessmentDraft.model_validate(data)
+
+    repaired = service._repair_assessment_references(assessment, fixtures.research())
+
+    assert repaired.risks[0].reference_ids == fixtures.SOURCE_IDS
+    assert repaired.holding_reviews[0].reference_ids == [fixtures.SOURCE_IDS[0]]
+    assert "src-orphan" in repaired.data_gaps[-1]
+    assert "Ignored unsupported source IDs" in repaired.holding_reviews[0].data_gaps[-1]
+    service._validate_assessment(
+        repaired,
+        fixtures.snapshot(),
+        fixtures.research(),
+        strategy="LongTerm",
+    )
+
+
+def test_assessment_reference_repair_rejects_unsupported_holding():
+    data = fixtures.assessment_data()
+    data["holding_reviews"][0]["reference_ids"] = [
+        fixtures.SOURCE_IDS[1],
+        "src-orphan",
+    ]
+    assessment = service._PortfolioAssessmentDraft.model_validate(data)
+
+    with pytest.raises(ValueError, match="NASDAQ:AAPL has no supported reference IDs"):
+        service._repair_assessment_references(assessment, fixtures.research())
+
+
+def test_target_reference_repair_removes_orphan_links():
+    data = fixtures.target_data()
+    data["positions"][0]["reference_ids"].append("src-orphan")
+    target = service._PortfolioTargetDraft.model_validate(data)
+
+    repaired = service._repair_target_references(
+        target,
+        fixtures.snapshot(),
+        fixtures.research(),
+    )
+
+    assert repaired.positions[0].reference_ids == [fixtures.SOURCE_IDS[0]]
+    assert "src-orphan" in repaired.data_gaps[-1]
+    service._validate_target(
+        repaired,
+        fixtures.snapshot(),
+        fixtures.research(),
+        fixtures.assessment(),
+    )
+
+
+def test_assessment_stage_repairs_orphan_links_before_validation():
+    response_data = fixtures.assessment_data()
+    response_data["risks"][0]["reference_ids"] = [
+        *response_data["risks"][0]["reference_ids"],
+        "src-orphan",
+    ]
+    response_data["holding_reviews"][0]["reference_ids"].append("src-orphan")
+
+    with (
+        patch.object(
+            service.ai_helper,
+            "ai_exec_task",
+            new_callable=AsyncMock,
+            return_value=ai_helper.LLMResponse(completion=json.dumps(response_data)),
+        ),
+        patch.object(service.cache, "get", new_callable=AsyncMock, return_value=None),
+        patch.object(service.cache, "set", new_callable=AsyncMock, return_value=True),
+    ):
+        assessment = asyncio.run(
+            service._assess_portfolio(
+                portfolio_id="portfolio-id",
+                snapshot=fixtures.snapshot(),
+                investor_theme="Long-term growth. Total budget USD 500.",
+                strategy="LongTerm",
+                plan=fixtures.plan(),
+                research=fixtures.research(),
+            )
+        )
+
+    assert "src-orphan" not in service.ai_reference_utils.collect_reference_ids(assessment)
+    assert "src-orphan" in assessment.data_gaps[-1]
+
+
 def test_long_term_actions_hold_overweight_positions_without_trim():
     calculated = service._calculate_actions(
         snapshot=fixtures.snapshot(),

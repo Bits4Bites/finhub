@@ -7,6 +7,7 @@ Requirements:
 - listing_status must be {{EXPECTED_STATUS}}.
 - Separate facts, assumptions, and data gaps.
 - Use only reference IDs present in the research.
+- Copy every reference ID exactly from the validated research; never reconstruct, shorten, or edit an ID.
 - Treat references with is_verified=false as unverified evidence and reflect that limitation in data quality and confidence.
 - Keep narrative fields concise and focus on the most material evidence.
 - Include at most three risks and three catalysts.
