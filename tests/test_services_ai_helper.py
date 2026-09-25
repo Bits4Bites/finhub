@@ -7,6 +7,7 @@ import httpx
 import openai
 import pytest
 from google.genai import types as genai_types
+from pydantic import BaseModel, ValidationError
 
 from app import config
 from app.services import ai_helper
@@ -64,6 +65,19 @@ def _make_rate_limit_error(
             }
         },
     )
+
+
+def test_structured_validation_logging_omits_rejected_input(caplog):
+    class ExampleModel(BaseModel):
+        value: int
+
+    with pytest.raises(ValidationError) as error_info:
+        ExampleModel.model_validate({"value": "private rejected value"})
+
+    ai_helper.log_structured_validation_failure("Example", "Assessment", error_info.value)
+
+    assert "value: Input should be a valid integer" in caplog.text
+    assert "private rejected value" not in caplog.text
 
 
 class TestLlmTaskConfig:

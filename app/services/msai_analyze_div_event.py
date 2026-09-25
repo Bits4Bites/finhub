@@ -187,6 +187,7 @@ async def ai_analyze_div_event(
     try:
         research = await _research_dividend_event(context, baseline, country=country)
     except DividendEventAIError as exc:
+        logging.warning("[Dividend Analysis] Research validation failed: %s", exc)
         result = _build_failed_analysis(context, baseline, str(exc))
         await cache.set(cache_key, result, ttl=_FAILED_ANALYSIS_CACHE_TTL)
         return result
@@ -201,10 +202,12 @@ async def ai_analyze_div_event(
             validation_warnings=assessment_result.validation_warnings,
         )
     except DividendEventAIError as exc:
+        logging.warning("[Dividend Analysis] Assessment validation failed: %s", exc)
         result = _build_failed_analysis(context, baseline, str(exc), research=research)
         await cache.set(cache_key, result, ttl=_FAILED_ANALYSIS_CACHE_TTL)
         return result
-    except ValidationError:
+    except ValidationError as exc:
+        ai_helper.log_structured_validation_failure("Dividend Analysis", "Finalization", exc)
         result = _build_failed_analysis(
             context,
             baseline,
@@ -709,6 +712,7 @@ async def _research_dividend_event(
         raw_research = _DividendResearchResponse.model_validate_json(response.completion)
         repaired_research = _repair_research_references(raw_research)
     except ValidationError as exc:
+        ai_helper.log_structured_validation_failure("Dividend Analysis", "Research", exc)
         raise DividendEventAIError("Dividend research returned an invalid structured response") from exc
     if raw_research.symbol != context.symbol:
         raise DividendEventAIError("Dividend research returned a different symbol")
@@ -720,6 +724,7 @@ async def _research_dividend_event(
             accessed_at=datetime.now(UTC),
         )
     except (TypeError, ValueError, ValidationError) as exc:
+        ai_helper.log_structured_validation_failure("Dividend Analysis", "Research references", exc)
         raise DividendEventAIError("Dividend research returned invalid references") from exc
 
 
@@ -831,6 +836,7 @@ async def _assess_dividend_event(
     try:
         assessment = _DividendAssessmentDraft.model_validate_json(response.completion)
     except ValidationError as exc:
+        ai_helper.log_structured_validation_failure("Dividend Analysis", "Assessment", exc)
         raise DividendEventAIError("Dividend assessment returned an invalid structured response") from exc
     if assessment.symbol != context.symbol:
         raise DividendEventAIError("Dividend assessment returned a different symbol")

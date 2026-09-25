@@ -23,6 +23,7 @@ Research current evidence appropriate to the asset type. Cover:
 
 Source rules:
 
+- Copy the supplied Security symbol exactly into symbol.
 - Prioritize regulator, exchange, issuer, filing, and other primary sources.
 - Use current, specific numbers and dates where available.
 - Return no more than 12 unique HTTPS sources.

@@ -32,6 +32,8 @@ Rules:
 - The application assigns recommendation scope from whether a current holding is present.
 - Every price range must be positive, ordered, use the verified trading currency, and be coherent with current price
   and forecast ranges.
+- Keep a price range no lower than 75% of the lowest verified current or forecast price and no higher than 125% of
+  the highest verified current or forecast price.
 - Consider cost basis and unrealized P/L when a holding exists, but do not use sunk-cost reasoning.
 - If overall data quality is Insufficient, return a low-confidence HOLD.
 - Explain timing, evidence, conditions, reassessment triggers, and risk warnings.

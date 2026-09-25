@@ -2,6 +2,7 @@ Assess two dividend strategies using only the validated event, historical baseli
 Return only the supplied structured JSON schema. Do not use web search or external knowledge.
 
 Assessment requirements:
+- Copy the validated event symbol exactly into symbol.
 - Assess DividendCapture and PostDividendDiscount independently.
 - Use gross pre-tax values and the supplied per-strategy transaction costs. A zero cost is an explicit assumption.
 - DividendCapture is eligible only when the event phase is BeforeExDate.

@@ -729,6 +729,7 @@ async def _research_ticker(baseline: _TickerMarketBaseline) -> _TickerResearch:
             accessed_at=datetime.now(UTC),
         )
     except (TypeError, ValueError, ValidationError) as exc:
+        ai_helper.log_structured_validation_failure("Ticker Analysis", "Research", exc)
         raise TickerAnalysisAIError("Ticker research returned invalid structured data") from exc
 
     await cache.set(
@@ -865,6 +866,7 @@ async def _forecast_ticker(
             raise ValueError("forecast returned a different symbol")
         forecasts = _finalize_forecasts(draft, baseline, research)
     except (ValueError, ValidationError) as exc:
+        ai_helper.log_structured_validation_failure("Ticker Analysis", "Forecast", exc)
         raise TickerAnalysisAIError("Ticker forecast returned invalid structured data") from exc
 
     await cache.set(
@@ -1015,6 +1017,7 @@ async def _recommend_ticker(
             holding_snapshot=holding_snapshot,
         )
     except (ValueError, ValidationError) as exc:
+        ai_helper.log_structured_validation_failure("Ticker Analysis", "Recommendation", exc)
         raise TickerAnalysisAIError("Ticker recommendation returned invalid structured data") from exc
 
     await cache.set(
@@ -1116,6 +1119,7 @@ def _build_analysis(
             references=references,
         )
     except ValidationError as exc:
+        ai_helper.log_structured_validation_failure("Ticker Analysis", "Finalization", exc)
         raise TickerAnalysisAIError("Ticker analysis failed final validation") from exc
 
 

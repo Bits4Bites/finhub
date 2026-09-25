@@ -209,7 +209,7 @@ class PortfolioHoldingReview(models_ai.StrictAIModel):
     )
     role: models_types.NonEmptyString = Field(
         max_length=1000,
-        description="Application-rendered portfolio role beginning with a standard role emoji.",
+        description="Application-rendered assessed role in the current portfolio, with a standard role emoji.",
     )
     current_allocation: float = Field(
         gt=0,
@@ -306,7 +306,7 @@ class PortfolioReviewTargetPosition(models_ai.StrictAIModel):
     )
     role: models_types.NonEmptyString = Field(
         max_length=1000,
-        description="Application-rendered portfolio role beginning with a standard role emoji.",
+        description="Application-rendered intended role in the target portfolio, with a standard role emoji.",
     )
     rationale: models_types.NonEmptyString = Field(
         max_length=4000,

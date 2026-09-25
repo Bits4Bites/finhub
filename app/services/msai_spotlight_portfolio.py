@@ -238,6 +238,7 @@ async def _build_analysis_plan(
         if plan.portfolio_id != portfolio_id:
             raise ValueError("planning returned a different portfolio ID")
     except (ValueError, ValidationError) as exc:
+        ai_helper.log_structured_validation_failure("Portfolio Spotlight", "Planning", exc)
         raise PortfolioSpotlightAIError("Portfolio spotlight planning returned invalid structured data") from exc
 
     await cache.set(
@@ -306,6 +307,7 @@ async def _research_portfolio(
             accessed_at=datetime.now(UTC),
         )
     except (TypeError, ValueError, ValidationError) as exc:
+        ai_helper.log_structured_validation_failure("Portfolio Spotlight", "Research", exc)
         raise PortfolioSpotlightAIError("Portfolio spotlight research returned invalid structured data") from exc
 
     await cache.set(
@@ -433,6 +435,7 @@ async def _assess_portfolio(
             raise ValueError("assessment returned a different portfolio ID")
         _validate_assessment(assessment, snapshot, research)
     except (ValueError, ValidationError) as exc:
+        ai_helper.log_structured_validation_failure("Portfolio Spotlight", "Assessment", exc)
         raise PortfolioSpotlightAIError("Portfolio spotlight assessment returned invalid structured data") from exc
 
     await cache.set(
@@ -512,6 +515,7 @@ def _build_analysis(
             references=references,
         )
     except ValidationError as exc:
+        ai_helper.log_structured_validation_failure("Portfolio Spotlight", "Finalization", exc)
         raise PortfolioSpotlightAIError("Portfolio spotlight failed final validation") from exc
 
 

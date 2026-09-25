@@ -27,7 +27,8 @@ Requirements:
 - Omit every current holding assessed as EXIT.
 - Introduce only candidates listed in assessment.eligible_additions.
 - Cite only validated research reference IDs relevant to the same ticker.
-- Choose one role_category from CoreGrowth, DefensiveIncome, Diversifier, Hedge, Tactical, and CashReserve; put no emoji in role_description.
+- Choose each position's intended role in the target portfolio from CoreGrowth, DefensiveIncome, Diversifier, Hedge, Tactical, and CashReserve; put no emoji in role_description.
+- A retained holding's target role may differ from its assessed current role when the target design justifies the change; explain any material reclassification in rationale.
 - For LongTerm, use aspirational target weights without trimming aligned overweight holdings; future new money can grow other positions. Do not imply a TRIM.
 - For Swing, optimize the target for risk-adjusted P&L over the stated swing horizon without promising returns.
 - Treat Total as new cash on top of holdings and Recurring as one next contribution; do not annualize either.

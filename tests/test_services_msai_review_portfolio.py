@@ -146,6 +146,29 @@ def test_long_term_actions_hold_overweight_positions_without_trim():
     assert calculated.cash_ledger.unallocated_cash == 100
 
 
+def test_target_can_reclassify_retained_holding_role():
+    target_data = fixtures.target_data()
+    target_data["positions"][0]["role_category"] = "DefensiveIncome"
+    target_data["positions"][0]["role_description"] = "Target income anchor"
+    target = service._PortfolioTargetDraft.model_validate(target_data)
+
+    target_positions = service._build_target_positions(
+        snapshot=fixtures.snapshot(),
+        research=fixtures.research(),
+        assessment=fixtures.assessment(),
+        target_draft=target,
+    )
+    holding_reviews = service._build_holding_reviews(
+        snapshot=fixtures.snapshot(),
+        assessment=fixtures.assessment(),
+        target_positions=target_positions,
+        strategy="LongTerm",
+    )
+
+    assert target_positions[0].role == "🛡️ Target income anchor"
+    assert holding_reviews[0].role == "🚀 Core growth compounder"
+
+
 def test_swing_actions_include_exit_trim_buy_more_and_introduction():
     snapshot = fixtures.snapshot()
     target_positions = [

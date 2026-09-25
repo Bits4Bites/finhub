@@ -680,6 +680,7 @@ async def _plan_portfolio(
         if plan.budget != budget:
             raise ValueError("planning changed the deterministically normalized budget")
     except (ValueError, ValidationError) as exc:
+        ai_helper.log_structured_validation_failure("Portfolio Review", "Planning", exc)
         raise PortfolioReviewAIError("Portfolio review planning returned invalid structured data") from exc
 
     await cache.set(cache_key, plan.model_dump(mode="json"), ttl=_PLAN_CACHE_TTL)
@@ -738,6 +739,7 @@ async def _research_portfolio(
             accessed_at=datetime.now(UTC),
         )
     except (TypeError, ValueError, ValidationError) as exc:
+        ai_helper.log_structured_validation_failure("Portfolio Review", "Research", exc)
         raise PortfolioReviewAIError("Portfolio review research returned invalid structured data") from exc
 
     await cache.set(cache_key, research.model_dump(mode="json"), ttl=_ANALYSIS_CACHE_TTL)
@@ -796,6 +798,7 @@ async def _assess_portfolio(
             raise ValueError("assessment returned a different portfolio ID")
         _validate_assessment(assessment, snapshot, research, strategy=strategy)
     except (ValueError, ValidationError) as exc:
+        ai_helper.log_structured_validation_failure("Portfolio Review", "Assessment", exc)
         raise PortfolioReviewAIError("Portfolio review assessment returned invalid structured data") from exc
 
     await cache.set(cache_key, assessment.model_dump(mode="json"), ttl=_ANALYSIS_CACHE_TTL)
@@ -856,6 +859,7 @@ async def _design_target(
             raise ValueError("target design returned a different portfolio ID")
         _validate_target(target, snapshot, research, assessment)
     except (ValueError, ValidationError) as exc:
+        ai_helper.log_structured_validation_failure("Portfolio Review", "Target design", exc)
         raise PortfolioReviewAIError("Portfolio review target design returned invalid structured data") from exc
 
     await cache.set(cache_key, target.model_dump(mode="json"), ttl=_ANALYSIS_CACHE_TTL)
@@ -931,6 +935,7 @@ async def _create_action_plan(
         draft = _PortfolioActionPlanDraft.model_validate_json(response.completion)
         _validate_action_plan_draft(draft, calculated_actions.candidates)
     except (ValueError, ValidationError) as exc:
+        ai_helper.log_structured_validation_failure("Portfolio Review", "Action planning", exc)
         raise PortfolioReviewAIError("Portfolio review action planning returned invalid structured data") from exc
 
     await cache.set(cache_key, draft.model_dump(mode="json"), ttl=_ACTION_CACHE_TTL)
@@ -1131,8 +1136,6 @@ def _validate_target(
     for position in target.positions:
         if position.ticker in current_tickers:
             supported_ids = evidence_by_ticker[position.ticker]
-            if position.role_category != assessment_by_ticker[position.ticker].role_category:
-                raise ValueError("target changed the assessed role category for a current holding")
         else:
             supported_ids = set(additions[position.ticker].reference_ids)
         unsupported_ids = set(position.reference_ids) - supported_ids
@@ -1668,6 +1671,7 @@ def _finalize_review(
             references=references,
         )
     except ValidationError as exc:
+        ai_helper.log_structured_validation_failure("Portfolio Review", "Finalization", exc)
         raise PortfolioReviewAIError("Portfolio review failed final validation") from exc
 
 

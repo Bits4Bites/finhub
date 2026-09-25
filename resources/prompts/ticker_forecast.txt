@@ -19,6 +19,8 @@ Produce exactly four forecasts in this order:
 3. OneMonth
 4. ThreeMonths
 
+Copy the supplied Security symbol exactly into symbol.
+
 For each horizon:
 
 - Use Forecast only when the baseline contains a usable empirical plausibility envelope.

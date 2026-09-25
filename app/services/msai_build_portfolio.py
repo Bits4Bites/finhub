@@ -421,6 +421,7 @@ async def _plan_portfolio(
         if plan.budget != budget:
             raise ValueError("plan changed the deterministically extracted investment budget")
     except (ValueError, ValidationError) as exc:
+        ai_helper.log_structured_validation_failure("Portfolio Construction", "Planning", exc)
         raise PortfolioConstructionAIError("Portfolio construction planning returned invalid structured data") from exc
 
     await cache.set(cache_key, plan.model_dump(mode="json"), ttl=_AI_STAGE_CACHE_TTL)
@@ -481,6 +482,7 @@ async def _research_portfolio(
             accessed_at=datetime.now(UTC),
         )
     except (TypeError, ValueError, ValidationError) as exc:
+        ai_helper.log_structured_validation_failure("Portfolio Construction", "Research", exc)
         raise PortfolioConstructionAIError("Portfolio construction research returned invalid structured data") from exc
 
     await cache.set(cache_key, research.model_dump(mode="json"), ttl=_AI_STAGE_CACHE_TTL)
@@ -534,6 +536,7 @@ async def _construct_portfolio(
             raise ValueError("constructed portfolio exceeds the planned holding count")
         _validate_draft_against_research(draft, research)
     except (ValueError, ValidationError) as exc:
+        ai_helper.log_structured_validation_failure("Portfolio Construction", "Construction", exc)
         raise PortfolioConstructionAIError("Portfolio construction returned invalid structured data") from exc
 
     await cache.set(cache_key, draft.model_dump(mode="json"), ttl=_AI_STAGE_CACHE_TTL)
@@ -611,6 +614,7 @@ async def _create_action_plan(
         draft = _PortfolioActionPlanDraft.model_validate_json(response.completion)
         _validate_action_plan_draft(draft, calculated_actions.candidates)
     except (ValueError, ValidationError) as exc:
+        ai_helper.log_structured_validation_failure("Portfolio Construction", "Action planning", exc)
         raise PortfolioConstructionAIError(
             "Portfolio construction action planning returned invalid structured data"
         ) from exc
@@ -1126,6 +1130,7 @@ def _finalize_portfolio(
             references=references,
         )
     except (KeyError, ValidationError) as exc:
+        ai_helper.log_structured_validation_failure("Portfolio Construction", "Finalization", exc)
         raise PortfolioConstructionAIError("Portfolio construction failed final validation") from exc
 
 

@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 
 import openai
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from .. import config
 
@@ -49,6 +49,37 @@ class LLMResponse(BaseModel):
     tokens_cache: int = 0
     tokens_total: int = 0
     citation_urls: list[str] = Field(default_factory=list)
+
+
+def log_structured_validation_failure(
+    feature: str,
+    stage: str,
+    error: Exception,
+) -> None:
+    """Log structured-output validation details without including rejected input values."""
+
+    if isinstance(error, ValidationError):
+        errors = error.errors(
+            include_url=False,
+            include_context=False,
+            include_input=False,
+        )
+        details = []
+        for item in errors[:8]:
+            location = ".".join(str(part) for part in item["loc"]) or "<root>"
+            details.append(f"{location}: {item['msg']} [{item['type']}]")
+        if len(errors) > len(details):
+            details.append(f"{len(errors) - len(details)} additional error(s)")
+        summary = "; ".join(details)
+    else:
+        summary = str(error)
+
+    logging.warning(
+        "[%s] %s structured-output validation failed: %s",
+        feature,
+        stage,
+        summary[:2000],
+    )
 
 
 def _is_debug_mode() -> bool:
