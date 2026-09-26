@@ -1,5 +1,5 @@
 {
-    "date": "2026-09-19",
+    "date": "2026-09-26",
     "data": [
         {
             "symbol": "ASX:360",
@@ -163,7 +163,7 @@
         },
         {
             "symbol": "ASX:BWP",
-            "company": "BWP TRUST",
+            "company": "BWP GROUP",
             "sector": "REITs"
         },
         {
@@ -327,6 +327,11 @@
             "sector": "Agriculture"
         },
         {
+            "symbol": "ASX:ELS",
+            "company": "ELSIGHT LIMITED",
+            "sector": "Military & Defence"
+        },
+        {
             "symbol": "ASX:ELV",
             "company": "ELEVRA LITHIUM LIMITED",
             "sector": "New Battery Elements"
@@ -345,11 +350,6 @@
             "symbol": "ASX:EVN",
             "company": "EVOLUTION MINING LIMITED",
             "sector": "Gold & Silver"
-        },
-        {
-            "symbol": "ASX:EVT",
-            "company": "EVT LIMITED",
-            "sector": "Travel, Leisure & Tourism"
         },
         {
             "symbol": "ASX:FBU",
@@ -397,19 +397,9 @@
             "sector": "Infra & Property Developers"
         },
         {
-            "symbol": "ASX:GNC",
-            "company": "GRAINCORP LIMITED",
-            "sector": "Agriculture"
-        },
-        {
             "symbol": "ASX:GPT",
             "company": "GPT GROUP",
             "sector": "Infra & Property Developers"
-        },
-        {
-            "symbol": "ASX:GQG",
-            "company": "GQG PARTNERS INC",
-            "sector": "Wealth Management & Investments"
         },
         {
             "symbol": "ASX:HDN",
@@ -692,11 +682,6 @@
             "sector": "Wealth Management & Investments"
         },
         {
-            "symbol": "ASX:PNR",
-            "company": "PANTORO GOLD LIMITED",
-            "sector": "Gold & Silver"
-        },
-        {
             "symbol": "ASX:PPT",
             "company": "PERPETUAL LIMITED",
             "sector": "Wealth Management & Investments"
@@ -720,6 +705,11 @@
             "symbol": "ASX:QAN",
             "company": "QANTAS AIRWAYS LIMITED",
             "sector": "Travel, Leisure & Tourism, Transportation & Logistics"
+        },
+        {
+            "symbol": "ASX:QBE",
+            "company": "QBE INSURANCE GROUP LIMITED",
+            "sector": "Insurance"
         },
         {
             "symbol": "ASX:REA",
@@ -822,6 +812,11 @@
             "sector": "Health & Nutrition"
         },
         {
+            "symbol": "ASX:SIQ",
+            "company": "SMARTGROUP CORPORATION LIMITED",
+            "sector": "Vehicle Leasing & Salary Packaging"
+        },
+        {
             "symbol": "ASX:SLC",
             "company": "SUPERLOOP LIMITED",
             "sector": "Telecommunication"
@@ -840,6 +835,16 @@
             "symbol": "ASX:SRG",
             "company": "SRG GLOBAL LIMITED",
             "sector": "Building Products & Services, Mining Sector Contracting"
+        },
+        {
+            "symbol": "ASX:SRL",
+            "company": "SUNRISE ENERGY METALS LIMITED",
+            "sector": "Nickel, New Battery Elements"
+        },
+        {
+            "symbol": "ASX:SSM",
+            "company": "SERVICE STREAM LIMITED",
+            "sector": "Industrial Sector Contractors & Engineers"
         },
         {
             "symbol": "ASX:STO",
@@ -892,11 +897,6 @@
             "sector": "Telecommunication, Telecommunication"
         },
         {
-            "symbol": "ASX:TUA",
-            "company": "TUAS LIMITED",
-            "sector": "Telecommunication"
-        },
-        {
             "symbol": "ASX:TWE",
             "company": "TREASURY WINE ESTATES LIMITED",
             "sector": "Food, Beverages & Tobacco, Luxury"
@@ -935,6 +935,11 @@
             "symbol": "ASX:WBC",
             "company": "WESTPAC BANKING CORPORATION",
             "sector": "Banks"
+        },
+        {
+            "symbol": "ASX:WBT",
+            "company": "WEEBIT NANO LIMITED",
+            "sector": "Hardware & Equipment"
         },
         {
             "symbol": "ASX:WDS",

@@ -1,5 +1,5 @@
 {
-    "date": "2026-09-19",
+    "date": "2026-09-26",
     "data": [
         {
             "symbol": "ASX:360",
@@ -50,11 +50,6 @@
             "symbol": "ASX:AEL",
             "company": "AMPLITUDE ENERGY LIMITED",
             "sector": "Crude Oil, NatGas"
-        },
-        {
-            "symbol": "ASX:AFG",
-            "company": "AUSTRALIAN FINANCE GROUP LIMITED",
-            "sector": "Banks"
         },
         {
             "symbol": "ASX:AGL",
@@ -162,14 +157,14 @@
             "sector": "Insurance"
         },
         {
+            "symbol": "ASX:AYA",
+            "company": "ARTRYA LIMITED",
+            "sector": "Medical Equipment & Devices"
+        },
+        {
             "symbol": "ASX:AZJ",
             "company": "AURIZON HOLDINGS LIMITED",
             "sector": "Transportation & Logistics"
-        },
-        {
-            "symbol": "ASX:BAP",
-            "company": "BAPCOR LIMITED",
-            "sector": "Automobiles & Components"
         },
         {
             "symbol": "ASX:BC8",
@@ -202,6 +197,11 @@
             "sector": "Uranium"
         },
         {
+            "symbol": "ASX:BNZ",
+            "company": "BENZ MINING CORP.",
+            "sector": "Gold & Silver"
+        },
+        {
             "symbol": "ASX:BOE",
             "company": "BOSS ENERGY LIMITED",
             "sector": "Uranium"
@@ -215,6 +215,11 @@
             "symbol": "ASX:BPT",
             "company": "BEACH ENERGY LIMITED",
             "sector": "Crude Oil"
+        },
+        {
+            "symbol": "ASX:BRE",
+            "company": "BRAZILIAN RARE EARTHS LIMITED",
+            "sector": "Rare Earth Minerals"
         },
         {
             "symbol": "ASX:BRG",
@@ -233,7 +238,7 @@
         },
         {
             "symbol": "ASX:BWP",
-            "company": "BWP TRUST",
+            "company": "BWP GROUP",
             "sector": "REITs"
         },
         {
@@ -260,6 +265,11 @@
             "symbol": "ASX:CBO",
             "company": "COBRAM ESTATE OLIVES LIMITED",
             "sector": "Agriculture"
+        },
+        {
+            "symbol": "ASX:CCL",
+            "company": "CUSCAL LIMITED",
+            "sector": "Diversified Financials"
         },
         {
             "symbol": "ASX:CCP",
@@ -377,6 +387,11 @@
             "sector": "Industrial Sector Contractors & Engineers"
         },
         {
+            "symbol": "ASX:CXO",
+            "company": "CORE LITHIUM LIMITED",
+            "sector": "Uranium, New Battery Elements"
+        },
+        {
             "symbol": "ASX:CYL",
             "company": "CATALYST METALS LIMITED",
             "sector": "Gold & Silver"
@@ -432,11 +447,6 @@
             "sector": "IT & Support"
         },
         {
-            "symbol": "ASX:DTR",
-            "company": "DATELINE RESOURCES LIMITED",
-            "sector": ""
-        },
-        {
             "symbol": "ASX:DVP",
             "company": "DEVELOP GLOBAL LIMITED",
             "sector": "Industrial Metals"
@@ -467,6 +477,11 @@
             "sector": "Food, Beverages & Tobacco"
         },
         {
+            "symbol": "ASX:EIQ",
+            "company": "ECHOIQ LIMITED",
+            "sector": "Medical Equipment & Devices, Software & Services"
+        },
+        {
             "symbol": "ASX:ELD",
             "company": "ELDERS LIMITED",
             "sector": "Agriculture"
@@ -490,6 +505,11 @@
             "symbol": "ASX:EOS",
             "company": "ELECTRO OPTIC SYSTEMS HOLDINGS LIMITED",
             "sector": "Military & Defence"
+        },
+        {
+            "symbol": "ASX:EQR",
+            "company": "EQ RESOURCES LIMITED",
+            "sector": "Industrial Metals"
         },
         {
             "symbol": "ASX:EQT",
@@ -542,11 +562,6 @@
             "sector": "Wealth Management & Investments, Insurance"
         },
         {
-            "symbol": "ASX:GEM",
-            "company": "G8 EDUCATION LIMITED",
-            "sector": "Childcare"
-        },
-        {
             "symbol": "ASX:GGP",
             "company": "GREATLAND RESOURCES LIMITED",
             "sector": "Gold & Silver"
@@ -572,6 +587,16 @@
             "sector": "Agriculture"
         },
         {
+            "symbol": "ASX:GNG",
+            "company": "GR ENGINEERING SERVICES LIMITED",
+            "sector": "Mining Sector Contracting"
+        },
+        {
+            "symbol": "ASX:GNP",
+            "company": "GENUSPLUS GROUP LIMITED",
+            "sector": "Infrastructure & Utilities"
+        },
+        {
             "symbol": "ASX:GOZ",
             "company": "GROWTHPOINT PROPERTIES AUSTRALIA",
             "sector": "Infra & Property Developers"
@@ -585,11 +610,6 @@
             "symbol": "ASX:GQG",
             "company": "GQG PARTNERS INC",
             "sector": "Wealth Management & Investments"
-        },
-        {
-            "symbol": "ASX:GTK",
-            "company": "GENTRACK GROUP LIMITED",
-            "sector": "Software & Services"
         },
         {
             "symbol": "ASX:GWA",
@@ -610,11 +630,6 @@
             "symbol": "ASX:HLI",
             "company": "HELIA GROUP LIMITED",
             "sector": "Insurance, Banks"
-        },
-        {
-            "symbol": "ASX:HLS",
-            "company": "HEALIUS LIMITED",
-            "sector": "Healthcare services"
         },
         {
             "symbol": "ASX:HMC",
@@ -672,9 +687,9 @@
             "sector": "Mining Sector Contracting"
         },
         {
-            "symbol": "ASX:IMM",
-            "company": "IMMUTEP LIMITED",
-            "sector": "Pharmaceuticals & Biotech/Lifesciences"
+            "symbol": "ASX:IMR",
+            "company": "IMRICOR MEDICAL SYSTEMS INC",
+            "sector": "Medical Equipment & Devices"
         },
         {
             "symbol": "ASX:INA",
@@ -717,11 +732,6 @@
             "sector": "Building Products & Services"
         },
         {
-            "symbol": "ASX:JIN",
-            "company": "JUMBO INTERACTIVE LIMITED",
-            "sector": "Gaming"
-        },
-        {
             "symbol": "ASX:KAR",
             "company": "KAROON ENERGY LIMITED",
             "sector": "Crude Oil, NatGas"
@@ -739,12 +749,17 @@
         {
             "symbol": "ASX:L1G",
             "company": "L1 GROUP LIMITED",
-            "sector": ""
+            "sector": "Wealth Management & Investments"
         },
         {
             "symbol": "ASX:LIC",
             "company": "LIFESTYLE COMMUNITIES LIMITED",
             "sector": "Aged Care & Seniors, Infra & Property Developers"
+        },
+        {
+            "symbol": "ASX:LIN",
+            "company": "LINDIAN RESOURCES LIMITED",
+            "sector": "Aluminium, Bauxite & Alumina, Rare Earth Minerals"
         },
         {
             "symbol": "ASX:LLC",
@@ -755,11 +770,6 @@
             "symbol": "ASX:LNW",
             "company": "LIGHT & WONDER INC",
             "sector": "Gaming"
-        },
-        {
-            "symbol": "ASX:LOT",
-            "company": "LOTUS RESOURCES LIMITED",
-            "sector": "Uranium"
         },
         {
             "symbol": "ASX:LOV",
@@ -790,11 +800,6 @@
             "symbol": "ASX:MAQ",
             "company": "MACQUARIE TECHNOLOGY GROUP LIMITED",
             "sector": "Telecommunication, Cloud services"
-        },
-        {
-            "symbol": "ASX:MEK",
-            "company": "MEEKA METALS LIMITED",
-            "sector": "Gold & Silver"
         },
         {
             "symbol": "ASX:MFG",
@@ -862,11 +867,6 @@
             "sector": "Food, Beverages & Tobacco"
         },
         {
-            "symbol": "ASX:MYR",
-            "company": "MYER HOLDINGS LIMITED",
-            "sector": "Household & Personal Products, Apparel & Footwear"
-        },
-        {
             "symbol": "ASX:MYS",
             "company": "MYSTATE LIMITED",
             "sector": "Banks"
@@ -900,6 +900,11 @@
             "symbol": "ASX:NEU",
             "company": "NEUREN PHARMACEUTICALS LIMITED",
             "sector": "Pharmaceuticals & Biotech/Lifesciences"
+        },
+        {
+            "symbol": "ASX:NGI",
+            "company": "NAVIGATOR GLOBAL INVESTMENTS LIMITED",
+            "sector": "Wealth Management & Investments"
         },
         {
             "symbol": "ASX:NHC",
@@ -957,11 +962,6 @@
             "sector": "Gold & Silver"
         },
         {
-            "symbol": "ASX:OCL",
-            "company": "OBJECTIVE CORPORATION LIMITED",
-            "sector": "IT & Support"
-        },
-        {
             "symbol": "ASX:OML",
             "company": "OOH!MEDIA LIMITED",
             "sector": "Out of Home Advertising"
@@ -990,11 +990,6 @@
             "symbol": "ASX:PDN",
             "company": "PALADIN ENERGY LIMITED",
             "sector": "Uranium"
-        },
-        {
-            "symbol": "ASX:PFP",
-            "company": "PROPEL FUNERAL PARTNERS LIMITED",
-            "sector": "Consumer Products & Services"
         },
         {
             "symbol": "ASX:PLS",
@@ -1055,6 +1050,11 @@
             "symbol": "ASX:PXA",
             "company": "PEXA GROUP LIMITED",
             "sector": "Real Estate"
+        },
+        {
+            "symbol": "ASX:PYC",
+            "company": "PYC THERAPEUTICS LIMITED",
+            "sector": "Pharmaceuticals & Biotech/Lifesciences"
         },
         {
             "symbol": "ASX:QAN",
@@ -1227,6 +1227,11 @@
             "sector": "REITs"
         },
         {
+            "symbol": "ASX:SKS",
+            "company": "SKS TECHNOLOGIES GROUP LIMITED",
+            "sector": "Technology"
+        },
+        {
             "symbol": "ASX:SLC",
             "company": "SUPERLOOP LIMITED",
             "sector": "Telecommunication"
@@ -1297,6 +1302,11 @@
             "sector": "Gold & Silver"
         },
         {
+            "symbol": "ASX:SXE",
+            "company": "SOUTHERN CROSS ELECTRICAL ENGINEERING LIMITED",
+            "sector": "Mining Sector Contracting"
+        },
+        {
             "symbol": "ASX:TAH",
             "company": "TABCORP HOLDINGS LIMITED",
             "sector": "Gaming"
@@ -1310,6 +1320,11 @@
             "symbol": "ASX:TCL",
             "company": "TRANSURBAN GROUP LIMITED",
             "sector": "Infrastructure & Utilities"
+        },
+        {
+            "symbol": "ASX:TEA",
+            "company": "TASMEA LIMITED",
+            "sector": "Industrial Sector Contractors & Engineers, Mining Sector Contracting"
         },
         {
             "symbol": "ASX:TLC",
