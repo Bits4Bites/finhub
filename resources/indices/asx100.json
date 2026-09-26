@@ -1,5 +1,5 @@
 {
-    "date": "2026-09-19",
+    "date": "2026-09-26",
     "data": [
         {
             "symbol": "ASX:360",
@@ -30,11 +30,6 @@
             "symbol": "ASX:ALQ",
             "company": "ALS LIMITED",
             "sector": "Mining Sector Contracting, Industrial Sector Contractors & Engineers"
-        },
-        {
-            "symbol": "ASX:ALX",
-            "company": "ATLAS ARTERIA",
-            "sector": "Infrastructure & Utilities"
         },
         {
             "symbol": "ASX:AMC",
@@ -110,6 +105,11 @@
             "symbol": "ASX:CBA",
             "company": "COMMONWEALTH BANK OF AUSTRALIA",
             "sector": "Banks"
+        },
+        {
+            "symbol": "ASX:CDA",
+            "company": "CODAN LIMITED",
+            "sector": "Mining Sector Contracting, Hardware & Equipment"
         },
         {
             "symbol": "ASX:CGF",
@@ -235,6 +235,11 @@
             "symbol": "ASX:LNW",
             "company": "LIGHT & WONDER INC",
             "sector": "Gaming"
+        },
+        {
+            "symbol": "ASX:LTR",
+            "company": "LIONTOWN LIMITED",
+            "sector": "New Battery Elements"
         },
         {
             "symbol": "ASX:LYC",

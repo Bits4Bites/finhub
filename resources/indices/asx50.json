@@ -1,5 +1,5 @@
 {
-    "date": "2026-09-19",
+    "date": "2026-09-26",
     "data": [
         {
             "symbol": "ASX:ALL",
@@ -50,11 +50,6 @@
             "symbol": "ASX:CBA",
             "company": "COMMONWEALTH BANK OF AUSTRALIA",
             "sector": "Banks"
-        },
-        {
-            "symbol": "ASX:COH",
-            "company": "COCHLEAR LIMITED",
-            "sector": "Medical Equipment & Devices"
         },
         {
             "symbol": "ASX:COL",
@@ -112,6 +107,11 @@
             "sector": "Rare Earth Minerals"
         },
         {
+            "symbol": "ASX:MIN",
+            "company": "MINERAL RESOURCES LIMITED",
+            "sector": "Mining Sector Contracting, Iron Ore"
+        },
+        {
             "symbol": "ASX:MPL",
             "company": "MEDIBANK PRIVATE LIMITED",
             "sector": "Healthcare services, Insurance"
@@ -135,6 +135,11 @@
             "symbol": "ASX:NST",
             "company": "NORTHERN STAR RESOURCES LIMITED",
             "sector": "Gold & Silver"
+        },
+        {
+            "symbol": "ASX:NXT",
+            "company": "NEXTDC LIMITED",
+            "sector": "Cloud services"
         },
         {
             "symbol": "ASX:ORG",
@@ -240,11 +245,6 @@
             "symbol": "ASX:WOW",
             "company": "WOOLWORTHS GROUP LIMITED",
             "sector": "Food, Beverages & Tobacco"
-        },
-        {
-            "symbol": "ASX:WTC",
-            "company": "WISETECH GLOBAL LIMITED",
-            "sector": "Transportation & Logistics, Cloud services"
         },
         {
             "symbol": "ASX:XRO",

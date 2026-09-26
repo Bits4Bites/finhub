@@ -1,5 +1,5 @@
 {
-    "date": "2026-09-19",
+    "date": "2026-09-26",
     "data": [
         {
             "symbol": "NYSE:MMM",
@@ -337,6 +337,11 @@
             "sector": "Financials"
         },
         {
+            "symbol": "NYSE:BE",
+            "company": "Bloom Energy",
+            "sector": "Industrials"
+        },
+        {
             "symbol": "NYSE:BNY",
             "company": "BNY Mellon",
             "sector": "Financials"
@@ -380,11 +385,6 @@
             "symbol": "NYSE:BF.B",
             "company": "Brown\u2013Forman",
             "sector": "Consumer Staples"
-        },
-        {
-            "symbol": "NYSE:BLDR",
-            "company": "Builders FirstSource",
-            "sector": "Industrials"
         },
         {
             "symbol": "NYSE:BG",
@@ -897,6 +897,11 @@
             "sector": "Utilities"
         },
         {
+            "symbol": "NYSE:P",
+            "company": "Everpure",
+            "sector": "Information Technology"
+        },
+        {
             "symbol": "NYSE:ES",
             "company": "Eversource Energy",
             "sector": "Utilities"
@@ -1237,6 +1242,11 @@
             "sector": "Industrials"
         },
         {
+            "symbol": "NASDAQ:ILMN",
+            "company": "Illumina, Inc.",
+            "sector": "Health Care"
+        },
+        {
             "symbol": "NASDAQ:INCY",
             "company": "Incyte",
             "sector": "Health Care"
@@ -1387,7 +1397,7 @@
             "sector": "Information Technology"
         },
         {
-            "symbol": "NASDAQ:KHC",
+            "symbol": "NYSE:KHC",
             "company": "Kraft Heinz",
             "sector": "Consumer Staples"
         },
@@ -1585,11 +1595,6 @@
             "symbol": "NASDAQ:MRNA",
             "company": "Moderna",
             "sector": "Health Care"
-        },
-        {
-            "symbol": "NYSE:TAP",
-            "company": "Molson Coors Beverage Company",
-            "sector": "Consumer Staples"
         },
         {
             "symbol": "NASDAQ:MDLZ",
@@ -2219,11 +2224,6 @@
         {
             "symbol": "NYSE:TKO",
             "company": "TKO Group Holdings",
-            "sector": "Communication Services"
-        },
-        {
-            "symbol": "NASDAQ:TTD",
-            "company": "Trade Desk (The)",
             "sector": "Communication Services"
         },
         {
