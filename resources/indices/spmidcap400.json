@@ -1,5 +1,5 @@
 {
-    "date": "2026-10-03",
+    "date": "2026-10-10",
     "data": [
         {
             "symbol": "NYSE:AA",
@@ -477,6 +477,11 @@
             "sector": "Real Estate"
         },
         {
+            "symbol": "NYSE:CTVA",
+            "company": "Corteva",
+            "sector": "Materials"
+        },
+        {
             "symbol": "NYSE:CUBE",
             "company": "CubeSmart",
             "sector": "Real Estate"
@@ -745,6 +750,11 @@
             "symbol": "NYSE:FNF",
             "company": "Fidelity National Financial",
             "sector": "Financials"
+        },
+        {
+            "symbol": "NASDAQ:FORM",
+            "company": "FormFactor, Inc.",
+            "sector": "Information Technology"
         },
         {
             "symbol": "NYSE:FOUR",
@@ -1297,11 +1307,6 @@
             "sector": "Consumer Discretionary"
         },
         {
-            "symbol": "NYSE:OLN",
-            "company": "Olin Corporation",
-            "sector": "Materials"
-        },
-        {
             "symbol": "NASDAQ:ONB",
             "company": "Old National Bank",
             "sector": "Financials"
@@ -1784,11 +1789,6 @@
         {
             "symbol": "NASDAQ:TTMI",
             "company": "TTM Technologies",
-            "sector": "Information Technology"
-        },
-        {
-            "symbol": "NYSE:TWLO",
-            "company": "Twilio",
             "sector": "Information Technology"
         },
         {
