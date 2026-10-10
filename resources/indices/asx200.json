@@ -1,5 +1,5 @@
 {
-    "date": "2026-10-03",
+    "date": "2026-10-10",
     "data": [
         {
             "symbol": "ASX:360",
@@ -39,7 +39,7 @@
         {
             "symbol": "ASX:ALD",
             "company": "AMPOL LIMITED",
-            "sector": "Crude Oil, Consumer Products & Services"
+            "sector": "Consumer Products & Services, Crude Oil"
         },
         {
             "symbol": "ASX:ALK",
@@ -284,7 +284,7 @@
         {
             "symbol": "ASX:DOW",
             "company": "DOWNER EDI LIMITED",
-            "sector": "Industrial Sector Contractors & Engineers, Mining Sector Contracting"
+            "sector": "Mining Sector Contracting, Industrial Sector Contractors & Engineers"
         },
         {
             "symbol": "ASX:DRO",
@@ -534,7 +534,7 @@
         {
             "symbol": "ASX:MND",
             "company": "MONADELPHOUS GROUP LIMITED",
-            "sector": "Energy Sector Contracting, Mining Sector Contracting"
+            "sector": "Mining Sector Contracting, Energy Sector Contracting"
         },
         {
             "symbol": "ASX:MP1",
@@ -899,7 +899,7 @@
         {
             "symbol": "ASX:TWE",
             "company": "TREASURY WINE ESTATES LIMITED",
-            "sector": "Food, Beverages & Tobacco, Luxury"
+            "sector": "Luxury, Food, Beverages & Tobacco"
         },
         {
             "symbol": "ASX:VAU",

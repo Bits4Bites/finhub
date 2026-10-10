@@ -1,5 +1,5 @@
 {
-    "date": "2026-10-03",
+    "date": "2026-10-10",
     "data": [
         {
             "symbol": "NYSE:MMM",
@@ -640,11 +640,6 @@
             "symbol": "NYSE:CPAY",
             "company": "Corpay",
             "sector": "Financials"
-        },
-        {
-            "symbol": "NYSE:CTVA",
-            "company": "Corteva",
-            "sector": "Materials"
         },
         {
             "symbol": "NASDAQ:CSGP",
@@ -1792,11 +1787,6 @@
             "sector": "Information Technology"
         },
         {
-            "symbol": "NASDAQ:PSKY",
-            "company": "Paramount Skydance Corporation",
-            "sector": "Communication Services"
-        },
-        {
             "symbol": "NYSE:PH",
             "company": "Parker Hannifin",
             "sector": "Industrials"
@@ -2062,6 +2052,11 @@
             "sector": "Real Estate"
         },
         {
+            "symbol": "NYSE:SKYD",
+            "company": "Skydance Corporation",
+            "sector": "Communication Services"
+        },
+        {
             "symbol": "NASDAQ:SWKS",
             "company": "Skyworks Solutions",
             "sector": "Information Technology"
@@ -2257,6 +2252,11 @@
             "sector": "Financials"
         },
         {
+            "symbol": "NYSE:TWLO",
+            "company": "Twilio",
+            "sector": "Information Technology"
+        },
+        {
             "symbol": "NYSE:TYL",
             "company": "Tyler Technologies",
             "sector": "Information Technology"
@@ -2392,6 +2392,11 @@
             "sector": "Materials"
         },
         {
+            "symbol": "NYSE:VYLR",
+            "company": "Vylor",
+            "sector": "Consumer Staples"
+        },
+        {
             "symbol": "NYSE:WRB",
             "company": "W. R. Berkley Corporation",
             "sector": "Financials"
@@ -2414,11 +2419,6 @@
         {
             "symbol": "NYSE:DIS",
             "company": "Walt Disney Company (The)",
-            "sector": "Communication Services"
-        },
-        {
-            "symbol": "NASDAQ:WBD",
-            "company": "Warner Bros. Discovery",
             "sector": "Communication Services"
         },
         {
