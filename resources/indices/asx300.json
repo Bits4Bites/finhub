@@ -1,5 +1,5 @@
 {
-    "date": "2026-10-10",
+    "date": "2026-10-17",
     "data": [
         {
             "symbol": "ASX:360",
@@ -434,7 +434,7 @@
         {
             "symbol": "ASX:DRO",
             "company": "DRONESHIELD LIMITED",
-            "sector": "Military & Defence"
+            "sector": "Aerospace & Defence"
         },
         {
             "symbol": "ASX:DRR",
@@ -489,7 +489,7 @@
         {
             "symbol": "ASX:ELS",
             "company": "ELSIGHT LIMITED",
-            "sector": "Military & Defence"
+            "sector": "Aerospace & Defence"
         },
         {
             "symbol": "ASX:ELV",
@@ -504,7 +504,7 @@
         {
             "symbol": "ASX:EOS",
             "company": "ELECTRO OPTIC SYSTEMS HOLDINGS LIMITED",
-            "sector": "Military & Defence"
+            "sector": "Aerospace & Defence"
         },
         {
             "symbol": "ASX:EQR",
@@ -1304,7 +1304,7 @@
         {
             "symbol": "ASX:SXE",
             "company": "SOUTHERN CROSS ELECTRICAL ENGINEERING LIMITED",
-            "sector": "Mining Sector Contracting"
+            "sector": "Mining Sector Contracting, Industrial Sector Contractors & Engineers"
         },
         {
             "symbol": "ASX:TAH",
