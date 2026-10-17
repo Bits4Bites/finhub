@@ -1,5 +1,5 @@
 {
-    "date": "2026-10-10",
+    "date": "2026-10-17",
     "data": [
         {
             "symbol": "NYSE:MMM",
@@ -1533,7 +1533,7 @@
         },
         {
             "symbol": "NYSE:MCK",
-            "company": "McKesson Corporation",
+            "company": "McKesson",
             "sector": "Health Care"
         },
         {
