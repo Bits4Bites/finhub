@@ -1,155 +1,155 @@
 {
-    "date": "2026-10-17",
+    "date": "2026-10-24",
     "data": [
         {
             "symbol": "HOSE:VIC",
             "company": "Vingroup JSC",
-            "market_cap": 1612230000000000
+            "market_cap": 1773450000000000
         },
         {
             "symbol": "HOSE:VHM",
             "company": "Vinhomes JSC",
-            "market_cap": 501100000000000
+            "market_cap": 528210000000000
         },
         {
             "symbol": "HOSE:VCB",
             "company": "Joint Stock Commercial Bank for Foreign Trade of Vietnam",
-            "market_cap": 475440000000000
+            "market_cap": 474600000000000
         },
         {
             "symbol": "HOSE:BID",
             "company": "Joint Stock Commercial Bank for Investment and Development of Vietnam",
-            "market_cap": 264070000000000
-        },
-        {
-            "symbol": "HOSE:VPB",
-            "company": "Vietnam Prosperity Joint Stock Commercial Bank",
-            "market_cap": 245000000000000
-        },
-        {
-            "symbol": "HOSE:CTG",
-            "company": "Vietnam Joint Stock Commercial Bank for Industry and Trade",
-            "market_cap": 237670000000000
+            "market_cap": 266410000000000
         },
         {
             "symbol": "HOSE:TCB",
             "company": "Vietnam Technological and Commercial Joint Stock Bank",
-            "market_cap": 235260000000000
+            "market_cap": 242350000000000
         },
         {
-            "symbol": "HOSE:MBB",
-            "company": "Military Commercial Joint Stock Bank",
-            "market_cap": 183880000000000
+            "symbol": "HOSE:VPB",
+            "company": "Vietnam Prosperity Joint Stock Commercial Bank",
+            "market_cap": 241000000000000
+        },
+        {
+            "symbol": "HOSE:CTG",
+            "company": "Vietnam Joint Stock Commercial Bank for Industry and Trade",
+            "market_cap": 240390000000000
         },
         {
             "symbol": "HOSE:GAS",
             "company": "Petrovietnam Gas Joint Stock Corporation",
-            "market_cap": 183630000000000
+            "market_cap": 188930000000000
         },
         {
             "symbol": "HOSE:MCH",
             "company": "Masan Consumer Corporation",
-            "market_cap": 181220000000000
+            "market_cap": 183680000000000
+        },
+        {
+            "symbol": "HOSE:MBB",
+            "company": "Military Commercial Joint Stock Bank",
+            "market_cap": 183410000000000
         },
         {
             "symbol": "HOSE:HPG",
             "company": "Hoa Phat Group JSC",
-            "market_cap": 176460000000000
-        },
-        {
-            "symbol": "HOSE:HDB",
-            "company": "Ho Chi Minh City Development Joint Stock Commercial Bank",
-            "market_cap": 148360000000000
+            "market_cap": 176880000000000
         },
         {
             "symbol": "HOSE:VPL",
             "company": "Vinpearl JSC",
-            "market_cap": 148320000000000
+            "market_cap": 161460000000000
+        },
+        {
+            "symbol": "HOSE:HDB",
+            "company": "Ho Chi Minh City Development Joint Stock Commercial Bank",
+            "market_cap": 146730000000000
         },
         {
             "symbol": "HOSE:BSR",
             "company": "Petrovietnam Refining and Petrochemical Corporation",
-            "market_cap": 141960000000000
-        },
-        {
-            "symbol": "HOSE:GVR",
-            "company": "Vietnam Rubber Group JSC",
-            "market_cap": 125000000000000
-        },
-        {
-            "symbol": "HOSE:VNM",
-            "company": "Vietnam Dairy Products JSC",
-            "market_cap": 120800000000000
-        },
-        {
-            "symbol": "HOSE:ACB",
-            "company": "Asia Commercial Joint Stock Bank",
-            "market_cap": 119570000000000
+            "market_cap": 145460000000000
         },
         {
             "symbol": "HOSE:STB",
             "company": "Saigon Treasure Commercial Joint Stock Bank",
-            "market_cap": 118390000000000
+            "market_cap": 129139999999999
+        },
+        {
+            "symbol": "HOSE:GVR",
+            "company": "Vietnam Rubber Group JSC",
+            "market_cap": 127000000000000
+        },
+        {
+            "symbol": "HOSE:ACB",
+            "company": "Asia Commercial Joint Stock Bank",
+            "market_cap": 123630000000000
         },
         {
             "symbol": "HOSE:LPB",
             "company": "Fortune Vietnam Joint Stock Commercial Bank",
-            "market_cap": 113520000000000
+            "market_cap": 120690000000000
         },
         {
-            "symbol": "HOSE:FPT",
-            "company": "FPT Corporation",
-            "market_cap": 109060000000000
+            "symbol": "HOSE:VNM",
+            "company": "Vietnam Dairy Products JSC",
+            "market_cap": 120380000000000
         },
         {
             "symbol": "HOSE:MWG",
             "company": "Mobile World Investment Corporation",
-            "market_cap": 108520000000000
+            "market_cap": 110870000000000
         },
         {
             "symbol": "HOSE:MSN",
             "company": "Masan Group Corporation",
-            "market_cap": 103240000000000
+            "market_cap": 107290000000000
+        },
+        {
+            "symbol": "HOSE:FPT",
+            "company": "FPT Corporation",
+            "market_cap": 106810000000000
         },
         {
             "symbol": "HOSE:VJC",
             "company": "VietJet Aviation JSC",
-            "market_cap": 98060000000000
-        },
-        {
-            "symbol": "HOSE:DMX",
-            "company": "Dien May Xanh Investment JSC",
-            "market_cap": 95080000000000
+            "market_cap": 99750000000000
         },
         {
             "symbol": "HOSE:TCX",
             "company": "Techcom Securities JSC",
-            "market_cap": 91890000000000
+            "market_cap": 97880000000000
+        },
+        {
+            "symbol": "HOSE:DMX",
+            "company": "Dien May Xanh Investment JSC",
+            "market_cap": 96220000000000
         },
         {
             "symbol": "HOSE:VCK",
             "company": "VPS Securities JSC",
-            "market_cap": 67200000000000
+            "market_cap": 68060000000000
         },
         {
             "symbol": "HOSE:HVN",
             "company": "Vietnam Airlines JSC",
-            "market_cap": 65340000000000
+            "market_cap": 65500000000000
         },
         {
             "symbol": "HOSE:SSI",
             "company": "SSI Securities Corporation",
-            "market_cap": 58370000000000
+            "market_cap": 59870000000000
         },
         {
             "symbol": "HOSE:MSB",
             "company": "Vietnam Maritime Commercial Joint Stock Bank",
-            "market_cap": 55410000000000
+            "market_cap": 58030000000000
         },
         {
             "symbol": "HOSE:SSB",
             "company": "Southeast Asia Commercial Joint Stock Bank",
-            "market_cap": 55380000000000
+            "market_cap": 57090000000000
         }
     ]
 }
