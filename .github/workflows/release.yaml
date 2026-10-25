@@ -39,7 +39,7 @@ jobs:
       - name: Release (dry-run)
         # see https://github.com/btnguyen2k/action-semrelease for documentation
         id: release_dry_run
-        uses: btnguyen2k/action-semrelease@v4
+        uses: btnguyen2k/action-semrelease@v5
         with:
           dry-run: true
           auto-mode: true
