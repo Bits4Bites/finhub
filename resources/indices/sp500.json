@@ -1,5 +1,5 @@
 {
-    "date": "2026-09-19",
+    "date": "2026-10-17",
     "data": [
         {
             "symbol": "NYSE:MMM",
@@ -337,6 +337,11 @@
             "sector": "Financials"
         },
         {
+            "symbol": "NYSE:BE",
+            "company": "Bloom Energy",
+            "sector": "Industrials"
+        },
+        {
             "symbol": "NYSE:BNY",
             "company": "BNY Mellon",
             "sector": "Financials"
@@ -380,11 +385,6 @@
             "symbol": "NYSE:BF.B",
             "company": "Brown\u2013Forman",
             "sector": "Consumer Staples"
-        },
-        {
-            "symbol": "NYSE:BLDR",
-            "company": "Builders FirstSource",
-            "sector": "Industrials"
         },
         {
             "symbol": "NYSE:BG",
@@ -642,11 +642,6 @@
             "sector": "Financials"
         },
         {
-            "symbol": "NYSE:CTVA",
-            "company": "Corteva",
-            "sector": "Materials"
-        },
-        {
             "symbol": "NASDAQ:CSGP",
             "company": "CoStar Group",
             "sector": "Real Estate"
@@ -895,6 +890,11 @@
             "symbol": "NYSE:EVRG",
             "company": "Evergy",
             "sector": "Utilities"
+        },
+        {
+            "symbol": "NYSE:P",
+            "company": "Everpure",
+            "sector": "Information Technology"
         },
         {
             "symbol": "NYSE:ES",
@@ -1237,6 +1237,11 @@
             "sector": "Industrials"
         },
         {
+            "symbol": "NASDAQ:ILMN",
+            "company": "Illumina, Inc.",
+            "sector": "Health Care"
+        },
+        {
             "symbol": "NASDAQ:INCY",
             "company": "Incyte",
             "sector": "Health Care"
@@ -1387,7 +1392,7 @@
             "sector": "Information Technology"
         },
         {
-            "symbol": "NASDAQ:KHC",
+            "symbol": "NYSE:KHC",
             "company": "Kraft Heinz",
             "sector": "Consumer Staples"
         },
@@ -1528,7 +1533,7 @@
         },
         {
             "symbol": "NYSE:MCK",
-            "company": "McKesson Corporation",
+            "company": "McKesson",
             "sector": "Health Care"
         },
         {
@@ -1585,11 +1590,6 @@
             "symbol": "NASDAQ:MRNA",
             "company": "Moderna",
             "sector": "Health Care"
-        },
-        {
-            "symbol": "NYSE:TAP",
-            "company": "Molson Coors Beverage Company",
-            "sector": "Consumer Staples"
         },
         {
             "symbol": "NASDAQ:MDLZ",
@@ -1785,11 +1785,6 @@
             "symbol": "NASDAQ:PANW",
             "company": "Palo Alto Networks",
             "sector": "Information Technology"
-        },
-        {
-            "symbol": "NASDAQ:PSKY",
-            "company": "Paramount Skydance Corporation",
-            "sector": "Communication Services"
         },
         {
             "symbol": "NYSE:PH",
@@ -2057,6 +2052,11 @@
             "sector": "Real Estate"
         },
         {
+            "symbol": "NYSE:SKYD",
+            "company": "Skydance Corporation",
+            "sector": "Communication Services"
+        },
+        {
             "symbol": "NASDAQ:SWKS",
             "company": "Skyworks Solutions",
             "sector": "Information Technology"
@@ -2222,11 +2222,6 @@
             "sector": "Communication Services"
         },
         {
-            "symbol": "NASDAQ:TTD",
-            "company": "Trade Desk (The)",
-            "sector": "Communication Services"
-        },
-        {
             "symbol": "NASDAQ:TSCO",
             "company": "Tractor Supply",
             "sector": "Consumer Discretionary"
@@ -2255,6 +2250,11 @@
             "symbol": "NYSE:TFC",
             "company": "Truist Financial",
             "sector": "Financials"
+        },
+        {
+            "symbol": "NYSE:TWLO",
+            "company": "Twilio",
+            "sector": "Information Technology"
         },
         {
             "symbol": "NYSE:TYL",
@@ -2392,6 +2392,11 @@
             "sector": "Materials"
         },
         {
+            "symbol": "NYSE:VYLR",
+            "company": "Vylor",
+            "sector": "Consumer Staples"
+        },
+        {
             "symbol": "NYSE:WRB",
             "company": "W. R. Berkley Corporation",
             "sector": "Financials"
@@ -2414,11 +2419,6 @@
         {
             "symbol": "NYSE:DIS",
             "company": "Walt Disney Company (The)",
-            "sector": "Communication Services"
-        },
-        {
-            "symbol": "NASDAQ:WBD",
-            "company": "Warner Bros. Discovery",
             "sector": "Communication Services"
         },
         {
