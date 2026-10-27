@@ -17,6 +17,8 @@ Market date: {{MARKET_DATE}}
 Requirements:
 - Return only the requested structured object.
 - Research between 3 and 20 candidates and do not exceed the plan's target holding count by more than five.
+- For US-listed candidates use NYSE:CODE or NASDAQ:CODE only; never use NYSEARCA or another provider-specific exchange alias.
+- Candidate tickers are proposed identities that the application will verify against current market data.
 - Include theme fit, a decision-useful investment case, material risks, and a role for each candidate.
 - When a budget is supplied, research securities whose likely whole-share affordability is compatible with it without inventing prices.
 - Treat Total as new cash on top of verified holdings and Recurring as one next contribution; never annualize either amount.

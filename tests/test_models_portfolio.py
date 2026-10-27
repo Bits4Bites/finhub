@@ -14,6 +14,12 @@ def test_portfolio_holding_normalizes_ticker_and_tags():
     assert holding.tags == "growth"
 
 
+def test_portfolio_holding_normalizes_nyse_arca_alias():
+    holding = models_portfolio.PortfolioHolding(ticker="NYSEARCA:SGOV")
+
+    assert holding.ticker == "NYSE:SGOV"
+
+
 def test_portfolio_holding_rejects_long_ticker():
     with pytest.raises(ValidationError):
         models_portfolio.PortfolioHolding(ticker="A" * 33)

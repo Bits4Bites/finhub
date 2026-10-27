@@ -307,10 +307,13 @@ def verified_quotes(
         currency="USD",
         securities=[
             portfolio_verification.VerifiedSecurityQuote(
+                requested_ticker=ticker,
+                symbol=ticker.split(":", 1)[1],
                 ticker=ticker,
                 company_name=company_name,
                 exchange="NASDAQ",
                 currency="USD",
+                quote_type="EQUITY",
                 market_price=market_price,
             )
             for ticker, company_name, market_price in zip(
@@ -320,6 +323,13 @@ def verified_quotes(
                 strict=True,
             )
         ],
+    )
+
+
+def candidate_verification() -> portfolio_verification.CandidateIdentityVerification:
+    return portfolio_verification.CandidateIdentityVerification(
+        identities=tuple(verified_quotes().securities),
+        rejected_tickers=(),
     )
 
 

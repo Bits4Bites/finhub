@@ -93,6 +93,12 @@ class TestNormalizeExchangeCode:
     def test_contains_ny(self):
         assert conv.normalize_exchange_code("NYArca") == "NYSE"
 
+    def test_cboe_us_to_nyse(self):
+        assert conv.normalize_exchange_code("Cboe US") == "NYSE"
+
+    def test_bts_to_nyse(self):
+        assert conv.normalize_exchange_code("BTS") == "NYSE"
+
     def test_asx_passthrough(self):
         assert conv.normalize_exchange_code("ASX") == "ASX"
 
@@ -117,6 +123,12 @@ class TestToYfSymbolFormat:
 
     def test_nyse_exchange_strips_prefix(self):
         assert conv.to_yf_symbol_format("NYSE:JPM") == "JPM"
+
+    def test_nyse_arca_exchange_normalizes_and_strips_prefix(self):
+        assert conv.to_yf_symbol_format("NYSEARCA:SGOV") == "SGOV"
+
+    def test_lse_exchange_adds_provider_suffix(self):
+        assert conv.to_yf_symbol_format("LSE:VOD") == "VOD.L"
 
     def test_nasdaq_exchange_strips_prefix(self):
         assert conv.to_yf_symbol_format("NASDAQ:AAPL") == "AAPL"
@@ -158,6 +170,22 @@ class TestToExchSymbFormat:
         result = conv.to_exch_symb_format(ticker=mock_ticker)
         # BRK.B has a 1-char suffix, so it should be preserved
         assert result == "NYSE:BRK.B"
+
+    def test_strips_single_character_non_us_market_suffix(self):
+        mock_ticker = MagicMock()
+        mock_ticker.info = {"fullExchangeName": "LSE", "symbol": "VOD.L"}
+
+        result = conv.to_exch_symb_format(ticker=mock_ticker)
+
+        assert result == "LSE:VOD"
+
+    def test_cboe_us_uses_canonical_nyse_exchange(self):
+        mock_ticker = MagicMock()
+        mock_ticker.info = {"exchange": "BTS", "fullExchangeName": "Cboe US", "symbol": "GOVT"}
+
+        result = conv.to_exch_symb_format(ticker=mock_ticker)
+
+        assert result == "NYSE:GOVT"
 
     @patch("app.utils.conv.yf.Ticker")
     def test_symbol_without_colon_creates_ticker(self, mock_ticker_cls):

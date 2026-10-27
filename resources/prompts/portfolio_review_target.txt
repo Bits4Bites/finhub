@@ -26,6 +26,7 @@ Requirements:
 - Retain every current holding unless its assessment recommendation is EXIT.
 - Omit every current holding assessed as EXIT.
 - Introduce only candidates listed in assessment.eligible_additions.
+- Copy retained tickers exactly from the verified snapshot and addition tickers exactly from assessment.eligible_additions; never translate exchanges, add or remove market suffixes, or substitute aliases.
 - Cite only validated research reference IDs relevant to the same ticker.
 - Copy every reference ID exactly from the validated research; never reconstruct, shorten, or edit an ID.
 - Choose each position's intended role in the target portfolio from CoreGrowth, DefensiveIncome, Diversifier, Hedge, Tactical, and CashReserve; put no emoji in role_description.

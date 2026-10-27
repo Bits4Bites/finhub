@@ -471,6 +471,18 @@ async def _research_portfolio(
     try:
         research_response = _PortfolioResearchResponse.model_validate_json(response.completion)
         repaired_research = _repair_research_references(research_response)
+        expected_currency = (
+            verified_portfolio.currency
+            if verified_portfolio is not None
+            else plan.budget.currency or conv.country_to_currency_code(country)
+        )
+        if not expected_currency:
+            raise ValueError("unable to determine the expected candidate currency")
+        repaired_research = _verify_research_candidates(
+            repaired_research,
+            country=country,
+            expected_currency=expected_currency,
+        )
         if len(repaired_research.candidates) > min(
             20,
             plan.target_holding_count + 5,
@@ -722,6 +734,53 @@ def _finalize_research_references(
     research_data["as_of"] = accessed_at
     research_data["references"] = [reference.model_dump(mode="python") for reference in canonicalized.references]
     return _PortfolioResearch.model_validate(research_data)
+
+
+def _verify_research_candidates(
+    research: _PortfolioResearchDraft,
+    *,
+    country: str,
+    expected_currency: str,
+) -> _PortfolioResearchDraft:
+    verification = portfolio_verification.verify_candidate_identities(
+        [candidate.ticker for candidate in research.candidates],
+        country=country,
+        expected_currency=expected_currency,
+    )
+    identities_by_requested_ticker = {identity.requested_ticker: identity for identity in verification.identities}
+    research_data = research.model_dump(mode="python")
+    verified_candidates = []
+    removed_tickers = set(verification.rejected_tickers)
+    normalized_tickers: list[str] = []
+
+    for candidate, candidate_data in zip(research.candidates, research_data["candidates"], strict=True):
+        identity = identities_by_requested_ticker.get(candidate.ticker)
+        if identity is None:
+            continue
+        if identity.ticker != candidate.ticker:
+            normalized_tickers.append(f"{candidate.ticker} -> {identity.ticker}")
+        candidate_data["ticker"] = identity.ticker
+        candidate_data["company_name"] = identity.company_name or candidate.company_name
+        verified_candidates.append(candidate_data)
+
+    if len(verified_candidates) < 3:
+        raise ValueError("research contains fewer than three market-verified candidates")
+    research_data["candidates"] = verified_candidates
+    if removed_tickers or normalized_tickers:
+        messages = []
+        if removed_tickers:
+            messages.append(f"Removed unverified candidate(s): {', '.join(sorted(removed_tickers))}.")
+        if normalized_tickers:
+            messages.append(f"Market-normalized candidate ticker(s): {', '.join(normalized_tickers)}.")
+        warning = " ".join(messages)
+        research_data["data_gaps"] = [*research_data["data_gaps"][:19], warning]
+        logging.warning("[Portfolio Construction] %s", warning)
+
+    used_ids = ai_reference_utils.collect_reference_ids(research_data)
+    research_data["references"] = [
+        reference for reference in research_data["references"] if reference["id"] in used_ids
+    ]
+    return _PortfolioResearchDraft.model_validate(research_data)
 
 
 def _validate_draft_against_research(

@@ -733,6 +733,7 @@ async def _research_portfolio(
         if research_response.portfolio_id != portfolio_id:
             raise ValueError("research returned a different portfolio ID")
         repaired_research = _repair_research_references(research_response)
+        repaired_research = _verify_research_additions(repaired_research, snapshot)
         _validate_research_coverage(repaired_research, snapshot)
         research = _finalize_research_references(
             repaired_research,
@@ -1040,6 +1041,58 @@ def _validate_research_coverage(
     duplicates = current_tickers & addition_tickers
     if duplicates:
         raise ValueError(f"research additions duplicate current holdings: {sorted(duplicates)}")
+
+
+def _verify_research_additions(
+    research: _PortfolioResearchDraft,
+    snapshot: models_review.PortfolioReviewSnapshot,
+) -> _PortfolioResearchDraft:
+    if not research.additions:
+        return research
+
+    verification = portfolio_verification.verify_candidate_identities(
+        [addition.ticker for addition in research.additions],
+        country=snapshot.country,
+        expected_currency=snapshot.currency,
+    )
+    identities_by_requested_ticker = {identity.requested_ticker: identity for identity in verification.identities}
+    current_tickers = {holding.ticker for holding in snapshot.holdings}
+    research_data = research.model_dump(mode="python")
+    verified_additions = []
+    removed_tickers = set(verification.rejected_tickers)
+    normalized_tickers: list[str] = []
+    seen_tickers: set[str] = set()
+
+    for addition, addition_data in zip(research.additions, research_data["additions"], strict=True):
+        identity = identities_by_requested_ticker.get(addition.ticker)
+        if identity is None:
+            continue
+        if identity.ticker in current_tickers or identity.ticker in seen_tickers:
+            removed_tickers.add(addition.ticker)
+            continue
+        seen_tickers.add(identity.ticker)
+        if identity.ticker != addition.ticker:
+            normalized_tickers.append(f"{addition.ticker} -> {identity.ticker}")
+        addition_data["ticker"] = identity.ticker
+        addition_data["company_name"] = identity.company_name or addition.company_name
+        verified_additions.append(addition_data)
+
+    research_data["additions"] = verified_additions
+    if removed_tickers or normalized_tickers:
+        messages = []
+        if removed_tickers:
+            messages.append(f"Removed unverified addition candidate(s): {', '.join(sorted(removed_tickers))}.")
+        if normalized_tickers:
+            messages.append(f"Market-normalized addition ticker(s): {', '.join(normalized_tickers)}.")
+        warning = " ".join(messages)
+        research_data["data_gaps"] = [*research_data["data_gaps"][:19], warning]
+        logging.warning("[Portfolio Review] %s", warning)
+
+    used_ids = ai_reference_utils.collect_reference_ids(research_data)
+    research_data["references"] = [
+        reference for reference in research_data["references"] if reference["id"] in used_ids
+    ]
+    return _PortfolioResearchDraft.model_validate(research_data)
 
 
 def _finalize_research_references(

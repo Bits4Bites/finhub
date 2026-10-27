@@ -20,6 +20,8 @@ Requirements:
 - Cover every current holding with at least one decision-useful sourced claim.
 - Cover portfolio-level concentration, sector, macro, valuation, liquidity, correlation, and catalyst questions where relevant evidence exists.
 - Return zero through five potential additions, all using canonical EXCHANGE:CODE tickers and supported by sources.
+- For US-listed candidates use NYSE:CODE or NASDAQ:CODE only; never use NYSEARCA or another provider-specific exchange alias.
+- Candidate tickers are proposed identities that the application will verify against current market data.
 - Do not return an existing holding as a potential addition.
 - Do not assess, recommend actions, set target weights, calculate quantities, or decide whether rebalancing is needed.
 - Every claim and addition must cite one through six source IDs.

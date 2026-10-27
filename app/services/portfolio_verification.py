@@ -1,18 +1,20 @@
 from __future__ import annotations
 
 import json
+import logging
 import math
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
-import yfinance as yf
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from .. import config
 from ..models import portfolio as models_portfolio
 from ..utils import cache, conv
+from . import stock as services_stock
 
 _CACHE_NAMESPACE = "portfolio-verification-v1"
-_SECURITY_QUOTES_CACHE_NAMESPACE = "portfolio-security-quotes-v1"
+_SECURITY_QUOTES_CACHE_NAMESPACE = "portfolio-security-quotes-v3"
 _CACHE_TTL = 5 * 60
 
 
@@ -47,15 +49,23 @@ class VerifiedPortfolio(BaseModel):
         return self
 
 
-class VerifiedSecurityQuote(BaseModel):
-    """Verified market data for deterministic whole-share sizing."""
+class VerifiedSecurityIdentity(BaseModel):
+    """Provider-native and application-canonical identity for one verified security."""
 
     model_config = ConfigDict(extra="forbid")
 
+    requested_ticker: str
+    symbol: str
     ticker: str
     company_name: str | None
     exchange: str
     currency: str = Field(min_length=3, max_length=3)
+    quote_type: str
+
+
+class VerifiedSecurityQuote(VerifiedSecurityIdentity):
+    """Verified market data for deterministic whole-share sizing."""
+
     market_price: float = Field(gt=0, allow_inf_nan=False)
 
 
@@ -79,6 +89,12 @@ class VerifiedSecurityQuotes(BaseModel):
         if {security.currency for security in self.securities} != {self.currency}:
             raise ValueError("verified security quotes must use the declared currency")
         return self
+
+
+@dataclass(frozen=True)
+class CandidateIdentityVerification:
+    identities: tuple[VerifiedSecurityIdentity, ...]
+    rejected_tickers: tuple[str, ...]
 
 
 async def verify_portfolio(
@@ -147,49 +163,107 @@ async def verify_security_quotes(
     return verified_quotes
 
 
+def verify_candidate_identities(
+    tickers: list[str],
+    *,
+    country: str,
+    expected_currency: str,
+) -> CandidateIdentityVerification:
+    normalized_country = conv.country_to_iso2(country.strip())
+    if not normalized_country:
+        raise PortfolioInputError("Unsupported or unknown country")
+    normalized_currency = expected_currency.strip().upper()
+    if len(normalized_currency) != 3:
+        raise PortfolioInputError("Expected candidate currency must use a three-letter code")
+
+    try:
+        normalized_tickers = [models_portfolio.normalize_canonical_ticker(ticker) for ticker in tickers]
+    except ValueError as exc:
+        raise PortfolioInputError("Candidate tickers must use EXCHANGE:CODE format") from exc
+
+    identities: list[VerifiedSecurityIdentity] = []
+    rejected_tickers: list[str] = []
+    seen_tickers: set[str] = set()
+    for requested_ticker in normalized_tickers:
+        try:
+            identity, _ = _load_security_identity(requested_ticker)
+            if identity.currency != normalized_currency:
+                raise PortfolioInputError(
+                    f"Ticker '{identity.ticker}' uses {identity.currency}, not expected {normalized_currency}"
+                )
+            if identity.ticker in seen_tickers:
+                raise PortfolioInputError(f"Ticker '{requested_ticker}' duplicates verified ticker '{identity.ticker}'")
+        except (PortfolioInputError, PortfolioVerificationError, ValueError) as exc:
+            logging.warning(
+                "[Portfolio Verification] Rejected research candidate %s: %s",
+                requested_ticker,
+                exc,
+            )
+            rejected_tickers.append(requested_ticker)
+            continue
+        seen_tickers.add(identity.ticker)
+        identities.append(identity)
+
+    return CandidateIdentityVerification(
+        identities=tuple(identities),
+        rejected_tickers=tuple(rejected_tickers),
+    )
+
+
+def _load_security_identity(
+    input_ticker: str,
+) -> tuple[VerifiedSecurityIdentity, float | None]:
+    try:
+        resolved = services_stock.resolve_symbol(input_ticker)
+    except Exception as exc:
+        raise PortfolioVerificationError(f"Unable to verify ticker '{input_ticker}'") from exc
+
+    if resolved.quote_type not in config.ALLOWED_QUOTE_TYPES:
+        raise PortfolioInputError(f"Unsupported or unknown ticker '{input_ticker}'")
+
+    try:
+        canonical_ticker = models_portfolio.normalize_canonical_ticker(resolved.normalized_symbol)
+    except ValueError as exc:
+        raise PortfolioInputError(f"Unable to normalize ticker '{input_ticker}'") from exc
+    if not isinstance(canonical_ticker, str):
+        raise PortfolioInputError(f"Unable to normalize ticker '{input_ticker}'")
+
+    canonical_exchange = canonical_ticker.split(":", 1)[0]
+    if not canonical_exchange:
+        raise PortfolioInputError(f"Ticker '{canonical_ticker}' has no exchange")
+
+    if not resolved.currency:
+        raise PortfolioInputError(f"Ticker '{canonical_ticker}' has no currency")
+
+    return (
+        VerifiedSecurityIdentity(
+            requested_ticker=input_ticker.strip().upper(),
+            symbol=resolved.symbol,
+            ticker=canonical_ticker,
+            company_name=resolved.company_name,
+            exchange=canonical_exchange,
+            currency=resolved.currency,
+            quote_type=resolved.quote_type,
+        ),
+        resolved.market_price,
+    )
+
+
 def _load_security_quote(
     input_ticker: str,
     *,
     fallback_market_price: float | None = None,
 ) -> tuple[VerifiedSecurityQuote, bool]:
-    yf_symbol = conv.to_yf_symbol_format(input_ticker)
-    try:
-        ticker = yf.Ticker(yf_symbol)
-        info = ticker.info or {}
-    except Exception as exc:
-        raise PortfolioVerificationError(f"Unable to verify ticker '{input_ticker}'") from exc
-
-    quote_type = str(info.get("quoteType") or "").upper()
-    if quote_type not in config.ALLOWED_QUOTE_TYPES:
-        raise PortfolioInputError(f"Unsupported or unknown ticker '{input_ticker}'")
-
-    canonical_ticker = conv.to_exch_symb_format(ticker=ticker).strip().upper()
-    if not canonical_ticker or canonical_ticker.startswith(":") or canonical_ticker.endswith(":"):
-        raise PortfolioInputError(f"Unable to normalize ticker '{input_ticker}'")
-
-    exchange = conv.normalize_exchange_code(str(info.get("fullExchangeName") or info.get("exchange") or ""))
-    if not exchange:
-        raise PortfolioInputError(f"Ticker '{canonical_ticker}' has no exchange")
-
-    currency = str(info.get("currency") or "").strip().upper()
-    if not currency:
-        raise PortfolioInputError(f"Ticker '{canonical_ticker}' has no currency")
-
-    market_price = _positive_finite_number(info.get("regularMarketPrice"))
-    if market_price is None:
-        market_price = _positive_finite_number(info.get("currentPrice"))
+    identity, market_price = _load_security_identity(input_ticker)
     used_fallback = market_price is None and fallback_market_price is not None
     if market_price is None:
         market_price = fallback_market_price
     if market_price is None:
-        raise PortfolioInputError(f"Ticker '{canonical_ticker}' has no current market price")
+        raise PortfolioInputError(f"Ticker '{identity.ticker}' has no current market price")
 
     return (
         VerifiedSecurityQuote(
-            ticker=canonical_ticker,
-            company_name=str(info.get("longName") or info.get("shortName") or "").strip() or None,
-            exchange=exchange,
-            currency=currency,
+            **identity.model_dump(),
             market_price=market_price,
         ),
         used_fallback,
@@ -305,13 +379,6 @@ def _build_verified_security_quotes(
         currency=next(iter(currencies)),
         securities=securities,
     )
-
-
-def _positive_finite_number(value: object) -> float | None:
-    if isinstance(value, bool) or not isinstance(value, int | float):
-        return None
-    number = float(value)
-    return number if math.isfinite(number) and number > 0 else None
 
 
 def _cached_portfolio(value: object) -> VerifiedPortfolio:

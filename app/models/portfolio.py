@@ -2,6 +2,8 @@ from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from ..utils import conv
+
 MAX_COMPANY_NAME_LENGTH = 200
 MAX_EXCHANGE_LENGTH = 32
 MAX_TAGS_LENGTH = 500
@@ -19,7 +21,8 @@ def normalize_canonical_ticker(value: object) -> object:
     parts = normalized.split(":")
     if len(parts) != 2 or not all(parts) or any(character.isspace() for character in normalized):
         raise ValueError("ticker must use canonical EXCHANGE:CODE format")
-    return normalized
+    exchange, ticker = parts
+    return f"{conv.normalize_exchange_code(exchange)}:{ticker}"
 
 
 class PortfolioBudget(BaseModel):
@@ -129,7 +132,10 @@ class PortfolioHolding(BaseModel):
     @field_validator("ticker", mode="before")
     @classmethod
     def normalize_ticker(cls, value: object) -> object:
-        return value.strip().upper() if isinstance(value, str) else value
+        if not isinstance(value, str):
+            return value
+        normalized = value.strip().upper()
+        return normalize_canonical_ticker(normalized) if ":" in normalized else normalized
 
     @field_validator("tags", mode="before")
     @classmethod

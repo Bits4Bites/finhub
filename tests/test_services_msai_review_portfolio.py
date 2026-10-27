@@ -82,10 +82,13 @@ def _addition_quotes(price: float = 250) -> portfolio_verification.VerifiedSecur
         currency="USD",
         securities=[
             portfolio_verification.VerifiedSecurityQuote(
+                requested_ticker="NASDAQ:NVDA",
+                symbol="NVDA",
                 ticker="NASDAQ:NVDA",
                 company_name="NVIDIA Corporation",
                 exchange="NASDAQ",
                 currency="USD",
+                quote_type="EQUITY",
                 market_price=price,
             )
         ],
@@ -128,6 +131,46 @@ def test_research_reference_repair_removes_orphans_and_unsupported_claims():
     assert len(repaired.claims) == 3
     assert repaired.claims[0].reference_ids == [fixtures.SOURCE_URLS[0]]
     assert "Removed 1 unsupported claim" in repaired.data_gaps[-1]
+
+
+def test_research_addition_verification_uses_provider_canonical_identity():
+    data = fixtures.research_response_data()
+    data["additions"] = [
+        {
+            "ticker": "NASDAQ:SGOV",
+            "company_name": "Treasury ETF",
+            "fit": "Adds a defensive cash-like allocation.",
+            "key_risks": ["Interest-rate and reinvestment risk."],
+            "reference_ids": [fixtures.SOURCE_URLS[0]],
+        }
+    ]
+    research = service._repair_research_references(service._PortfolioResearchResponse.model_validate(data))
+    verification = portfolio_verification.CandidateIdentityVerification(
+        identities=(
+            portfolio_verification.VerifiedSecurityQuote(
+                requested_ticker="NASDAQ:SGOV",
+                symbol="SGOV",
+                ticker="NYSE:SGOV",
+                company_name="iShares 0-3 Month Treasury Bond ETF",
+                exchange="NYSE",
+                currency="USD",
+                quote_type="ETF",
+                market_price=100.65,
+            ),
+        ),
+        rejected_tickers=(),
+    )
+
+    with patch.object(
+        service.portfolio_verification,
+        "verify_candidate_identities",
+        return_value=verification,
+    ):
+        verified = service._verify_research_additions(research, fixtures.snapshot())
+
+    assert verified.additions[0].ticker == "NYSE:SGOV"
+    assert verified.additions[0].company_name == "iShares 0-3 Month Treasury Bond ETF"
+    assert "NASDAQ:SGOV -> NYSE:SGOV" in verified.data_gaps[-1]
 
 
 def test_assessment_reference_repair_removes_orphan_and_wrong_ticker_links():
@@ -189,6 +232,15 @@ def test_target_reference_repair_removes_orphan_links():
         fixtures.research(),
         fixtures.assessment(),
     )
+
+
+def test_target_normalizes_nyse_arca_alias():
+    data = fixtures.target_data()
+    data["positions"][0]["ticker"] = "NYSEARCA:SGOV"
+
+    target = service._PortfolioTargetDraft.model_validate(data)
+
+    assert target.positions[0].ticker == "NYSE:SGOV"
 
 
 def test_assessment_stage_repairs_orphan_links_before_validation():
@@ -470,6 +522,12 @@ def test_structured_review_runs_all_five_stages_and_returns_growth_plan():
         "REVIEW_PORTFOLIO_TARGET",
         "REVIEW_PORTFOLIO_ACTION_PLAN",
     ]
+    research_prompt = mock_ai_exec.await_args_list[1].args[1]
+    assessment_prompt = mock_ai_exec.await_args_list[2].args[1]
+    target_prompt = mock_ai_exec.await_args_list[3].args[1]
+    assert "never use NYSEARCA" in research_prompt
+    assert "Copy every eligible-addition ticker exactly" in assessment_prompt
+    assert "Copy retained tickers exactly" in target_prompt
 
 
 def test_provider_failure_is_explicit():

@@ -1,3 +1,5 @@
+import math
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -7,6 +9,45 @@ from .. import config
 from ..models import market_data as models_market_data
 from ..models import stocks as models_stocks
 from ..utils import conv
+
+
+@dataclass(frozen=True)
+class ResolvedSymbol:
+    symbol: str
+    normalized_symbol: str
+    exchange: str
+    country: str
+    currency: str
+    quote_type: str
+    company_name: str | None
+    market_price: float | None
+
+
+def resolve_symbol(symbol: str) -> ResolvedSymbol:
+    """Resolve one accepted symbol into provider-native and canonical market identity."""
+    yf_symbol = conv.to_yf_symbol_format(symbol)
+    ticker = yf.Ticker(yf_symbol)
+    info = dict(ticker.info or {})
+    market_price = _positive_finite_number(info.get("regularMarketPrice"))
+    if market_price is None:
+        market_price = _positive_finite_number(info.get("currentPrice"))
+    return ResolvedSymbol(
+        symbol=str(info.get("symbol") or yf_symbol).strip().upper(),
+        normalized_symbol=conv.to_exch_symb_format(ticker=ticker).strip().upper(),
+        exchange=conv.normalize_exchange_code(str(info.get("fullExchangeName") or info.get("exchange") or "")),
+        country=conv.country_to_iso2(str(info.get("country") or info.get("region") or "US")),
+        currency=str(info.get("currency") or "").strip().upper(),
+        quote_type=str(info.get("quoteType") or "").strip().upper(),
+        company_name=str(info.get("longName") or info.get("shortName") or "").strip() or None,
+        market_price=market_price,
+    )
+
+
+def _positive_finite_number(value: object) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        return None
+    number = float(value)
+    return number if math.isfinite(number) and number > 0 else None
 
 
 def get_symbol_info_raw(symbol: str) -> dict[str, Any]:

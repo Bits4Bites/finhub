@@ -26,5 +26,6 @@ Requirements:
 - For LongTerm, never recommend TRIM. Recommend EXIT only for a sourced CriticalRisk or StructuralChange and set exit_reason accordingly. Otherwise use HOLD or BUY_MORE.
 - For Swing, focus on risk-adjusted P&L over a days-to-weeks horizon and consider liquidity, volatility, catalyst timing, downside controls, costs, and tax uncertainty. HOLD, TRIM, EXIT, and BUY_MORE are permitted. Set exit_reason to SwingRiskControl or SwingThesisInvalidated when that is the evidence-backed EXIT basis; CriticalRisk and StructuralChange remain valid when applicable.
 - Select eligible additions only from researched candidates and only when they materially improve the target design.
+- Copy every eligible-addition ticker exactly from validated research; never translate its exchange, add or remove a market suffix, or substitute an alias.
 - Do not set target allocations, quantities, prices, cash amounts, or a final rebalance flag.
 - Record uncertainty in data_gaps and assign confidence and data quality conservatively.

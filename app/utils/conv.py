@@ -81,6 +81,19 @@ _EXCHANGE_ALIASES: dict[str, str] = {
     "NYQ": "NYSE",
     "NYSE": "NYSE",
     "NYS": "NYSE",
+    "NYSEARCA": "NYSE",
+    "NYSE ARCA": "NYSE",
+    "BATS": "NYSE",
+    "BTS": "NYSE",
+    "CBOE BZX": "NYSE",
+    "CBOE US": "NYSE",
+}
+_YF_SUFFIX_BY_EXCHANGE: dict[str, str] = {
+    "ASX": "AX",
+    "HNX": "VN",
+    "HOSE": "VN",
+    "LSE": "L",
+    "UPCOM": "VN",
 }
 
 
@@ -126,12 +139,9 @@ def to_exch_symb_format(*, ticker: yf.Ticker = None, symbol: str = None) -> str:
     ticker = yf.Ticker(symbol) if not ticker else ticker
     exchange = normalize_exchange_code(ticker.info.get("fullExchangeName", ticker.info.get("exchange", "")))
     symbol = ticker.info.get("symbol", "")
-    # Strip YF exchange suffix if it's a 2-char country code (e.g. .AX, .VN, .TO)
-    # Preserves dots in ticker names like BRK.B
-    if "." in symbol:
-        base, suffix = symbol.rsplit(".", 1)
-        if len(suffix) == 2:
-            symbol = base
+    # Non-US provider symbols use a market suffix; US dots can identify share classes such as BRK.B.
+    if "." in symbol and exchange not in {"NASDAQ", "NYSE"}:
+        symbol = symbol.rsplit(".", 1)[0]
     return f"{exchange}:{symbol}"
 
 
@@ -154,12 +164,12 @@ def to_yf_symbol_format(symbol: str) -> str:
     symbol = symbol.upper()
     if ":" in symbol:
         exchange, ticker = symbol.split(":", 1)
-        if exchange == "ASX":
-            return f"{ticker}.AX"
-        elif exchange in ("HOSE", "HNX", "UPCOM"):
-            return f"{ticker}.VN"
-        elif exchange in ("NYSE", "NASDAQ"):
+        exchange = normalize_exchange_code(exchange)
+        if exchange in ("NYSE", "NASDAQ"):
             return ticker
+        suffix = _YF_SUFFIX_BY_EXCHANGE.get(exchange)
+        if suffix:
+            return f"{ticker}.{suffix}"
     return symbol
 
 

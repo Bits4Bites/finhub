@@ -8,6 +8,7 @@ import pytest
 from app.services import ai_helper
 from app.services import msai_spotlight_portfolio as service
 from app.services import portfolio_verification as verification
+from app.services import stock as services_stock
 from app.utils import ai_reference as ai_reference_utils
 from tests import portfolio_spotlight_fixtures
 
@@ -24,26 +25,23 @@ def _assert_all_object_properties_are_required(value: object) -> None:
             _assert_all_object_properties_are_required(nested_value)
 
 
-def _ticker_info(
+def _resolved_symbol(
     *,
     symbol: str = "AAPL",
     price: float | None = 200,
     currency: str = "USD",
-) -> dict[str, object]:
-    return {
-        "symbol": symbol,
-        "quoteType": "EQUITY",
-        "fullExchangeName": "NasdaqGS",
-        "currency": currency,
-        "regularMarketPrice": price,
-        "longName": "Apple Inc.",
-    }
-
-
-def _ticker(info: dict[str, object]) -> MagicMock:
-    ticker = MagicMock()
-    ticker.info = info
-    return ticker
+    exchange: str = "NASDAQ",
+) -> services_stock.ResolvedSymbol:
+    return services_stock.ResolvedSymbol(
+        symbol=symbol,
+        normalized_symbol=f"{exchange}:{symbol}",
+        exchange=exchange,
+        country="US",
+        currency=currency,
+        quote_type="EQUITY",
+        company_name="Apple Inc.",
+        market_price=price,
+    )
 
 
 def _research_response_data(portfolio_id: str = "portfolio-id") -> dict[str, object]:
@@ -169,7 +167,11 @@ def test_verification_uses_current_market_data_and_calculates_snapshot():
             new_callable=AsyncMock,
             return_value=True,
         ) as mock_cache_set,
-        patch.object(verification.yf, "Ticker", return_value=_ticker(_ticker_info())),
+        patch.object(
+            verification.services_stock,
+            "resolve_symbol",
+            return_value=_resolved_symbol(),
+        ),
     ):
         snapshot = asyncio.run(
             verification.verify_portfolio(
@@ -191,11 +193,14 @@ def test_verification_uses_current_market_data_and_calculates_snapshot():
 
 
 def test_verification_uses_client_price_only_as_fallback():
-    info = _ticker_info(price=None)
     with (
         patch.object(verification.cache, "get", new_callable=AsyncMock, return_value=None),
         patch.object(verification.cache, "set", new_callable=AsyncMock, return_value=True),
-        patch.object(verification.yf, "Ticker", return_value=_ticker(info)),
+        patch.object(
+            verification.services_stock,
+            "resolve_symbol",
+            return_value=_resolved_symbol(price=None),
+        ),
     ):
         snapshot = asyncio.run(
             verification.verify_portfolio(
@@ -215,7 +220,11 @@ def test_verification_rejects_duplicate_canonical_tickers():
     ]
     with (
         patch.object(verification.cache, "get", new_callable=AsyncMock, return_value=None),
-        patch.object(verification.yf, "Ticker", return_value=_ticker(_ticker_info())),
+        patch.object(
+            verification.services_stock,
+            "resolve_symbol",
+            return_value=_resolved_symbol(),
+        ),
         pytest.raises(verification.PortfolioInputError, match="Duplicate"),
     ):
         asyncio.run(verification.verify_portfolio(positions, country="US"))
@@ -226,13 +235,17 @@ def test_verification_rejects_mixed_currency_portfolio():
         portfolio_spotlight_fixtures.request_holding("NASDAQ:AAPL"),
         portfolio_spotlight_fixtures.request_holding("NASDAQ:MSFT"),
     ]
-    tickers = [
-        _ticker(_ticker_info(symbol="AAPL", currency="USD")),
-        _ticker(_ticker_info(symbol="MSFT", currency="AUD")),
+    symbols = [
+        _resolved_symbol(symbol="AAPL", currency="USD"),
+        _resolved_symbol(symbol="MSFT", currency="AUD"),
     ]
     with (
         patch.object(verification.cache, "get", new_callable=AsyncMock, return_value=None),
-        patch.object(verification.yf, "Ticker", side_effect=tickers),
+        patch.object(
+            verification.services_stock,
+            "resolve_symbol",
+            side_effect=symbols,
+        ),
         pytest.raises(verification.PortfolioInputError, match="Mixed-currency"),
     ):
         asyncio.run(verification.verify_portfolio(positions, country="US"))
