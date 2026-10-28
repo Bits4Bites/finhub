@@ -1,8 +1,10 @@
 import time
+import typing
 from abc import ABC
 from typing import Literal
 
 import openai
+import pydantic_settings
 from azure.identity import EnvironmentCredential, get_bearer_token_provider
 from google import genai
 from google.genai.types import HttpOptions
@@ -86,7 +88,7 @@ class LLMConfig(BaseSettings):
     api_tier: str = ""
     api_key: str = Field(default="")
     endpoint: str = Field(default="")
-    models: set[str] = Field(default=[])
+    models: typing.Annotated[set[str], pydantic_settings.NoDecode] = Field(default=[])
 
     @field_validator("models", mode="before")
     @classmethod
