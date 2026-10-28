@@ -2,13 +2,18 @@ name: 'ci'
 
 on:
   push:
-    branches: [ '*' ]
+    branches: [ '**' ]
     paths-ignore:
       - '.github/dependabot.yaml'
   pull_request:
     types: [ opened, edited, reopened, synchronize, review_requested ]
-    branches: [ '*' ]
+    branches: [ '**' ]
   workflow_call:
+    inputs:
+      target-sha:
+        description: 'Commit SHA to check out and analyze.'
+        required: false
+        type: string
 
   # Allow manually trigger
   workflow_dispatch:
@@ -27,6 +32,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.target-sha || github.sha }}
       - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python }}
@@ -43,16 +50,18 @@ jobs:
           # Run unit tests
           pytest
 
-  BuildAndTestDotNet:
+  BuildAndTestDotNetContracts:
     name: Build and Test .NET 8 Contracts
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.target-sha || github.sha }}
       - name: Set up .NET 8
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: '8.x'
       - name: Restore .NET projects
         run: dotnet restore clients/dotnet/FinHub.Client.Contracts.Tests/FinHub.Client.Contracts.Tests.csproj --nologo
       - name: Build .NET projects
@@ -70,6 +79,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.target-sha || github.sha }}
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
       - name: Set up Docker Buildx
@@ -105,7 +116,7 @@ jobs:
     if: |
       github.event_name == 'workflow_dispatch' &&
       startsWith(github.ref_name, 'cache-static-data-')
-    needs: [BuildAndTest, BuildAndTestDotNet, BuildDockerAndQuickTest]
+    needs: [BuildAndTest, BuildAndTestDotNetContracts, BuildDockerAndQuickTest]
     runs-on: ubuntu-latest
     permissions:
       actions: write
@@ -126,11 +137,11 @@ jobs:
                 validated_sha: context.sha,
               },
             });
-            console.log(`Dispatched auto-merge for ${context.ref} at ${context.sha}.`);
+            console.log(`✅ Dispatched auto-merge for ${context.ref} at ${context.sha}.`);
 
   ReleaseDryRun:
     if: github.event_name == 'push'
-    needs: [BuildAndTest, BuildAndTestDotNet, BuildDockerAndQuickTest]
+    needs: [BuildAndTest, BuildAndTestDotNetContracts, BuildDockerAndQuickTest]
     runs-on: ubuntu-latest
     outputs:
       RESULT: ${{ steps.release_dry_run.outputs.result }}
@@ -139,6 +150,8 @@ jobs:
     steps:
       - name: Check out code
         uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.target-sha || github.sha }}
       - name: Install Node
         uses: actions/setup-node@v7
         with:
@@ -146,16 +159,12 @@ jobs:
       - name: Release (dry-run)
         # see https://github.com/btnguyen2k/action-semrelease for documentation
         id: release_dry_run
-        uses: btnguyen2k/action-semrelease@v4
+        uses: btnguyen2k/action-semrelease@37fe196d36496098bd291e9519c86772ea2e0c0d # v5.1.0
         with:
           dry-run: true
-          auto-mode: true
           github-token: ${{ github.token }}
-          tag-major-release: false
-          tag-minor-release: false
           branches: ${{ github.ref_name }}
           tag-prefix: ${{ env.TAG_PREFIX }}
-          tag-only: true
 
   PublishDockerImagesLinuxBuild:
     if: |
@@ -174,6 +183,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.target-sha || github.sha }}
       - name: Update version metadata
         run: |
           DATE=`date +%Y%m%d%H%M%S`
@@ -249,16 +260,3 @@ jobs:
             -t ${{ env.DOCKER_IMAGE }}:${{ env.VERSION }}-dev \
             -t ${{ env.DOCKER_IMAGE }}:${{ github.sha }} \
             $(printf '${{ env.DOCKER_IMAGE }}@sha256:%s ' *)
-      # - name: Inspect image
-      #   run: |
-      #     docker buildx imagetools inspect ${{ env.DOCKER_IMAGE }}:${{ steps.meta.outputs.version }}
-      # - name: Log in to Azure
-      #   uses: azure/login@v2
-      #   with:
-      #     creds: ${{ secrets.AZURE_CREDENTIALS }}
-      # - name: Deploy to dev environment
-      #   uses: azure/container-apps-deploy-action@v2
-      #   with:
-      #     containerAppName: ${{ secrets.AZURE_CONTAINER_APP }}
-      #     resourceGroup: ${{ secrets.AZURE_RESOURCE_GROUP }}
-      #     imageToDeploy: docker.io/${{ env.DOCKER_IMAGE }}:${{ github.sha }}
