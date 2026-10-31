@@ -87,7 +87,7 @@ jobs:
         uses: btnguyen2k/gh-actions/dockerbp@dockerbp/v0.1.0
         with:
           target-sha: ${{ inputs.target-sha || github.sha }}
-          image: finhub
+          image: btnguyen2k/finhub
           tags: ci
           platforms: linux/amd64
           dockerfile: ./${{ matrix.dockerfiles }}
@@ -113,7 +113,7 @@ jobs:
             --name test \
             -p 1234:8000 \
             --platform ${{ matrix.platforms }} \
-            finhub:ci)
+            btnguyen2k/finhub:ci)
           HEALTH_RESPONSE=$(mktemp)
           trap '
             docker logs "$CONTAINER" || true
