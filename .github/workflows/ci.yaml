@@ -84,21 +84,21 @@ jobs:
           ref: ${{ inputs.target-sha || github.sha }}
       - name: Build Docker image for ${{ matrix.platforms }} with ${{ matrix.dockerfiles }}
         id: docker_build
-        uses: btnguyen2k/gh-actions/dockerbp@dockerbp/v0.1.0
+        uses: btnguyen2k/gh-actions/dockerbp@dockerbp/v0.2.0
         with:
           target-sha: ${{ inputs.target-sha || github.sha }}
-          image: btnguyen2k/finhub
+          image: finhub
           tags: ci
           platforms: linux/amd64
           dockerfile: ./${{ matrix.dockerfiles }}
           context: ./
           mode: build
-          publish: false
+          publish: local
       - name: Verify Docker build for ${{ matrix.platforms }} with ${{ matrix.dockerfiles }}
         shell: bash
         run: |
-          # check if output 'status' from step docker_build is 'built'
-          if [[ "${{ steps.docker_build.outputs.status }}" != "built" ]]; then
+          # check if output 'status' from step docker_build is 'local-built'
+          if [[ "${{ steps.docker_build.outputs.status }}" != "local-built" ]]; then
               echo "❌ Docker build failed for ${{ matrix.platforms }} with ${{ matrix.dockerfiles }}"
               exit 1
           fi
@@ -109,11 +109,13 @@ jobs:
         run: |
           set -euo pipefail
 
+          docker images
+
           CONTAINER=$(docker run -d \
             --name test \
             -p 1234:8000 \
             --platform ${{ matrix.platforms }} \
-            btnguyen2k/finhub:ci)
+            finhub:ci)
           HEALTH_RESPONSE=$(mktemp)
           trap '
             docker logs "$CONTAINER" || true
