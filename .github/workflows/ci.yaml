@@ -70,6 +70,7 @@ jobs:
         run: dotnet test clients/dotnet/FinHub.Client.Contracts.Tests/FinHub.Client.Contracts.Tests.csproj --configuration Release --no-build --no-restore --nologo
 
   BuildDockerAndQuickTest:
+    needs: [ BuildAndTest ]
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -81,35 +82,74 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ inputs.target-sha || github.sha }}
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
       - name: Build Docker image for ${{ matrix.platforms }} with ${{ matrix.dockerfiles }}
-        uses: docker/build-push-action@v7
+        id: docker_build
+        uses: btnguyen2k/gh-actions/dockerbp@dockerbp/v0.1.0
         with:
-          platforms: ${{ matrix.platforms }}
-          push: false
-          load: true
-          tags: test
-          file: ./${{ matrix.dockerfiles }}
+          target-sha: ${{ inputs.target-sha || github.sha }}
+          image: finhub
+          tags: ci
+          platforms: linux/amd64
+          dockerfile: ./${{ matrix.dockerfiles }}
           context: ./
-      - name: Test Docker container for ${{ matrix.platforms }} with ${{ matrix.dockerfiles }}
+          mode: build
+          publish: false
+      - name: Verify Docker build for ${{ matrix.platforms }} with ${{ matrix.dockerfiles }}
+        shell: bash
         run: |
+          # check if output 'status' from step docker_build is 'built'
+          if [[ "${{ steps.docker_build.outputs.status }}" != "built" ]]; then
+              echo "❌ Docker build failed for ${{ matrix.platforms }} with ${{ matrix.dockerfiles }}"
+              exit 1
+          fi
+      - name: Test Docker container for ${{ matrix.platforms }} with ${{ matrix.dockerfiles }}
+        shell: bash
+        env:
+          STARTUP_TIMEOUT_SECONDS: '60'
+        run: |
+          set -euo pipefail
+
           CONTAINER=$(docker run -d \
             --name test \
             -p 1234:8000 \
             --platform ${{ matrix.platforms }} \
-            test)
-          sleep 20 # Wait for the container to start and bootstrap, increase wait time if needed
-          docker logs ${CONTAINER}
-          STATUS_OUTPUT=$(curl http://localhost:1234/health)
-          echo "ℹ️ Health check output: $STATUS_OUTPUT"
-          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:1234/health)
-          if [ "$STATUS_CODE" -ne 200 ]; then
-            echo "❌ Health check failed with status code $STATUS_CODE"
-            exit 1
-          fi
+            finhub:ci)
+          HEALTH_RESPONSE=$(mktemp)
+          trap '
+            docker logs "$CONTAINER" || true
+            docker rm -f "$CONTAINER" >/dev/null || true
+            rm -f "$HEALTH_RESPONSE"
+          ' EXIT
+          echo "ℹ️ Started Docker container with ID: ${CONTAINER}"
+          DEADLINE=$((SECONDS + STARTUP_TIMEOUT_SECONDS))
+          STATUS_CODE=000
+          while (( SECONDS < DEADLINE )); do
+            if [[ "$(docker inspect --format '{{.State.Running}}' "$CONTAINER")" != "true" ]]; then
+              echo "❌ Container exited before becoming healthy."
+              exit 1
+            fi
+            REMAINING=$((DEADLINE - SECONDS))
+            if (( REMAINING <= 0 )); then
+              break
+            fi
+            REQUEST_TIMEOUT=$((REMAINING < 2 ? REMAINING : 2))
+            STATUS_CODE=$(curl --silent \
+              --connect-timeout 1 \
+              --max-time "$REQUEST_TIMEOUT" \
+              --output "$HEALTH_RESPONSE" \
+              --write-out "%{http_code}" \
+              http://localhost:1234/health) || STATUS_CODE=000
+            if [[ "$STATUS_CODE" == "200" ]]; then
+              echo "✅ Health check output: $(cat "$HEALTH_RESPONSE")"
+              exit 0
+            fi
+            if (( SECONDS < DEADLINE )); then
+              sleep 1
+            fi
+          done
+          echo "❌ Health check did not return HTTP 200 within ${STARTUP_TIMEOUT_SECONDS}s (last status: ${STATUS_CODE})."
+          echo "❌ Last health check output: $(cat "$HEALTH_RESPONSE")"
+          exit 1
 
   DispatchCacheAutomerge:
     name: Dispatch cache static data auto-merge
@@ -166,97 +206,97 @@ jobs:
           branches: ${{ github.ref_name }}
           tag-prefix: ${{ env.TAG_PREFIX }}
 
-  PublishDockerImagesLinuxBuild:
-    if: |
-      needs.ReleaseDryRun.outputs.RESULT == 'SUCCESS' &&
-      github.ref == 'refs/heads/dev'
-    needs: [ ReleaseDryRun, BuildAndTest, BuildDockerAndQuickTest ]
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        platforms: [ 'linux/amd64', 'linux/arm64' ] # change target platform list if needed
-    name: Build Docker image(s) - Linux - Dev Branch
-    env:
-      VERSION: ${{ needs.ReleaseDryRun.outputs.VERSION }}
-    outputs:
-      VERSION: ${{ needs.ReleaseDryRun.outputs.VERSION }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ inputs.target-sha || github.sha }}
-      - name: Update version metadata
-        run: |
-          DATE=`date +%Y%m%d%H%M%S`
-          sed -i -E "s/VERSION\s*=.*/VERSION = \"${{ env.VERSION }}-${DATE}\"/" app/version.py
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-      - name: Login to Docker Hub
-        uses: docker/login-action@v4
-        with:
-          username: ${{ secrets.DOCKER_HUB_USER }}
-          password: ${{ secrets.DOCKER_HUB_PAT }}
-      - name: Prepare
-        run: |
-          platform=${{ matrix.platforms }}
-          echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
-      - name: Docker meta
-        id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ${{ env.DOCKER_IMAGE }}
-      - name: Build and push by digest
-        id: build
-        uses: docker/build-push-action@v7
-        with:
-          platforms: ${{ matrix.platforms }}
-          labels: ${{ steps.meta.outputs.labels }}
-          outputs: type=image,name=${{ env.DOCKER_IMAGE }},push-by-digest=true,name-canonical=true,push=true
-          file: ./Dockerfile
-          context: ./
-      - name: Export digest
-        run: |
-          mkdir -p /tmp/digests
-          digest="${{ steps.build.outputs.digest }}"
-          touch "/tmp/digests/${digest#sha256:}"
-      - name: Upload digest
-        uses: actions/upload-artifact@v7
-        with:
-          name: digests-${{ env.PLATFORM_PAIR }}
-          path: /tmp/digests/*
-          if-no-files-found: error
-          retention-days: 1
-
-  PublishDockerImagesLinuxMerge:
-    runs-on: ubuntu-latest
-    needs: PublishDockerImagesLinuxBuild
-    name: Merge & Publish Docker image(s) - Linux
-    env:
-      VERSION: ${{ needs.PublishDockerImagesLinuxBuild.outputs.VERSION }}
-    steps:
-      - name: Download digests
-        uses: actions/download-artifact@v8
-        with:
-          path: /tmp/digests
-          pattern: digests-*
-          merge-multiple: true
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-      - name: Docker meta
-        id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ${{ env.DOCKER_IMAGE }}
-      - name: Login to Docker Hub
-        uses: docker/login-action@v4
-        with:
-          username: ${{ secrets.DOCKER_HUB_USER }}
-          password: ${{ secrets.DOCKER_HUB_PAT }}
-      - name: Create manifest list and push
-        working-directory: /tmp/digests
-        run: |
-          docker buildx imagetools create \
-            -t ${{ env.DOCKER_IMAGE }}:dev \
-            -t ${{ env.DOCKER_IMAGE }}:${{ env.VERSION }}-dev \
-            -t ${{ env.DOCKER_IMAGE }}:${{ github.sha }} \
-            $(printf '${{ env.DOCKER_IMAGE }}@sha256:%s ' *)
+#  PublishDockerImagesLinuxBuild:
+#    if: |
+#      needs.ReleaseDryRun.outputs.RESULT == 'SUCCESS' &&
+#      github.ref == 'refs/heads/dev'
+#    needs: [ ReleaseDryRun, BuildAndTest, BuildDockerAndQuickTest ]
+#    runs-on: ubuntu-latest
+#    strategy:
+#      matrix:
+#        platforms: [ 'linux/amd64', 'linux/arm64' ] # change target platform list if needed
+#    name: Build Docker image(s) - Linux - Dev Branch
+#    env:
+#      VERSION: ${{ needs.ReleaseDryRun.outputs.VERSION }}
+#    outputs:
+#      VERSION: ${{ needs.ReleaseDryRun.outputs.VERSION }}
+#    steps:
+#      - name: Checkout code
+#        uses: actions/checkout@v7
+#        with:
+#          ref: ${{ inputs.target-sha || github.sha }}
+#      - name: Update version metadata
+#        run: |
+#          DATE=`date +%Y%m%d%H%M%S`
+#          sed -i -E "s/VERSION\s*=.*/VERSION = \"${{ env.VERSION }}-${DATE}\"/" app/version.py
+#      - name: Set up Docker Buildx
+#        uses: docker/setup-buildx-action@v4
+#      - name: Login to Docker Hub
+#        uses: docker/login-action@v4
+#        with:
+#          username: ${{ secrets.DOCKER_HUB_USER }}
+#          password: ${{ secrets.DOCKER_HUB_PAT }}
+#      - name: Prepare
+#        run: |
+#          platform=${{ matrix.platforms }}
+#          echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
+#      - name: Docker meta
+#        id: meta
+#        uses: docker/metadata-action@v6
+#        with:
+#          images: ${{ env.DOCKER_IMAGE }}
+#      - name: Build and push by digest
+#        id: build
+#        uses: docker/build-push-action@v7
+#        with:
+#          platforms: ${{ matrix.platforms }}
+#          labels: ${{ steps.meta.outputs.labels }}
+#          outputs: type=image,name=${{ env.DOCKER_IMAGE }},push-by-digest=true,name-canonical=true,push=true
+#          file: ./Dockerfile
+#          context: ./
+#      - name: Export digest
+#        run: |
+#          mkdir -p /tmp/digests
+#          digest="${{ steps.build.outputs.digest }}"
+#          touch "/tmp/digests/${digest#sha256:}"
+#      - name: Upload digest
+#        uses: actions/upload-artifact@v7
+#        with:
+#          name: digests-${{ env.PLATFORM_PAIR }}
+#          path: /tmp/digests/*
+#          if-no-files-found: error
+#          retention-days: 1
+#
+#  PublishDockerImagesLinuxMerge:
+#    runs-on: ubuntu-latest
+#    needs: PublishDockerImagesLinuxBuild
+#    name: Merge & Publish Docker image(s) - Linux
+#    env:
+#      VERSION: ${{ needs.PublishDockerImagesLinuxBuild.outputs.VERSION }}
+#    steps:
+#      - name: Download digests
+#        uses: actions/download-artifact@v8
+#        with:
+#          path: /tmp/digests
+#          pattern: digests-*
+#          merge-multiple: true
+#      - name: Set up Docker Buildx
+#        uses: docker/setup-buildx-action@v4
+#      - name: Docker meta
+#        id: meta
+#        uses: docker/metadata-action@v6
+#        with:
+#          images: ${{ env.DOCKER_IMAGE }}
+#      - name: Login to Docker Hub
+#        uses: docker/login-action@v4
+#        with:
+#          username: ${{ secrets.DOCKER_HUB_USER }}
+#          password: ${{ secrets.DOCKER_HUB_PAT }}
+#      - name: Create manifest list and push
+#        working-directory: /tmp/digests
+#        run: |
+#          docker buildx imagetools create \
+#            -t ${{ env.DOCKER_IMAGE }}:dev \
+#            -t ${{ env.DOCKER_IMAGE }}:${{ env.VERSION }}-dev \
+#            -t ${{ env.DOCKER_IMAGE }}:${{ github.sha }} \
+#            $(printf '${{ env.DOCKER_IMAGE }}@sha256:%s ' *)
