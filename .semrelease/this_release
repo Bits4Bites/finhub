@@ -2,28 +2,28 @@
 # Generate its content quickly using the following command:
 #   git log origin..HEAD | grep "^\s" > .semrelease/this_release
 #!VERSION=0.16.0
-- feat(AI): Add task-level reasoning and web search.
-- refactor(AI): Standardize prompt execution execution with reasoning, web search and response JSON schema.
-- refactor(AI): Introduce shared ReferenceSource model for source identity.
-- impr(AI/new-listings): Rebuild feature with deep research and analysis.
-- feat(client/dotnet): Add new-listings API contracts.
-- feat(AI/analyze-dividend-event): Rebuild feature with evidence-backed dividend-event research and analysis.
-- feat(client/dotnet): Add analyze-dividend-event API contracts.
-- feat(AI/spotlight-portfolio): Rebuild feature with structured theme-aware research and analysis.
-- feat(client/dotnet): Add spotlight-portfolio API contracts.
-- feat(AI/build-portfolio): Rebuild feature with structured theme-aware research, analysis and action plan.
-- feat(client/dotnet): Add build-portfolio API contracts.
-- feat(AI/review-portfolio): Rebuild feature with structured theme-aware research, analysis and action plan.
-- feat(client/dotnet): Add review-portfolio API contracts.
-- feat(AI/analyze-ticker): Rebuild feature with structured deep research and analysis.
-- feat(client/dotnet): Add analyze-ticker API contracts.
-- feat(async): Deduplicate identical task starts.
-- fix(AI/new-listings/async): Reject unsupported country before task creation.
-- refactor(proxy): Centralize FinHub proxy mode handler.
-- feat(client/dotnet): Add AI-vendor API contracts.
-- feat(client/dotnet): Add market-index API contracts.
-- feat(client/dotnet): Add stock and precious-metals API contracts.
-- refactor(api): organize models and schemas by domain.
-- feat(client/dotnet): add upcoming market-event API contracts.
-- feat(AI): Add configurable OpenAI request throttling and retries.
-- feat(async): split APIs into start and poll routes.
+- feat(AI): add task-level reasoning and web search
+- refactor(AI): standardize prompt execution execution with reasoning, web search and response JSON schema
+- refactor(AI): introduce shared ReferenceSource model for source identity
+- impr(AI/new-listings): rebuild feature with deep research and analysis
+- feat(client/dotnet): add new-listings API contracts
+- feat(AI/analyze-dividend-event): rebuild feature with evidence-backed dividend-event research and analysis
+- feat(client/dotnet): add analyze-dividend-event API contracts
+- feat(AI/spotlight-portfolio): rebuild feature with structured theme-aware research and analysis
+- feat(client/dotnet): add spotlight-portfolio API contracts
+- feat(AI/build-portfolio): rebuild feature with structured theme-aware research, analysis and action plan
+- feat(client/dotnet): add build-portfolio API contracts
+- feat(AI/review-portfolio): rebuild feature with structured theme-aware research, analysis and action plan
+- feat(client/dotnet): add review-portfolio API contracts
+- feat(AI/analyze-ticker): rebuild feature with structured deep research and analysis
+- feat(client/dotnet): add analyze-ticker API contracts
+- feat(async): deduplicate identical task starts
+- fix(AI/new-listings/async): reject unsupported country before task creation
+- refactor(proxy): centralize FinHub proxy mode handler
+- feat(client/dotnet): add AI-vendor API contracts
+- feat(client/dotnet): add market-index API contracts
+- feat(client/dotnet): add stock and precious-metals API contracts
+- refactor(api): organize models and schemas by domain
+- feat(client/dotnet): add upcoming market-event API contracts
+- feat(AI): add configurable OpenAI request throttling and retries
+- feat(async): split APIs into start and poll routes
