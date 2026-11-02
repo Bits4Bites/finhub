@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from app import config
 from app.main import app
-from app.models.finhub import StockQuote
+from app.models import market_data as models_market_data
 
 client = TestClient(app)
 
@@ -14,8 +14,8 @@ PROTECTED_URL = "/toz/gold/quote"
 CONFIGURED_KEY = "super-secret-key"
 
 
-def _make_stock_quote() -> StockQuote:
-    return StockQuote.model_construct(currency="USD", market_price=2650.0)
+def _make_stock_quote() -> models_market_data.StockQuote:
+    return models_market_data.StockQuote.model_construct(currency="USD", market_price=2650.0)
 
 
 @pytest.fixture

@@ -4,7 +4,7 @@ import json
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from ..utils import json as json_utils
 
@@ -13,68 +13,133 @@ if TYPE_CHECKING:
 
 
 class EventBase(BaseModel):
-    symbol: str
-    exchange: str | None = None
-    company_name: str | None = None
-    timestamp: int = 0
-    date: str | None = None
-    event_category: str | None = None
-    source_name: str | None = None
-    link: str | None = None
+    """Common identity, timing, and provenance fields for market events."""
+
+    symbol: str = Field(description="Security symbol associated with the event.")
+    exchange: str | None = Field(
+        default=None,
+        description="Exchange code associated with the security, when available.",
+    )
+    company_name: str | None = Field(
+        default=None,
+        description="Company or issuer name, when available.",
+    )
+    timestamp: int = Field(
+        default=0,
+        description="Unix timestamp in seconds representing the event date or time.",
+    )
+    timestamp_str: str = Field(
+        description="Human-readable string representation of the event timestamp.",
+    )
+    event_category: str | None = Field(
+        default=None,
+        description="Category identifying the type of market event.",
+    )
+    source_name: str | None = Field(
+        default=None,
+        description="Name of the source that reported the event.",
+    )
+    link: str | None = Field(
+        default=None,
+        description="Source URL containing additional event details.",
+    )
 
 
 class DividendEventAnalysis(EventBase):
+    """Legacy dividend-event metrics and AI assessment attached to an event."""
+
     # ===== base info
     # overview: SymbolOverview = None
-    price: float = 0.0  # current stock price
+    price: float = Field(default=0.0, description="Current security price.")
     # ex_div_date: str | None = None
     # ex_div_date_timestamp: int = 0
-    div_amount: float = 0.0
-    div_yield: float = 0.0  # div_amount / price
+    div_amount: float = Field(default=0.0, description="Dividend amount per share.")
+    div_yield: float = Field(
+        default=0.0,
+        description="Dividend amount divided by the current price.",
+    )
     # ====== analysis result
-    num_samples: int = 0  # number of historical dividend events used for analysis
-    drop_price_min: float = 0.0
-    drop_price_max: float = 0.0
-    recovery_probability: float = 0.0
-    recovery_days_min: int = 0
-    recovery_days_max: int = 0
-    recovery_price_min: float = 0.0
-    recovery_price_max: float = 0.0
+    num_samples: int = Field(
+        default=0,
+        description="Number of historical dividend events used for analysis.",
+    )
+    drop_price_min: float = Field(
+        default=0.0,
+        description="Lower historical estimate of the ex-dividend price drop.",
+    )
+    drop_price_max: float = Field(
+        default=0.0,
+        description="Upper historical estimate of the ex-dividend price drop.",
+    )
+    recovery_probability: float = Field(
+        default=0.0,
+        description="Estimated probability of recovering the reference price.",
+    )
+    recovery_days_min: int = Field(
+        default=0,
+        description="Lower estimate of calendar days to price recovery.",
+    )
+    recovery_days_max: int = Field(
+        default=0,
+        description="Upper estimate of calendar days to price recovery.",
+    )
+    recovery_price_min: float = Field(
+        default=0.0,
+        description="Lower price estimate for recovery.",
+    )
+    recovery_price_max: float = Field(
+        default=0.0,
+        description="Upper price estimate for recovery.",
+    )
     # ===== technical data, used for further analysis with AI
-    beta: float = 0.0
-    rsi14: int = 0
-    avg_dvt_7d: int = 0
-    std_dvt_7d: int = 0
-    avg_volume_30d: int = 0
-    std_volume_30d: int = 0
-    bid_ask_spread: float = 0.0
-    trend_60d: float = 0.0
-    market_trend_60d: float = 0.0
-    peer_trend_60d: float = 0.0
-    # ====== analysis result from AI
-    llm_error: bool = False
-    llm_error_msg: str | None = None
-    # llm_response: str | None = None
-    search_summary: str | None = None
-    strategy: str | None = None
-    reasoning: str | None = None
-    sentiment_score: float = 0.0
-    recovery_probability_adj: float = 0.0
-    recovery_days_adj: str | None = None
-    drop_price_adj: str | None = None
-    recovery_price_adj: str | None = None
-    expected_pl: float = 0.0
-    confidence_level: float = 0.0
-    risk_level: float = 0.0
+    beta: float = Field(default=0.0, description="Security beta used as market-sensitivity context.")
+    rsi14: int = Field(default=0, description="Fourteen-period relative strength index.")
+    avg_dvt_7d: int = Field(
+        default=0,
+        description="Average daily value traded over seven trading days.",
+    )
+    std_dvt_7d: int = Field(
+        default=0,
+        description="Standard deviation of daily value traded over seven trading days.",
+    )
+    avg_volume_30d: int = Field(
+        default=0,
+        description="Average daily volume over 30 trading days.",
+    )
+    std_volume_30d: int = Field(
+        default=0,
+        description="Standard deviation of daily volume over 30 trading days.",
+    )
+    bid_ask_spread: float = Field(default=0.0, description="Observed bid-ask spread.")
+    trend_60d: float = Field(
+        default=0.0,
+        description="Security price trend over 60 trading days.",
+    )
+    market_trend_60d: float = Field(
+        default=0.0,
+        description="Relevant market trend over 60 trading days.",
+    )
+    peer_trend_60d: float = Field(
+        default=0.0,
+        description="Relevant peer-group trend over 60 trading days.",
+    )
 
 
 class UpcomingDividendEvent(EventBase):
-    status: str = ""
-    amount: float = 0.0
-    dividend_yield: float = 0.0
-    currency: str = ""
-    payment_date: str | None
-    analysis: DividendEventAnalysis | None = None
+    """An announced upcoming dividend or distribution event."""
+
+    status: str = Field(default="", description="Source-reported event status.")
+    amount: float = Field(default=0.0, description="Announced dividend amount per share.")
+    dividend_yield: float = Field(
+        default=0.0,
+        description="Announced or derived dividend yield.",
+    )
+    currency: str = Field(default="", description="Currency of the dividend amount.")
+    payment_date: str | None = Field(description="Scheduled payment date, when available.")
+    analysis: DividendEventAnalysis | None = Field(
+        default=None,
+        description="Optional legacy analysis associated with the dividend event.",
+    )
 
 
 def parse_upcoming_dividend_events_from_json(
@@ -89,7 +154,7 @@ def parse_upcoming_dividend_events_from_json(
             symbol=item.get("sym", default_vals.get("sym")),
             exchange=item.get("exchange", default_vals.get("exchange")),
             company_name=item.get("corp", default_vals.get("corp")),
-            date=item.get("date", default_vals.get("date")),
+            timestamp_str=item.get("date", default_vals.get("date")),
             payment_date=item.get("pdate", default_vals.get("pdate")),
             event_category=item.get("cat", default_vals.get("cat", "Dividend")),
             source_name=item.get("src", default_vals.get("src")),
@@ -99,16 +164,23 @@ def parse_upcoming_dividend_events_from_json(
             dividend_yield=item.get("yield", default_vals.get("yield", 0.0)),
             currency=item.get("currency", default_vals.get("currency", "")),
         )
-        # parse yyyy-MM-dd from event.date into event.timestamp
-        event.timestamp = int(datetime.strptime(event.date or "", "%Y-%m-%d").timestamp())
+        event.timestamp = int(datetime.strptime(event.timestamp_str or "", "%Y-%m-%d").timestamp())
         result.append(event)
 
     return result
 
 
 class UpcomingEarningsEvent(EventBase):
-    report_period: str | None = None
-    status: str | None = None
+    """An announced upcoming earnings-report event."""
+
+    report_period: str | None = Field(
+        default=None,
+        description="Financial reporting period covered by the announcement.",
+    )
+    status: str | None = Field(
+        default=None,
+        description="Source-reported event status.",
+    )
 
 
 def parse_upcoming_earnings_events_from_json(
@@ -123,97 +195,14 @@ def parse_upcoming_earnings_events_from_json(
             symbol=item.get("sym", default_vals.get("sym")),
             exchange=item.get("exchange", default_vals.get("exchange")),
             company_name=item.get("corp", default_vals.get("corp")),
-            date=item.get("date", default_vals.get("date")),
+            timestamp_str=item.get("date", default_vals.get("date")),
             event_category="earnings",
             source_name=item.get("src", default_vals.get("src")),
             link=item.get("link", default_vals.get("link")),
             report_period=item.get("report_period", default_vals.get("report_period")),
             status=item.get("status", default_vals.get("status")),
         )
-        # parse yyyy-MM-dd from event.date into event.timestamp
-        event.timestamp = int(datetime.strptime(event.date or "", "%Y-%m-%d").timestamp())
-        result.append(event)
-
-    return result
-
-
-class ListingOutlook(BaseModel):
-    direction: str | None = None
-    reason: str | None = None
-    confidence: int = 0
-
-
-class ListingAnalysis(BaseModel):
-    status: str | None = None
-    data_quality: str | None = None
-    search_findings: str | None = None
-    stance: str | None = None
-    catalyst: str | None = None
-    risks: list[str] | None = None
-    outlook: dict[str, ListingOutlook] | None = None
-
-
-def parse_listing_analysis_from_json(json_str: str, default_vals: dict[str, Any] = None) -> dict[str, ListingAnalysis]:
-    default_vals = default_vals or {}
-    json_str = json_utils.normalize_json_str(json_str)
-    analysis = json.loads(json_str)
-    result = {}
-    for k, v in analysis.items():
-        result[k] = ListingAnalysis(
-            status=v.get("status", default_vals.get("status")),
-            data_quality=v.get("data_quality", default_vals.get("data_quality")),
-            search_findings=v.get("search_findings", default_vals.get("search_findings")),
-            stance=v.get("stance", default_vals.get("stance")),
-            catalyst=v.get("catalyst", default_vals.get("catalyst")),
-            risks=v.get("risks", default_vals.get("risks")),
-        )
-        if "outlook" in v:
-            result[k].outlook = {}
-            for period in ("d1", "w1", "w2", "m1"):
-                if period in v["outlook"]:
-                    result[k].outlook[period] = ListingOutlook(
-                        direction=v["outlook"][period].get("dir"),
-                        reason=v["outlook"][period].get("reason"),
-                        confidence=v["outlook"][period].get("confidence"),
-                    )
-
-    return result
-
-
-class ListingEvent(EventBase):
-    sector: str | None = None
-    industry: str | None = None
-    principal_activities: str | None = None
-    price: float = 0.0
-    currency: str = ""
-    capital: int = 0
-    public_offer_close_date: str | None = None
-    analysis: ListingAnalysis | None = None
-
-
-def parse_new_listing_events_from_json(json_str: str, default_vals: dict[str, Any] = None) -> list[ListingEvent]:
-    default_vals = default_vals or {}
-    json_str = json_utils.normalize_json_str(json_str)
-    events = json.loads(json_str)
-    result = []
-    for item in events:
-        event = ListingEvent(
-            symbol=item.get("symbol", default_vals.get("symbol")),
-            exchange=item.get("exchange", default_vals.get("exchange")),
-            company_name=item.get("company", default_vals.get("company")),
-            date=item.get("date", default_vals.get("date")),
-            event_category="listing",
-            source_name=item.get("src", default_vals.get("src")),
-            link=item.get("link", default_vals.get("link")),
-            sector=item.get("sector", default_vals.get("sector")),
-            principal_activities=item.get("principal_activities", default_vals.get("principal_activities")),
-            price=item.get("price", default_vals.get("price", 0.0)),
-            currency=item.get("currency", default_vals.get("currency", "")),
-            capital=int(item.get("capital", default_vals.get("capital", 0))),
-            public_offer_close_date=item.get("public_offer_close_date", default_vals.get("public_offer_close_date")),
-        )
-        # parse yyyy-MM-dd from event.date into event.timestamp
-        event.timestamp = int(datetime.strptime(event.date or "", "%Y-%m-%d").timestamp())
+        event.timestamp = int(datetime.strptime(event.timestamp_str or "", "%Y-%m-%d").timestamp())
         result.append(event)
 
     return result

@@ -1,947 +1,540 @@
-"""Unit tests for app.services.msai_* modules."""
+"""Tests for the staged ticker-analysis service."""
 
 import asyncio
 from unittest.mock import AsyncMock, patch
 
-from app.models.ai import LLMResponse
-from app.models.finhub import HoldingTicker
-
-# ===========================================================================
-# Tests for msai_analyze_ticker
-# ===========================================================================
-
-
-class TestAiAnalyzeTicker:
-    """Tests for ai_analyze_ticker function."""
-
-    @patch("app.services.msai_analyze_ticker.cache.get", new_callable=AsyncMock)
-    @patch("app.services.msai_analyze_ticker.cache.generate_key", return_value="cache-key")
-    @patch("app.services.msai_analyze_ticker.yf.Ticker")
-    def test_returns_cached_result(self, mock_ticker_cls, mock_generate_key, mock_cache_get):
-        from app.models.ai import AnalysisResult
-        from app.services.msai_analyze_ticker import ai_analyze_ticker
-
-        cached_result = AnalysisResult(analysis="Cached analysis")
-        mock_cache_get.return_value = cached_result
-
-        result = asyncio.run(ai_analyze_ticker("NASDAQ:AAPL", intent="Growth outlook"))
-
-        assert result is cached_result
-        mock_generate_key.assert_called_once_with(
-            "ticker-analysis",
-            "NASDAQ:AAPL",
-            "Growth outlook",
-        )
-        mock_cache_get.assert_awaited_once_with("cache-key")
-        mock_ticker_cls.assert_not_called()
-
-    @patch("app.utils.conv.to_yf_symbol_format", return_value="AAPL")
-    @patch("app.services.msai_analyze_ticker.yf.Ticker")
-    def test_returns_none_for_unsupported_quote_type(self, mock_ticker_cls, mock_conv):
-        from app.services.msai_analyze_ticker import ai_analyze_ticker
-
-        mock_ticker_cls.return_value.info = {"quoteType": "CURRENCY", "country": "US"}
-        result = asyncio.run(ai_analyze_ticker("AAPL"))
-        assert result is None
-
-    @patch("app.services.msai_analyze_ticker.ai_helper.ai_exec_task", new_callable=AsyncMock)
-    @patch("app.utils.conv.to_yf_symbol_format", return_value="AAPL")
-    @patch("app.services.msai_analyze_ticker.yf.Ticker")
-    def test_returns_error_when_build_prompt_fails(self, mock_ticker_cls, mock_conv, mock_ai_exec):
-        from app.services.msai_analyze_ticker import ai_analyze_ticker
-
-        mock_ticker_cls.return_value.info = {
-            "quoteType": "EQUITY",
-            "country": "US",
-            "sector": "Technology",
-            "industry": "Consumer Electronics",
-            "longName": "Apple Inc.",
-            "fullExchangeName": "NASDAQ",
-            "exchange": "NMS",
-            "symbol": "AAPL",
-            "marketCap": 3_000_000_000_000,
-        }
-        mock_ai_exec.return_value = LLMResponse(is_error=True, error_msg="LLM timeout")
-
-        result = asyncio.run(ai_analyze_ticker("AAPL"))
-        assert result is not None
-        assert result.llm_error is True
-        assert "LLM timeout" in result.llm_error_msg
-
-    @patch("app.services.msai_analyze_ticker.ai_helper.ai_exec_task", new_callable=AsyncMock)
-    @patch("app.utils.conv.to_yf_symbol_format", return_value="AAPL")
-    @patch("app.services.msai_analyze_ticker.yf.Ticker")
-    def test_returns_error_when_exec_fails(self, mock_ticker_cls, mock_conv, mock_ai_exec):
-        from app.services.msai_analyze_ticker import ai_analyze_ticker
-
-        mock_ticker_cls.return_value.info = {
-            "quoteType": "EQUITY",
-            "country": "US",
-            "sector": "Technology",
-            "industry": "Consumer Electronics",
-            "longName": "Apple Inc.",
-            "fullExchangeName": "NASDAQ",
-            "exchange": "NMS",
-            "symbol": "AAPL",
-            "marketCap": 3_000_000_000_000,
-        }
-        mock_ai_exec.side_effect = [
-            LLMResponse(completion="Generated prompt"),
-            LLMResponse(is_error=True, error_msg="Exec failed"),
-        ]
-
-        result = asyncio.run(ai_analyze_ticker("AAPL"))
-        assert result is not None
-        assert result.llm_error is True
-        assert "Exec failed" in result.llm_error_msg
-
-    @patch("app.services.msai_analyze_ticker.ai_helper.ai_exec_task", new_callable=AsyncMock)
-    @patch("app.utils.conv.to_yf_symbol_format", return_value="AAPL")
-    @patch("app.services.msai_analyze_ticker.yf.Ticker")
-    def test_returns_analysis_on_success(self, mock_ticker_cls, mock_conv, mock_ai_exec):
-        from app.services.msai_analyze_ticker import ai_analyze_ticker
-
-        mock_ticker_cls.return_value.info = {
-            "quoteType": "EQUITY",
-            "country": "US",
-            "sector": "Technology",
-            "industry": "Consumer Electronics",
-            "longName": "Apple Inc.",
-            "fullExchangeName": "NASDAQ",
-            "exchange": "NMS",
-            "symbol": "AAPL",
-            "marketCap": 3_000_000_000_000,
-        }
-        mock_ai_exec.side_effect = [
-            LLMResponse(completion="Generated prompt"),
-            LLMResponse(completion="AAPL looks bullish..."),
-        ]
-
-        with (
-            patch(
-                "app.services.msai_analyze_ticker.cache.get",
-                new_callable=AsyncMock,
-                return_value=None,
-            ),
-            patch(
-                "app.services.msai_analyze_ticker.cache.set",
-                new_callable=AsyncMock,
-                return_value=True,
-            ) as mock_cache_set,
-            patch(
-                "app.services.msai_analyze_ticker.cache.generate_key",
-                return_value="cache-key",
-            ),
-        ):
-            result = asyncio.run(ai_analyze_ticker("AAPL"))
-
-        assert result is not None
-        assert result.llm_error is False
-        assert result.analysis == "AAPL looks bullish..."
-        mock_cache_set.assert_awaited_once_with("cache-key", result, ttl=72 * 60 * 60)
-
-
-# ===========================================================================
-# Tests for msai_build_portfolio
-# ===========================================================================
-
-
-class TestAiBuildPortfolio:
-    """Tests for ai_build_portfolio function."""
-
-    @patch("app.services.msai_build_portfolio.cache.get", new_callable=AsyncMock)
-    @patch("app.services.msai_build_portfolio.cache.generate_key", return_value="cache-key")
-    @patch("app.services.msai_build_portfolio.ai_helper.ai_exec_task", new_callable=AsyncMock)
-    def test_returns_cached_result(self, mock_ai_exec, mock_generate_key, mock_cache_get):
-        from app.models.ai import AnalyzePortfolioResult
-        from app.services.msai_build_portfolio import ai_build_portfolio
-
-        positions = [
-            HoldingTicker(
-                ticker="MSFT",
-                num_shares=5,
-                avg_price=300,
-                market_price=450,
-                target_allocation=0.4,
-                tags="technology",
-            ),
-            HoldingTicker(
-                ticker="AAPL",
-                num_shares=10,
-                avg_price=125,
-                market_price=200,
-                target_allocation=0.6,
-                tags="growth",
-            ),
-        ]
-        cached_result = AnalyzePortfolioResult(analysis="Cached portfolio")
-        mock_cache_get.return_value = cached_result
-
-        result = asyncio.run(
-            ai_build_portfolio(
-                existing_positions=positions,
-                country="US",
-                investor_theme="Growth focused",
-            )
-        )
-
-        assert result is cached_result
-        mock_generate_key.assert_called_once_with(
-            "build-portfolio-analysis",
-            "US",
-            "Growth focused",
-            "AAPL",
-            "10.0",
-            "125.0",
-            "0.6",
-            "MSFT",
-            "5.0",
-            "300.0",
-            "0.4",
-        )
-        mock_cache_get.assert_awaited_once_with("cache-key")
-        mock_ai_exec.assert_not_awaited()
-        assert [position.ticker for position in positions] == ["MSFT", "AAPL"]
-
-    @patch("app.services.msai_build_portfolio.ai_helper.ai_exec_task", new_callable=AsyncMock)
-    def test_returns_error_when_build_prompt_fails(self, mock_ai_exec):
-        from app.services.msai_build_portfolio import ai_build_portfolio
-
-        mock_ai_exec.return_value = LLMResponse(is_error=True, error_msg="Build failed")
-
-        result = asyncio.run(ai_build_portfolio(country="AU"))
-        assert result is not None
-        assert result.llm_error is True
-        assert "Build failed" in result.llm_error_msg
-
-    @patch("app.services.msai_build_portfolio.ai_helper.ai_exec_task", new_callable=AsyncMock)
-    def test_returns_error_when_exec_fails(self, mock_ai_exec):
-        from app.services.msai_build_portfolio import ai_build_portfolio
-
-        mock_ai_exec.side_effect = [
-            LLMResponse(completion="Generated prompt"),
-            LLMResponse(is_error=True, error_msg="Exec failed"),
-        ]
-
-        result = asyncio.run(ai_build_portfolio(country="US"))
-        assert result is not None
-        assert result.llm_error is True
-        assert "Exec failed" in result.llm_error_msg
-
-    @patch("app.services.msai_build_portfolio.ai_helper.ai_exec_task", new_callable=AsyncMock)
-    def test_returns_analysis_on_success(self, mock_ai_exec):
-        from app.services.msai_build_portfolio import ai_build_portfolio
-
-        mock_ai_exec.side_effect = [
-            LLMResponse(completion="Generated prompt"),
-            LLMResponse(completion="Recommended portfolio: ..."),
-        ]
-
-        with (
-            patch(
-                "app.services.msai_build_portfolio.cache.get",
-                new_callable=AsyncMock,
-                return_value=None,
-            ),
-            patch(
-                "app.services.msai_build_portfolio.cache.set",
-                new_callable=AsyncMock,
-                return_value=True,
-            ) as mock_cache_set,
-            patch(
-                "app.services.msai_build_portfolio.cache.generate_key",
-                return_value="cache-key",
-            ),
-        ):
-            result = asyncio.run(ai_build_portfolio(country="AU"))
-
-        assert result is not None
-        assert result.llm_error is False
-        assert result.analysis == "Recommended portfolio: ..."
-        mock_cache_set.assert_awaited_once_with("cache-key", result, ttl=72 * 60 * 60)
-
-    @patch("app.services.msai_build_portfolio.ai_helper.ai_exec_task", new_callable=AsyncMock)
-    def test_includes_existing_positions_in_prompt(self, mock_ai_exec):
-        from app.services.msai_build_portfolio import ai_build_portfolio
-
-        mock_ai_exec.side_effect = [
-            LLMResponse(completion="Generated prompt"),
-            LLMResponse(completion="Portfolio result"),
-        ]
-
-        positions = [
-            HoldingTicker(ticker="AAPL", num_shares=10, market_price=150.0, tags="growth"),
-            HoldingTicker(ticker="MSFT", num_shares=5, market_price=400.0),
-        ]
-
-        result = asyncio.run(ai_build_portfolio(country="US", existing_positions=positions))
-        assert result is not None
-        assert result.analysis == "Portfolio result"
-
-        # Verify the build prompt call included holdings info
-        first_call_args = mock_ai_exec.call_args_list[0]
-        prompt_input = first_call_args[0][1]  # second positional arg
-        assert "AAPL" in prompt_input
-        assert "MSFT" in prompt_input
-        assert "(growth)" in prompt_input
-
-    @patch("app.services.msai_build_portfolio.ai_helper.ai_exec_task", new_callable=AsyncMock)
-    def test_empty_existing_positions_treated_as_none(self, mock_ai_exec):
-        from app.services.msai_build_portfolio import ai_build_portfolio
-
-        mock_ai_exec.side_effect = [
-            LLMResponse(completion="Generated prompt"),
-            LLMResponse(completion="Portfolio result"),
-        ]
-
-        result = asyncio.run(ai_build_portfolio(country="AU", existing_positions=[]))
-        assert result is not None
-        assert result.analysis == "Portfolio result"
-
-        # Verify no holdings info in prompt
-        first_call_args = mock_ai_exec.call_args_list[0]
-        prompt_input = first_call_args[0][1]
-        assert "Current holdings" not in prompt_input
-
-
-# ===========================================================================
-# Tests for msai_review_portfolio
-# ===========================================================================
-
-
-class TestAiSpotlightPortfolio:
-    """Tests for ai_spotlight_portfolio function."""
-
-    @patch("app.services.msai_spotlight_portfolio.cache.get", new_callable=AsyncMock)
-    @patch("app.services.msai_spotlight_portfolio.cache.generate_key", return_value="cache-key")
-    @patch("app.services.msai_spotlight_portfolio.ai_helper.ai_exec_task", new_callable=AsyncMock)
-    def test_returns_cached_result(self, mock_ai_exec, mock_generate_key, mock_cache_get):
-        from app.models.ai import AnalysisResult
-        from app.services.msai_spotlight_portfolio import ai_spotlight_portfolio
-
-        portfolio = [
-            HoldingTicker(
-                ticker="MSFT",
-                num_shares=5,
-                avg_price=300,
-                market_price=450,
-                target_allocation=0.4,
-                tags="technology",
-            ),
-            HoldingTicker(
-                ticker="AAPL",
-                num_shares=10,
-                avg_price=125,
-                market_price=200,
-                target_allocation=0.6,
-                tags="growth",
-            ),
-        ]
-        cached_result = AnalysisResult(analysis="Cached spotlight")
-        mock_cache_get.return_value = cached_result
-
-        result = asyncio.run(
-            ai_spotlight_portfolio(
-                portfolio=portfolio,
-                country="US",
-                investor_theme="Growth focused",
-            )
-        )
-
-        assert result is cached_result
-        mock_generate_key.assert_called_once_with(
-            "spotlight-portfolio-analysis",
-            "US",
-            "Growth focused",
-            "AAPL",
-            "10.0",
-            "125.0",
-            "0.6",
-            "MSFT",
-            "5.0",
-            "300.0",
-            "0.4",
-        )
-        mock_cache_get.assert_awaited_once_with("cache-key")
-        mock_ai_exec.assert_not_awaited()
-        assert [position.ticker for position in portfolio] == ["MSFT", "AAPL"]
-
-    def test_returns_skipped_analysis_for_empty_portfolio(self):
-        from app.services.msai_spotlight_portfolio import ai_spotlight_portfolio
-
-        result = asyncio.run(ai_spotlight_portfolio(portfolio=[], country="AU"))
-        assert result.analysis == "SUMMARY: No holdings, spotlight analysis skipped."
-
-    @patch("app.services.msai_spotlight_portfolio.ai_helper.ai_exec_task", new_callable=AsyncMock)
-    def test_uses_two_step_prompt_flow(self, mock_ai_exec):
-        from app.services.msai_spotlight_portfolio import ai_spotlight_portfolio
-
-        mock_ai_exec.side_effect = [
-            LLMResponse(completion="Generated spotlight prompt"),
-            LLMResponse(completion="Immediate risks and actions"),
-        ]
-        portfolio = [HoldingTicker(ticker="AAPL", num_shares=20, avg_price=150.0, market_price=190.0, tags="growth")]
-
-        with (
-            patch(
-                "app.services.msai_spotlight_portfolio.cache.get",
-                new_callable=AsyncMock,
-                return_value=None,
-            ),
-            patch(
-                "app.services.msai_spotlight_portfolio.cache.set",
-                new_callable=AsyncMock,
-                return_value=True,
-            ) as mock_cache_set,
-            patch(
-                "app.services.msai_spotlight_portfolio.cache.generate_key",
-                return_value="cache-key",
-            ),
-        ):
-            result = asyncio.run(ai_spotlight_portfolio(portfolio=portfolio, country="US"))
-
-        assert result is not None
-        assert result.analysis == "Immediate risks and actions"
-        assert mock_ai_exec.call_count == 2
-        assert mock_ai_exec.call_args_list[0].args[0] == "SPOTLIGHT_PORTFOLIO_BUILD_PROMPT"
-        assert "avg price $150.00, market value $3800.00" in mock_ai_exec.call_args_list[0].args[1]
-        assert mock_ai_exec.call_args_list[1].args[0] == "SPOTLIGHT_PORTFOLIO_EXEC"
-        mock_cache_set.assert_awaited_once_with("cache-key", result, ttl=72 * 60 * 60)
-
-
-class TestAiReviewPortfolio:
-    """Tests for ai_review_portfolio function."""
-
-    def setup_method(self):
-        from app.utils import cache
-
-        asyncio.run(cache.clear())
-
-    @patch("app.services.msai_review_portfolio.cache.get", new_callable=AsyncMock)
-    @patch("app.services.msai_review_portfolio.cache.generate_key", return_value="cache-key")
-    @patch("app.services.msai_review_portfolio.ai_helper.ai_exec_task", new_callable=AsyncMock)
-    def test_returns_cached_result(self, mock_ai_exec, mock_generate_key, mock_cache_get):
-        from app.models.ai import AnalyzePortfolioResult
-        from app.services.msai_review_portfolio import ai_review_portfolio
-
-        portfolio = [
-            HoldingTicker(
-                ticker="MSFT",
-                num_shares=5,
-                avg_price=300,
-                market_price=450,
-                target_allocation=0.4,
-                tags="technology",
-            ),
-            HoldingTicker(
-                ticker="AAPL",
-                num_shares=10,
-                avg_price=125,
-                market_price=200,
-                target_allocation=0.6,
-                tags="growth",
-            ),
-        ]
-        cached_result = AnalyzePortfolioResult(analysis="Cached review")
-        mock_cache_get.return_value = cached_result
-
-        result = asyncio.run(
-            ai_review_portfolio(
-                portfolio=portfolio,
-                country="US",
-                investor_theme="Growth focused",
-                rebalance_plan=True,
-            )
-        )
-
-        assert result is cached_result
-        mock_generate_key.assert_called_once_with(
-            "review-portfolio-analysis",
-            "US",
-            "Growth focused",
-            "True",
-            "AAPL",
-            "10.0",
-            "125.0",
-            "0.6",
-            "MSFT",
-            "5.0",
-            "300.0",
-            "0.4",
-        )
-        mock_cache_get.assert_awaited_once_with("cache-key")
-        mock_ai_exec.assert_not_awaited()
-        assert [position.ticker for position in portfolio] == ["MSFT", "AAPL"]
-
-    def test_returns_none_for_empty_portfolio(self):
-        from app.services.msai_review_portfolio import ai_review_portfolio
-
-        result = asyncio.run(ai_review_portfolio(portfolio=[], country="AU"))
-        assert result is None
-
-    @patch("app.services.msai_review_portfolio.ai_helper.ai_exec_task", new_callable=AsyncMock)
-    def test_returns_error_when_build_prompt_fails(self, mock_ai_exec):
-        from app.services.msai_review_portfolio import ai_review_portfolio
-
-        mock_ai_exec.return_value = LLMResponse(is_error=True, error_msg="Build failed")
-        portfolio = [HoldingTicker(ticker="CBA.AX", num_shares=100, market_price=120.0)]
-
-        result = asyncio.run(ai_review_portfolio(portfolio=portfolio, country="AU"))
-        assert result is not None
-        assert result.llm_error is True
-        assert "Build failed" in result.llm_error_msg
-
-    @patch("app.services.msai_review_portfolio.ai_helper.ai_exec_task", new_callable=AsyncMock)
-    def test_returns_error_when_exec_fails(self, mock_ai_exec):
-        from app.services.msai_review_portfolio import ai_review_portfolio
-
-        mock_ai_exec.side_effect = [
-            LLMResponse(completion="Generated prompt"),
-            LLMResponse(is_error=True, error_msg="Exec failed"),
-        ]
-        portfolio = [HoldingTicker(ticker="CBA.AX", num_shares=100, market_price=120.0)]
-
-        result = asyncio.run(ai_review_portfolio(portfolio=portfolio, country="AU"))
-        assert result is not None
-        assert result.llm_error is True
-        assert "Exec failed" in result.llm_error_msg
-
-    @patch("app.services.msai_review_portfolio.ai_helper.ai_exec_task", new_callable=AsyncMock)
-    def test_returns_analysis_on_success(self, mock_ai_exec):
-        from app.services.msai_review_portfolio import ai_review_portfolio
-
-        mock_ai_exec.side_effect = [
-            LLMResponse(completion="Generated prompt"),
-            LLMResponse(completion="Portfolio review: well diversified...\n\nREBALANCE_NEEDED: NO"),
-        ]
-        portfolio = [
-            HoldingTicker(ticker="CBA.AX", num_shares=100, market_price=120.0),
-            HoldingTicker(ticker="BHP.AX", num_shares=50, market_price=45.0),
-        ]
-
-        with (
-            patch(
-                "app.services.msai_review_portfolio.cache.get",
-                new_callable=AsyncMock,
-                return_value=None,
-            ),
-            patch(
-                "app.services.msai_review_portfolio.cache.set",
-                new_callable=AsyncMock,
-                return_value=True,
-            ) as mock_cache_set,
-            patch(
-                "app.services.msai_review_portfolio.cache.generate_key",
-                return_value="cache-key",
-            ),
-        ):
-            result = asyncio.run(ai_review_portfolio(portfolio=portfolio, country="AU"))
-
-        assert result is not None
-        assert result.llm_error is False
-        assert result.analysis == "Portfolio review: well diversified..."
-        assert result.rebalance_plan == ""
-        assert mock_ai_exec.call_count == 2
-        mock_cache_set.assert_awaited_once_with("cache-key", result, ttl=72 * 60 * 60)
-
-    @patch("app.services.msai_review_portfolio.ai_helper.ai_exec_task", new_callable=AsyncMock)
-    def test_generates_rebalance_plan_with_low_cost_preparation_and_premium_execution(self, mock_ai_exec):
-        from app.services.msai_review_portfolio import ai_review_portfolio
-
-        mock_ai_exec.side_effect = [
-            LLMResponse(completion="Generated review prompt"),
-            LLMResponse(completion="Premium portfolio review\n\nREBALANCE_NEEDED: YES"),
-            LLMResponse(completion="Low-cost review summary"),
-            LLMResponse(completion="Generated rebalance prompt"),
-            LLMResponse(completion="Premium rebalance plan"),
-        ]
-        portfolio = [
-            HoldingTicker(
-                ticker="CBA.AX",
-                num_shares=100,
-                avg_price=100.0,
-                market_price=120.0,
-                tags="core",
-            )
-        ]
-
-        result = asyncio.run(
-            ai_review_portfolio(
-                portfolio=portfolio,
-                country="AU",
-                rebalance_plan=True,
-            )
-        )
-
-        assert result is not None
-        assert result.llm_error is False
-        assert result.analysis == "Premium portfolio review"
-        assert result.rebalance_plan == "Premium rebalance plan"
-        assert [call.args[0] for call in mock_ai_exec.call_args_list] == [
-            "REVIEW_PORTFOLIO_BUILD_PROMPT",
-            "REVIEW_PORTFOLIO_EXEC",
-            "REVIEW_PORTFOLIO_SUMMARIZE",
-            "REVIEW_PORTFOLIO_REBALANCE_BUILD_PROMPT",
-            "REVIEW_PORTFOLIO_REBALANCE_EXEC",
-        ]
-        assert "Premium portfolio review" in mock_ai_exec.call_args_list[2].args[1]
-        assert "REBALANCE_NEEDED" not in mock_ai_exec.call_args_list[2].args[1]
-        assert "Premium portfolio review" not in mock_ai_exec.call_args_list[3].args[1]
-        assert "Low-cost review summary" in mock_ai_exec.call_args_list[3].args[1]
-        assert mock_ai_exec.call_args_list[4].args[1] == "Generated rebalance prompt"
-
-    @patch("app.services.msai_review_portfolio.ai_helper.ai_exec_task", new_callable=AsyncMock)
-    def test_skips_rebalance_pipeline_when_major_rebalance_is_not_needed(self, mock_ai_exec):
-        from app.services.msai_review_portfolio import ai_review_portfolio
-
-        portfolio_review = "Portfolio is healthy. Continue monitoring.\n\nREBALANCE_NEEDED: NO"
-        mock_ai_exec.side_effect = [
-            LLMResponse(completion="Generated review prompt"),
-            LLMResponse(completion=portfolio_review),
-        ]
-        portfolio = [HoldingTicker(ticker="CBA.AX", num_shares=100, market_price=120.0)]
-
-        result = asyncio.run(
-            ai_review_portfolio(
-                portfolio=portfolio,
-                country="AU",
-                rebalance_plan=True,
-            )
-        )
-
-        assert result is not None
-        assert result.llm_error is False
-        assert result.analysis == "Portfolio is healthy. Continue monitoring."
-        assert result.rebalance_plan == "No rebalance needed"
-        assert mock_ai_exec.call_count == 2
-        assert "REBALANCE_NEEDED: YES" in mock_ai_exec.call_args_list[0].args[1]
-        assert "REBALANCE_NEEDED: NO" in mock_ai_exec.call_args_list[0].args[1]
-
-    @patch("app.services.msai_review_portfolio.ai_helper.ai_exec_task", new_callable=AsyncMock)
-    def test_accepts_markdown_wrapped_rebalance_flag(self, mock_ai_exec):
-        from app.services.msai_review_portfolio import ai_review_portfolio
-
-        mock_ai_exec.side_effect = [
-            LLMResponse(completion="Generated review prompt"),
-            LLMResponse(completion="Portfolio is healthy.\n\n**REBALANCE_NEEDED: NO**"),
-        ]
-        portfolio = [HoldingTicker(ticker="CBA.AX", num_shares=100, market_price=120.0)]
-
-        result = asyncio.run(
-            ai_review_portfolio(
-                portfolio=portfolio,
-                country="AU",
-                rebalance_plan=True,
-            )
-        )
-
-        assert result is not None
-        assert result.analysis == "Portfolio is healthy."
-        assert result.rebalance_plan == "No rebalance needed"
-        assert result.llm_error is False
-        assert mock_ai_exec.call_count == 2
-
-    @patch("app.services.msai_review_portfolio.ai_helper.ai_exec_task", new_callable=AsyncMock)
-    def test_returns_error_when_rebalance_flag_is_missing(self, mock_ai_exec):
-        from app.services.msai_review_portfolio import ai_review_portfolio
-
-        mock_ai_exec.side_effect = [
-            LLMResponse(completion="Generated review prompt"),
-            LLMResponse(completion="Premium portfolio review without the required flag"),
-        ]
-        portfolio = [HoldingTicker(ticker="CBA.AX", num_shares=100, market_price=120.0)]
-
-        result = asyncio.run(
-            ai_review_portfolio(
-                portfolio=portfolio,
-                country="AU",
-                rebalance_plan=True,
-            )
-        )
-
-        assert result is not None
-        assert result.analysis == "Premium portfolio review without the required flag"
-        assert result.rebalance_plan == ""
-        assert result.llm_error is True
-        assert "REBALANCE_NEEDED" in result.llm_error_msg
-        assert mock_ai_exec.call_count == 2
-
-    @patch("app.services.msai_review_portfolio.ai_helper.ai_exec_task", new_callable=AsyncMock)
-    def test_preserves_review_when_rebalance_summary_fails(self, mock_ai_exec):
-        from app.services.msai_review_portfolio import ai_review_portfolio
-
-        mock_ai_exec.side_effect = [
-            LLMResponse(completion="Generated review prompt"),
-            LLMResponse(completion="Premium portfolio review\n\nREBALANCE_NEEDED: YES"),
-            LLMResponse(is_error=True, error_msg="Summary failed"),
-        ]
-        portfolio = [HoldingTicker(ticker="CBA.AX", num_shares=100, market_price=120.0)]
-
-        result = asyncio.run(
-            ai_review_portfolio(
-                portfolio=portfolio,
-                country="AU",
-                rebalance_plan=True,
-            )
-        )
-
-        assert result is not None
-        assert result.analysis == "Premium portfolio review"
-        assert result.rebalance_plan == ""
-        assert result.llm_error is True
-        assert result.llm_error_msg == "Summary failed"
-
-    @patch("app.services.msai_review_portfolio.ai_helper.ai_exec_task", new_callable=AsyncMock)
-    def test_preserves_review_when_rebalance_prompt_build_fails(self, mock_ai_exec):
-        from app.services.msai_review_portfolio import ai_review_portfolio
-
-        mock_ai_exec.side_effect = [
-            LLMResponse(completion="Generated review prompt"),
-            LLMResponse(completion="Premium portfolio review\n\nREBALANCE_NEEDED: YES"),
-            LLMResponse(completion="Low-cost review summary"),
-            LLMResponse(is_error=True, error_msg="Rebalance prompt failed"),
-        ]
-        portfolio = [HoldingTicker(ticker="CBA.AX", num_shares=100, market_price=120.0)]
-
-        result = asyncio.run(
-            ai_review_portfolio(
-                portfolio=portfolio,
-                country="AU",
-                rebalance_plan=True,
-            )
-        )
-
-        assert result is not None
-        assert result.analysis == "Premium portfolio review"
-        assert result.rebalance_plan == ""
-        assert result.llm_error is True
-        assert result.llm_error_msg == "Rebalance prompt failed"
-
-    @patch("app.services.msai_review_portfolio.ai_helper.ai_exec_task", new_callable=AsyncMock)
-    def test_preserves_review_when_rebalance_execution_fails(self, mock_ai_exec):
-        from app.services.msai_review_portfolio import ai_review_portfolio
-
-        mock_ai_exec.side_effect = [
-            LLMResponse(completion="Generated review prompt"),
-            LLMResponse(completion="Premium portfolio review\n\nREBALANCE_NEEDED: YES"),
-            LLMResponse(completion="Low-cost review summary"),
-            LLMResponse(completion="Generated rebalance prompt"),
-            LLMResponse(is_error=True, error_msg="Rebalance execution failed"),
-        ]
-        portfolio = [HoldingTicker(ticker="CBA.AX", num_shares=100, market_price=120.0)]
-
-        result = asyncio.run(
-            ai_review_portfolio(
-                portfolio=portfolio,
-                country="AU",
-                rebalance_plan=True,
-            )
-        )
-
-        assert result is not None
-        assert result.analysis == "Premium portfolio review"
-        assert result.rebalance_plan == ""
-        assert result.llm_error is True
-        assert result.llm_error_msg == "Rebalance execution failed"
-
-    @patch("app.services.msai_review_portfolio.ai_helper.ai_exec_task", new_callable=AsyncMock)
-    def test_includes_portfolio_positions_in_prompt(self, mock_ai_exec):
-        from app.services.msai_review_portfolio import ai_review_portfolio
-
-        mock_ai_exec.side_effect = [
-            LLMResponse(completion="Generated prompt"),
-            LLMResponse(completion="Review result"),
-        ]
-        portfolio = [HoldingTicker(ticker="AAPL", num_shares=20, market_price=190.0, tags="growth")]
-
-        asyncio.run(ai_review_portfolio(portfolio=portfolio, country="US"))
-
-        first_call_args = mock_ai_exec.call_args_list[0]
-        prompt_input = first_call_args[0][1]
-        assert "AAPL" in prompt_input
-        assert "20" in prompt_input
-        assert "(growth)" in prompt_input
-
-
-# ===========================================================================
-# Tests for msai_analyze_div_event
-# ===========================================================================
-
-
-class TestAiAnalyzeDivEvent:
-    """Tests for ai_analyze_div_event function."""
-
-    @patch("app.services.msai_analyze_div_event.cache.get", new_callable=AsyncMock)
-    @patch("app.services.msai_analyze_div_event.cache.generate_key", return_value="cache-key")
-    @patch("app.services.msai_analyze_div_event.yf.Ticker")
-    def test_returns_cached_result(self, mock_ticker_cls, mock_generate_key, mock_cache_get):
-        from app.models.event import DividendEventAnalysis
-        from app.services.msai_analyze_div_event import ai_analyze_div_event
-
-        cached_result = DividendEventAnalysis(symbol="CBA.AX", price=120.0, strategy="Dividend Capture")
-        mock_cache_get.return_value = cached_result
-
-        result = asyncio.run(
-            ai_analyze_div_event(
-                symbol="ASX:CBA",
-                ex_date="2025-08-15",
-                div_amount=2.50,
-                intent="Capture income",
-            )
-        )
-
-        assert result is cached_result
-        mock_generate_key.assert_called_once_with(
-            "dividend-event-analysis",
-            "ASX:CBA",
-            "2025-08-15",
-            "2.5",
-            "Capture income",
-        )
-        mock_cache_get.assert_awaited_once_with("cache-key")
-        mock_ticker_cls.assert_not_called()
-
-    @patch("app.services.msai_analyze_div_event.services_event.analyse_dividend_event", new_callable=AsyncMock)
-    @patch("app.utils.conv.to_yf_symbol_format", return_value="CBA.AX")
-    @patch("app.services.msai_analyze_div_event.yf.Ticker")
-    def test_returns_none_when_pre_analysis_fails(self, mock_ticker_cls, mock_conv, mock_analyse):
-        from app.services.msai_analyze_div_event import ai_analyze_div_event
-
-        mock_ticker_cls.return_value.info = {"country": "Australia"}
-        mock_analyse.return_value = None
-
-        result = asyncio.run(ai_analyze_div_event(symbol="ASX:CBA", ex_date="2025-08-15", div_amount=2.50))
-        assert result is None
-
-    @patch("app.services.msai_analyze_div_event.ai_helper.ai_exec_task", new_callable=AsyncMock)
-    @patch("app.services.msai_analyze_div_event.services_event.analyse_dividend_event", new_callable=AsyncMock)
-    @patch("app.utils.conv.to_yf_symbol_format", return_value="CBA.AX")
-    @patch("app.services.msai_analyze_div_event.yf.Ticker")
-    def test_returns_error_when_build_prompt_fails(self, mock_ticker_cls, mock_conv, mock_analyse, mock_ai_exec):
-        from app.models.event import DividendEventAnalysis
-        from app.services.msai_analyze_div_event import ai_analyze_div_event
-
-        mock_ticker_cls.return_value.info = {
-            "country": "Australia",
-            "quoteType": "EQUITY",
-            "sector": "Financials",
-            "industry": "Banks",
-            "longName": "Commonwealth Bank",
-            "fullExchangeName": "ASX",
-            "exchange": "ASX",
-            "symbol": "CBA.AX",
-            "marketCap": 200_000_000_000,
-        }
-        mock_analyse.return_value = DividendEventAnalysis(symbol="CBA.AX", price=120.0)
-        mock_ai_exec.return_value = LLMResponse(is_error=True, error_msg="Build timeout")
-
-        result = asyncio.run(ai_analyze_div_event(symbol="ASX:CBA", ex_date="2025-08-15", div_amount=2.50))
-        assert result is not None
-        assert result.llm_error is True
-        assert "Build timeout" in result.llm_error_msg
-
-    @patch("app.services.msai_analyze_div_event.ai_helper.ai_exec_task", new_callable=AsyncMock)
-    @patch("app.services.msai_analyze_div_event.services_event.analyse_dividend_event", new_callable=AsyncMock)
-    @patch("app.utils.conv.to_yf_symbol_format", return_value="CBA.AX")
-    @patch("app.services.msai_analyze_div_event.yf.Ticker")
-    def test_returns_error_when_exec_fails(self, mock_ticker_cls, mock_conv, mock_analyse, mock_ai_exec):
-        from app.models.event import DividendEventAnalysis
-        from app.services.msai_analyze_div_event import ai_analyze_div_event
-
-        mock_ticker_cls.return_value.info = {
-            "country": "Australia",
-            "quoteType": "EQUITY",
-            "sector": "Financials",
-            "industry": "Banks",
-            "longName": "Commonwealth Bank",
-            "fullExchangeName": "ASX",
-            "exchange": "ASX",
-            "symbol": "CBA.AX",
-            "marketCap": 200_000_000_000,
-        }
-        mock_analyse.return_value = DividendEventAnalysis(symbol="CBA.AX", price=120.0)
-        mock_ai_exec.side_effect = [
-            LLMResponse(completion="Generated prompt"),
-            LLMResponse(is_error=True, error_msg="Exec timeout"),
-        ]
-
-        result = asyncio.run(ai_analyze_div_event(symbol="ASX:CBA", ex_date="2025-08-15", div_amount=2.50))
-        assert result is not None
-        assert result.llm_error is True
-        assert "Exec timeout" in result.llm_error_msg
-
-    @patch("app.services.msai_analyze_div_event.ai_helper.ai_exec_task", new_callable=AsyncMock)
-    @patch("app.services.msai_analyze_div_event.services_event.analyse_dividend_event", new_callable=AsyncMock)
-    @patch("app.utils.conv.to_yf_symbol_format", return_value="CBA.AX")
-    @patch("app.services.msai_analyze_div_event.yf.Ticker")
-    def test_returns_full_result_on_success(self, mock_ticker_cls, mock_conv, mock_analyse, mock_ai_exec):
-        import json
-
-        from app.models.event import DividendEventAnalysis
-        from app.services.msai_analyze_div_event import ai_analyze_div_event
-
-        mock_ticker_cls.return_value.info = {
-            "country": "Australia",
-            "quoteType": "EQUITY",
-            "sector": "Financials",
-            "industry": "Banks",
-            "longName": "Commonwealth Bank",
-            "fullExchangeName": "ASX",
-            "exchange": "ASX",
-            "symbol": "CBA.AX",
-            "marketCap": 200_000_000_000,
-        }
-        mock_analyse.return_value = DividendEventAnalysis(symbol="CBA.AX", price=120.0)
-
-        llm_json = json.dumps(
+import pytest
+from pydantic import ValidationError
+
+from app.models import ai_ticker as models_ticker
+from app.schemas import ai_ticker as schemas_ticker
+from app.services import ai_helper
+from app.services import msai_analyze_ticker as services_ticker
+from tests import ticker_fixtures
+
+
+def _assert_openai_strict_objects(value):
+    if isinstance(value, dict):
+        if value.get("type") == "object":
+            assert value.get("additionalProperties") is False
+            assert set(value.get("required", [])) == set(value.get("properties", {}))
+        if "$ref" in value:
+            assert set(value) == {"$ref"}
+        for nested_value in value.values():
+            _assert_openai_strict_objects(nested_value)
+    elif isinstance(value, list):
+        for nested_value in value:
+            _assert_openai_strict_objects(nested_value)
+
+
+def _forecast_draft() -> services_ticker._TickerForecastResponse:
+    return services_ticker._TickerForecastResponse(
+        symbol="NASDAQ:AAPL",
+        forecasts=[
             {
-                "search_summary": "Positive sentiment overall",
-                "strategy": "Dividend Capture",
-                "reasoning": "Strong recovery history",
-                "sent_score": 0.65,
-                "recov_prob_adj": 0.80,
-                "eff_div": 0.035,
-                "recovery_days": "3-7",
-                "est_drop_price": "117.50-118.50",
-                "est_recovery_price": "119.80-120.50",
-                "expected_pl": 1.25,
-                "confidence": 72,
-                "risk": 35,
-                "risk_factors": ["earnings approaching"],
+                "horizon": horizon,
+                "assessment_status": "Forecast",
+                "expected_price_min": 105 + index,
+                "expected_price_max": 110 + index,
+                "confidence": 70,
+                "rationale": "Sourced forecast.",
+                "key_drivers": ["Growth"],
+                "risk_factors": ["Volatility"],
+                "assumptions": ["Stable market"],
+                "data_gaps": [],
+                "reference_ids": [ticker_fixtures.SOURCE_ID],
             }
+            for index, horizon in enumerate(services_ticker._HORIZON_ORDER)
+        ],
+        overall_data_quality="High",
+        data_gaps=[],
+    )
+
+
+def test_ai_response_schemas_are_openai_compatible_and_strict():
+    for response_model in (
+        services_ticker._TickerResearchResponse,
+        services_ticker._TickerForecastResponse,
+        services_ticker._TickerRecommendationDraft,
+    ):
+        schema = ai_helper._openai_compatible_json_schema(response_model.model_json_schema())
+        _assert_openai_strict_objects(schema)
+
+
+def test_holding_snapshot_uses_verified_market_price():
+    holding = schemas_ticker.TickerHoldingInput(num_shares=10, avg_price=80)
+
+    snapshot = services_ticker._build_holding_snapshot(
+        holding,
+        ticker_fixtures.make_market_snapshot(),
+    )
+
+    assert snapshot is not None
+    assert snapshot.cost_basis == 800
+    assert snapshot.market_value == 1_000
+    assert snapshot.unrealized_profit_loss == 200
+    assert snapshot.unrealized_return_pct == 25
+    assert snapshot.break_even_price == 80
+
+
+def test_ticker_analysis_requires_four_ordered_horizons():
+    analysis = ticker_fixtures.make_analysis()
+    payload = analysis.model_dump()
+    payload["forecasts"] = list(reversed(payload["forecasts"]))
+
+    with pytest.raises(ValidationError, match="four required horizons in order"):
+        models_ticker.TickerAnalysis.model_validate(payload)
+
+
+def test_recommendation_enforces_action_specific_range():
+    with pytest.raises(ValidationError, match="BUY requires only buy_range"):
+        models_ticker.TickerRecommendation(
+            action="BUY",
+            scope="NewPosition",
+            confidence=70,
+            summary="Invalid recommendation.",
+            buy_range=None,
+            sell_range=None,
+            reasoning=["Reason"],
+            key_conditions=[],
+            reassessment_triggers=[],
+            risk_warnings=[],
+            reference_ids=[ticker_fixtures.SOURCE_ID],
         )
 
-        mock_ai_exec.side_effect = [
-            LLMResponse(completion="Generated prompt"),
-            LLMResponse(completion=llm_json),
-        ]
 
+def test_analysis_rejects_unknown_reference_ids():
+    analysis = ticker_fixtures.make_analysis()
+    payload = analysis.model_dump()
+    payload["recommendation"]["reference_ids"] = ["src-unknown"]
+
+    with pytest.raises(ValueError, match="unknown reference IDs"):
+        models_ticker.TickerAnalysis.model_validate(payload)
+
+
+def test_research_repair_drops_orphan_claim_and_records_gap():
+    source = services_ticker._TickerResearchSourceMetadata(
+        id=ticker_fixtures.SOURCE_URL,
+        title="Issuer research",
+        publisher="Example",
+        source_type="Research",
+        published_at=ticker_fixtures.AS_OF,
+        accessed_at=None,
+        url=ticker_fixtures.SOURCE_URL,
+    )
+    valid_claim = {
+        "text": "Supported claim.",
+        "reference_ids": [ticker_fixtures.SOURCE_URL],
+    }
+    invalid_claim = {
+        "text": "Unsupported claim.",
+        "reference_ids": ["https://missing.example/source"],
+    }
+    section = {
+        "summary": "Section summary.",
+        "data_quality": "High",
+        "claims": [valid_claim, invalid_claim],
+        "data_gaps": [],
+        "reference_ids": [ticker_fixtures.SOURCE_URL, "https://missing.example/source"],
+    }
+    response = services_ticker._TickerResearchResponse(
+        symbol="NASDAQ:AAPL",
+        business_profile=section,
+        financial_performance={**section, "claims": [valid_claim]},
+        valuation={**section, "claims": [valid_claim]},
+        recent_developments={**section, "claims": [valid_claim]},
+        catalysts={**section, "claims": [valid_claim]},
+        risks={**section, "claims": [valid_claim]},
+        market_consensus={**section, "claims": [valid_claim]},
+        asset_specific={**section, "claims": [valid_claim]},
+        data_gaps=[],
+        references=[source],
+    )
+
+    repaired = services_ticker._repair_research_references(response)
+
+    assert len(repaired.business_profile.claims) == 1
+    assert repaired.business_profile.summary == "Supported claim."
+    assert repaired.business_profile.data_quality == "Low"
+    assert "Ignored unsupported source links" in repaired.business_profile.data_gaps[0]
+    assert "Removed 1 unsupported claim" in repaired.data_gaps[0]
+
+
+def test_finalize_forecasts_recomputes_returns_and_direction():
+    draft = _forecast_draft()
+
+    result = services_ticker._finalize_forecasts(
+        draft,
+        ticker_fixtures.make_baseline(),
+        ticker_fixtures.make_research(),
+    )
+
+    assert [forecast.horizon for forecast in result.forecasts] == list(services_ticker._HORIZON_ORDER)
+    assert result.forecasts[0].direction == "Up"
+    assert result.forecasts[0].expected_return_min_pct == pytest.approx(5)
+    assert result.forecasts[0].expected_return_max_pct == pytest.approx(10)
+
+
+def test_forecast_reference_repair_preserves_valid_links_and_records_gap():
+    draft_data = _forecast_draft().model_dump(mode="python")
+    draft_data["forecasts"][0]["reference_ids"].append("src-orphan")
+    draft = services_ticker._TickerForecastResponse.model_validate(draft_data)
+
+    repaired = services_ticker._repair_forecast_references(
+        draft,
+        ticker_fixtures.make_research(),
+    )
+
+    assert repaired.forecasts[0].reference_ids == [ticker_fixtures.SOURCE_ID]
+    assert "src-orphan" in repaired.forecasts[0].data_gaps[-1]
+    assert "src-orphan" in repaired.data_gaps[-1]
+
+
+def test_forecast_reference_repair_downgrades_fully_unsupported_horizon():
+    draft_data = _forecast_draft().model_dump(mode="python")
+    draft_data["forecasts"][0]["reference_ids"] = ["src-orphan"]
+    draft = services_ticker._TickerForecastResponse.model_validate(draft_data)
+
+    repaired = services_ticker._repair_forecast_references(
+        draft,
+        ticker_fixtures.make_research(),
+    )
+    result = services_ticker._finalize_forecasts(
+        repaired,
+        ticker_fixtures.make_baseline(),
+        ticker_fixtures.make_research(),
+    )
+
+    assert repaired.forecasts[0].assessment_status == "InsufficientData"
+    assert repaired.forecasts[0].expected_price_min is None
+    assert repaired.forecasts[0].reference_ids == []
+    assert result.overall_data_quality == "Medium"
+
+
+def test_recommendation_reference_repair_downgrades_unsupported_action():
+    draft = services_ticker._TickerRecommendationDraft(
+        action="BUY",
+        confidence=70,
+        summary="Buy based on cited evidence.",
+        buy_range={"minimum": 95, "maximum": 100, "currency": "USD"},
+        sell_range=None,
+        reasoning=["Evidence supports buying."],
+        key_conditions=["Conditions remain stable."],
+        reassessment_triggers=["Conditions change."],
+        risk_warnings=[],
+        reference_ids=["src-orphan"],
+    )
+
+    repaired = services_ticker._repair_recommendation_references(
+        draft,
+        ticker_fixtures.make_research(),
+    )
+
+    assert repaired.action == "HOLD"
+    assert repaired.buy_range is None
+    assert repaired.confidence == 25
+    assert repaired.reference_ids == []
+    assert "src-orphan" in repaired.risk_warnings[-1]
+
+
+def test_finalize_forecasts_rejects_range_outside_deterministic_envelope():
+    draft = services_ticker._TickerForecastResponse(
+        symbol="NASDAQ:AAPL",
+        forecasts=[
+            {
+                "horizon": horizon,
+                "assessment_status": "Forecast",
+                "expected_price_min": 100,
+                "expected_price_max": 130,
+                "confidence": 70,
+                "rationale": "Sourced forecast.",
+                "key_drivers": [],
+                "risk_factors": [],
+                "assumptions": [],
+                "data_gaps": [],
+                "reference_ids": [ticker_fixtures.SOURCE_ID],
+            }
+            for horizon in services_ticker._HORIZON_ORDER
+        ],
+        overall_data_quality="High",
+        data_gaps=[],
+    )
+
+    with pytest.raises(ValueError, match="outside its deterministic envelope"):
+        services_ticker._finalize_forecasts(
+            draft,
+            ticker_fixtures.make_baseline(),
+            ticker_fixtures.make_research(),
+        )
+
+
+def test_forecast_quality_is_insufficient_when_all_horizons_lack_envelopes():
+    baseline = ticker_fixtures.make_baseline()
+    baseline = baseline.model_copy(
+        update={
+            "forecast_envelopes": [
+                services_ticker._ForecastEnvelope(
+                    horizon=horizon,
+                    sample_count=0,
+                    data_gaps=["Insufficient history."],
+                )
+                for horizon in services_ticker._HORIZON_ORDER
+            ]
+        }
+    )
+    draft = services_ticker._TickerForecastResponse(
+        symbol="NASDAQ:AAPL",
+        forecasts=[
+            {
+                "horizon": horizon,
+                "assessment_status": "InsufficientData",
+                "expected_price_min": None,
+                "expected_price_max": None,
+                "confidence": 80,
+                "rationale": "History is insufficient.",
+                "key_drivers": [],
+                "risk_factors": [],
+                "assumptions": [],
+                "data_gaps": ["Insufficient history."],
+                "reference_ids": [],
+            }
+            for horizon in services_ticker._HORIZON_ORDER
+        ],
+        overall_data_quality="High",
+        data_gaps=["Insufficient history."],
+    )
+
+    result = services_ticker._finalize_forecasts(
+        draft,
+        baseline,
+        ticker_fixtures.make_research(),
+    )
+
+    assert result.overall_data_quality == "Insufficient"
+    assert {forecast.confidence for forecast in result.forecasts} == {25}
+    assert (
+        services_ticker._overall_data_quality(
+            ticker_fixtures.make_research(),
+            result,
+        )
+        == "Insufficient"
+    )
+
+
+def test_final_cache_key_isolated_by_holding_but_research_is_shared():
+    baseline = ticker_fixtures.make_baseline()
+    snapshot = baseline.snapshot
+    holding_a = services_ticker._build_holding_snapshot(
+        schemas_ticker.TickerHoldingInput(num_shares=10, avg_price=80),
+        snapshot,
+    )
+    holding_b = services_ticker._build_holding_snapshot(
+        schemas_ticker.TickerHoldingInput(num_shares=20, avg_price=90),
+        snapshot,
+    )
+
+    with patch(
+        "app.services.msai_analyze_ticker.cache.generate_hourly_key",
+        side_effect=lambda *parts: repr(parts),
+    ):
+        no_holding_key = services_ticker._final_cache_key(
+            baseline=baseline,
+            holding_snapshot=None,
+        )
+        holding_a_key = services_ticker._final_cache_key(
+            baseline=baseline,
+            holding_snapshot=holding_a,
+        )
+        holding_b_key = services_ticker._final_cache_key(
+            baseline=baseline,
+            holding_snapshot=holding_b,
+        )
+
+    assert len({no_holding_key, holding_a_key, holding_b_key}) == 3
+    assert "holding_snapshot" not in services_ticker._research_ticker.__annotations__
+    assert "holding_snapshot" not in services_ticker._forecast_ticker.__annotations__
+
+
+def test_stage_cache_reuses_research_and_forecast_but_isolates_holding():
+    baseline = ticker_fixtures.make_baseline()
+    research = ticker_fixtures.make_research()
+    forecasts = ticker_fixtures.make_forecasts()
+    recommendation = ticker_fixtures.make_recommendation()
+    holding_a = services_ticker._build_holding_snapshot(
+        schemas_ticker.TickerHoldingInput(num_shares=10, avg_price=80),
+        baseline.snapshot,
+    )
+    holding_b = services_ticker._build_holding_snapshot(
+        schemas_ticker.TickerHoldingInput(num_shares=20, avg_price=90),
+        baseline.snapshot,
+    )
+
+    async def collect_keys():
+        with patch(
+            "app.services.msai_analyze_ticker.cache.get",
+            new_callable=AsyncMock,
+            return_value=research,
+        ) as cache_get:
+            await services_ticker._research_ticker(baseline)
+            await services_ticker._research_ticker(baseline)
+        research_keys = [call.args[0] for call in cache_get.await_args_list]
+
+        with patch(
+            "app.services.msai_analyze_ticker.cache.get",
+            new_callable=AsyncMock,
+            return_value=forecasts,
+        ) as cache_get:
+            await services_ticker._forecast_ticker(baseline, research)
+            await services_ticker._forecast_ticker(baseline, research)
+        forecast_keys = [call.args[0] for call in cache_get.await_args_list]
+
+        with patch(
+            "app.services.msai_analyze_ticker.cache.get",
+            new_callable=AsyncMock,
+            return_value=recommendation,
+        ) as cache_get:
+            await services_ticker._recommend_ticker(
+                baseline.snapshot,
+                research,
+                forecasts,
+                holding_snapshot=holding_a,
+            )
+            await services_ticker._recommend_ticker(
+                baseline.snapshot,
+                research,
+                forecasts,
+                holding_snapshot=holding_b,
+            )
+        recommendation_keys = [call.args[0] for call in cache_get.await_args_list]
+        return research_keys, forecast_keys, recommendation_keys
+
+    research_keys, forecast_keys, recommendation_keys = asyncio.run(collect_keys())
+
+    assert research_keys[0] == research_keys[1]
+    assert forecast_keys[0] == forecast_keys[1]
+    assert recommendation_keys[0] != recommendation_keys[1]
+
+
+def test_unverified_source_is_retained_with_warning():
+    result = ticker_fixtures.make_analysis(verified_reference=False)
+
+    assert result.references[0].is_verified is False
+    assert result.analysis_status == "CompleteWithWarnings"
+    assert result.validation_warnings == ["1 cited research source(s) could not be provider-verified."]
+
+
+def test_market_stage_caches_for_one_hour():
+    baseline = ticker_fixtures.make_baseline()
+    with (
+        patch("app.services.msai_analyze_ticker.cache.get", new_callable=AsyncMock, return_value=None),
+        patch("app.services.msai_analyze_ticker.cache.set", new_callable=AsyncMock) as cache_set,
+        patch("app.services.msai_analyze_ticker._build_market_baseline", return_value=baseline),
+    ):
+        result = asyncio.run(services_ticker._get_market_baseline("NASDAQ:AAPL"))
+
+    assert result == baseline
+    assert cache_set.await_args.kwargs["ttl"] == 3600
+
+
+def test_optional_benchmark_lookup_failure_is_non_fatal():
+    data_gaps = []
+    with patch(
+        "app.services.msai_analyze_ticker.yfutils.lookup_index_yf_static_symbol",
+        side_effect=ValueError("missing metadata"),
+    ):
+        result = services_ticker._load_optional_relative_return_for_ticker(
+            object(),
+            use_peer=False,
+            label="market benchmark",
+            data_gaps=data_gaps,
+        )
+
+    assert result is None
+    assert data_gaps == ["A representative market benchmark is unavailable."]
+
+
+def test_ai_stages_and_final_result_cache_for_one_hour():
+    baseline = ticker_fixtures.make_baseline()
+    research = ticker_fixtures.make_research()
+    forecasts = ticker_fixtures.make_forecasts()
+    recommendation = ticker_fixtures.make_recommendation()
+    responses = [
+        ai_helper.LLMResponse(completion="{}", citation_urls=[ticker_fixtures.SOURCE_URL]),
+        ai_helper.LLMResponse(completion="{}"),
+        ai_helper.LLMResponse(completion="{}"),
+    ]
+
+    async def execute():
         with (
+            patch("app.services.msai_analyze_ticker.cache.get", new_callable=AsyncMock, return_value=None),
+            patch("app.services.msai_analyze_ticker.cache.set", new_callable=AsyncMock) as cache_set,
             patch(
-                "app.services.msai_analyze_div_event.cache.get",
-                new_callable=AsyncMock,
-                return_value=None,
+                "app.services.msai_analyze_ticker._get_market_baseline", new_callable=AsyncMock, return_value=baseline
             ),
             patch(
-                "app.services.msai_analyze_div_event.cache.set",
-                new_callable=AsyncMock,
-                return_value=True,
-            ) as mock_cache_set,
+                "app.services.msai_analyze_ticker._finalize_research_references",
+                return_value=research,
+            ),
             patch(
-                "app.services.msai_analyze_div_event.cache.generate_key",
-                return_value="cache-key",
+                "app.services.msai_analyze_ticker._repair_research_references",
+                return_value=research,
+            ),
+            patch(
+                "app.services.msai_analyze_ticker._TickerResearchResponse.model_validate_json",
+                return_value=type("Research", (), {"symbol": "NASDAQ:AAPL"})(),
+            ),
+            patch(
+                "app.services.msai_analyze_ticker._finalize_forecasts",
+                return_value=forecasts,
+            ),
+            patch(
+                "app.services.msai_analyze_ticker._TickerForecastResponse.model_validate_json",
+                return_value=type("Forecast", (), {"symbol": "NASDAQ:AAPL"})(),
+            ),
+            patch(
+                "app.services.msai_analyze_ticker._repair_forecast_references",
+                return_value=object(),
+            ),
+            patch(
+                "app.services.msai_analyze_ticker._finalize_recommendation",
+                return_value=recommendation,
+            ),
+            patch(
+                "app.services.msai_analyze_ticker._TickerRecommendationDraft.model_validate_json",
+                return_value=object(),
+            ),
+            patch(
+                "app.services.msai_analyze_ticker._repair_recommendation_references",
+                return_value=object(),
+            ),
+            patch(
+                "app.services.msai_analyze_ticker.ai_helper.ai_exec_task",
+                new_callable=AsyncMock,
+                side_effect=responses,
             ),
         ):
-            result = asyncio.run(ai_analyze_div_event(symbol="ASX:CBA", ex_date="2025-08-15", div_amount=2.50))
+            result = await services_ticker.ai_analyze_ticker(symbol="NASDAQ:AAPL")
+        return result, cache_set
 
-        assert result is not None
-        assert result.llm_error is False
-        assert result.strategy == "Dividend Capture"
-        assert result.search_summary == "Positive sentiment overall"
-        assert result.reasoning == "Strong recovery history"
-        assert result.sentiment_score == 0.65
-        assert result.recovery_probability_adj == 0.80
-        assert result.recovery_days_adj == "3-7"
-        assert result.confidence_level == 72
-        assert result.risk_level == 35
-        mock_cache_set.assert_awaited_once_with("cache-key", result, ttl=72 * 60 * 60)
+    result, cache_set = asyncio.run(execute())
+
+    assert result.symbol == "NASDAQ:AAPL"
+    assert cache_set.await_count == 4
+    assert {call.kwargs["ttl"] for call in cache_set.await_args_list} == {3600}
+
+
+def test_cached_final_result_skips_all_stages():
+    cached = ticker_fixtures.make_analysis()
+    with (
+        patch(
+            "app.services.msai_analyze_ticker._get_market_baseline",
+            new_callable=AsyncMock,
+            return_value=ticker_fixtures.make_baseline(),
+        ),
+        patch("app.services.msai_analyze_ticker.cache.get", new_callable=AsyncMock, return_value=cached),
+        patch("app.services.msai_analyze_ticker._research_ticker", new_callable=AsyncMock) as research,
+    ):
+        result = asyncio.run(services_ticker.ai_analyze_ticker(symbol="NASDAQ:AAPL"))
+
+    assert result == cached
+    research.assert_not_awaited()

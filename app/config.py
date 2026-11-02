@@ -1,15 +1,18 @@
 import time
+import typing
 from abc import ABC
 from typing import Literal
 
 import openai
+import pydantic_settings
 from azure.identity import EnvironmentCredential, get_bearer_token_provider
 from google import genai
 from google.genai.types import HttpOptions
-from pydantic import BaseModel, Field, field_validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ALLOWED_QUOTE_TYPES = {"EQUITY", "ETF", "MUTUALFUND"}
+ReasoningEffort = Literal["High", "Medium", "Low"]
 
 # ----------------------------------------------------------------------#
 
@@ -85,7 +88,7 @@ class LLMConfig(BaseSettings):
     api_tier: str = ""
     api_key: str = Field(default="")
     endpoint: str = Field(default="")
-    models: set[str] = Field(default=[])
+    models: typing.Annotated[set[str], pydantic_settings.NoDecode] = Field(default=[])
 
     @field_validator("models", mode="before")
     @classmethod
@@ -96,23 +99,37 @@ class LLMConfig(BaseSettings):
 
 
 class LLMTaskConfig(BaseSettings):
-    """
-    LLM configurations for a task. Supply an instance of LLMTaskConfigOverride to override the default LLM configurations for a task.
-    """
+    """LLM configurations for a task."""
 
     task_name: str = ""
     vendor: str = ""
     tier: str = ""
     model: str = ""
-    temperature: float = 0.2
+    reasoning_effort: ReasoningEffort | None = None
+    use_web_search: bool = False
+    max_tool_calls: int = 0
+
+    @field_validator("reasoning_effort", mode="before")
+    @classmethod
+    def normalize_reasoning_effort(cls, v: str | None) -> str | None:
+        if isinstance(v, str):
+            return v.strip().title() or None
+        return v
 
 
-class LLMTaskConfigOverride(LLMTaskConfig):
-    """
-    Supply an instance of LLMTaskConfigOverride to override the default LLM configurations for a task.
-    """
+class OpenAIExecutionSettings(BaseSettings):
+    """Runtime controls shared by OpenAI-compatible providers."""
 
-    pass
+    max_concurrent_requests: int = Field(default=2, ge=1)
+    rate_limit_max_wait_seconds: float = Field(default=10 * 60, ge=0)
+    rate_limit_initial_backoff_seconds: float = Field(default=5, gt=0)
+    rate_limit_max_backoff_seconds: float = Field(default=60, gt=0)
+    model_config = SettingsConfigDict(
+        env_file="ai_vendors.env",
+        env_file_encoding="utf-8",
+        env_prefix="FINHUB_OPENAI_EXECUTION_",
+        extra="ignore",
+    )
 
 
 class LLMVendorSettings(BaseSettings):
@@ -170,38 +187,18 @@ class LLMTaskSettings(BaseSettings):
         extra="ignore",
     )
 
-    # def get_llm_client(self, task_id, timeout_sec: float = 180) -> genai.Client | openai.AsyncOpenAI | None:
-    #     t_id = task_id.upper()
-    #     task_config = self.tasks.get(t_id)
-    #     return settings_llm_vendor.get_llm_client(task_config.vendor, task_config.tier, timeout_sec) \
-    #     if task_config
-    #     else None
 
-
+settings_openai_execution = OpenAIExecutionSettings()
 settings_llm_vendor = LLMVendorSettings()
 settings_llm_task = LLMTaskSettings()
 
 # ----------------------------------------------------------------------#
 
 
-class HttpProxy(BaseModel):
-    id: int = 0
-    ip: str = ""
-    port: int = 0
-    protocol: str = ""
-    anonymity: str = ""
-    speed: float = 0.0
-    https: int = 0
-    country: str = ""
-    city: str = ""
-    connect_string: str = ""
-
-
 class FinHubProxySettings(BaseSettings):
     proxy_mode: Literal["None", "Redirect", "Forward"] = Field(default="None", alias="FINHUB_PROXY_MODE")
     url_web_crawl_node: str = Field(default="", alias="FINHUB_URL_WEB_CRAWL_NODE")
-    fetch_website_via_proxy: bool = Field(default=False, alias="FINHUB_FETCH_WEBSITE_VIA_PROXY")
-    http_proxies: list[HttpProxy] | None = None
+    url_ai_task_node: str = Field(default="", alias="FINHUB_URL_AI_TASK_NODE")
     model_config = SettingsConfigDict(
         env_file="finhub_proxy_config.env",
         env_file_encoding="utf-8",
@@ -224,28 +221,3 @@ class AppSettings(BaseSettings):
 
 
 settings_app = AppSettings()
-
-# ----------------------------------------------------------------------#
-
-
-class CompanyBriefInfo(BaseSettings):
-    symbol: str = Field(default="")
-    name: str = Field(default="")
-    sector: str = Field(default="")
-    market_cap: int = Field(default=0)
-
-    model_config = SettingsConfigDict(
-        nested_model_default_partial_update=True,
-    )
-
-
-class MarketIndices(BaseSettings):
-    # {index -> {symbol -> CompanyBriefInfo}}
-    indices: dict[str, dict[str, CompanyBriefInfo]] = Field(default={})
-    raw_json: dict[str, str] = Field(default={})
-    model_config = SettingsConfigDict(
-        nested_model_default_partial_update=True,
-    )
-
-
-market_indices = MarketIndices()

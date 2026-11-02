@@ -1,5 +1,5 @@
-from .. import config
 from ..models import types
+from ..services import market as services_market
 
 
 def detect_asset_type(
@@ -53,7 +53,7 @@ def is_in_index(*, index: str, symbol: str) -> bool:
     Returns:
         bool: True if the stock symbol in a market index, False otherwise.
     """
-    return symbol.upper() in config.market_indices.indices[index.upper()]
+    return symbol.upper() in services_market.market_indices.indices[index.upper()]
 
 
 def classify_market_cap(

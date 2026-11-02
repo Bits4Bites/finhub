@@ -6,7 +6,7 @@ import logging
 
 import yfinance as yf
 
-from app.utils import finhub as finhub_utils
+from app.utils import data as data_utils
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
@@ -57,17 +57,17 @@ def verify2layers(name: str, data: dict[str, dict[str, str]]):
 
 
 async def main():
-    verify1layer("asx_index_yf_static_tickers", finhub_utils.asx_index_yf_static_tickers)
-    verify1layer("asx_sector_yf_static_tickers", finhub_utils.asx_sector_yf_static_tickers)
+    verify1layer("asx_index_yf_static_tickers", data_utils.asx_index_yf_static_tickers)
+    verify1layer("asx_sector_yf_static_tickers", data_utils.asx_sector_yf_static_tickers)
 
-    verify1layer("us_index_yf_static_tickers", finhub_utils.us_index_yf_static_tickers)
+    verify1layer("us_index_yf_static_tickers", data_utils.us_index_yf_static_tickers)
 
-    verify1layer("us_sector_yf_static_tickers", finhub_utils.us_sector_yf_static_tickers)
-    verify2layers("us_industry_yf_static_tickers", finhub_utils.us_industry_yf_static_tickers)
+    verify1layer("us_sector_yf_static_tickers", data_utils.us_sector_yf_static_tickers)
+    verify2layers("us_industry_yf_static_tickers", data_utils.us_industry_yf_static_tickers)
 
-    # verify1layer('us_sector_yf_static_tickers_sp400', finhub_utils.us_sector_yf_static_tickers_sp400)
+    # verify1layer("us_sector_yf_static_tickers_sp400", data_utils.us_sector_yf_static_tickers_sp400)
 
-    # verify1layer('us_sector_yf_static_tickers_sp600', finhub_utils.us_sector_yf_static_tickers_sp600)
+    # verify1layer("us_sector_yf_static_tickers_sp600", data_utils.us_sector_yf_static_tickers_sp600)
 
 
 asyncio.run(main())

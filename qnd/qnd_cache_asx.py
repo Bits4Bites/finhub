@@ -7,9 +7,9 @@ import json
 import pandas as pd
 import yfinance as yf
 
-from app.models import finhub as models
+from app import config
+from app.models import stocks as models_stocks
 from app.services import crawler as crawler_service
-from app.services import stock as stock_service
 
 
 def load_csv_with_pandas(file_path):
@@ -33,7 +33,7 @@ async def main():
     cache_filename = "./.cache_data/ASX_Listed_Companies.csv"
     # write CSV data to file
     with open(cache_filename, "w", encoding="utf-8") as cache_file:
-        cache_file.write(csv_data)
+        cache_file.write(csv_data or "")
 
     pd_data = load_csv_with_pandas(cache_filename)
 
@@ -48,7 +48,7 @@ async def main():
         if quote_type == "NONE":
             print(f"Symbol: {symbol} / No quoteType found")
             continue
-        if quote_type not in stock_service.allowed_quote_types:
+        if quote_type not in config.ALLOWED_QUOTE_TYPES:
             print(f"Symbol: {symbol} / Invalid quoteType found: {quote_type}")
             continue
         if "regularMarketPrice" not in ticker.info:
@@ -57,7 +57,7 @@ async def main():
 
         num_cached += 1
         try:
-            symbol_data = models.SymbolOverview(ticker)
+            symbol_data = models_stocks.SymbolOverview(ticker)
             cache_data[symbol] = symbol_data.model_dump()
         except Exception as e:
             print(f"Symbol: {symbol} / Invalid symbol found: {e}")
