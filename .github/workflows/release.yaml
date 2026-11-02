@@ -119,6 +119,7 @@ jobs:
               throw new Error(`No VERSION assignment found in ${versionFile}.`);
             }
             fs.writeFileSync(versionFile, versionSource.replace(versionPattern, `VERSION = ${JSON.stringify(VERSION)}`));
+            core.info(`✅ Updated module metadata for version ${tag}.`);
       - name: Commit release metadata and capture C
         if: steps.release_dry_run.outputs.result == 'SUCCESS'
         id: metadata
@@ -126,9 +127,10 @@ jobs:
           VERSION: ${{ steps.release_dry_run.outputs.releaseVersion }}
         run: |
           set -euo pipefail
+          
           REMOTE_SHA=$(git ls-remote --exit-code origin "refs/heads/${BRANCH_TO_RELEASE}" | cut -f1)
           if [[ "$REMOTE_SHA" != "$SOURCE_SHA" || "$(git rev-parse HEAD)" != "$SOURCE_SHA" ]]; then
-            echo "::error::Release branch changed; refusing to publish an unverified source."
+            echo "❌ Release branch changed; refusing to publish an unverified source."
             exit 1
           fi
           git config user.name "github-actions[bot]"
@@ -137,6 +139,7 @@ jobs:
           git commit -m "chore(release): prepare ${TAG_PREFIX}${VERSION}"
           git push origin "HEAD:refs/heads/${BRANCH_TO_RELEASE}"
           printf 'target-sha=%s\n' "$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "✅ Committed release metadata for version ${TAG_PREFIX}${VERSION} at commit $(git rev-parse HEAD)."
 
   Release:
     runs-on: ubuntu-latest
@@ -181,9 +184,10 @@ jobs:
       - name: Cleanup release metadata after publication
         run: |
           set -euo pipefail
+          
           REMOTE_SHA=$(git ls-remote --exit-code origin "refs/heads/${BRANCH_TO_RELEASE}" | cut -f1)
           if [[ "$REMOTE_SHA" != "$TARGET_SHA" ]]; then
-            echo "::error::Release branch changed; refusing to discard pending release messages."
+            echo "❌ Release branch changed; refusing to discard pending release messages."
             exit 1
           fi
           if [[ -f .semrelease/this_release ]]; then
@@ -198,6 +202,7 @@ jobs:
               git push origin "HEAD:refs/heads/${BRANCH_TO_RELEASE}"
             fi
           fi
+          echo "✅ Cleaned up release metadata for version ${TAG_PREFIX}${VERSION} at commit $(git rev-parse HEAD)."
       - name: Create or update release-to-main PR
         uses: actions/github-script@v9
         with:
@@ -217,110 +222,52 @@ jobs:
               : await github.rest.pulls.create({
                   ...details, head: branch, base: 'main', maintainer_can_modify: true,
                 });
-            core.info(`Release-to-main PR: ${pr.html_url}`);
+            core.info(`✅ Release-to-main PR: ${pr.html_url}`);
 
-  PublishDockerImagesLinuxBuild:
+  PublishDockerImagesLinux:
+    name: Build and Publish Linux Docker Images
     if: |
       needs.Release.outputs.RESULT == 'SUCCESS'
-    needs: [Release]
+    needs: [ Release ]
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        platforms: [ 'linux/amd64', 'linux/arm64' ] # change target platform list if needed
-    name: Build Docker image(s) - Linux - Release Branch
     env:
       VERSION: ${{ needs.Release.outputs.VERSION }}
       TARGET_SHA: ${{ needs.Release.outputs.TARGET_SHA }}
     outputs:
-      VERSION: ${{ needs.Release.outputs.VERSION }}
       TARGET_SHA: ${{ needs.Release.outputs.TARGET_SHA }}
+      VERSION: ${{ needs.Release.outputs.VERSION }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
         with:
           ref: ${{ env.TARGET_SHA }}
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-      - name: Login to Docker Hub
-        uses: docker/login-action@v4
+          depth: 0
+      - uses: docker/login-action@v4
         with:
-          username: ${{ secrets.DOCKER_HUB_USER }}
+          username: ${{ vars.DOCKER_HUB_USER }}
           password: ${{ secrets.DOCKER_HUB_PAT }}
-      - name: Prepare
-        run: |
-          platform=${{ matrix.platforms }}
-          echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
-      - name: Docker meta
-        id: meta
-        uses: docker/metadata-action@v6
+      - uses: btnguyen2k/gh-actions/dockerbp@dockerbp/v0.3.0
+        id: images
         with:
-          images: ${{ env.DOCKER_IMAGE }}
-          tags: type=raw,value=${{ env.VERSION }}
-          labels: org.opencontainers.image.revision=${{ env.TARGET_SHA }}
-      - name: Build and push by digest
-        id: build
-        uses: docker/build-push-action@v7
-        with:
-          platforms: ${{ matrix.platforms }}
-          labels: ${{ steps.meta.outputs.labels }}
-          outputs: type=image,name=${{ env.DOCKER_IMAGE }},push-by-digest=true,name-canonical=true,push=true
-          file: ./Dockerfile
+          mode: build
+          checkout: false
+          publish: true
+          target-sha: ${{ env.TARGET_SHA }}
+          image: ${{ env.DOCKER_IMAGE }}
+          platforms: linux/amd64,linux/arm64
+          tags: |
+            release
+            ${{ env.VERSION }}
+          dockerfile: Dockerfile
           context: ./
-      - name: Export digest
-        run: |
-          mkdir -p /tmp/digests
-          digest="${{ steps.build.outputs.digest }}"
-          touch "/tmp/digests/${digest#sha256:}"
-      - name: Upload digest
-        uses: actions/upload-artifact@v7
-        with:
-          name: digests-${{ env.PLATFORM_PAIR }}
-          path: /tmp/digests/*
-          if-no-files-found: error
-          retention-days: 1
-
-  PublishDockerImagesLinuxMerge:
-    runs-on: ubuntu-latest
-    needs: PublishDockerImagesLinuxBuild
-    name: Merge & Publish Docker image(s) - Linux
-    env:
-      VERSION: ${{ needs.PublishDockerImagesLinuxBuild.outputs.VERSION }}
-      TARGET_SHA: ${{ needs.PublishDockerImagesLinuxBuild.outputs.TARGET_SHA }}
-    outputs:
-      VERSION: ${{ needs.PublishDockerImagesLinuxBuild.outputs.VERSION }}
-      TARGET_SHA: ${{ needs.PublishDockerImagesLinuxBuild.outputs.TARGET_SHA }}
-    steps:
-      - name: Download digests
-        uses: actions/download-artifact@v8
-        with:
-          path: /tmp/digests
-          pattern: digests-*
-          merge-multiple: true
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-      - name: Login to Docker Hub
-        uses: docker/login-action@v4
-        with:
-          username: ${{ secrets.DOCKER_HUB_USER }}
-          password: ${{ secrets.DOCKER_HUB_PAT }}
-      - name: Create manifest list and push
-        working-directory: /tmp/digests
-        run: |
-          docker buildx imagetools create \
-            -t ${{ env.DOCKER_IMAGE }}:release \
-            -t ${{ env.DOCKER_IMAGE }}:${{ env.VERSION }} \
-            -t ${{ env.DOCKER_IMAGE }}:${{ env.TARGET_SHA }} \
-            $(printf '${{ env.DOCKER_IMAGE }}@sha256:%s ' *)
 
   DeployToProd:
     runs-on: ubuntu-latest
-    needs: [ PublishDockerImagesLinuxMerge ]
+    needs: [ PublishDockerImagesLinux ]
     name: Deploy to production
+    if: needs.PublishDockerImagesLinux.steps.images.outputs.status == 'published'
     env:
-      VERSION: ${{ needs.PublishDockerImagesLinuxMerge.outputs.VERSION }}
-      TARGET_SHA: ${{ needs.PublishDockerImagesLinuxMerge.outputs.TARGET_SHA }}
+      TARGET_SHA: ${{ needs.PublishDockerImagesLinux.outputs.TARGET_SHA }}
     steps:
       - name: Log in to Azure
         uses: azure/login@v3
