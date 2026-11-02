@@ -1,5 +1,6 @@
 import asyncio
 import json
+import time
 from collections.abc import Mapping
 from unittest.mock import AsyncMock, patch
 
@@ -566,11 +567,23 @@ def test_task_configuration_matches_quality_first_stage_design():
             "AUD",
             None,
         ),
+        ("Use 1 234.50 EUR as the total budget.", "Total", 1_234.50, "EUR", None),
+        ("Invest 2.5k USD.", "Total", 2_500, "USD", None),
+        ("Invest 2 M aud.", "Total", 2_000_000, "AUD", None),
+        ("Invest 250USD.", "Total", 250, "USD", None),
+        ("Contribute 250 USD/mo.", "Recurring", 250, "USD", "Monthly"),
         ("Contribute $250/mo.", "Recurring", 250, "USD", "Monthly"),
         ("Invest 500 every month.", "Recurring", 500, "USD", "Monthly"),
         ("Invest A$1000 monthly.", "Recurring", 1_000, "AUD", "Monthly"),
         (
             "Build a diversified portfolio of stocks priced under $20 per share.",
+            "NotProvided",
+            None,
+            None,
+            None,
+        ),
+        (
+            "Build a diversified portfolio of stocks priced under 20 USD per share.",
             "NotProvided",
             None,
             None,
@@ -595,12 +608,35 @@ def test_extract_budget_from_investor_theme(
     assert budget.is_inferred is False
 
 
-def test_extract_budget_rejects_multiple_amounts():
+@pytest.mark.parametrize(
+    "theme",
+    [
+        "Use a USD 10,000 total budget plus USD 500 monthly.",
+        "Use a 10,000 USD total budget plus 500 USD monthly.",
+    ],
+)
+def test_extract_budget_rejects_multiple_amounts(theme):
     with pytest.raises(service.portfolio_verification.PortfolioInputError, match="multiple"):
-        portfolio_budget.extract_budget(
-            "Use a USD 10,000 total budget plus USD 500 monthly.",
-            default_currency="USD",
-        )
+        portfolio_budget.extract_budget(theme, default_currency="USD")
+
+
+@pytest.mark.parametrize(
+    ("theme", "expected_amount"),
+    [
+        pytest.param("1" * 3999 + "!", None, id="digits"),
+        pytest.param("1" * 3999 + ",", None, id="trailing-comma"),
+        pytest.param("1" + " 111" * 999 + "!", None, id="grouped-digits"),
+        pytest.param("1" * 3989 + "! 250 USD", 250, id="later-budget"),
+    ],
+)
+def test_extract_budget_handles_long_numeric_runs(theme, expected_amount):
+    started = time.process_time()
+
+    budget = portfolio_budget.extract_budget(theme, default_currency="USD")
+
+    assert time.process_time() - started < 0.1
+    assert budget.amount == expected_amount
+    assert budget.budget_type == ("NotProvided" if expected_amount is None else "Total")
 
 
 def test_extract_budget_rejects_negative_amount():

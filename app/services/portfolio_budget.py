@@ -1,3 +1,4 @@
+import collections.abc
 import re
 from decimal import ROUND_FLOOR, Decimal
 
@@ -22,16 +23,20 @@ _BUDGET_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
-        rf"(?P<source>{_AMOUNT_TOKEN}\s*(?P<currency>{_CURRENCY_CODES}))",
-        re.IGNORECASE,
-    ),
-    re.compile(
         rf"(?P<source>(?:total\s+|recurring\s+|regular\s+)?"
         rf"(?:portfolio\s+)?(?:budget|investment(?:\s+amount)?|contribution|capital|"
         rf"invest|contribute|deploy|fund|allocate|put\s+in)"
         rf"\s*(?:of|is|:|=)?\s*{_AMOUNT_TOKEN})",
         re.IGNORECASE,
     ),
+)
+_AMOUNT_CURRENCY_PATTERN = re.compile(
+    rf"(?P<source>{_AMOUNT_TOKEN}\s*(?P<currency>{_CURRENCY_CODES}))",
+    re.IGNORECASE,
+)
+_CURRENCY_SUFFIX_PATTERN = re.compile(
+    rf"(?:[kKmM](?![A-Za-z])\s*)?(?:{_CURRENCY_CODES})",
+    re.IGNORECASE,
 )
 _BUDGET_CONTEXT_PATTERN = re.compile(
     r"\b(?:budget|invest(?:ment)?|contribut(?:e|ion|ions)?|capital|portfolio|deploy|fund|"
@@ -54,58 +59,57 @@ def extract_budget(
     if _NEGATIVE_BUDGET_PATTERN.search(investor_theme):
         raise portfolio_verification.PortfolioInputError("Investment budget must be a positive finite amount")
     matches: list[tuple[int, int, Decimal, str, str, bool]] = []
-    for pattern in _BUDGET_PATTERNS:
-        for match in pattern.finditer(investor_theme):
-            start, end = match.span("source")
-            context = investor_theme[max(0, start - 60) : min(len(investor_theme), end + 60)]
-            currency_marker = match.groupdict().get("currency")
-            if not currency_marker and not _BUDGET_CONTEXT_PATTERN.search(context):
-                continue
-            if not currency_marker and re.match(
-                r"\s*(?:%|percent|ETFs?|stocks?|holdings?|positions?|years?)\b",
-                investor_theme[end:],
-                re.IGNORECASE,
-            ):
-                continue
-            immediate_context = investor_theme[max(0, start - 40) : min(len(investor_theme), end + 40)]
-            if re.search(
-                r"\b(?:salary|income|revenue|price|priced|pricing|per\s+share|"
-                r"share\s+price|stocks?\s+(?:under|below|above)|market\s+cap|"
-                r"dividend|fee|expense|debt)\b",
-                immediate_context,
-                re.IGNORECASE,
-            ) and not re.search(
-                r"\b(?:budget|contribut(?:e|ion|ions)?|deploy|fund|lump[\s-]?sum)\b",
-                immediate_context,
-                re.IGNORECASE,
-            ):
-                continue
+    for match in _iter_budget_matches(investor_theme):
+        start, end = match.span("source")
+        context = investor_theme[max(0, start - 60) : min(len(investor_theme), end + 60)]
+        currency_marker = match.groupdict().get("currency")
+        if not currency_marker and not _BUDGET_CONTEXT_PATTERN.search(context):
+            continue
+        if not currency_marker and re.match(
+            r"\s*(?:%|percent|ETFs?|stocks?|holdings?|positions?|years?)\b",
+            investor_theme[end:],
+            re.IGNORECASE,
+        ):
+            continue
+        immediate_context = investor_theme[max(0, start - 40) : min(len(investor_theme), end + 40)]
+        if re.search(
+            r"\b(?:salary|income|revenue|price|priced|pricing|per\s+share|"
+            r"share\s+price|stocks?\s+(?:under|below|above)|market\s+cap|"
+            r"dividend|fee|expense|debt)\b",
+            immediate_context,
+            re.IGNORECASE,
+        ) and not re.search(
+            r"\b(?:budget|contribut(?:e|ion|ions)?|deploy|fund|lump[\s-]?sum)\b",
+            immediate_context,
+            re.IGNORECASE,
+        ):
+            continue
 
-            number_text = match.group("number").replace(",", "").replace(" ", "")
-            amount = Decimal(number_text)
-            scale = (match.group("scale") or "").lower()
-            if scale == "k":
-                amount *= Decimal("1000")
-            elif scale == "m":
-                amount *= Decimal("1000000")
-            if not amount.is_finite() or amount <= 0:
-                raise portfolio_verification.PortfolioInputError("Investment budget must be a positive finite amount")
+        number_text = match.group("number").replace(",", "").replace(" ", "")
+        amount = Decimal(number_text)
+        scale = (match.group("scale") or "").lower()
+        if scale == "k":
+            amount *= Decimal("1000")
+        elif scale == "m":
+            amount *= Decimal("1000000")
+        if not amount.is_finite() or amount <= 0:
+            raise portfolio_verification.PortfolioInputError("Investment budget must be a positive finite amount")
 
-            currency = _resolve_budget_currency(
-                currency_marker,
-                default_currency=default_currency,
+        currency = _resolve_budget_currency(
+            currency_marker,
+            default_currency=default_currency,
+        )
+        source_text = _budget_source_excerpt(investor_theme, start=start, end=end)
+        matches.append(
+            (
+                start,
+                end,
+                amount,
+                currency,
+                source_text,
+                bool(currency_marker),
             )
-            source_text = _budget_source_excerpt(investor_theme, start=start, end=end)
-            matches.append(
-                (
-                    start,
-                    end,
-                    amount,
-                    currency,
-                    source_text,
-                    bool(currency_marker),
-                )
-            )
+        )
 
     matches.sort(key=lambda item: (-item[5], -(item[1] - item[0]), item[0]))
     non_overlapping: list[tuple[int, int, Decimal, str, str, bool]] = []
@@ -227,6 +231,43 @@ def allocate_whole_shares(
 
 def round_money(amount: Decimal) -> float:
     return float(amount.quantize(MONEY_QUANTUM))
+
+
+def _iter_budget_matches(investor_theme: str) -> collections.abc.Iterator[re.Match[str]]:
+    for pattern in _BUDGET_PATTERNS:
+        yield from pattern.finditer(investor_theme)
+
+    # Discover currencies first instead of retrying a failed amount at every digit.
+    for suffix in _CURRENCY_SUFFIX_PATTERN.finditer(investor_theme):
+        number_end = suffix.start()
+        while number_end and investor_theme[number_end - 1].isspace():
+            number_end -= 1
+        start = number_end
+        while start and investor_theme[start - 1].isdecimal():
+            start -= 1
+        if start == number_end:
+            continue
+        if start > 1 and investor_theme[start - 1] == "." and investor_theme[start - 2].isdecimal():
+            number_end = start - 1
+            start = number_end
+            while start and investor_theme[start - 1].isdecimal():
+                start -= 1
+        while (
+            number_end - start == 3
+            and start > 1
+            and (investor_theme[start - 1] == "," or investor_theme[start - 1].isspace())
+            and investor_theme[start - 2].isdecimal()
+        ):
+            number_end = start - 1
+            start = number_end
+            while start and investor_theme[start - 1].isdecimal():
+                start -= 1
+            if number_end - start > 3:
+                # The initial group of a grouped number contains at most three digits.
+                start = number_end - 3
+                break
+        if match := _AMOUNT_CURRENCY_PATTERN.match(investor_theme, start, suffix.end()):
+            yield match
 
 
 def _budget_source_excerpt(
