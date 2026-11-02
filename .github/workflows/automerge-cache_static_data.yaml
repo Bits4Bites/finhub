@@ -74,12 +74,18 @@ jobs:
               });
 
               if (!result.merged) {
-                core.setFailed(`PR #${pullNumber} was not merged: ${result.message}`);
+                core.setFailed(`❌ PR #${pullNumber} was not merged: ${result.message}`);
                 return;
               }
 
-              console.log(`Merged cache static data PR #${pullNumber}.`);
+              console.log(`✅ Merged cache static data PR #${pullNumber}.`);
+              await github.rest.git.deleteRef({
+                owner,
+                repo,
+                ref: `heads/${branch}`,
+              });
+              console.log(`✅ Deleted cache static data branch ${branch}.`);
               return;
             }
 
-            core.setFailed(`No open cache static data PR found for branch ${branch}.`);
+            core.setFailed(`❌ No open cache static data PR found for branch ${branch}.`);
