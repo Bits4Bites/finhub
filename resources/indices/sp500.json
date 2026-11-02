@@ -1,5 +1,5 @@
 {
-    "date": "2026-10-17",
+    "date": "2026-10-24",
     "data": [
         {
             "symbol": "NYSE:MMM",
@@ -1963,7 +1963,7 @@
         },
         {
             "symbol": "NYSE:RMD",
-            "company": "ResMed|",
+            "company": "ResMed",
             "sector": "Health Care"
         },
         {
