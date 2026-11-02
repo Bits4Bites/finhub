@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Setup env
-        run: echo "WORK_BRANCH=cache-static-data-$(date +'%Y%m%d')" >> $GITHUB_ENV
+        run: echo "WORK_BRANCH=cache-static-data-$(date +'%Y%m%d%H')" >> $GITHUB_ENV
       - name: Checkout code
         uses: actions/checkout@v7
       - name: Create new branch
@@ -30,6 +30,7 @@ jobs:
       - name: Sync code to the latest version
         run: |
           git pull origin main
+          echo "REFRESH_BASE_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
@@ -41,20 +42,32 @@ jobs:
         run: |
           python -m qnd.qnd_update_asx_indices
           git add .
-          git commit -am "Update ASX indices"
-          echo "✅ ASX indices updated and committed."
+          if git diff --cached --quiet; then
+            echo "ℹ️ No ASX indices changes to commit."
+          else
+            git commit -am "Update ASX indices"
+            echo "✅ ASX indices updated and committed."
+          fi
       - name: Update US Indices
         run: |
           python -m qnd.qnd_update_us_indices
           git add .
-          git commit -am "Update US indices"
-          echo "✅ US indices updated and committed."
+          if git diff --cached --quiet; then
+            echo "ℹ️ No US indices changes to commit."
+          else
+            git commit -am "Update US indices"
+            echo "✅ US indices updated and committed."
+          fi
       - name: Update VN Indices
         run: |
           python -m qnd.qnd_update_vn_indices
           git add .
-          git commit -am "Update VN indices"
-          echo "✅ VN indices updated and committed."
+          if git diff --cached --quiet; then
+            echo "ℹ️ No VN indices changes to commit."
+          else
+            git commit -am "Update VN indices"
+            echo "✅ VN indices updated and committed."
+          fi
 #      - name: Cache ASX
 #        run: |
 #          python -m qnd.qnd_cache_asx
@@ -69,7 +82,11 @@ jobs:
 #          echo "✅ SP1500 data cached and committed."
       - name: Push changes
         run: |
-          git push origin ${WORK_BRANCH}
+          if [[ "$(git rev-parse HEAD)" == "$REFRESH_BASE_SHA" ]]; then
+            echo "❌ Nothing to push: no index updates were committed."
+            exit 1
+          fi
+          git push origin "${WORK_BRANCH}"
           echo "✅ Branch ${WORK_BRANCH} pushed to origin"
       - name: Create Pull Request
         uses: actions/github-script@v9
