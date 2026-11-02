@@ -3,12 +3,12 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.models.finhub import HistoryPoint, StockQuote
+from app.models import market_data as models_market_data
 
 client = TestClient(app)
 
 
-def _make_stock_quote(**overrides) -> StockQuote:
+def _make_stock_quote(**overrides) -> models_market_data.StockQuote:
     """Create a StockQuote without requiring a yf.Ticker."""
     defaults = {
         "currency": "USD",
@@ -23,12 +23,12 @@ def _make_stock_quote(**overrides) -> StockQuote:
         "market_volume": 50000,
     }
     defaults.update(overrides)
-    return StockQuote.model_construct(**defaults)
+    return models_market_data.StockQuote.model_construct(**defaults)
 
 
-def _make_history_points(n: int = 3, currency: str = "USD") -> list[HistoryPoint]:
+def _make_history_points(n: int = 3, currency: str = "USD") -> list[models_market_data.HistoryPoint]:
     return [
-        HistoryPoint(
+        models_market_data.HistoryPoint(
             timestamp=1700000000 + i * 86400,
             timestamp_str=f"2026-01-0{i + 1} 00:00:00",
             currency=currency,

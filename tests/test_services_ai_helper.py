@@ -1,9 +1,185 @@
 import asyncio
+import inspect
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
+import openai
+import pytest
+from google.genai import types as genai_types
+from pydantic import BaseModel, ValidationError
+
 from app import config
 from app.services import ai_helper
+
+
+def _make_openai_response():
+    return SimpleNamespace(
+        output_text="ok",
+        status="completed",
+        output=[],
+        usage=SimpleNamespace(
+            input_tokens=10,
+            output_tokens=5,
+            total_tokens=17,
+            input_tokens_details=SimpleNamespace(cached_tokens=3),
+            output_tokens_details=SimpleNamespace(reasoning_tokens=2),
+        ),
+    )
+
+
+def _make_gemini_response():
+    return SimpleNamespace(
+        text="ok",
+        usage_metadata=SimpleNamespace(
+            prompt_token_count=10,
+            candidates_token_count=5,
+            thoughts_token_count=2,
+            tool_use_prompt_token_count=1,
+            cached_content_token_count=3,
+            total_token_count=17,
+        ),
+        prompt_feedback=None,
+        candidates=[SimpleNamespace()],
+    )
+
+
+def _make_rate_limit_error(
+    *,
+    code: str = "rate_limit_exceeded",
+    headers: dict[str, str] | None = None,
+) -> openai.RateLimitError:
+    response = httpx.Response(
+        429,
+        headers=headers,
+        request=httpx.Request("POST", "https://api.openai.com/v1/responses"),
+    )
+    return openai.RateLimitError(
+        "Rate limit exceeded",
+        response=response,
+        body={
+            "error": {
+                "message": "Rate limit exceeded",
+                "type": "too_many_requests",
+                "code": code,
+            }
+        },
+    )
+
+
+def test_structured_validation_logging_omits_rejected_input(caplog):
+    class ExampleModel(BaseModel):
+        value: int
+
+    with pytest.raises(ValidationError) as error_info:
+        ExampleModel.model_validate({"value": "private rejected value"})
+
+    ai_helper.log_structured_validation_failure("Example", "Assessment", error_info.value)
+
+    assert "value: Input should be a valid integer" in caplog.text
+    assert "private rejected value" not in caplog.text
+
+
+class TestLlmTaskConfig:
+    def test_reasoning_and_web_search_defaults(self):
+        task_cfg = config.LLMTaskConfig()
+
+        assert task_cfg.reasoning_effort is None
+        assert task_cfg.use_web_search is False
+        assert task_cfg.max_tool_calls == 0
+        assert not hasattr(task_cfg, "temperature")
+
+    def test_reasoning_effort_is_case_insensitive(self):
+        task_cfg = config.LLMTaskConfig(reasoning_effort="High")
+
+        assert task_cfg.reasoning_effort == "High"
+
+    def test_underwritten_listing_tasks_use_terra_with_high_reasoning(self):
+        settings = config.LLMTaskSettings()
+        standard_research_task = settings.tasks["asx_listtings_research"]
+        research_task = settings.tasks["asx_listtings_underwritten_research"]
+        analysis_task = settings.tasks["asx_listtings_underwritten_analyze"]
+
+        assert standard_research_task.max_tool_calls == 0
+        assert (research_task.model, research_task.reasoning_effort, research_task.use_web_search) == (
+            "gpt-5.6-terra",
+            "High",
+            True,
+        )
+        assert research_task.max_tool_calls == 0
+        assert (analysis_task.model, analysis_task.reasoning_effort, analysis_task.use_web_search) == (
+            "gpt-5.6-terra",
+            "High",
+            False,
+        )
+
+    def test_dividend_tasks_split_web_research_from_assessment(self):
+        settings = config.LLMTaskSettings()
+        research_task = settings.tasks["analyze_div_event_research"]
+        assessment_task = settings.tasks["analyze_div_event_assess"]
+
+        assert (research_task.model, research_task.reasoning_effort, research_task.use_web_search) == (
+            "gpt-5.6-terra",
+            "High",
+            True,
+        )
+        assert (assessment_task.model, assessment_task.reasoning_effort, assessment_task.use_web_search) == (
+            "gpt-5.6-terra",
+            "High",
+            False,
+        )
+
+    def test_ticker_tasks_use_selected_profiles(self):
+        settings = config.LLMTaskSettings()
+        research = settings.tasks["analyze_ticker_research"]
+        forecast = settings.tasks["analyze_ticker_forecast"]
+        recommendation = settings.tasks["analyze_ticker_recommend"]
+
+        assert (research.model, research.reasoning_effort, research.use_web_search, research.max_tool_calls) == (
+            "gpt-5.6-sol",
+            "High",
+            True,
+            0,
+        )
+        assert (forecast.model, forecast.reasoning_effort, forecast.use_web_search) == (
+            "gpt-5.6-terra",
+            "High",
+            False,
+        )
+        assert (recommendation.model, recommendation.reasoning_effort, recommendation.use_web_search) == (
+            "gpt-5.6-terra",
+            "High",
+            False,
+        )
+
+    def test_portfolio_review_tasks_use_selected_profiles(self):
+        settings = config.LLMTaskSettings()
+        research = settings.tasks["review_portfolio_research"]
+        assessment = settings.tasks["review_portfolio_assess"]
+        target = settings.tasks["review_portfolio_target"]
+        action_plan = settings.tasks["review_portfolio_action_plan"]
+
+        assert (research.model, research.reasoning_effort, research.use_web_search, research.max_tool_calls) == (
+            "gpt-5.6-sol",
+            "High",
+            True,
+            25,
+        )
+        assert (assessment.model, assessment.reasoning_effort, assessment.use_web_search) == (
+            "gpt-5.6-terra",
+            "High",
+            False,
+        )
+        assert (target.model, target.reasoning_effort, target.use_web_search) == (
+            "gpt-5.6-sol",
+            "Medium",
+            False,
+        )
+        assert (action_plan.model, action_plan.reasoning_effort, action_plan.use_web_search) == (
+            "gpt-5.6-sol",
+            "Medium",
+            False,
+        )
 
 
 class TestAiExecPrompt:
@@ -17,7 +193,13 @@ class TestAiExecPrompt:
             result = asyncio.run(ai_helper.ai_exec_prompt(task_cfg, "hello world"))
 
         assert result is expected
-        mock_exec.assert_awaited_once_with(task_cfg, "hello world", None, 0.2)
+        mock_exec.assert_awaited_once_with(
+            task_cfg,
+            "hello world",
+            country="",
+            response_json_schema=None,
+            schema_name="json_responses",
+        )
 
     def test_ai_exec_prompt_raises_for_unknown_vendor(self):
         task_cfg = config.LLMTaskConfig(task_name="demo", vendor="UNKNOWN", tier="cheap", model="x")
@@ -32,7 +214,14 @@ class TestAiExecPrompt:
 
 class TestAiExecTask:
     def test_ai_exec_task_builds_prompt_config_and_uses_task(self):
-        task_cfg = config.LLMTaskConfig(task_name="demo", vendor="OPENAI", tier="cheap", model="gpt-5-mini")
+        task_cfg = config.LLMTaskConfig(
+            task_name="demo",
+            vendor="OPENAI",
+            tier="cheap",
+            model="gpt-5-mini",
+            reasoning_effort="HIGH",
+            use_web_search=True,
+        )
         fake_settings = MagicMock()
         fake_settings.tasks = {"DEMO": task_cfg}
 
@@ -46,9 +235,491 @@ class TestAiExecTask:
 
         assert result == "ok"
         mock_exec_prompt.assert_awaited_once()
-        called_task_cfg, called_prompt, called_cfg = mock_exec_prompt.await_args.args
+        called_task_cfg, called_prompt = mock_exec_prompt.await_args.args
         assert called_task_cfg is task_cfg
         assert called_prompt == "prompt"
-        assert called_cfg.use_web_search is True
-        assert called_cfg.country == "AU"
-        assert mock_exec_prompt.await_args.kwargs["llm_config_override"] is None
+        assert called_task_cfg.reasoning_effort == "High"
+        assert called_task_cfg.use_web_search is True
+        assert mock_exec_prompt.await_args.kwargs == {
+            "country": "AU",
+            "response_json_schema": None,
+            "schema_name": "json_responses",
+        }
+
+    def test_country_is_keyword_only(self):
+        country_param = inspect.signature(ai_helper.ai_exec_task).parameters["country"]
+
+        assert country_param.kind is inspect.Parameter.KEYWORD_ONLY
+
+
+class TestExecPromptOpenAiClient:
+    def test_rate_limit_waits_for_provider_delay_then_returns_response(self):
+        task_cfg = config.LLMTaskConfig(
+            task_name="demo",
+            vendor="AZURE_OPENAI",
+            tier="cheap",
+            model="gpt-5.6-sol",
+        )
+        client = MagicMock()
+        client.responses.create = AsyncMock(
+            side_effect=[
+                _make_rate_limit_error(headers={"retry-after-ms": "2500"}),
+                _make_openai_response(),
+            ]
+        )
+
+        with patch.object(ai_helper.asyncio, "sleep", new_callable=AsyncMock) as mock_sleep:
+            result = asyncio.run(
+                ai_helper._exec_prompt_openai_client(
+                    client,
+                    task_cfg,
+                    "prompt",
+                    schema_name="json_responses",
+                )
+            )
+
+        assert result.completion == "ok"
+        assert client.responses.create.await_count == 2
+        mock_sleep.assert_awaited_once_with(2.5)
+
+    def test_rate_limit_without_provider_delay_uses_jittered_backoff(self):
+        task_cfg = config.LLMTaskConfig(
+            task_name="demo",
+            vendor="OPENAI",
+            tier="cheap",
+            model="gpt-5.6-sol",
+        )
+        client = MagicMock()
+        client.responses.create = AsyncMock(
+            side_effect=[
+                _make_rate_limit_error(),
+                _make_openai_response(),
+            ]
+        )
+
+        with (
+            patch.object(ai_helper.random, "uniform", return_value=0.75) as mock_uniform,
+            patch.object(ai_helper.asyncio, "sleep", new_callable=AsyncMock) as mock_sleep,
+        ):
+            result = asyncio.run(
+                ai_helper._exec_prompt_openai_client(
+                    client,
+                    task_cfg,
+                    "prompt",
+                    schema_name="json_responses",
+                )
+            )
+
+        assert result.completion == "ok"
+        mock_uniform.assert_called_once_with(0, 5)
+        mock_sleep.assert_awaited_once_with(0.75)
+
+    def test_permanent_quota_error_is_not_retried(self):
+        task_cfg = config.LLMTaskConfig(
+            task_name="demo",
+            vendor="OPENAI",
+            tier="cheap",
+            model="gpt-5.6-sol",
+        )
+        client = MagicMock()
+        error = _make_rate_limit_error(code="insufficient_quota")
+        client.responses.create = AsyncMock(side_effect=error)
+
+        with (
+            patch.object(ai_helper.asyncio, "sleep", new_callable=AsyncMock) as mock_sleep,
+            pytest.raises(openai.RateLimitError),
+        ):
+            asyncio.run(
+                ai_helper._exec_prompt_openai_client(
+                    client,
+                    task_cfg,
+                    "prompt",
+                    schema_name="json_responses",
+                )
+            )
+
+        client.responses.create.assert_awaited_once()
+        mock_sleep.assert_not_awaited()
+
+    def test_retry_budget_exhaustion_raises_transient_rate_limit_error(self):
+        task_cfg = config.LLMTaskConfig(
+            task_name="demo",
+            vendor="OPENAI",
+            tier="cheap",
+            model="gpt-5.6-sol",
+        )
+        client = MagicMock()
+        client.responses.create = AsyncMock(side_effect=_make_rate_limit_error())
+        settings = config.settings_openai_execution.model_copy(update={"rate_limit_max_wait_seconds": 0})
+
+        with (
+            patch.object(ai_helper.config, "settings_openai_execution", settings),
+            pytest.raises(ai_helper.LLMRateLimitError),
+        ):
+            asyncio.run(
+                ai_helper._exec_prompt_openai_client(
+                    client,
+                    task_cfg,
+                    "prompt",
+                    schema_name="json_responses",
+                )
+            )
+
+        client.responses.create.assert_awaited_once()
+
+    def test_same_provider_model_requests_are_admission_limited(self):
+        async def run_requests() -> int:
+            task_cfg = config.LLMTaskConfig(
+                task_name="demo",
+                vendor="AZURE_OPENAI",
+                tier="cheap",
+                model="gpt-5.6-sol",
+            )
+            client = MagicMock()
+            first_request_started = asyncio.Event()
+            release_first_request = asyncio.Event()
+            active_requests = 0
+            maximum_active_requests = 0
+            request_count = 0
+
+            async def create_response(**_: object):
+                nonlocal active_requests, maximum_active_requests, request_count
+                request_count += 1
+                active_requests += 1
+                maximum_active_requests = max(maximum_active_requests, active_requests)
+                if request_count == 1:
+                    first_request_started.set()
+                    await release_first_request.wait()
+                active_requests -= 1
+                return _make_openai_response()
+
+            client.responses.create = AsyncMock(side_effect=create_response)
+            first = asyncio.create_task(
+                ai_helper._exec_prompt_openai_client(
+                    client,
+                    task_cfg,
+                    "first",
+                    schema_name="json_responses",
+                )
+            )
+            await first_request_started.wait()
+            second = asyncio.create_task(
+                ai_helper._exec_prompt_openai_client(
+                    client,
+                    task_cfg,
+                    "second",
+                    schema_name="json_responses",
+                )
+            )
+            await asyncio.sleep(0)
+            assert client.responses.create.await_count == 1
+            release_first_request.set()
+            await asyncio.gather(first, second)
+            return maximum_active_requests
+
+        settings = config.settings_openai_execution.model_copy(update={"max_concurrent_requests": 1})
+        with patch.object(ai_helper.config, "settings_openai_execution", settings):
+            maximum_active_requests = asyncio.run(run_requests())
+
+        assert maximum_active_requests == 1
+
+    def test_responses_collects_provider_url_citations(self):
+        task_cfg = config.LLMTaskConfig(vendor="OPENAI", model="gpt-5", use_web_search=True)
+        client = MagicMock()
+        response = _make_openai_response()
+        response.output = [
+            SimpleNamespace(
+                content=[
+                    SimpleNamespace(
+                        annotations=[
+                            SimpleNamespace(
+                                type="url_citation",
+                                url="https://www.asx.com.au/source",
+                            ),
+                            SimpleNamespace(
+                                type="url_citation",
+                                url="https://www.asx.com.au/source",
+                            ),
+                        ]
+                    )
+                ]
+            )
+        ]
+        client.responses.create = AsyncMock(return_value=response)
+
+        result = asyncio.run(
+            ai_helper._exec_prompt_openai_client(
+                client,
+                task_cfg,
+                "prompt",
+                schema_name="json_responses",
+            )
+        )
+
+        assert result.citation_urls == ["https://www.asx.com.au/source"]
+
+    def test_responses_uses_model_defaults_when_reasoning_effort_is_missing(self):
+        task_cfg = config.LLMTaskConfig(vendor="OPENAI", model="gpt-5-mini")
+        client = MagicMock()
+        client.responses.create = AsyncMock(return_value=_make_openai_response())
+
+        result = asyncio.run(
+            ai_helper._exec_prompt_openai_client(
+                client,
+                task_cfg,
+                "prompt",
+                schema_name="json_responses",
+            )
+        )
+
+        assert result.completion == "ok"
+        assert result.tokens_thought == 2
+        assert result.tokens_cache == 3
+        request_kwargs = client.responses.create.await_args.kwargs
+        assert "reasoning" not in request_kwargs
+        assert "temperature" not in request_kwargs
+
+    def test_responses_uses_configured_reasoning_effort(self):
+        task_cfg = config.LLMTaskConfig(vendor="OPENAI", model="gpt-5-mini", reasoning_effort="Medium")
+        client = MagicMock()
+        client.responses.create = AsyncMock(return_value=_make_openai_response())
+
+        asyncio.run(
+            ai_helper._exec_prompt_openai_client(
+                client,
+                task_cfg,
+                "prompt",
+                schema_name="json_responses",
+            )
+        )
+
+        request_kwargs = client.responses.create.await_args.kwargs
+        assert request_kwargs["reasoning"] == {"effort": "medium"}
+        assert "temperature" not in request_kwargs
+
+    def test_web_search_uses_task_config_and_country(self):
+        task_cfg = config.LLMTaskConfig(
+            vendor="OPENAI",
+            model="gpt-5",
+            reasoning_effort="High",
+            use_web_search=True,
+        )
+        client = MagicMock()
+        client.responses.create = AsyncMock(return_value=_make_openai_response())
+
+        result = asyncio.run(
+            ai_helper._exec_prompt_openai_client(
+                client,
+                task_cfg,
+                "prompt",
+                country="AU",
+                schema_name="json_responses",
+            )
+        )
+
+        assert result.completion == "ok"
+        request_kwargs = client.responses.create.await_args.kwargs
+        assert request_kwargs["reasoning"] == {"effort": "high"}
+        assert request_kwargs["max_tool_calls"] == 13
+        assert request_kwargs["tools"][0]["user_location"] == {"type": "approximate", "country": "AU"}
+        assert "temperature" not in request_kwargs
+        client.chat.completions.create.assert_not_called()
+
+    def test_web_search_uses_positive_max_tool_call_override(self):
+        task_cfg = config.LLMTaskConfig(
+            vendor="OPENAI",
+            model="gpt-5.6-sol",
+            reasoning_effort="High",
+            use_web_search=True,
+            max_tool_calls=25,
+        )
+        client = MagicMock()
+        client.responses.create = AsyncMock(return_value=_make_openai_response())
+
+        asyncio.run(
+            ai_helper._exec_prompt_openai_client(
+                client,
+                task_cfg,
+                "prompt",
+                schema_name="json_responses",
+            )
+        )
+
+        assert client.responses.create.await_args.kwargs["max_tool_calls"] == 25
+
+    def test_web_search_uses_reasoning_default_for_negative_max_tool_calls(self):
+        task_cfg = config.LLMTaskConfig(
+            vendor="OPENAI",
+            model="gpt-5.6-sol",
+            reasoning_effort="Medium",
+            use_web_search=True,
+            max_tool_calls=-1,
+        )
+        client = MagicMock()
+        client.responses.create = AsyncMock(return_value=_make_openai_response())
+
+        asyncio.run(
+            ai_helper._exec_prompt_openai_client(
+                client,
+                task_cfg,
+                "prompt",
+                schema_name="json_responses",
+            )
+        )
+
+        assert client.responses.create.await_args.kwargs["max_tool_calls"] == 7
+
+    def test_web_search_omits_reasoning_when_missing(self):
+        task_cfg = config.LLMTaskConfig(vendor="OPENAI", model="gpt-5", use_web_search=True)
+        client = MagicMock()
+        client.responses.create = AsyncMock(return_value=_make_openai_response())
+
+        asyncio.run(
+            ai_helper._exec_prompt_openai_client(
+                client,
+                task_cfg,
+                "prompt",
+                schema_name="json_responses",
+            )
+        )
+
+        request_kwargs = client.responses.create.await_args.kwargs
+        assert "reasoning" not in request_kwargs
+        assert request_kwargs["tools"][0]["user_location"] is None
+        assert "temperature" not in request_kwargs
+
+    def test_structured_response_uses_schema_name(self):
+        task_cfg = config.LLMTaskConfig(vendor="OPENAI", model="gpt-5-mini")
+        client = MagicMock()
+        client.responses.create = AsyncMock(return_value=_make_openai_response())
+        response_schema = {"type": "object", "properties": {"answer": {"type": "string"}}}
+
+        asyncio.run(
+            ai_helper._exec_prompt_openai_client(
+                client,
+                task_cfg,
+                "prompt",
+                response_json_schema=response_schema,
+                schema_name="json_responses",
+            )
+        )
+
+        response_format = client.responses.create.await_args.kwargs["text"]["format"]
+        assert response_format["name"] == "json_responses"
+        assert response_format["schema"] == response_schema
+
+    def test_structured_response_removes_ref_sibling_keywords(self):
+        task_cfg = config.LLMTaskConfig(vendor="OPENAI", model="gpt-5-mini")
+        client = MagicMock()
+        client.responses.create = AsyncMock(return_value=_make_openai_response())
+        response_schema = {
+            "$defs": {
+                "ListingPeriodOutlook": {
+                    "type": "object",
+                    "properties": {"direction": {"type": "string"}},
+                },
+                "ListingOutlook": {
+                    "type": "object",
+                    "properties": {
+                        "ipo_day": {
+                            "$ref": "#/$defs/ListingPeriodOutlook",
+                            "description": "Outlook for the initial listing day.",
+                        }
+                    },
+                },
+            },
+            "type": "object",
+            "properties": {"outlook": {"$ref": "#/$defs/ListingOutlook"}},
+        }
+
+        asyncio.run(
+            ai_helper._exec_prompt_openai_client(
+                client,
+                task_cfg,
+                "prompt",
+                response_json_schema=response_schema,
+                schema_name="asx_listing_analysis",
+            )
+        )
+
+        sent_schema = client.responses.create.await_args.kwargs["text"]["format"]["schema"]
+        assert sent_schema["$defs"]["ListingOutlook"]["properties"]["ipo_day"] == {
+            "$ref": "#/$defs/ListingPeriodOutlook"
+        }
+        assert "description" in response_schema["$defs"]["ListingOutlook"]["properties"]["ipo_day"]
+
+    def test_structured_response_removes_only_unsupported_string_formats(self):
+        task_cfg = config.LLMTaskConfig(vendor="OPENAI", model="gpt-5-mini")
+        client = MagicMock()
+        client.responses.create = AsyncMock(return_value=_make_openai_response())
+        response_schema = {
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "format": "uri",
+                    "minLength": 1,
+                },
+                "accessed_at": {
+                    "type": "string",
+                    "format": "date-time",
+                },
+                "format": {
+                    "type": "string",
+                },
+            },
+        }
+
+        asyncio.run(
+            ai_helper._exec_prompt_openai_client(
+                client,
+                task_cfg,
+                "prompt",
+                response_json_schema=response_schema,
+                schema_name="json_responses",
+            )
+        )
+
+        sent_schema = client.responses.create.await_args.kwargs["text"]["format"]["schema"]
+        assert sent_schema["properties"]["url"] == {
+            "type": "string",
+            "minLength": 1,
+        }
+        assert sent_schema["properties"]["accessed_at"]["format"] == "date-time"
+        assert "format" in sent_schema["properties"]
+        assert response_schema["properties"]["url"]["format"] == "uri"
+
+
+class TestExecPromptGemini:
+    def test_uses_model_defaults_when_optional_config_is_missing(self):
+        task_cfg = config.LLMTaskConfig(vendor="GEMINI", tier="cheap", model="gemini-3-flash")
+        client = MagicMock()
+        client.aio.models.generate_content = AsyncMock(return_value=_make_gemini_response())
+
+        with patch.object(ai_helper.config.LLMVendorSettings, "get_llm_client", return_value=client):
+            result = asyncio.run(ai_helper._exec_prompt_gemini(task_cfg, "prompt"))
+
+        assert result.completion == "ok"
+        request_kwargs = client.aio.models.generate_content.await_args.kwargs
+        generation_cfg = request_kwargs["config"]
+        assert generation_cfg.thinking_config is None
+        assert generation_cfg.tools is None
+
+    def test_uses_configured_reasoning_and_web_search(self):
+        task_cfg = config.LLMTaskConfig(
+            vendor="GEMINI",
+            tier="cheap",
+            model="gemini-3-flash",
+            reasoning_effort="LOW",
+            use_web_search=True,
+        )
+        client = MagicMock()
+        client.aio.models.generate_content = AsyncMock(return_value=_make_gemini_response())
+
+        with patch.object(ai_helper.config.LLMVendorSettings, "get_llm_client", return_value=client):
+            asyncio.run(ai_helper._exec_prompt_gemini(task_cfg, "prompt"))
+
+        generation_cfg = client.aio.models.generate_content.await_args.kwargs["config"]
+        assert generation_cfg.thinking_config.thinking_level == genai_types.ThinkingLevel.LOW
+        assert generation_cfg.tools[0].google_search is not None
+        assert generation_cfg.temperature is None

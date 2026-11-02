@@ -1,31 +1,28 @@
-from .. import config
-from ..models import finhub as models
+from ..models import market as models_market
+from ..models import market_data as models_market_data
+from ..models import stocks as models_stocks
 from .base_req_resp import BaseResponse
 
 
-class StockQuotesResponse(BaseResponse):
-    data: dict[str, models.StockQuote] | None = None
+class StockQuotesResponse(BaseResponse[dict[str, models_market_data.StockQuote]]):
+    """Response envelope containing quotes keyed by requested symbol."""
 
 
-class StockQuoteResponse(BaseResponse):
-    data: models.StockQuote | None = None
+class StockHistoryResponse(BaseResponse[list[models_market_data.HistoryPoint]]):
+    """Response envelope containing historical price points."""
 
 
-class StockHistoryResponse(BaseResponse):
-    data: list[models.HistoryPoint] | None = None
+class SymbolOverviewResponse(BaseResponse[models_stocks.SymbolOverview]):
+    """Response envelope containing company and security overview data."""
 
 
-class SymbolOverviewResponse(BaseResponse):
-    data: models.SymbolOverview | None = None
+class SymbolInfoResponse(BaseResponse[models_stocks.SymbolInfo]):
+    """Response envelope containing comprehensive symbol information."""
 
 
-class SymbolInfoResponse(BaseResponse):
-    data: models.SymbolInfo | None = None
+class StockQuoteAtDateResponse(BaseResponse[models_market_data.HistoryPoint]):
+    """Response envelope containing a historical quote for one date."""
 
 
-class StockQuoteAtDateResponse(BaseResponse):
-    data: models.HistoryPoint | None = None
-
-
-class IndexCompaniesResponse(BaseResponse):
-    data: list[config.CompanyBriefInfo] | None = None
+class IndexCompaniesResponse(BaseResponse[list[models_market.CompanyBriefInfo]]):
+    """Response envelope containing constituents of a market index."""

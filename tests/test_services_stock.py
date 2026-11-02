@@ -8,6 +8,7 @@ from app.services.stock import (
     get_symbol_history,
     get_symbol_info,
     get_symbol_overview,
+    resolve_symbol,
 )
 
 # ---------------------------------------------------------------------------
@@ -115,6 +116,52 @@ def _make_history_df(num_rows: int = 3) -> pd.DataFrame:
         },
         index=dates,
     )
+
+
+@patch("app.utils.conv.to_yf_symbol_format", return_value="SGOV")
+@patch("app.services.stock.yf.Ticker")
+def test_resolve_symbol_returns_provider_and_canonical_identity(mock_ticker_cls, mock_to_yf):
+    info = {
+        **ETF_INFO,
+        "symbol": "SGOV",
+        "fullExchangeName": "NYSEArca",
+        "regularMarketPrice": 100.65,
+        "longName": "iShares 0-3 Month Treasury Bond ETF",
+    }
+    mock_ticker_cls.return_value = _make_ticker_mock(info)
+
+    result = resolve_symbol("NYSE:SGOV")
+
+    mock_to_yf.assert_called_once_with("NYSE:SGOV")
+    mock_ticker_cls.assert_called_once_with("SGOV")
+    assert result.symbol == "SGOV"
+    assert result.normalized_symbol == "NYSE:SGOV"
+    assert result.exchange == "NYSE"
+    assert result.currency == "USD"
+    assert result.quote_type == "ETF"
+    assert result.market_price == 100.65
+
+
+@patch("app.utils.conv.to_yf_symbol_format", return_value="GOVT")
+@patch("app.services.stock.yf.Ticker")
+def test_resolve_symbol_normalizes_cboe_us_to_nyse(mock_ticker_cls, mock_to_yf):
+    info = {
+        **ETF_INFO,
+        "symbol": "GOVT",
+        "exchange": "BTS",
+        "fullExchangeName": "Cboe US",
+        "regularMarketPrice": 23.45,
+        "longName": "iShares U.S. Treasury Bond ETF",
+    }
+    mock_ticker_cls.return_value = _make_ticker_mock(info)
+
+    result = resolve_symbol("NYSE:GOVT")
+
+    mock_to_yf.assert_called_once_with("NYSE:GOVT")
+    mock_ticker_cls.assert_called_once_with("GOVT")
+    assert result.symbol == "GOVT"
+    assert result.normalized_symbol == "NYSE:GOVT"
+    assert result.exchange == "NYSE"
 
 
 # ---------------------------------------------------------------------------

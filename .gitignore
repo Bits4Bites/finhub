@@ -1,4 +1,4 @@
-qnd.py
+qnd.*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -77,6 +77,12 @@ docs/_build/
 # PyBuilder
 .pybuilder/
 target/
+
+# .NET build output
+clients/dotnet/bin/
+clients/dotnet/obj/
+clients/dotnet/**/bin/
+clients/dotnet/**/obj/
 
 # Jupyter Notebook
 .ipynb_checkpoints

@@ -1,5 +1,5 @@
 {
-    "date": "2026-08-08",
+    "date": "2026-10-17",
     "data": [
         {
             "symbol": "NYSE:MMM",
@@ -267,11 +267,6 @@
             "sector": "Consumer Discretionary"
         },
         {
-            "symbol": "NYSE:AVB",
-            "company": "AvalonBay Communities",
-            "sector": "Real Estate"
-        },
-        {
             "symbol": "NYSE:AVY",
             "company": "Avery Dennison",
             "sector": "Materials"
@@ -342,6 +337,11 @@
             "sector": "Financials"
         },
         {
+            "symbol": "NYSE:BE",
+            "company": "Bloom Energy",
+            "sector": "Industrials"
+        },
+        {
             "symbol": "NYSE:BNY",
             "company": "BNY Mellon",
             "sector": "Financials"
@@ -385,11 +385,6 @@
             "symbol": "NYSE:BF.B",
             "company": "Brown\u2013Forman",
             "sector": "Consumer Staples"
-        },
-        {
-            "symbol": "NYSE:BLDR",
-            "company": "Builders FirstSource",
-            "sector": "Industrials"
         },
         {
             "symbol": "NYSE:BG",
@@ -647,11 +642,6 @@
             "sector": "Financials"
         },
         {
-            "symbol": "NYSE:CTVA",
-            "company": "Corteva",
-            "sector": "Materials"
-        },
-        {
             "symbol": "NASDAQ:CSGP",
             "company": "CoStar Group",
             "sector": "Real Estate"
@@ -804,7 +794,7 @@
         {
             "symbol": "NYSE:DD",
             "company": "DuPont",
-            "sector": "Materials"
+            "sector": "Industrials"
         },
         {
             "symbol": "NYSE:ETN",
@@ -877,11 +867,6 @@
             "sector": "Real Estate"
         },
         {
-            "symbol": "NYSE:EQR",
-            "company": "Equity Residential",
-            "sector": "Real Estate"
-        },
-        {
             "symbol": "NASDAQ:ERIE",
             "company": "Erie Indemnity",
             "sector": "Financials"
@@ -905,6 +890,11 @@
             "symbol": "NYSE:EVRG",
             "company": "Evergy",
             "sector": "Utilities"
+        },
+        {
+            "symbol": "NYSE:P",
+            "company": "Everpure",
+            "sector": "Information Technology"
         },
         {
             "symbol": "NYSE:ES",
@@ -1247,6 +1237,11 @@
             "sector": "Industrials"
         },
         {
+            "symbol": "NASDAQ:ILMN",
+            "company": "Illumina, Inc.",
+            "sector": "Health Care"
+        },
+        {
             "symbol": "NASDAQ:INCY",
             "company": "Incyte",
             "sector": "Health Care"
@@ -1397,7 +1392,7 @@
             "sector": "Information Technology"
         },
         {
-            "symbol": "NASDAQ:KHC",
+            "symbol": "NYSE:KHC",
             "company": "Kraft Heinz",
             "sector": "Consumer Staples"
         },
@@ -1538,7 +1533,7 @@
         },
         {
             "symbol": "NYSE:MCK",
-            "company": "McKesson Corporation",
+            "company": "McKesson",
             "sector": "Health Care"
         },
         {
@@ -1597,11 +1592,6 @@
             "sector": "Health Care"
         },
         {
-            "symbol": "NYSE:TAP",
-            "company": "Molson Coors Beverage Company",
-            "sector": "Consumer Staples"
-        },
-        {
             "symbol": "NASDAQ:MDLZ",
             "company": "Mondelez International",
             "sector": "Consumer Staples"
@@ -1638,7 +1628,7 @@
         },
         {
             "symbol": "NYSE:MSCI",
-            "company": "MSCI Inc.",
+            "company": "MSCI",
             "sector": "Financials"
         },
         {
@@ -1738,7 +1728,7 @@
         },
         {
             "symbol": "NASDAQ:ORLY",
-            "company": "O\u2019Reilly Automotive",
+            "company": "O'Reilly Automotive",
             "sector": "Consumer Discretionary"
         },
         {
@@ -1795,11 +1785,6 @@
             "symbol": "NASDAQ:PANW",
             "company": "Palo Alto Networks",
             "sector": "Information Technology"
-        },
-        {
-            "symbol": "NASDAQ:PSKY",
-            "company": "Paramount Skydance Corporation",
-            "sector": "Communication Services"
         },
         {
             "symbol": "NYSE:PH",
@@ -1942,6 +1927,11 @@
             "sector": "Financials"
         },
         {
+            "symbol": "NYSE:RDDT",
+            "company": "Reddit",
+            "sector": "Communication Services"
+        },
+        {
             "symbol": "NYSE:RTX",
             "company": "RTX Corporation",
             "sector": "Industrials"
@@ -1973,7 +1963,7 @@
         },
         {
             "symbol": "NYSE:RMD",
-            "company": "ResMed",
+            "company": "ResMed|",
             "sector": "Health Care"
         },
         {
@@ -2060,6 +2050,11 @@
             "symbol": "NYSE:SPG",
             "company": "Simon Property Group",
             "sector": "Real Estate"
+        },
+        {
+            "symbol": "NYSE:SKYD",
+            "company": "Skydance Corporation",
+            "sector": "Communication Services"
         },
         {
             "symbol": "NASDAQ:SWKS",
@@ -2227,11 +2222,6 @@
             "sector": "Communication Services"
         },
         {
-            "symbol": "NASDAQ:TTD",
-            "company": "Trade Desk (The)",
-            "sector": "Communication Services"
-        },
-        {
             "symbol": "NASDAQ:TSCO",
             "company": "Tractor Supply",
             "sector": "Consumer Discretionary"
@@ -2260,6 +2250,11 @@
             "symbol": "NYSE:TFC",
             "company": "Truist Financial",
             "sector": "Financials"
+        },
+        {
+            "symbol": "NYSE:TWLO",
+            "company": "Twilio",
+            "sector": "Information Technology"
         },
         {
             "symbol": "NYSE:TYL",
@@ -2387,9 +2382,19 @@
             "sector": "Utilities"
         },
         {
+            "symbol": "NYSE:VMRK",
+            "company": "Vivmark Residential",
+            "sector": "Real Estate"
+        },
+        {
             "symbol": "NYSE:VMC",
             "company": "Vulcan Materials Company",
             "sector": "Materials"
+        },
+        {
+            "symbol": "NYSE:VYLR",
+            "company": "Vylor",
+            "sector": "Consumer Staples"
         },
         {
             "symbol": "NYSE:WRB",
@@ -2414,11 +2419,6 @@
         {
             "symbol": "NYSE:DIS",
             "company": "Walt Disney Company (The)",
-            "sector": "Communication Services"
-        },
-        {
-            "symbol": "NASDAQ:WBD",
-            "company": "Warner Bros. Discovery",
             "sector": "Communication Services"
         },
         {

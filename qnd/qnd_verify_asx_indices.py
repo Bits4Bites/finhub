@@ -5,7 +5,7 @@ import asyncio
 import json
 import logging
 
-from app.utils import finhub as finhub_utils
+from app.utils import data as data_utils
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
@@ -26,7 +26,7 @@ def read_file_as_single_string(file_path) -> str:
 
 
 async def main():
-    cache_json_content = read_file_as_single_string("./.cache/asx_cache.json")
+    cache_json_content = read_file_as_single_string("./.cache_data/asx_cache.json")
     cache_ticker_info = json.loads(cache_json_content)
 
     data = []
@@ -54,14 +54,14 @@ async def main():
         # if sector != "REAL ESTATE":
         #     continue
 
-        found_sector = sector in finhub_utils.asx_sector_yf_indices
+        found_sector = sector in data_utils.asx_sector_yf_static_tickers
         num_found_sector += found_sector
         if found_sector:
             sectors[sector] = True
 
         # industry = ticker_info["industry"] if "industry" in ticker_info else None
         # industry = industry.upper() if industry is not None else "NONE"
-        # found_industry = industry in finhub_utils.us_industry_yf_indices[sector]
+        # found_industry = industry in data_utils.us_industry_yf_static_tickers[sector]
         # num_found_industry += found_industry
         # if found_industry:
         #     industries[industry] = True

@@ -7,8 +7,8 @@ import logging
 
 import yfinance as yf
 
-from app.models import finhub as models
-from app.services import stock as stock_service
+from app import config
+from app.models import stocks as models_stocks
 
 
 def read_file_as_single_string(file_path) -> str:
@@ -50,7 +50,7 @@ async def main():
         if quote_type == "NONE":
             print(f"Symbol: {symbol} / No quoteType found")
             continue
-        if quote_type not in stock_service.allowed_quote_types:
+        if quote_type not in config.ALLOWED_QUOTE_TYPES:
             print(f"Symbol: {symbol} / Invalid quoteType found: {quote_type}")
             continue
         if "regularMarketPrice" not in ticker.info:
@@ -59,7 +59,7 @@ async def main():
 
         num_cached += 1
         try:
-            symbol_data = models.SymbolOverview(ticker)
+            symbol_data = models_stocks.SymbolOverview(ticker)
             cache_data[symbol] = symbol_data.model_dump()
         except Exception as e:
             print(f"Symbol: {symbol} / Invalid symbol found: {e}")

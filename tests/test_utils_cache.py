@@ -13,6 +13,28 @@ def test_generate_key_is_deterministic_and_order_sensitive():
     assert cache.generate_key("alpha", "beta") != cache.generate_key("beta", "alpha")
 
 
+def test_generate_hourly_key_groups_datetimes_within_the_same_utc_hour():
+    first = '{"as_of":"2026-08-23T16:10:18Z","references":[{"accessed_at":"2026-08-23T18:45:00+00:00"}]}'
+    second = '{"as_of":"2026-08-23T16:59:59+00:00","references":[{"accessed_at":"2026-08-23T18:01:00Z"}]}'
+
+    assert cache.generate_hourly_key(first) == cache.generate_hourly_key(second)
+
+
+def test_generate_hourly_key_uses_utc_hour_boundaries():
+    utc_value = '{"as_of":"2026-08-23T16:10:00Z"}'
+    offset_value = '{"as_of":"2026-08-23T18:50:00+02:00"}'
+    next_hour = '{"as_of":"2026-08-23T17:00:00Z"}'
+
+    assert cache.generate_hourly_key(utc_value) == cache.generate_hourly_key(offset_value)
+    assert cache.generate_hourly_key(utc_value) != cache.generate_hourly_key(next_hour)
+
+
+def test_generate_hourly_key_preserves_non_temporal_key_behavior():
+    items = ("portfolio", '{"positions":[{"ticker":"NASDAQ:AAPL","weight":0.6}]}')
+
+    assert cache.generate_hourly_key(*items) == cache.generate_key(*items)
+
+
 def test_generate_key_preserves_item_boundaries():
     assert cache.generate_key("ab", "c") != cache.generate_key("a", "bc")
 

@@ -1,16 +1,14 @@
 import datetime
 import logging
 import random
-import ssl
 import time
 from zoneinfo import ZoneInfo
 
 import cloudscraper
 import pandas as pd
 from bs4 import BeautifulSoup
-from playwright.async_api import Page, ProxySettings, ViewportSize, async_playwright
+from playwright.async_api import Page, ViewportSize, async_playwright
 
-from .. import config
 from ..utils import cache
 
 logger = logging.getLogger(__name__)
@@ -90,9 +88,7 @@ def extract_data_table_from_html(html_content: str, *, raw_cell_content=False, t
     return df
 
 
-async def fetch_webpage_content(
-    url: str, *, retries: int = 3, backoff_factor: float = 0.5, proxies: list[str] = None
-) -> str | None:
+async def fetch_webpage_content(url: str, *, retries: int = 3, backoff_factor: float = 0.5) -> str | None:
     """
     Fetches the content of a webpage, with retry logic.
 
@@ -100,7 +96,6 @@ async def fetch_webpage_content(
         url (str): The URL of the webpage to fetch.
         retries (int, optional): Number of times to retry the request in case of failure. Defaults to 3.
         backoff_factor (float, optional): Factor for calculating sleep time between retries. Defaults to 0.5.
-        proxies (list[str], optional): Optional list http proxies.
 
     Returns:
         str: The content of the webpage if successful, otherwise None.
@@ -111,30 +106,11 @@ async def fetch_webpage_content(
         logger.info("Using cached content for '%s'.", url)
         return cached_content
 
-    proxies = [] if not proxies else proxies
-    unverified_ssl_context = ssl.create_default_context()
-    unverified_ssl_context.check_hostname = False
-    scraper = cloudscraper.create_scraper(
-        browser={"browser": "chrome", "platform": "windows", "desktop": True},
-        ssl_context=unverified_ssl_context if proxies else None,
-    )
-    scraper.verify = not proxies
+    scraper = cloudscraper.create_scraper(browser={"browser": "chrome", "platform": "windows", "desktop": True})
     start_time = time.monotonic()
     for attempt in range(retries):
-        http_proxy = random.sample(proxies, 1) if proxies else None
-        if http_proxy:
-            logger.info("fetch_webpage_content: using proxy %s", http_proxy[0])
         try:
-            response = scraper.get(
-                url,
-                timeout=60,
-                proxies={
-                    "http": http_proxy[0],
-                    "https": http_proxy[0],
-                }
-                if http_proxy
-                else None,
-            )
+            response = scraper.get(url, timeout=60)
             response.raise_for_status()  # Raise an exception for HTTP errors
             await cache.set(cache_key, response.text, ttl=_HTML_CACHE_TTL)
             logger.info("Fetched content from '%s' in %.2f seconds.", url, time.monotonic() - start_time)
@@ -150,7 +126,7 @@ async def fetch_webpage_content(
 
 
 async def fetch_webpage_content_playwright(
-    url: str, *, after_load_func_async=None, retries: int = 2, backoff_factor: float = 0.5, proxies: list[str] = None
+    url: str, *, after_load_func_async=None, retries: int = 2, backoff_factor: float = 0.5
 ) -> str | None:
     """
     Fetches the content of a webpage using Playwright, with retry logic.
@@ -160,7 +136,6 @@ async def fetch_webpage_content_playwright(
         after_load_func_async (callable, optional): A function to execute after the page has loaded, for additional interactions.
         retries (int, optional): Number of times to retry the request in case of failure. Defaults to 2.
         backoff_factor (float, optional): Factor for calculating sleep time between retries. Defaults to 0.5.
-        proxies (list[str], optional): Optional list http proxies.
 
     Returns:
         str: The content of the webpage if successful, otherwise None.
@@ -171,20 +146,12 @@ async def fetch_webpage_content_playwright(
         logger.info("Using cached Playwright content for '%s'.", url)
         return cached_content
 
-    proxies = [] if not proxies else proxies
     start_time = time.monotonic()
     for attempt in range(retries):
-        http_proxy = random.sample(proxies, 1) if proxies else None
-        if http_proxy:
-            logger.info("fetch_webpage_content_playwright: using proxy %s", http_proxy[0])
         try:
             async with async_playwright() as p:
-                browser = await p.webkit.launch(
-                    headless=True,
-                    proxy=ProxySettings(server=http_proxy[0]) if http_proxy else None,
-                )
+                browser = await p.webkit.launch(headless=True)
                 page = await browser.new_page(
-                    ignore_https_errors=not (not http_proxy),
                     screen=ViewportSize(width=1664, height=1110),
                     user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0",
                 )
@@ -206,9 +173,7 @@ async def fetch_webpage_content_playwright(
     return None
 
 
-async def scrape_data_table(
-    url: str, *, raw_cell_content=False, table_attr_filter=None, proxies: list[str] = None
-) -> pd.DataFrame:
+async def scrape_data_table(url: str, *, raw_cell_content=False, table_attr_filter=None) -> pd.DataFrame:
     """
     Scrapes data from the given URL, assuming main content is in a table, and returns it as a Pandas DataFrame.
 
@@ -217,14 +182,13 @@ async def scrape_data_table(
         raw_cell_content (bool, optional): If False, cell content will be cleaned-up; otherwise cell's raw content will be returned.
         table_attr_filter (dict[str, str], optional): A dictionary of attribute name and values to filter the table.
             For example, {"id": "event-content"} to find a table with id="event-content".
-        proxies (list[str], optional): Optional list http proxies.
 
     Returns:
         DataFrame: A Pandas DataFrame containing the data table extracted from the webpage.
     """
     # fetch the webpage content
     logger.info("Fetching data from '%s'...", url)
-    html_content = await fetch_webpage_content(url, proxies=proxies)
+    html_content = await fetch_webpage_content(url)
     if not html_content:
         logger.error("Failed to fetch content from '%s'.", url)
         return pd.DataFrame()
@@ -242,7 +206,7 @@ async def scrape_data_table(
 
 
 async def scrape_data_table_playwright(
-    url: str, *, raw_cell_content=False, after_load_func_async=None, table_attr_filter=None, proxies: list[str] = None
+    url: str, *, raw_cell_content=False, after_load_func_async=None, table_attr_filter=None
 ) -> pd.DataFrame:
     """
     Scrapes data from the given URL using Playwright, assuming main content is in a table, and returns it as a Pandas DataFrame.
@@ -253,7 +217,6 @@ async def scrape_data_table_playwright(
         after_load_func_async (callable, optional): A function to execute after the page has loaded, for additional interactions.
         table_attr_filter (dict[str, str], optional): A dictionary of attribute name and values to filter the table.
             For example, {"id": "event-content"} to find a table with id="event-content".
-        proxies (list[str], optional): Optional list http proxies.
 
     Returns:
         DataFrame: A Pandas DataFrame containing the data table extracted from the webpage.
@@ -263,7 +226,6 @@ async def scrape_data_table_playwright(
     html_content = await fetch_webpage_content_playwright(
         url,
         after_load_func_async=after_load_func_async,
-        proxies=proxies,
     )
     if not html_content:
         logger.error("Failed to fetch content from '%s'.", url)
@@ -279,31 +241,6 @@ async def scrape_data_table_playwright(
         logger.warning("No data table found in the content from '%s'.", url)
 
     return data_table_df
-
-
-def _get_http_proxies() -> list[str] | None:
-    """
-    Builds the list of HTTP proxy connect strings to use for fetching, based on configuration.
-
-    Returns:
-        list[str]: A list of HttpProxy.connect_string values when FinHubProxySettings.fetch_website_via_proxy
-            is True and proxies are configured, otherwise None. When HttpProxy.https is 1 the connect string
-            scheme is normalized to "https://" instead of "http://".
-    """
-    if not config.settings_finhub_proxy.fetch_website_via_proxy:
-        return None
-
-    http_proxies = config.settings_finhub_proxy.http_proxies
-    if not http_proxies:
-        return None
-
-    result = []
-    for proxy in http_proxies:
-        connect_string = (
-            proxy.connect_string.replace("http://", "https://") if proxy.https == 1 else proxy.connect_string
-        )
-        result.append(connect_string)
-    return result
 
 
 async def scrape_dividends_from_tipranks(
@@ -336,7 +273,6 @@ async def scrape_dividends_from_tipranks(
         if start_date.weekday() >= 5:  # Saturday or Sunday
             start_date -= datetime.timedelta(days=start_date.weekday() - 4)
 
-    proxies = _get_http_proxies()
     final_df = pd.DataFrame()
     while start_date <= end_date:
         if start_date.weekday() >= 5:  # skip if weekend
@@ -345,9 +281,9 @@ async def scrape_dividends_from_tipranks(
 
         target_url = url_template.format(date=start_date.strftime("%Y-%m-%d"))
         df = (
-            await scrape_data_table_playwright(target_url, after_load_func_async=after_load_func_async, proxies=proxies)
+            await scrape_data_table_playwright(target_url, after_load_func_async=after_load_func_async)
             if use_playwright
-            else await scrape_data_table(target_url, proxies=proxies)
+            else await scrape_data_table(target_url)
         )
         if not df.empty:
             # add column "Ex-Dividend Date" and fill it with the current date
@@ -516,7 +452,6 @@ async def scrape_dividends_vn(end_date: datetime.date) -> pd.DataFrame:
         if start_date.weekday() >= 5:  # Saturday or Sunday
             start_date -= datetime.timedelta(days=start_date.weekday() - 4)
 
-    proxies = _get_http_proxies()
     final_df = pd.DataFrame()
     page = 1
     while True:
@@ -533,7 +468,6 @@ async def scrape_dividends_vn(end_date: datetime.date) -> pd.DataFrame:
             target_url,
             table_attr_filter={"id": "event-content"},
             after_load_func_async=wait_for_page_render_after_load_func,
-            proxies=proxies,
         )
         if df.empty or len(df.columns) < 2:
             break
@@ -608,7 +542,6 @@ async def scrape_earnings_from_tipranks(
     if start_date.weekday() >= 5:  # Saturday or Sunday
         start_date += datetime.timedelta(days=(7 - start_date.weekday()))
 
-    proxies = _get_http_proxies()
     final_df = pd.DataFrame()
     while start_date <= end_date:
         if start_date.weekday() >= 5:  # skip if weekend
@@ -617,9 +550,9 @@ async def scrape_earnings_from_tipranks(
 
         target_url = url_template.format(date=start_date.strftime("%Y-%m-%d"))
         df = (
-            await scrape_data_table_playwright(target_url, after_load_func_async=after_load_func_async, proxies=proxies)
+            await scrape_data_table_playwright(target_url, after_load_func_async=after_load_func_async)
             if use_playwright
-            else await scrape_data_table(target_url, proxies=proxies)
+            else await scrape_data_table(target_url)
         )
         if not df.empty:
             # add column "Announcement Date" and fill it with the current date
