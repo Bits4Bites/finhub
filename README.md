@@ -2,6 +2,8 @@
 [![Actions Status](https://github.com/Bits4Bites/finhub/workflows/ci/badge.svg)](https://github.com/Bits4Bites/finhub/actions)
 [![Release](https://img.shields.io/github/release/Bits4Bites/finhub.svg?style=flat-square)](RELEASE-NOTES.md)
 
+**Version:** v0.16.0
+
 A developer-first financial API hub for stock market data and AI-assisted investing workflows.
 
 ## ✨ Features

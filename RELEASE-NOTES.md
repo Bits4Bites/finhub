@@ -1,5 +1,38 @@
 # FinHub release notes
 
+## 2026-11-02 - v0.16.0
+
+### Added/Refactoring/Deprecation
+
+- Feat(AI): add configurable OpenAI request throttling and retries
+- Feat(AI): add task-level reasoning and web search
+- Feat(AI/analyze-dividend-event): rebuild feature with evidence-backed dividend-event research and analysis
+- Feat(AI/analyze-ticker): rebuild feature with structured deep research and analysis
+- Feat(AI/build-portfolio): rebuild feature with structured theme-aware research, analysis and action plan
+- Feat(AI/review-portfolio): rebuild feature with structured theme-aware research, analysis and action plan
+- Feat(AI/spotlight-portfolio): rebuild feature with structured theme-aware research and analysis
+- Feat(async): deduplicate identical task starts
+- Feat(async): split APIs into start and poll routes
+- Feat(client/dotnet): add AI-vendor API contracts
+- Feat(client/dotnet): add analyze-dividend-event API contracts
+- Feat(client/dotnet): add analyze-ticker API contracts
+- Feat(client/dotnet): add build-portfolio API contracts
+- Feat(client/dotnet): add market-index API contracts
+- Feat(client/dotnet): add new-listings API contracts
+- Feat(client/dotnet): add review-portfolio API contracts
+- Feat(client/dotnet): add spotlight-portfolio API contracts
+- Feat(client/dotnet): add stock and precious-metals API contracts
+- Feat(client/dotnet): add upcoming market-event API contracts
+- Refactor(AI): introduce shared ReferenceSource model for source identity
+- Refactor(AI): standardize prompt execution execution with reasoning, web search and response JSON schema
+- Refactor(api): organize models and schemas by domain
+- Refactor(proxy): centralize FinHub proxy mode handler
+
+### Fixed/Improvements
+
+- Fix(AI/new-listings/async): reject unsupported country before task creation
+- Impr(AI/new-listings): rebuild feature with deep research and analysis
+
 ## 2026-08-12 - v0.15.0
 
 ### Added/Refactoring/Deprecation
