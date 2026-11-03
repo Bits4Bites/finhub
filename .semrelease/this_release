@@ -3,3 +3,4 @@
 #   git log origin..HEAD | grep "^\s" > .semrelease/this_release
 #!VERSION=0.16.1
 - patch(CodeQL): fix CodeQL warnings
+- patch(crawler): prevent HTTP requests and delays from blocking the event loop
