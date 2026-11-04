@@ -14,6 +14,7 @@ on:
         description: 'Commit SHA to check out and analyze.'
         required: false
         type: string
+        default: ''
 
   # Allow manually trigger
   workflow_dispatch:
@@ -27,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python: [ '3.12', '3.13', '3.14' ] # change target Python versions if needed
+        python: [ '3.12', '3.13', '3.14', '3.15' ] # change target Python versions if needed
     name: Build and Test with Python ${{ matrix.python }}
     steps:
       - name: Checkout code
@@ -71,38 +72,42 @@ jobs:
 
   BuildDockerAndQuickTest:
     needs: [ BuildAndTest ]
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     strategy:
+      fail-fast: false
       matrix:
-        platforms: [ 'linux/amd64' ] # change target platform list if needed
-        dockerfiles: [ 'Dockerfile' ] # add more Dockerfiles here if needed
-    name: Build and Test Docker image(s) for ${{ matrix.platforms }} with ${{ matrix.dockerfiles }}
+        include:
+          - runner: ubuntu-24.04
+            platform: linux/amd64
+          - runner: ubuntu-24.04-arm
+            platform: linux/arm64
+    name: Build and Test Docker image(s) for ${{ matrix.platform }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
         with:
           ref: ${{ inputs.target-sha || github.sha }}
-      - name: Build Docker image for ${{ matrix.platforms }} with ${{ matrix.dockerfiles }}
+      - name: Build Docker image for ${{ matrix.platform }}
         id: docker_build
         uses: btnguyen2k/gh-actions/dockerbp@dockerbp/v0.3.0
         with:
           target-sha: ${{ inputs.target-sha || github.sha }}
           image: finhub
           tags: ci
-          platforms: linux/amd64
-          dockerfile: ./${{ matrix.dockerfiles }}
+          platforms: ${{ matrix.platform }}
+          dockerfile: Dockerfile
           context: ./
           mode: build
           publish: local
-      - name: Verify Docker build for ${{ matrix.platforms }} with ${{ matrix.dockerfiles }}
+      - name: Verify Docker build for ${{ matrix.platform }}
         shell: bash
         run: |
           # check if output 'status' from step docker_build is 'local-built'
           if [[ "${{ steps.docker_build.outputs.status }}" != "local-built" ]]; then
-              echo "❌ Docker build failed for ${{ matrix.platforms }} with ${{ matrix.dockerfiles }}"
+              echo "❌ Docker build failed for ${{ matrix.platform }}"
               exit 1
           fi
-      - name: Test Docker container for ${{ matrix.platforms }} with ${{ matrix.dockerfiles }}
+      - name: Test Docker container for ${{ matrix.platform }}
         shell: bash
         env:
           STARTUP_TIMEOUT_SECONDS: '60'
@@ -114,7 +119,7 @@ jobs:
           CONTAINER=$(docker run -d \
             --name test \
             -p 1234:8000 \
-            --platform ${{ matrix.platforms }} \
+            --platform ${{ matrix.platform }} \
             finhub:ci)
           HEALTH_RESPONSE=$(mktemp)
           trap '

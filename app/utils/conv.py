@@ -3,11 +3,23 @@ from zoneinfo import ZoneInfo
 
 import babel.core
 import babel.numbers
-import country_converter as coco
+import pycountry
 import yfinance as yf
 
-# Singleton converter instance (avoids repeated init overhead)
-_COUNTRY_CONVERTER = coco.CountryConverter()
+_COUNTRY_ALIASES: dict[str, str] = {
+    "uk": "GB",
+    "u.k.": "GB",
+    "great britain": "GB",
+    "england": "GB",
+    "u.s.": "US",
+    "u.s.a.": "US",
+    "uae": "AE",
+    "u.a.e.": "AE",
+    "republic of korea": "KR",
+    "hong kong sar": "HK",
+    "hong kong sar, china": "HK",
+    "turkey": "TR",
+}
 
 
 def country_to_iso2(country: str | None) -> str:
@@ -20,10 +32,13 @@ def country_to_iso2(country: str | None) -> str:
     Returns:
         str: The ISO 3166-1 alpha-2 country code.
     """
+    country = (country or "").strip()
     if not country:
         return ""
-    code = _COUNTRY_CONVERTER.convert(country, to="ISO2")
-    return code if code != "not found" else ""
+    try:
+        return pycountry.countries.lookup(country).alpha_2
+    except LookupError:
+        return _COUNTRY_ALIASES.get(country.casefold(), "")
 
 
 def country_to_currency_symbol(country: str | None) -> str:

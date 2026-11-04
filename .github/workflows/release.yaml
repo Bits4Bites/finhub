@@ -5,7 +5,7 @@ name: 'release'
 on:
   pull_request:
     types: [ closed ]
-    branches: [ release ]
+    branches: [ release ] # Keep synchronized with env.BRANCH_TO_RELEASE.
 
 concurrency:
   group: ${{ github.event.pull_request.merged && 'release-publication' || github.run_id }}
@@ -244,7 +244,7 @@ jobs:
           depth: 0
       - uses: docker/login-action@v4
         with:
-          username: ${{ vars.DOCKER_HUB_USER }}
+          username: ${{ secrets.DOCKER_HUB_USER }}
           password: ${{ secrets.DOCKER_HUB_PAT }}
       - uses: btnguyen2k/gh-actions/dockerbp@dockerbp/v0.3.0
         id: images

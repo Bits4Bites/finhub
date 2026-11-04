@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 import logging
 import random
@@ -6,6 +7,7 @@ from zoneinfo import ZoneInfo
 
 import cloudscraper
 import pandas as pd
+import starlette.concurrency
 from bs4 import BeautifulSoup
 from playwright.async_api import Page, ViewportSize, async_playwright
 
@@ -110,7 +112,7 @@ async def fetch_webpage_content(url: str, *, retries: int = 3, backoff_factor: f
     start_time = time.monotonic()
     for attempt in range(retries):
         try:
-            response = scraper.get(url, timeout=60)
+            response = await starlette.concurrency.run_in_threadpool(scraper.get, url, timeout=60)
             response.raise_for_status()  # Raise an exception for HTTP errors
             await cache.set(cache_key, response.text, ttl=_HTML_CACHE_TTL)
             logger.info("Fetched content from '%s' in %.2f seconds.", url, time.monotonic() - start_time)
@@ -119,8 +121,8 @@ async def fetch_webpage_content(url: str, *, retries: int = 3, backoff_factor: f
             logger.warning(f"Fetching attempt {attempt + 1} failed for URL: {url}. Error: {e}")
             if attempt < retries - 1:
                 sleep_time = backoff_factor * (2**attempt) + random.uniform(0, 0.1)  # Exponential backoff
-                logger.info(f"Retrying after {sleep_time:.2f} seconds...")
-                time.sleep(sleep_time)
+                logger.info(f"Retrying after {float(sleep_time):.2f} seconds...")
+                await asyncio.sleep(sleep_time)
     logger.error(f"All {retries} fetching attempts failed for URL: {url}.")
     return None
 
@@ -167,8 +169,8 @@ async def fetch_webpage_content_playwright(
             logger.warning(f"Playwright fetching attempt {attempt + 1} failed for URL: {url}. Error: {e}")
             if attempt < retries - 1:
                 sleep_time = backoff_factor * (2**attempt) + random.uniform(0, 0.1)  # Exponential backoff
-                logger.info(f"Retrying after {sleep_time:.2f} seconds...")
-                time.sleep(sleep_time)
+                logger.info(f"Retrying after {float(sleep_time):.2f} seconds...")
+                await asyncio.sleep(sleep_time)
     logger.error(f"All {retries} Playwright fetching attempts failed for URL: {url}.")
     return None
 
@@ -292,7 +294,7 @@ async def scrape_dividends_from_tipranks(
 
         # delay randomly a few seconds to avoid overwhelming the server
         delay_seconds = random.uniform(1.00, 3.00)
-        time.sleep(delay_seconds)
+        await asyncio.sleep(delay_seconds)
 
         start_date += datetime.timedelta(days=1)
 
@@ -437,8 +439,6 @@ async def scrape_dividends_vn(end_date: datetime.date) -> pd.DataFrame:
     """
 
     async def wait_for_page_render_after_load_func(*args, **kwargs):
-        import asyncio
-
         await asyncio.sleep(1.5)
 
     url_template = "https://finance.vietstock.vn/lich-su-kien.htm?from={s_date}&to={e_date}&page={page}&tab=1&group=13"
@@ -475,7 +475,7 @@ async def scrape_dividends_vn(end_date: datetime.date) -> pd.DataFrame:
 
         # delay randomly a few seconds to avoid overwhelming the server
         delay_seconds = random.uniform(1.00, 3.00)
-        time.sleep(delay_seconds)
+        await asyncio.sleep(delay_seconds)
 
         page += 1
 
@@ -561,7 +561,7 @@ async def scrape_earnings_from_tipranks(
 
         # delay randomly a few seconds to avoid overwhelming the server
         delay_seconds = random.uniform(1.00, 3.00)
-        time.sleep(delay_seconds)
+        await asyncio.sleep(delay_seconds)
 
         start_date += datetime.timedelta(days=1)
 
