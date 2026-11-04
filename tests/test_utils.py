@@ -5,6 +5,7 @@ from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from app.models import types
 from app.utils import asset, conv, finhub, yfutils
@@ -35,6 +36,31 @@ class TestCountryToIso2:
 
     def test_vietnam(self):
         assert conv.country_to_iso2("Vietnam") == "VN"
+
+    @pytest.mark.parametrize(
+        ("country", "expected"),
+        [("South Korea", "KR"), ("GBR", "GB"), ("Namibia", "NA"), ("NA", "NA")],
+    )
+    def test_market_country_names_and_codes(self, country, expected):
+        assert conv.country_to_iso2(country) == expected
+
+    @pytest.mark.parametrize(
+        ("country", "expected"),
+        [
+            (" uk ", "GB"),
+            ("U.K.", "GB"),
+            ("UAE", "AE"),
+            ("Republic of Korea", "KR"),
+            ("Hong Kong SAR", "HK"),
+            ("Turkey", "TR"),
+        ],
+    )
+    def test_known_country_aliases(self, country, expected):
+        assert conv.country_to_iso2(country) == expected
+
+    @pytest.mark.parametrize("country", ["Korea", "Austraila", "   "])
+    def test_unresolved_names_are_not_fuzzy_matched(self, country):
+        assert conv.country_to_iso2(country) == ""
 
 
 class TestCountryToCurrencySymbol:
@@ -73,6 +99,13 @@ class TestCountryToCurrencyCode:
 
     def test_unknown_country_returns_empty(self):
         assert conv.country_to_currency_code("Atlantis") == ""
+
+    @pytest.mark.parametrize(
+        ("country", "expected"),
+        [("UK", "GBP"), ("Republic of Korea", "KRW"), ("Hong Kong SAR", "HKD")],
+    )
+    def test_country_aliases_select_the_correct_currency(self, country, expected):
+        assert conv.country_to_currency_code(country) == expected
 
 
 class TestNormalizeExchangeCode:
