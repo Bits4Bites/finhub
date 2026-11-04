@@ -575,6 +575,9 @@ def test_task_configuration_matches_quality_first_stage_design():
         ("Contribute $250/mo.", "Recurring", 250, "USD", "Monthly"),
         ("Invest 500 every month.", "Recurring", 500, "USD", "Monthly"),
         ("Invest A$1000 monthly.", "Recurring", 1_000, "AUD", "Monthly"),
+        ("Invest \t 250.", "Total", 250, "USD", None),
+        ("Budget \t of \t 1,234.50.", "Total", 1_234.50, "USD", None),
+        ("Invest\u00a0is\u2003250.", "Total", 250, "USD", None),
         (
             "Build a diversified portfolio of stocks priced under $20 per share.",
             "NotProvided",
@@ -639,10 +642,36 @@ def test_extract_budget_handles_long_numeric_runs(theme, expected_amount):
     assert budget.budget_type == ("NotProvided" if expected_amount is None else "Total")
 
 
-def test_extract_budget_rejects_negative_amount():
+@pytest.mark.parametrize(
+    "theme",
+    [
+        pytest.param("invest" + " " * 3993 + "!", id="keyword"),
+        pytest.param("budget -" + " " * 3991 + "!", id="negative"),
+    ],
+)
+def test_extract_budget_handles_long_whitespace_runs(theme):
+    started = time.process_time()
+
+    budget = portfolio_budget.extract_budget(theme, default_currency="USD")
+
+    assert time.process_time() - started < 0.1
+    assert budget.amount is None
+    assert budget.budget_type == "NotProvided"
+
+
+@pytest.mark.parametrize(
+    "theme",
+    [
+        "Use an investment budget of -$500.",
+        "Use an investment budget of - \t 500.",
+        "Use an investment budget of -\u00a0USD\u2003500.",
+        "Use an investment budget of USD \t - \t 500.",
+    ],
+)
+def test_extract_budget_rejects_negative_amount(theme):
     with pytest.raises(service.portfolio_verification.PortfolioInputError, match="positive"):
         portfolio_budget.extract_budget(
-            "Use an investment budget of -$500.",
+            theme,
             default_currency="USD",
         )
 

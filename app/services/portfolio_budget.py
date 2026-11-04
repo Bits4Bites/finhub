@@ -26,7 +26,7 @@ _BUDGET_PATTERNS = (
         rf"(?P<source>(?:total\s+|recurring\s+|regular\s+)?"
         rf"(?:portfolio\s+)?(?:budget|investment(?:\s+amount)?|contribution|capital|"
         rf"invest|contribute|deploy|fund|allocate|put\s+in)"
-        rf"\s*(?:of|is|:|=)?\s*{_AMOUNT_TOKEN})",
+        rf"\s*(?:(?:of|is|:|=)\s*)?{_AMOUNT_TOKEN})",
         re.IGNORECASE,
     ),
 )
@@ -45,7 +45,7 @@ _BUDGET_CONTEXT_PATTERN = re.compile(
 )
 _NEGATIVE_BUDGET_PATTERN = re.compile(
     rf"\b(?:budget|investment|contribution|invest|contribute|deploy|fund)\b"
-    rf"[^.;!?\n]{{0,30}}(?:-\s*(?:{_CURRENCY_MARKERS})?\s*\d|"
+    rf"[^.;!?\n]{{0,30}}(?:-\s*(?:(?:{_CURRENCY_MARKERS})\s*)?\d|"
     rf"(?:{_CURRENCY_MARKERS})\s*-\s*\d)",
     re.IGNORECASE,
 )
