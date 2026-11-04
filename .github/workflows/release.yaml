@@ -5,7 +5,7 @@ name: 'release'
 on:
   pull_request:
     types: [ closed ]
-    branches: [ release ]
+    branches: [ release ] # Keep synchronized with env.BRANCH_TO_RELEASE.
 
 concurrency:
   group: ${{ github.event.pull_request.merged && 'release-publication' || github.run_id }}
