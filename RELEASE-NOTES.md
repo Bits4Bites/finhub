@@ -1,5 +1,13 @@
 # FinHub release notes
 
+## 2026-11-04 - v0.16.1
+
+### Fixed/Improvements
+
+- Patch(CodeQL): fix CodeQL warnings
+- Patch(crawler): prevent HTTP requests and delays from blocking the event loop
+- Patch(deps): upgrade dependencies
+
 ## 2026-11-02 - v0.16.0
 
 ### Added/Refactoring/Deprecation
