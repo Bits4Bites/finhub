@@ -33,7 +33,7 @@ jobs:
           echo "REFRESH_BASE_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
       - uses: actions/setup-python@v7
         with:
-          python-version: '3.12'
+          python-version: '3.14'
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
