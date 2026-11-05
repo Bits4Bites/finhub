@@ -98,18 +98,6 @@ jobs:
             for (const file of fs.readdirSync('.').filter(file => file.endsWith('.md') && file !== FILE_CHANGELOG)) {
               const original = fs.readFileSync(file, 'utf8');
               let updated = original.replaceAll('<<VERSION>>', tag);
-              if (file === 'README.md') {
-                const marker = /^\*\*Version:\*\*.*$/m;
-                const versionLine = `**Version:** ${tag}`;
-                if (marker.test(updated)) {
-                  updated = updated.replace(marker, versionLine);
-                } else {
-                  const boundary = updated.search(/\r?\n\r?\n/);
-                  updated = boundary < 0
-                    ? `${versionLine}\n\n${updated}`
-                    : `${updated.slice(0, boundary)}\n\n${versionLine}${updated.slice(boundary)}`;
-                }
-              }
               if (updated !== original) fs.writeFileSync(file, updated);
             }
             const versionFile = 'app/version.py';
@@ -236,6 +224,7 @@ jobs:
     outputs:
       TARGET_SHA: ${{ needs.Release.outputs.TARGET_SHA }}
       VERSION: ${{ needs.Release.outputs.VERSION }}
+      DOCKER_PUBLISH_STATUS: ${{ steps.images.outputs.status }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -251,8 +240,8 @@ jobs:
         with:
           mode: build
           checkout: false
+          target-sha: ${{ env.TARGET_SHA }}  # even when checkout=false, still need the pinned SHA for verification
           publish: true
-          target-sha: ${{ env.TARGET_SHA }}
           image: ${{ env.DOCKER_IMAGE }}
           platforms: linux/amd64,linux/arm64
           tags: |
@@ -265,7 +254,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [ PublishDockerImagesLinux ]
     name: Deploy to production
-    if: needs.PublishDockerImagesLinux.steps.images.outputs.status == 'published'
+    if: needs.PublishDockerImagesLinux.outputs.DOCKER_PUBLISH_STATUS == 'published'
     env:
       TARGET_SHA: ${{ needs.PublishDockerImagesLinux.outputs.TARGET_SHA }}
     steps:

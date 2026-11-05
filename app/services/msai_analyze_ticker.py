@@ -653,7 +653,7 @@ def _finite_float(value: object) -> float | None:
         return None
     try:
         result = float(value)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
     return result if math.isfinite(result) else None
 
