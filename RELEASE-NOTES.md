@@ -1,5 +1,11 @@
 # FinHub release notes
 
+## 2026-11-05 - v0.16.2
+
+### Fixed/Improvements
+
+- Patch(runtime): migrated to Python 3.14+
+
 ## 2026-11-04 - v0.16.1
 
 ### Fixed/Improvements
