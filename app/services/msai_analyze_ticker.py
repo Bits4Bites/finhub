@@ -344,10 +344,10 @@ async def _get_market_baseline(symbol: str) -> _TickerMarketBaseline:
         yf_exceptions.YFException,
         OSError,
     ) as exc:
-        logging.exception("[Ticker Analysis] Market-data provider failed for '%s'.", symbol)
+        logging.exception("[Ticker Analysis] Market-data provider failed for '%r'.", symbol)
         raise TickerVerificationError("Ticker market-data verification failed") from exc
     except (IndexError, KeyError, TypeError, ValueError) as exc:
-        logging.exception("[Ticker Analysis] Market-data response was invalid for '%s'.", symbol)
+        logging.exception("[Ticker Analysis] Market-data response was invalid for '%r'.", symbol)
         raise TickerVerificationError("Ticker market-data verification returned invalid data") from exc
 
     await cache.set(
