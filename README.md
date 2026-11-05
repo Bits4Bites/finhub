@@ -2,8 +2,6 @@
 [![Actions Status](https://github.com/Bits4Bites/finhub/workflows/ci/badge.svg)](https://github.com/Bits4Bites/finhub/actions)
 [![Release](https://img.shields.io/github/release/Bits4Bites/finhub.svg?style=flat-square)](RELEASE-NOTES.md)
 
-**Version:** v0.16.1
-
 A developer-first financial API hub for stock market data and AI-assisted investing workflows.
 
 ## ✨ Features
@@ -17,21 +15,37 @@ A developer-first financial API hub for stock market data and AI-assisted invest
 
 ### Requirements
 
-- Python **3.12+** (CI tests against 3.12, 3.13, and 3.14).
+- Python **3.14+** (CI tests against 3.14 and 3.15).
 - Python dependencies from `requirements.txt`.
 - [Playwright](https://playwright.dev/) WebKit browser (used by the event crawlers).
 
-```bash
-python -m venv .venv
+From a fresh checkout, create and activate a virtual environment using Python 3.14.
+
+Windows PowerShell:
+
+```powershell
+py -3.14 -m venv .venv
+.\.venv\Scripts\Activate.ps1
 ```
 
-Activate it with `.\.venv\Scripts\Activate.ps1` in Windows PowerShell or
-`source .venv/bin/activate` on Linux/macOS, then install the runtime dependencies:
+Linux/macOS:
+
+```bash
+python3.14 -m venv .venv
+source .venv/bin/activate
+```
+
+Then install the runtime dependencies and browser:
 
 ```bash
 python -m pip install -r requirements.txt
-playwright install webkit
+python -m playwright install webkit
 ```
+
+On supported Linux distributions, also install WebKit's OS dependencies with
+`python -m playwright install-deps webkit` (requires administrative privileges).
+Install browser binaries as the account that will run FinHub, or configure the same
+`PLAYWRIGHT_BROWSERS_PATH` for installation and startup.
 
 ### Run from the command line
 
@@ -174,7 +188,7 @@ If you find a bug or have a suggestion:
    development dependencies:
    ```bash
    python -m pip install -r requirements-dev.txt
-   playwright install webkit
+   python -m playwright install webkit
    ```
 
 5. **Make your changes** following the project's coding standards

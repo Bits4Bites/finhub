@@ -1,7 +1,7 @@
 # Sample build command:
 # docker build --rm -t finhub:dev .
 
-ARG PYTHON_VERSION=3.12
+ARG PYTHON_VERSION=3.14
 ARG PYTHON_IMG=${PYTHON_VERSION}-slim
 
 FROM python:${PYTHON_IMG} AS build

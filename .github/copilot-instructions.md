@@ -26,7 +26,7 @@ pytest
 pytest tests/test_demo.py::test_always_passes
 ```
 
-Python versions supported: 3.11, 3.12, 3.13, 3.14.
+Python 3.14+ is required. CI tests Python 3.14 and 3.15.
 
 ## Architecture
 
