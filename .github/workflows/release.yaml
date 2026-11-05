@@ -252,6 +252,7 @@ jobs:
         with:
           mode: build
           checkout: false
+          target-sha: ${{ env.TARGET_SHA }}  # even when checkout=false, still need the pinned SHA for verification
           publish: true
           image: ${{ env.DOCKER_IMAGE }}
           platforms: linux/amd64,linux/arm64
