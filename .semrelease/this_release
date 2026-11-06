@@ -1,5 +1,3 @@
-# This file has been cleaned up post-releasing version 0.16.3.
+# This file has been cleaned up post-releasing version 0.16.4.
 # Generate its content quickly using the following command:
 #   git log origin..HEAD | grep "^\s" > .semrelease/this_release
-#!VERSION=0.16.4
-- feat(api): add /info endpoint to expose application metadata
