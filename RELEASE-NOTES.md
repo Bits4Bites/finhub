@@ -1,5 +1,11 @@
 # FinHub release notes
 
+## 2026-11-06 - v0.16.4
+
+### Added/Refactoring/Deprecation
+
+- Feat(api): add /info endpoint to expose application metadata
+
 ## 2026-11-05 - v0.16.3
 
 ### Fixed/Improvements
