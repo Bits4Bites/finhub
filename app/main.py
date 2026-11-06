@@ -1,3 +1,4 @@
+import datetime
 import traceback
 
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -31,6 +32,10 @@ openapi_tags_metadata = [
     {
         "name": "health",
         "description": "Endpoint for health check.",
+    },
+    {
+        "name": "info",
+        "description": "Endpoint for application information.",
     },
 ]
 
@@ -102,3 +107,20 @@ async def health():
     health is the health check endpoint.
     """
     return {"status": 200, "message": "ok"}
+
+
+@app.get("/info", tags=["info"])
+async def info():
+    """
+    info endpoint returning application information and current server-local time.
+    """
+    return {
+        "status": 200,
+        "message": "ok",
+        "data": {
+            "app_name": APP_NAME,
+            "app_description": APP_DESCRIPTION,
+            "version": version.VERSION,
+            "server_time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        },
+    }
