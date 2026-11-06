@@ -1,3 +1,4 @@
+import datetime
 from unittest.mock import patch
 
 import pytest
@@ -58,6 +59,20 @@ class TestApiKeyAuth:
         assert response.status_code == 200
 
     def test_open_endpoints_do_not_require_key(self, configured_api_key):
-        # Root and health endpoints are not protected.
+        # Root, health, and info endpoints are not protected.
         assert client.get("/").status_code == 200
         assert client.get("/health").status_code == 200
+        assert client.get("/info").status_code == 200
+
+    def test_info_reports_current_server_time(self, configured_api_key):
+        with patch("app.main.datetime") as mock_datetime:
+            mock_datetime.datetime.now.side_effect = [
+                datetime.datetime(2026, 1, 2, 3, 4, 5),
+                datetime.datetime(2026, 1, 2, 3, 4, 6),
+            ]
+            first_response = client.get("/info")
+            second_response = client.get("/info")
+
+        assert first_response.status_code == second_response.status_code == 200
+        assert first_response.json()["data"]["server_time"] == "2026-01-02 03:04:05"
+        assert second_response.json()["data"]["server_time"] == "2026-01-02 03:04:06"
