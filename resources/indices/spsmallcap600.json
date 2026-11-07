@@ -1,5 +1,5 @@
 {
-    "date": "2026-10-24",
+    "date": "2026-11-07",
     "data": [
         {
             "symbol": "NYSE:AAMI",
@@ -1772,8 +1772,8 @@
             "sector": "Utilities"
         },
         {
-            "symbol": "NYSE:MSGS",
-            "company": "Madison Square Garden Sports Corp.",
+            "symbol": "NYSE:MSGK",
+            "company": "MSG Knickerbockers Corp.",
             "sector": "Communication Services"
         },
         {
@@ -2563,7 +2563,7 @@
         },
         {
             "symbol": "NASDAQ:SUPN",
-            "company": "Supernus Pharmaceuticals, Inc.",
+            "company": "Supernus, Inc.",
             "sector": "Health Care"
         },
         {
