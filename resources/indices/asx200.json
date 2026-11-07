@@ -1,5 +1,5 @@
 {
-    "date": "2026-10-24",
+    "date": "2026-11-07",
     "data": [
         {
             "symbol": "ASX:360",
@@ -513,8 +513,8 @@
         },
         {
             "symbol": "ASX:MFG",
-            "company": "MAGELLAN FINANCIAL GROUP LIMITED",
-            "sector": "Wealth Management & Investments"
+            "company": "",
+            "sector": ""
         },
         {
             "symbol": "ASX:MGR",
