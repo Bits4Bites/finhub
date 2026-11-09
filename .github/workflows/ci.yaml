@@ -35,7 +35,8 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ inputs.target-sha || github.sha }}
-      - uses: actions/setup-python@v7
+      - name: Set up Python ${{ matrix.python }}
+        uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python }}
       - name: Install dependencies
@@ -87,7 +88,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ inputs.target-sha || github.sha }}
-      - name: Build Docker image for ${{ matrix.platform }}
+      - name: Build Docker image
         id: docker_build
         uses: btnguyen2k/gh-actions/dockerbp@dockerbp/v0.3.0
         with:
@@ -99,15 +100,15 @@ jobs:
           context: ./
           mode: build
           publish: local
-      - name: Verify Docker build for ${{ matrix.platform }}
+      - name: Verify Docker build
         shell: bash
         run: |
           # check if output 'status' from step docker_build is 'local-built'
           if [[ "${{ steps.docker_build.outputs.status }}" != "local-built" ]]; then
-              echo "❌ Docker build failed for ${{ matrix.platform }}"
+              echo "❌ Docker build failed"
               exit 1
           fi
-      - name: Test Docker container for ${{ matrix.platform }}
+      - name: Test Docker container
         shell: bash
         env:
           STARTUP_TIMEOUT_SECONDS: '60'
@@ -204,7 +205,6 @@ jobs:
         with:
           node-version: 'lts/*'
       - name: Release (dry-run)
-        # see https://github.com/btnguyen2k/action-semrelease for documentation
         id: release_dry_run
         uses: btnguyen2k/action-semrelease@37fe196d36496098bd291e9519c86772ea2e0c0d # v5.1.0
         with:
@@ -213,7 +213,7 @@ jobs:
           branches: ${{ github.ref_name }}
           tag-prefix: ${{ env.TAG_PREFIX }}
 
-  PublishDockerImagesLinuxBuild:
+  PublishDockerImagesLinux:
     if: |
       needs.ReleaseDryRun.outputs.RESULT == 'SUCCESS' &&
       github.ref == 'refs/heads/dev'
