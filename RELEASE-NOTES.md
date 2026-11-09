@@ -1,5 +1,11 @@
 # FinHub release notes
 
+## 2026-11-09 - v0.16.5
+
+### Fixed/Improvements
+
+- Patch(ai): refresh OpenAI and Azure model catalogs and migrate task defaults to GPT-6/6.1
+
 ## 2026-11-06 - v0.16.4
 
 ### Added/Refactoring/Deprecation

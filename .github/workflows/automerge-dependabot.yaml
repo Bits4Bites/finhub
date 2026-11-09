@@ -7,9 +7,6 @@ on:
     workflows: [ "ci" ]
     types: [ "completed" ]
 
-permissions:
-  contents: read
-
 jobs:
   Automerge:
     runs-on: ubuntu-latest

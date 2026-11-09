@@ -18,7 +18,7 @@ env:
   BRANCH_TO_RELEASE: 'release'
   TAG_PREFIX: 'v'
   FILE_CHANGELOG: 'RELEASE-NOTES.md'
-  DOCKER_IMAGE: btnguyen2k/finhub # update your Docker Hub image name here
+  DOCKER_IMAGE: btnguyen2k/finhub # update Docker Hub image name here
 
 jobs:
   CaptureContext:
@@ -60,9 +60,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ env.SOURCE_SHA }}
-          fetch-depth: 0
       - name: Release (dry-run)
-        # see https://github.com/btnguyen2k/action-semrelease for documentation
         id: release_dry_run
         uses: btnguyen2k/action-semrelease@37fe196d36496098bd291e9519c86772ea2e0c0d # v5.1.0
         with:
@@ -71,7 +69,7 @@ jobs:
           target-sha: ${{ needs.CaptureContext.outputs.TARGET_SHA }}
           branches: ${{ env.BRANCH_TO_RELEASE }}
           tag-prefix: ${{ env.TAG_PREFIX }}
-      - name: Update module meta
+      - name: Update metadata
         if: steps.release_dry_run.outputs.result == 'SUCCESS'
         uses: actions/github-script@v9
         env:
@@ -82,6 +80,8 @@ jobs:
             const fs = require('node:fs');
             const { VERSION, RELEASE_NOTES, TAG_PREFIX, FILE_CHANGELOG } = process.env;
             const tag = `${TAG_PREFIX}${VERSION}`;
+            
+            core.info(`⌛ Updating changelog file ${FILE_CHANGELOG} for version ${tag}...`);
             const changelog = fs.readFileSync(FILE_CHANGELOG, 'utf8');
             if (changelog.split(/\r?\n/).some(line => line.startsWith('## ') && line.endsWith(` - ${tag}`))) {
               throw new Error(`Changelog already contains ${tag}; inspect the previous release preparation.`);
@@ -95,11 +95,15 @@ jobs:
               FILE_CHANGELOG,
               `${changelog.slice(0, headingEnd + 1)}\n## ${date} - ${tag}\n\n${RELEASE_NOTES.trimEnd()}\n${changelog.slice(headingEnd + 1)}`,
             );
+            
+            core.info(`⌛ Updating document files with version ${tag}...`);
             for (const file of fs.readdirSync('.').filter(file => file.endsWith('.md') && file !== FILE_CHANGELOG)) {
               const original = fs.readFileSync(file, 'utf8');
               let updated = original.replaceAll('<<VERSION>>', tag);
               if (updated !== original) fs.writeFileSync(file, updated);
             }
+
+            core.info(`⌛ Updating application metadata with version ${tag}...`);
             const versionFile = 'app/version.py';
             const versionSource = fs.readFileSync(versionFile, 'utf8');
             const versionPattern = /^VERSION\s*=.*$/m;
@@ -107,8 +111,9 @@ jobs:
               throw new Error(`No VERSION assignment found in ${versionFile}.`);
             }
             fs.writeFileSync(versionFile, versionSource.replace(versionPattern, `VERSION = ${JSON.stringify(VERSION)}`));
-            core.info(`✅ Updated module metadata for version ${tag}.`);
-      - name: Commit release metadata and capture C
+            
+            core.info(`✅ Updated metadata for version ${tag}.`);
+      - name: Commit release metadata and capture commit SHA C
         if: steps.release_dry_run.outputs.result == 'SUCCESS'
         id: metadata
         env:
@@ -168,7 +173,6 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ env.TARGET_SHA }}
-          fetch-depth: 0
       - name: Cleanup release metadata after publication
         run: |
           set -euo pipefail
@@ -230,7 +234,6 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ env.TARGET_SHA }}
-          depth: 0
       - uses: docker/login-action@v4
         with:
           username: ${{ secrets.DOCKER_HUB_USER }}
@@ -243,7 +246,7 @@ jobs:
           target-sha: ${{ env.TARGET_SHA }}  # even when checkout=false, still need the pinned SHA for verification
           publish: true
           image: ${{ env.DOCKER_IMAGE }}
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64, linux/arm64
           tags: |
             release
             ${{ env.VERSION }}
