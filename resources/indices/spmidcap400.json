@@ -1,5 +1,5 @@
 {
-    "date": "2026-10-24",
+    "date": "2026-11-07",
     "data": [
         {
             "symbol": "NYSE:AA",
@@ -753,7 +753,7 @@
         },
         {
             "symbol": "NASDAQ:FORM",
-            "company": "FormFactor, Inc.",
+            "company": "FormFactor",
             "sector": "Information Technology"
         },
         {
@@ -805,6 +805,11 @@
             "symbol": "NYSE:GHC",
             "company": "Graham Holdings",
             "sector": "Consumer Discretionary"
+        },
+        {
+            "symbol": "NYSE:GKOS",
+            "company": "Glaukos",
+            "sector": "Health Care"
         },
         {
             "symbol": "NASDAQ:GLPI",
@@ -1290,11 +1295,6 @@
             "symbol": "NYSE:OHI",
             "company": "Omega Healthcare Investors",
             "sector": "Real Estate"
-        },
-        {
-            "symbol": "NASDAQ:OKTA",
-            "company": "Okta, Inc.",
-            "sector": "Information Technology"
         },
         {
             "symbol": "NASDAQ:OLED",

@@ -1,5 +1,5 @@
 {
-    "date": "2026-10-24",
+    "date": "2026-11-07",
     "data": [
         {
             "symbol": "NYSE:MMM",
@@ -757,7 +757,7 @@
             "sector": "Utilities"
         },
         {
-            "symbol": "NYSE:DPZ",
+            "symbol": "NASDAQ:DPZ",
             "company": "Domino's",
             "sector": "Consumer Discretionary"
         },
@@ -887,7 +887,7 @@
             "sector": "Financials"
         },
         {
-            "symbol": "NYSE:EVRG",
+            "symbol": "NASDAQ:EVRG",
             "company": "Evergy",
             "sector": "Utilities"
         },
@@ -917,7 +917,7 @@
             "sector": "Consumer Discretionary"
         },
         {
-            "symbol": "NASDAQ:EXPD",
+            "symbol": "NYSE:EXPD",
             "company": "Expeditors International",
             "sector": "Industrials"
         },
@@ -1347,11 +1347,6 @@
             "sector": "Financials"
         },
         {
-            "symbol": "NYSE:KVUE",
-            "company": "Kenvue",
-            "sector": "Consumer Staples"
-        },
-        {
             "symbol": "NASDAQ:KDP",
             "company": "Keurig Dr Pepper",
             "sector": "Consumer Staples"
@@ -1737,6 +1732,11 @@
             "sector": "Energy"
         },
         {
+            "symbol": "NASDAQ:OKTA",
+            "company": "Okta, Inc.",
+            "sector": "Information Technology"
+        },
+        {
             "symbol": "NASDAQ:ODFL",
             "company": "Old Dominion",
             "sector": "Industrials"
@@ -1877,14 +1877,14 @@
             "sector": "Financials"
         },
         {
-            "symbol": "NYSE:PEG",
-            "company": "Public Service Enterprise Group",
-            "sector": "Utilities"
-        },
-        {
             "symbol": "NASDAQ:PTC",
             "company": "PTC Inc.",
             "sector": "Information Technology"
+        },
+        {
+            "symbol": "NYSE:PEG",
+            "company": "Public Service Enterprise Group",
+            "sector": "Utilities"
         },
         {
             "symbol": "NYSE:PSA",
@@ -1897,9 +1897,9 @@
             "sector": "Consumer Discretionary"
         },
         {
-            "symbol": "NYSE:PWR",
-            "company": "Quanta Services",
-            "sector": "Industrials"
+            "symbol": "NYSE:Q",
+            "company": "Qnity Electronics",
+            "sector": "Information Technology"
         },
         {
             "symbol": "NASDAQ:QCOM",
@@ -1907,14 +1907,14 @@
             "sector": "Information Technology"
         },
         {
+            "symbol": "NYSE:PWR",
+            "company": "Quanta Services",
+            "sector": "Industrials"
+        },
+        {
             "symbol": "NYSE:DGX",
             "company": "Quest Diagnostics",
             "sector": "Health Care"
-        },
-        {
-            "symbol": "NYSE:Q",
-            "company": "Qnity Electronics",
-            "sector": "Information Technology"
         },
         {
             "symbol": "NYSE:RL",
@@ -1930,11 +1930,6 @@
             "symbol": "NYSE:RDDT",
             "company": "Reddit",
             "sector": "Communication Services"
-        },
-        {
-            "symbol": "NYSE:RTX",
-            "company": "RTX Corporation",
-            "sector": "Industrials"
         },
         {
             "symbol": "NYSE:O",
@@ -2002,6 +1997,11 @@
             "sector": "Consumer Discretionary"
         },
         {
+            "symbol": "NYSE:RTX",
+            "company": "RTX Corporation",
+            "sector": "Industrials"
+        },
+        {
             "symbol": "NYSE:SPGI",
             "company": "S&amp;P Global",
             "sector": "Financials"
@@ -2053,7 +2053,7 @@
         },
         {
             "symbol": "NYSE:SKYD",
-            "company": "Skydance Corporation",
+            "company": "Skydance",
             "sector": "Communication Services"
         },
         {

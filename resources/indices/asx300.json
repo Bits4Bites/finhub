@@ -1,5 +1,5 @@
 {
-    "date": "2026-10-24",
+    "date": "2026-11-07",
     "data": [
         {
             "symbol": "ASX:360",
@@ -759,7 +759,7 @@
         {
             "symbol": "ASX:LIN",
             "company": "LINDIAN RESOURCES LIMITED",
-            "sector": "Aluminium, Bauxite & Alumina, Rare Earth Minerals"
+            "sector": "Rare Earth Minerals, Aluminium, Bauxite & Alumina"
         },
         {
             "symbol": "ASX:LLC",
@@ -803,8 +803,8 @@
         },
         {
             "symbol": "ASX:MFG",
-            "company": "MAGELLAN FINANCIAL GROUP LIMITED",
-            "sector": "Wealth Management & Investments"
+            "company": "",
+            "sector": ""
         },
         {
             "symbol": "ASX:MGH",
