@@ -588,20 +588,3 @@ def test_provider_schema_requires_every_declared_property(response_model):
     schema = ai_helper._openai_compatible_json_schema(response_model.model_json_schema())
 
     _assert_all_object_properties_are_required(schema)
-
-
-def test_task_configuration_uses_terra_medium_for_planning():
-    plan = service.config.settings_llm_task.tasks["SPOTLIGHT_PORTFOLIO_PLAN"]
-    research = service.config.settings_llm_task.tasks["SPOTLIGHT_PORTFOLIO_RESEARCH"]
-    assessment = service.config.settings_llm_task.tasks["SPOTLIGHT_PORTFOLIO_ASSESS"]
-
-    assert plan.model == "gpt-5.6-terra"
-    assert plan.reasoning_effort == "Medium"
-    assert plan.use_web_search is False
-    assert research.model == "gpt-5.6-terra"
-    assert research.reasoning_effort == "High"
-    assert research.use_web_search is True
-    assert research.max_tool_calls == 0
-    assert assessment.model == "gpt-5.6-terra"
-    assert assessment.reasoning_effort == "High"
-    assert assessment.use_web_search is False

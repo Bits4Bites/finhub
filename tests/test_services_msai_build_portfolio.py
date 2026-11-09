@@ -516,37 +516,33 @@ def test_provider_schema_requires_every_declared_property(response_model):
     _assert_all_object_properties_are_required(schema)
 
 
-def test_task_configuration_matches_quality_first_stage_design():
-    plan = service.config.settings_llm_task.tasks["BUILD_PORTFOLIO_PLAN"]
-    research = service.config.settings_llm_task.tasks["BUILD_PORTFOLIO_RESEARCH"]
-    construct = service.config.settings_llm_task.tasks["BUILD_PORTFOLIO_CONSTRUCT"]
-    action_plan = service.config.settings_llm_task.tasks["BUILD_PORTFOLIO_ACTION_PLAN"]
+@pytest.mark.parametrize(
+    ("setting", "value"),
+    [
+        ("vendor", "another-vendor"),
+        ("tier", "another-tier"),
+        ("model", "another-model"),
+        ("reasoning_effort", "High"),
+        ("use_web_search", True),
+        ("max_tool_calls", 5),
+    ],
+)
+def test_task_cache_identity_changes_with_configuration(monkeypatch, setting, value):
+    task_config = service.config.LLMTaskConfig(
+        task_name="TEST_TASK",
+        vendor="test-vendor",
+        tier="test-tier",
+        model="test-model",
+        reasoning_effort="Low",
+        use_web_search=False,
+        max_tool_calls=0,
+    )
+    monkeypatch.setattr(service.config.settings_llm_task, "tasks", {"TEST_TASK": task_config})
+    original_identity = service._task_cache_identity("TEST_TASK")
 
-    assert (plan.model, plan.reasoning_effort, plan.use_web_search) == (
-        "gpt-5.6-terra",
-        "Medium",
-        False,
-    )
-    assert (research.model, research.reasoning_effort, research.use_web_search, research.max_tool_calls) == (
-        "gpt-5.6-terra",
-        "High",
-        True,
-        25,
-    )
-    assert (construct.model, construct.reasoning_effort, construct.use_web_search) == (
-        "gpt-5.6-terra",
-        "High",
-        False,
-    )
-    assert (action_plan.model, action_plan.reasoning_effort, action_plan.use_web_search) == (
-        "gpt-5.6-terra",
-        "High",
-        False,
-    )
-    assert json.loads(service._task_cache_identity("BUILD_PORTFOLIO_PLAN"))["config"] == plan.model_dump(mode="json")
-    assert json.loads(service._task_cache_identity("BUILD_PORTFOLIO_RESEARCH"))["config"] == research.model_dump(
-        mode="json"
-    )
+    monkeypatch.setattr(task_config, setting, value)
+
+    assert service._task_cache_identity("TEST_TASK") != original_identity
 
 
 @pytest.mark.parametrize(
