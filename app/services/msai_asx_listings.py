@@ -126,21 +126,22 @@ class _ListingAnalysisDraft(models_events_listings.ListingAnalysisBase):
 
 async def ai_get_asx_new_listings() -> list[models_events_listings.ListingEvent]:
     """
-    Fetch, extract, and analyze up to five current or upcoming ASX listings.
+    Fetch all current or upcoming ASX listings and analyze up to five eligible events.
 
     Listings before the current Sydney date are excluded. Today's listings are
     included, and results are ordered by the soonest confirmed listing date. Entries
     without a confirmed date or with supplied non-positive monetary values are
     excluded. Unavailable issue prices and capital amounts are retained as null.
     Economy mode skips analysis for explicitly non-underwritten listings with a
-    missing public-offer close date or one before today.
+    missing public-offer close date or one before today. Economy-skipped events do
+    not consume the analysis limit, but failed analysis attempts do. Once the limit
+    is reached, remaining events are returned with their analysis status set to Skipped.
     """
     today = _current_asx_date()
     events = _select_current_and_future_listings(
         await _get_asx_new_listings(),
         today=today,
     )
-    events = events[:_MAX_LISTINGS_TO_ANALYZE]
     cache_key = _generate_analysis_cache_key(events, today=today)
     cached_events = await cache.get(cache_key)
     if cached_events is not None:
@@ -388,20 +389,29 @@ async def _analyze_asx_listings(
 ) -> list[models_events_listings.ListingEvent]:
     today = _current_asx_date()
     economy_mode = config.settings_llm_task.tokenomics_mode == "Economy"
+    analysis_attempts = 0
     for event in events:
         try:
-            if (
+            limit_reached = analysis_attempts >= _MAX_LISTINGS_TO_ANALYZE
+            if limit_reached or (
                 event.is_underwritten is False
                 and economy_mode
                 and (event.public_offer_close_date is None or date.fromisoformat(event.public_offer_close_date) < today)
             ):
-                logging.info("[ASX Listings] Skipping analysis for '%s' in Economy mode.", event.symbol)
+                logging.info(
+                    "[ASX Listings] Skipping analysis for '%s': %s.",
+                    event.symbol,
+                    "analysis limit reached" if limit_reached else "Economy mode",
+                )
                 event.analysis = None
                 event.analysis_status = "Skipped"
                 event.analysis_error = None
                 continue
 
-            logging.info("[ASX Listings] Analyzing listing '%s' (underwritten=%s).", event.symbol, event.is_underwritten)
+            analysis_attempts += 1
+            logging.info(
+                "[ASX Listings] Analyzing listing '%s' (underwritten=%s).", event.symbol, event.is_underwritten
+            )
             research = await _research_asx_listing(event)
             event.analysis = await _assess_asx_listing(event, research)
             event.analysis_status = "Completed"

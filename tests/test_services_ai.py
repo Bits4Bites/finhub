@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from app.models import events_listings as models_events_listings
+from app.services import msai_asx_listings
 
 # ===========================================================================
 # Tests for get_symbol_info_raw
@@ -208,11 +209,10 @@ class TestAiGetAsxNewListings:
         assert [event["symbol"] for event in cached_events] == ["ASX:AAA", "ASX:ZZZ"]
         assert self.mock_cache_set.await_args.kwargs["ttl"] == 86400
 
+    @patch("app.services.msai_asx_listings._MAX_LISTINGS_TO_ANALYZE", 2)
     @patch("app.services.msai_asx_listings._analyze_asx_listings", new_callable=AsyncMock)
     @patch("app.services.msai_asx_listings._get_asx_new_listings", new_callable=AsyncMock)
-    def test_analyzes_only_five_soonest_listings(self, mock_get, mock_analyze):
-        from app.services.msai_asx_listings import ai_get_asx_new_listings
-
+    def test_passes_all_current_and_future_listings_to_analysis(self, mock_get, mock_analyze):
         events = [
             _make_listing_event(
                 symbol=f"ASX:A{day}",
@@ -224,22 +224,15 @@ class TestAiGetAsxNewListings:
         mock_get.return_value = events
         mock_analyze.side_effect = lambda selected: selected
 
-        result = asyncio.run(ai_get_asx_new_listings())
+        result = asyncio.run(msai_asx_listings.ai_get_asx_new_listings())
 
-        assert [event.symbol for event in result] == ["ASX:A1", "ASX:A2", "ASX:A3", "ASX:A4", "ASX:A5"]
-        assert [event.symbol for event in mock_analyze.await_args.args[0]] == [
-            "ASX:A1",
-            "ASX:A2",
-            "ASX:A3",
-            "ASX:A4",
-            "ASX:A5",
-        ]
+        expected_symbols = ["ASX:A1", "ASX:A2", "ASX:A3", "ASX:A4", "ASX:A5", "ASX:A6"]
+        assert [event.symbol for event in result] == expected_symbols
+        assert [event.symbol for event in mock_analyze.await_args.args[0]] == expected_symbols
 
     @patch("app.services.msai_asx_listings._analyze_asx_listings", new_callable=AsyncMock)
     @patch("app.services.msai_asx_listings._get_asx_new_listings", new_callable=AsyncMock)
-    def test_filters_by_date_before_applying_listing_cap(self, mock_get, mock_analyze):
-        from app.services.msai_asx_listings import ai_get_asx_new_listings
-
+    def test_filters_past_listings_without_truncating_current_and_future_events(self, mock_get, mock_analyze):
         events = [
             _make_listing_event(symbol="ASX:F5", timestamp_str="2026-06-20", analysis_status="Completed"),
             _make_listing_event(symbol="ASX:F1", timestamp_str="2026-06-16", analysis_status="Completed"),
@@ -258,9 +251,9 @@ class TestAiGetAsxNewListings:
         mock_get.return_value = events
         mock_analyze.side_effect = lambda selected: selected
 
-        result = asyncio.run(ai_get_asx_new_listings())
+        result = asyncio.run(msai_asx_listings.ai_get_asx_new_listings())
 
-        expected_symbols = ["ASX:EF2", "ASX:F1", "ASX:F2", "ASX:F3", "ASX:F4"]
+        expected_symbols = ["ASX:EF2", "ASX:F1", "ASX:F2", "ASX:F3", "ASX:F4", "ASX:F5"]
         assert [event.symbol for event in result] == expected_symbols
         assert [event.symbol for event in mock_analyze.await_args.args[0]] == expected_symbols
 

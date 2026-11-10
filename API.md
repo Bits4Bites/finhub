@@ -353,8 +353,8 @@ data; polling returns HTTP `200` with envelope `status=501` and an unsupported-c
 
 ### `GET /events/new_listings`
 
-Get up to five confirmed current or upcoming listing events for a market, ordered by listing date and enriched with
-structured AI analysis.
+Get all confirmed current or upcoming listing events for a market, ordered by listing date. AI analysis is attempted
+for up to five eligible listings.
 
 | Parameter | Type  | Required | Description                                                                  |
 |-----------|-------|----------|------------------------------------------------------------------------------|
@@ -401,6 +401,10 @@ With `FINHUB_LLM_TOKENOMICS_MODE=Economy`, explicitly non-underwritten listings 
 is missing or before the current Sydney date return `analysis_status=Skipped` without analysis. Underwritten
 listings, listings with unknown underwriting, and offers closing today or later remain eligible for analysis.
 `Standard` mode does not apply this skip rule.
+
+Economy-skipped listings do not count toward the five analysis attempts; failed research or assessment attempts do.
+Once the limit is reached, every remaining listing is returned with `analysis_status=Skipped`, including underwritten
+listings.
 
 `ListingAnalysis` contains:
 

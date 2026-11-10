@@ -720,6 +720,81 @@ def test_analysis_respects_tokenomics_offer_window_and_underwriting(
         mock_assess.assert_awaited_once_with(event, research)
 
 
+@pytest.mark.parametrize("mode", ["Standard", "Economy"])
+def test_analysis_caps_attempts_and_retains_all_listings(monkeypatch, mode):
+    monkeypatch.setattr(msai_asx_listings.config.settings_llm_task, "tokenomics_mode", mode)
+    monkeypatch.setattr(msai_asx_listings, "_MAX_LISTINGS_TO_ANALYZE", 2)
+    events = [_event(f"ASX:A{index}", is_underwritten=True) for index in range(1, 5)]
+    research = _research_model()
+    analysis = _analysis_model()
+    for event in events:
+        event.analysis = analysis
+        event.analysis_status = "Failed"
+        event.analysis_error = "Previous analysis failed"
+
+    with (
+        patch.object(
+            msai_asx_listings,
+            "_research_asx_listing",
+            new_callable=AsyncMock,
+            return_value=research,
+        ) as mock_research,
+        patch.object(
+            msai_asx_listings,
+            "_assess_asx_listing",
+            new_callable=AsyncMock,
+            return_value=analysis,
+        ) as mock_assess,
+    ):
+        result = asyncio.run(msai_asx_listings._analyze_asx_listings(events))
+
+    assert [event.analysis_status for event in result] == ["Completed", "Completed", "Skipped", "Skipped"]
+    assert [call.args[0].symbol for call in mock_research.await_args_list] == ["ASX:A1", "ASX:A2"]
+    assert mock_assess.await_count == 2
+    assert all(event.analysis_error is None for event in result)
+    assert all(event.analysis is None for event in result[2:])
+
+
+@pytest.mark.parametrize("failure_stage", ["research", "assessment"])
+def test_analysis_limit_counts_failures_but_not_economy_skips(monkeypatch, failure_stage):
+    monkeypatch.setattr(msai_asx_listings.config.settings_llm_task, "tokenomics_mode", "Economy")
+    monkeypatch.setattr(msai_asx_listings, "_MAX_LISTINGS_TO_ANALYZE", 2)
+    events = [
+        _event("ASX:SKIP"),
+        _event("ASX:FAIL", is_underwritten=True),
+        _event("ASX:OK", is_underwritten=True),
+        _event("ASX:LIMIT", is_underwritten=True),
+    ]
+    research = _research_model()
+    analysis = _analysis_model()
+    failure = RuntimeError(f"{failure_stage} failed")
+    research_results = [failure, research] if failure_stage == "research" else [research, research]
+    assessment_results = [analysis] if failure_stage == "research" else [failure, analysis]
+
+    with (
+        patch.object(
+            msai_asx_listings,
+            "_research_asx_listing",
+            new_callable=AsyncMock,
+            side_effect=research_results,
+        ) as mock_research,
+        patch.object(
+            msai_asx_listings,
+            "_assess_asx_listing",
+            new_callable=AsyncMock,
+            side_effect=assessment_results,
+        ) as mock_assess,
+    ):
+        result = asyncio.run(msai_asx_listings._analyze_asx_listings(events))
+
+    assert [event.analysis_status for event in result] == ["Skipped", "Failed", "Completed", "Skipped"]
+    assert [call.args[0].symbol for call in mock_research.await_args_list] == ["ASX:FAIL", "ASX:OK"]
+    expected_assessed = ["ASX:OK"] if failure_stage == "research" else ["ASX:FAIL", "ASX:OK"]
+    assert [call.args[0].symbol for call in mock_assess.await_args_list] == expected_assessed
+    assert result[1].analysis_error == "AI listing analysis failed"
+    assert all(event.analysis is None and event.analysis_error is None for event in (result[0], result[3]))
+
+
 def test_combined_analysis_cache_identity_changes_with_tokenomics_mode(monkeypatch):
     monkeypatch.setattr(msai_asx_listings.config.settings_llm_task, "tasks", {})
     monkeypatch.setattr(msai_asx_listings.config.settings_llm_task, "tokenomics_mode", "Standard")
