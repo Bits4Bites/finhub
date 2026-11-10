@@ -395,11 +395,13 @@ async def _analyze_asx_listings(
                 and economy_mode
                 and (event.public_offer_close_date is None or date.fromisoformat(event.public_offer_close_date) < today)
             ):
+                logging.info("[ASX Listings] Skipping analysis for '%s' in Economy mode.", event.symbol)
                 event.analysis = None
                 event.analysis_status = "Skipped"
                 event.analysis_error = None
                 continue
 
+            logging.info("[ASX Listings] Analyzing listing '%s' (underwritten=%s).", event.symbol, event.is_underwritten)
             research = await _research_asx_listing(event)
             event.analysis = await _assess_asx_listing(event, research)
             event.analysis_status = "Completed"
