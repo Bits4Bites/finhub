@@ -12,7 +12,7 @@ from . import types as models_types
 
 ListingStatus = Literal["Upcoming", "Listed"]
 ListingStance = Literal["Bullish", "Neutral", "Bearish", "InsufficientData"]
-ListingAnalysisStatus = Literal["NotStarted", "Completed", "Failed"]
+ListingAnalysisStatus = Literal["NotStarted", "Completed", "Failed", "Skipped"]
 ListingOutlookAssessmentType = Literal["Forecast", "Observed", "InsufficientData"]
 ListingOutlookDirection = Literal["Up", "Flat", "Down", "InsufficientData"]
 ListingRiskSeverity = Literal["Critical", "High", "Medium", "Low"]

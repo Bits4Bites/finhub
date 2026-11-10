@@ -8,4 +8,5 @@ public enum ListingAnalysisStatus
     NotStarted,
     Completed,
     Failed,
+    Skipped,
 }

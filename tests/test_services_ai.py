@@ -83,6 +83,7 @@ class TestAiGetAsxNewListings:
             patch("app.services.msai_asx_listings.cache.get", new_callable=AsyncMock, return_value=None) as mock_get,
             patch("app.services.msai_asx_listings.cache.set", new_callable=AsyncMock, return_value=True) as mock_set,
             patch("app.services.msai_asx_listings._current_asx_date", return_value=date(2026, 6, 15)),
+            patch("app.services.msai_asx_listings.config.settings_llm_task.tokenomics_mode", "Standard"),
         ):
             self.mock_cache_get = mock_get
             self.mock_cache_set = mock_set
@@ -193,6 +194,7 @@ class TestAiGetAsxNewListings:
         mock_generate_key.assert_called_once_with(
             "asx-new-listings-analysis-v3",
             "2026-06-15",
+            "Standard",
             "task:ASX_LISTTINGS_EXTRACT",
             "task:ASX_LISTTINGS_RESEARCH",
             "task:ASX_LISTTINGS_ANALYZE",

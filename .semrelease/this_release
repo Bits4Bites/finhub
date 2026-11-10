@@ -3,3 +3,4 @@
 #   git log origin..HEAD | grep "^\s" > .semrelease/this_release
 #!VERSION=0.17.0
 - feat(ai): add tokenomics mode configuration (env FINHUB_LLM_TOKENOMICS_MODE)
+- feat(ai/new_listings): reduce token usage under Economy tokenomics mode

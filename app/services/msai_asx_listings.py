@@ -132,6 +132,8 @@ async def ai_get_asx_new_listings() -> list[models_events_listings.ListingEvent]
     included, and results are ordered by the soonest confirmed listing date. Entries
     without a confirmed date or with supplied non-positive monetary values are
     excluded. Unavailable issue prices and capital amounts are retained as null.
+    Economy mode skips analysis for explicitly non-underwritten listings with a
+    missing public-offer close date or one before today.
     """
     today = _current_asx_date()
     events = _select_current_and_future_listings(
@@ -181,6 +183,7 @@ def _generate_analysis_cache_key(
     return cache.generate_hourly_key(
         _ASX_LISTINGS_CACHE_NAMESPACE,
         today.isoformat(),
+        config.settings_llm_task.tokenomics_mode,
         *(
             _task_cache_identity(task_id)
             for task_id in (
@@ -383,8 +386,20 @@ def _clean_names(values: list[str]) -> list[str]:
 async def _analyze_asx_listings(
     events: list[models_events_listings.ListingEvent],
 ) -> list[models_events_listings.ListingEvent]:
+    today = _current_asx_date()
+    economy_mode = config.settings_llm_task.tokenomics_mode == "Economy"
     for event in events:
         try:
+            if (
+                event.is_underwritten is False
+                and economy_mode
+                and (event.public_offer_close_date is None or date.fromisoformat(event.public_offer_close_date) < today)
+            ):
+                event.analysis = None
+                event.analysis_status = "Skipped"
+                event.analysis_error = None
+                continue
+
             research = await _research_asx_listing(event)
             event.analysis = await _assess_asx_listing(event, research)
             event.analysis_status = "Completed"

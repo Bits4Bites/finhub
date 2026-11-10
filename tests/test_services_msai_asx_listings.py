@@ -661,8 +661,84 @@ def test_underwritten_listing_selects_underwritten_analysis_task():
     assert "proof of investor demand" in mock_ai_exec.await_args.args[1]
 
 
-def test_per_stock_pipeline_reports_partial_failures_explicitly():
-    events = [_event("ASX:ABC"), _event("ASX:XYZ")]
+@pytest.mark.parametrize(
+    ("mode", "is_underwritten", "close_date", "expected_status"),
+    [
+        ("Economy", True, None, "Completed"),
+        ("Economy", True, "2026-06-14", "Completed"),
+        ("Economy", False, None, "Skipped"),
+        ("Economy", False, "2026-06-14", "Skipped"),
+        ("Economy", False, "2026-06-15", "Completed"),
+        ("Economy", False, "2026-06-16", "Completed"),
+        ("Economy", None, None, "Completed"),
+        ("Economy", None, "2026-06-14", "Completed"),
+        ("Standard", False, None, "Completed"),
+        ("Standard", False, "2026-06-14", "Completed"),
+    ],
+)
+def test_analysis_respects_tokenomics_offer_window_and_underwriting(
+    monkeypatch, mode, is_underwritten, close_date, expected_status
+):
+    monkeypatch.setattr(msai_asx_listings.config.settings_llm_task, "tokenomics_mode", mode)
+    monkeypatch.setattr(msai_asx_listings, "_current_asx_date", lambda: date(2026, 6, 15))
+    event = _event(is_underwritten=is_underwritten)
+    event.public_offer_close_date = close_date
+    research = _research_model()
+    analysis = _analysis_model()
+    event.analysis = analysis
+    event.analysis_status = "Failed"
+    event.analysis_error = "Previous analysis failed"
+
+    with (
+        patch.object(
+            msai_asx_listings,
+            "_research_asx_listing",
+            new_callable=AsyncMock,
+            return_value=research,
+        ) as mock_research,
+        patch.object(
+            msai_asx_listings,
+            "_assess_asx_listing",
+            new_callable=AsyncMock,
+            return_value=analysis,
+        ) as mock_assess,
+    ):
+        result = asyncio.run(msai_asx_listings._analyze_asx_listings([event]))
+
+    assert result == [event]
+    assert event.analysis_status == expected_status
+    assert event.analysis_error is None
+    if expected_status == "Skipped":
+        assert event.analysis is None
+        mock_research.assert_not_awaited()
+        mock_assess.assert_not_awaited()
+        restored = models_events_listings.ListingEvent.model_validate_json(event.model_dump_json())
+        assert restored.analysis_status == "Skipped"
+    else:
+        assert event.analysis is analysis
+        mock_research.assert_awaited_once_with(event)
+        mock_assess.assert_awaited_once_with(event, research)
+
+
+def test_combined_analysis_cache_identity_changes_with_tokenomics_mode(monkeypatch):
+    monkeypatch.setattr(msai_asx_listings.config.settings_llm_task, "tasks", {})
+    monkeypatch.setattr(msai_asx_listings.config.settings_llm_task, "tokenomics_mode", "Standard")
+    events = [_event()]
+    today = date(2026, 6, 15)
+    standard_key = msai_asx_listings._generate_analysis_cache_key(events, today=today)
+
+    monkeypatch.setattr(msai_asx_listings.config.settings_llm_task, "tokenomics_mode", "Economy")
+
+    assert msai_asx_listings._generate_analysis_cache_key(events, today=today) != standard_key
+
+
+def test_per_stock_pipeline_reports_skips_and_partial_failures_explicitly(monkeypatch):
+    monkeypatch.setattr(msai_asx_listings.config.settings_llm_task, "tokenomics_mode", "Economy")
+    events = [
+        _event("ASX:SKIP"),
+        _event("ASX:ABC", is_underwritten=True),
+        _event("ASX:XYZ", is_underwritten=True),
+    ]
     research = _research_model()
     analysis = _analysis_model()
 
@@ -682,7 +758,9 @@ def test_per_stock_pipeline_reports_partial_failures_explicitly():
     ):
         result = asyncio.run(msai_asx_listings._analyze_asx_listings(events))
 
-    assert [event.analysis_status for event in result] == ["Completed", "Failed"]
-    assert result[1].analysis_error == "AI listing analysis failed"
+    assert [event.analysis_status for event in result] == ["Skipped", "Completed", "Failed"]
+    assert result[0].analysis is None
+    assert result[0].analysis_error is None
+    assert result[2].analysis_error == "AI listing analysis failed"
     assert mock_research.await_count == 2
     assert mock_assess.await_count == 1

@@ -391,11 +391,16 @@ For a successful request, `data` is an array of `ListingEvent` objects:
 | `is_underwritten`         | Whether underwriting was disclosed.                                    |
 | `underwriters`            | Disclosed underwriting organizations.                                  |
 | `lead_managers`           | Disclosed lead managers.                                               |
-| `analysis_status`         | `NotStarted`, `Completed`, or `Failed`.                                |
+| `analysis_status`         | `NotStarted`, `Completed`, `Failed`, or `Skipped`.                     |
 | `analysis_error`          | Analysis failure detail when `analysis_status=Failed`.                 |
 | `analysis`                | Structured `ListingAnalysis` when analysis completes.                  |
 
 Nullable fields are omitted when unavailable because this endpoint excludes `null` response properties.
+
+With `FINHUB_LLM_TOKENOMICS_MODE=Economy`, explicitly non-underwritten listings whose public-offer close date
+is missing or before the current Sydney date return `analysis_status=Skipped` without analysis. Underwritten
+listings, listings with unknown underwriting, and offers closing today or later remain eligible for analysis.
+`Standard` mode does not apply this skip rule.
 
 `ListingAnalysis` contains:
 
