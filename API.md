@@ -431,6 +431,18 @@ outlook period identifies whether it is observed, forecast, or unavailable; its 
 price and return ranges, confidence, rationale, drivers, risks, assumptions, gaps, and source IDs. Each reference
 includes source metadata, publication and access timestamps, its canonical HTTPS URL, and `is_verified`.
 
+Upcoming ASX assessments include a provisional subjective overview, stance, and directional forecasts even when
+factual evidence is sparse. When the issue price is available, all four horizons include subjective base-case trading
+ranges anchored to that price; percentage returns are calculated from the price bounds and issue price. These are
+conditional scenarios, not established fair values, guaranteed trading bounds, or personalized recommendations.
+Without an issue-price anchor, the overview and directional views remain available, but absolute price and return
+ranges are null.
+
+Subjectivity labels and cautions use the existing summary/rationale, `assumptions`, and `data_gaps` fields.
+Evidence quality and source-verification flags remain unchanged by the need to provide an opinion; low evidence
+quality is not itself a reason to suppress a future view. Prompts adapt to the listing's offer, evidence coverage,
+and gaps without an additional prompt-building AI call.
+
 ### `GET /events/start_new_listings_async` and `GET /events/poll_new_listings_async`
 
 Run the new-listings request in the background. Task state and results expire after one hour.

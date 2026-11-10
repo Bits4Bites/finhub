@@ -9,6 +9,8 @@ Quick-research scope:
   material, and audited documents.
 - Cover essential offer terms and use of funds; business and sector; headline financial and valuation evidence;
   material governance issues; market context; key risks and catalysts; and observed trading for elapsed horizons.
+- Prioritize facts useful for later conditional scenarios: the issue-price anchor, disclosed offer size/share count,
+  business maturity, funding needs, escrow/free float, underwriting conditions, and relevant market context.
 - Limit each section to at most three material facts. Record unavailable details in data_gaps rather than searching
   exhaustively.
 {{UNDERWRITING_INSTRUCTION}}
@@ -16,7 +18,9 @@ Quick-research scope:
 - Return factual evidence only. Do not give a stance, recommendation, or price outlook.
 - Set each temporary source ID to that source's exact cited HTTPS URL and use the same URL in reference_ids. The
   application replaces these temporary URL IDs after validation.
-- Every section and every fact must reference at least one source ID.
+- Every fact must reference at least one source ID. Section reference_ids must cover the sources actually used.
+  A section with no discovered facts may have empty facts and reference_ids with explicit data_gaps; do not attach
+  irrelevant citations or invent facts merely to fill a section.
 - Include each source once in references using its exact cited HTTPS URL.
 - Use null for published_at when the source has no publication date.
 - Do not invent source metadata or unsupported facts. Record missing information in data_gaps.

@@ -193,7 +193,7 @@ class TestAiGetAsxNewListings:
             asyncio.run(ai_get_asx_new_listings())
 
         mock_generate_key.assert_called_once_with(
-            "asx-new-listings-analysis-v3",
+            "asx-new-listings-analysis-v4",
             "2026-06-15",
             "Standard",
             "task:ASX_LISTTINGS_EXTRACT",

@@ -563,11 +563,110 @@ def test_assessment_uses_structured_response_and_preserves_source_verification(
     assert "explicitly underwritten" not in mock_ai_exec.await_args.args[1]
     assert mock_ai_exec.await_args.kwargs["schema_name"] == "asx_listing_analysis"
     assert mock_ai_exec.await_args.kwargs["response_json_schema"] == (
-        msai_asx_listings._ListingAnalysisDraft.model_json_schema()
+        msai_asx_listings._PricedListingAnalysisDraft.model_json_schema()
     )
     _, mock_cache_set = mock_listings_cache
     mock_cache_set.assert_awaited_once()
     assert mock_cache_set.await_args.kwargs["ttl"] == 24 * 60 * 60
+
+
+@pytest.mark.parametrize("price_anchor", [1.5, None])
+def test_sparse_evidence_keeps_subjective_views_with_honest_quality_and_cautions(price_anchor):
+    event = _event()
+    event.issue_price = price_anchor
+    research_data = _research_model(is_verified=False).model_dump()
+    for section_name in msai_asx_listings._RESEARCH_SECTION_NAMES:
+        if section_name != "offer":
+            research_data[section_name] = {
+                "facts": [],
+                "data_gaps": ["No further issuer evidence was supplied."],
+                "reference_ids": [],
+            }
+    research = msai_asx_listings._ListingResearch.model_validate(research_data)
+    response_data = _analysis_draft_data()
+    response_data["overall_data_quality"] = "Low"
+    response_data["overall_stance"] = "Neutral"
+    response_data["overall_confidence"] = 25
+    response_data["executive_summary"]["summary"] = "A speculative issuer whose offer depends on funding execution."
+    response_data["financials"]["data_quality"] = "Insufficient"
+    for section_name in msai_asx_listings._ANALYSIS_SECTION_NAMES:
+        response_data[section_name]["facts"] = []
+
+    with patch.object(
+        msai_asx_listings.ai_helper,
+        "ai_exec_task",
+        new_callable=AsyncMock,
+        return_value=ai_helper.LLMResponse(completion=json.dumps(response_data)),
+    ) as mock_ai_exec:
+        analysis = asyncio.run(msai_asx_listings._assess_asx_listing(event, research))
+
+    mock_ai_exec.assert_awaited_once()
+    prompt = mock_ai_exec.await_args.args[1]
+    context_json = prompt.split("BEGIN_APPLICATION_ASSESSMENT_CONTEXT\n", 1)[1].split(
+        "\nEND_APPLICATION_ASSESSMENT_CONTEXT", 1
+    )[0]
+    context = json.loads(context_json)
+    assert context["issue_price_anchor"] == price_anchor
+    assert "financials" in context["sections_without_facts"]
+    assert "valuation" in context["sections_without_facts"]
+    assert "offer" not in context["sections_without_facts"]
+    assert context["unverified_source_count"] == 1
+    assert analysis.overall_data_quality == "Low"
+    assert analysis.financials.data_quality == "Insufficient"
+    assert analysis.overall_stance == "Neutral"
+    assert analysis.overall_confidence == 25
+    assert analysis.references[0].is_verified is False
+    assert "Subjective base-case view:" in analysis.executive_summary.summary
+    assert "speculative issuer" in analysis.executive_summary.summary
+    assert any("provider citation verification" in warning for warning in analysis.executive_summary.data_gaps)
+    for period in (
+        analysis.outlook.ipo_day,
+        analysis.outlook.first_week,
+        analysis.outlook.first_two_weeks,
+        analysis.outlook.first_month,
+    ):
+        assert period.assessment_type == "Forecast"
+        assert period.direction == "Up"
+        assert any("Subjective screening opinion" in warning for warning in period.data_gaps)
+        assert period.reference_ids == ["asx-source"]
+        if price_anchor is None:
+            assert context["forecast_mode"] == "Qualitative"
+            assert period.expected_price_min is None
+            assert period.expected_price_max is None
+            assert period.expected_return_min_pct is None
+            assert period.expected_return_max_pct is None
+            assert any("No confirmed issue-price anchor" in warning for warning in period.data_gaps)
+        else:
+            assert context["forecast_mode"] == "SubjectiveBaseCase"
+            assert period.expected_price_min == 1.6
+            assert period.expected_price_max == 1.8
+            assert period.expected_return_min_pct == pytest.approx(6.67)
+            assert period.expected_return_max_pct == pytest.approx(20)
+
+
+def test_observed_past_periods_are_not_relabelled_as_subjective_forecasts(monkeypatch):
+    monkeypatch.setattr(msai_asx_listings, "_current_asx_date", lambda: date(2026, 6, 15))
+    event = _event()
+    event.timestamp_str = "2026-05-01"
+    response_data = _analysis_draft_data()
+    response_data["listing_status"] = "Listed"
+    for period in response_data["outlook"].values():
+        period["assessment_type"] = "Observed"
+        period["period_end"] = "2026-05-31"
+        period["rationale"] = "Observed prices in the supplied research."
+
+    with patch.object(
+        msai_asx_listings.ai_helper,
+        "ai_exec_task",
+        new_callable=AsyncMock,
+        return_value=ai_helper.LLMResponse(completion=json.dumps(response_data)),
+    ):
+        analysis = asyncio.run(msai_asx_listings._assess_asx_listing(event, _research_model()))
+
+    assert analysis.listing_status == "Listed"
+    assert analysis.outlook.ipo_day.assessment_type == "Observed"
+    assert analysis.outlook.ipo_day.rationale == "Observed prices in the supplied research."
+    assert analysis.outlook.ipo_day.expected_return_min_pct == 6.6
 
 
 def test_assessment_repairs_mixed_orphan_links_and_drops_unsupported_driver(
