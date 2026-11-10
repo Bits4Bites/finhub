@@ -13,6 +13,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ALLOWED_QUOTE_TYPES = {"EQUITY", "ETF", "MUTUALFUND"}
 ReasoningEffort = Literal["High", "Medium", "Low"]
+TokenomicsMode = Literal["Standard", "Economy"]
 
 # ----------------------------------------------------------------------#
 
@@ -179,6 +180,7 @@ class LLMVendorSettings(BaseSettings):
 
 class LLMTaskSettings(BaseSettings):
     tasks: dict[str, LLMTaskConfig] = Field(alias="FINHUB_LLM_TASK", default={})
+    tokenomics_mode: TokenomicsMode = Field(alias="FINHUB_LLM_TOKENOMICS_MODE", default="Standard")
     model_config = SettingsConfigDict(
         env_file="ai_tasks.env",
         env_file_encoding="utf-8",
@@ -186,6 +188,12 @@ class LLMTaskSettings(BaseSettings):
         nested_model_default_partial_update=True,
         extra="ignore",
     )
+
+    @field_validator("tokenomics_mode", mode="before")
+    @classmethod
+    def normalize_tokenomics_mode(cls, v: object) -> str:
+        supported_modes = {mode.casefold(): mode for mode in typing.get_args(TokenomicsMode)}
+        return supported_modes.get(v.strip().casefold(), "Standard") if isinstance(v, str) else "Standard"
 
 
 settings_openai_execution = OpenAIExecutionSettings()

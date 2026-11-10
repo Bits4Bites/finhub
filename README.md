@@ -112,6 +112,10 @@ FINHUB_LLM__OPENAI__PREMIUM__MODELS="gpt-5.4, gpt-5.6-sol"
 
 #### AI task routing (`ai_tasks.env`)
 
+`FINHUB_LLM_TOKENOMICS_MODE` selects the tokenomics mode. `Economy` is case-insensitive; other or empty
+values normalize to `Standard` (Economy disabled), which is also the default when unspecified.
+Set it in `ai_tasks.env` or override it through the process environment.
+
 Map each AI task to a vendor/tier/model using the pattern
 `FINHUB_LLM_TASK__<TASK>__<SETTING>`, where `<SETTING>` is `VENDOR`, `TIER`, `MODEL`,
 `REASONING_EFFORT`, `USE_WEB_SEARCH`, or `MAX_TOOL_CALLS`. `REASONING_EFFORT` is optional (`High`,
@@ -121,6 +125,8 @@ Tasks include `ANALYZE_TICKER_*`, `BUILD_PORTFOLIO_*`, `REVIEW_PORTFOLIO_*`,
 `SPOTLIGHT_PORTFOLIO_*`, `ANALYZE_DIV_EVENT_*`, and `ASX_LISTTINGS_*`. Example:
 
 ```env
+FINHUB_LLM_TOKENOMICS_MODE="Economy"
+
 FINHUB_LLM_TASK__ANALYZE_TICKER_RESEARCH__VENDOR="OpenAI"
 FINHUB_LLM_TASK__ANALYZE_TICKER_RESEARCH__TIER="Premium"
 FINHUB_LLM_TASK__ANALYZE_TICKER_RESEARCH__MODEL="gpt-5.4"
