@@ -5,14 +5,14 @@ namespace FinHub.Client.Models.Listings;
 public sealed record ListingValuationAnalysis : ListingAnalysisSection
 {
     [JsonPropertyName("valuation_view")]
-    public required string ValuationView { get; init; }
+    public string ValuationView { get; init; } = string.Empty;
 
     [JsonPropertyName("implied_market_cap")]
-    public required double? ImpliedMarketCap { get; init; }
+    public double? ImpliedMarketCap { get; init; }
 
     [JsonPropertyName("peer_comparison")]
-    public required string PeerComparison { get; init; }
+    public string PeerComparison { get; init; } = string.Empty;
 
     [JsonPropertyName("sensitivity")]
-    public required string Sensitivity { get; init; }
+    public string Sensitivity { get; init; } = string.Empty;
 }
