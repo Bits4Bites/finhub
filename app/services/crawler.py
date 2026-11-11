@@ -24,7 +24,9 @@ def _callback_name(callback) -> str:
     return f"{getattr(callback, '__module__', '')}.{getattr(callback, '__qualname__', type(callback).__qualname__)}"
 
 
-def extract_data_table_from_html(html_content: str, *, raw_cell_content=False, table_attr_filter=None) -> pd.DataFrame:
+def extract_data_table_from_html(
+    html_content: str, *, raw_cell_content=False, table_attr_filter=None, filter_skip=0
+) -> pd.DataFrame:
     """
     Extracts data from the given HTML content, assuming main content is in a table, and returns it as a Pandas DataFrame.
 
@@ -33,16 +35,19 @@ def extract_data_table_from_html(html_content: str, *, raw_cell_content=False, t
         raw_cell_content (bool, optional): If False, cell content will be cleaned-up; otherwise cell's raw content will be returned.
         table_attr_filter (dict[str, str], optional): A dictionary of attribute name and values to filter the table.
             For example, {"id": "event-content"} to find a table with id="event-content".
+        filter_skip (int, optional): The number of tables that match the filter to skip.
+            This is useful when there are multiple tables on the page and you want to select a specific one.
 
     Returns:
         DataFrame: A Pandas DataFrame containing the extracted data.
     """
     soup = BeautifulSoup(html_content, "html.parser")
 
-    # Find the main data table
-    table = soup.find("table", attrs=table_attr_filter)
-    if not table:
+    # Find the main data table(s), skip first `filter_skip` tables that match the filter
+    tables = soup.find_all("table", attrs=table_attr_filter)
+    if len(tables) <= filter_skip:
         return pd.DataFrame()
+    table = tables[filter_skip]
 
     # 1. Extract the table headers
     # headers_list = None
@@ -186,7 +191,9 @@ async def fetch_webpage_content_fallback_to_playwright(url: str) -> str | None:
     return await fetch_webpage_content_playwright(url, retries=2)
 
 
-async def scrape_data_table(url: str, *, raw_cell_content=False, table_attr_filter=None) -> pd.DataFrame:
+async def scrape_data_table(
+    url: str, *, raw_cell_content=False, table_attr_filter=None, filter_skip=0
+) -> pd.DataFrame:
     """
     Scrapes data from the given URL, assuming main content is in a table, and returns it as a Pandas DataFrame.
 
@@ -195,6 +202,8 @@ async def scrape_data_table(url: str, *, raw_cell_content=False, table_attr_filt
         raw_cell_content (bool, optional): If False, cell content will be cleaned-up; otherwise cell's raw content will be returned.
         table_attr_filter (dict[str, str], optional): A dictionary of attribute name and values to filter the table.
             For example, {"id": "event-content"} to find a table with id="event-content".
+        filter_skip (int, optional): The number of tables that match the filter to skip.
+            This is useful when there are multiple tables on the page and you want to select a specific one.
 
     Returns:
         DataFrame: A Pandas DataFrame containing the data table extracted from the webpage.
@@ -209,7 +218,7 @@ async def scrape_data_table(url: str, *, raw_cell_content=False, table_attr_filt
     # parse the HTML content and extract the data table
     logger.info("Extracting data table from the fetched content...")
     data_table_df = extract_data_table_from_html(
-        html_content, raw_cell_content=raw_cell_content, table_attr_filter=table_attr_filter
+        html_content, raw_cell_content=raw_cell_content, table_attr_filter=table_attr_filter, filter_skip=filter_skip
     )
 
     if data_table_df.empty:
@@ -219,7 +228,7 @@ async def scrape_data_table(url: str, *, raw_cell_content=False, table_attr_filt
 
 
 async def scrape_data_table_playwright(
-    url: str, *, raw_cell_content=False, after_load_func_async=None, table_attr_filter=None
+    url: str, *, raw_cell_content=False, after_load_func_async=None, table_attr_filter=None, filter_skip=0
 ) -> pd.DataFrame:
     """
     Scrapes data from the given URL using Playwright, assuming main content is in a table, and returns it as a Pandas DataFrame.
@@ -230,6 +239,8 @@ async def scrape_data_table_playwright(
         after_load_func_async (callable, optional): A function to execute after the page has loaded, for additional interactions.
         table_attr_filter (dict[str, str], optional): A dictionary of attribute name and values to filter the table.
             For example, {"id": "event-content"} to find a table with id="event-content".
+        filter_skip (int, optional): The number of tables that match the filter to skip.
+            This is useful when there are multiple tables on the page and you want to select a specific one.
 
     Returns:
         DataFrame: A Pandas DataFrame containing the data table extracted from the webpage.
@@ -247,7 +258,7 @@ async def scrape_data_table_playwright(
     # parse the HTML content and extract the data table
     logger.info("Extracting data table from the fetched content...")
     data_table_df = extract_data_table_from_html(
-        html_content, raw_cell_content=raw_cell_content, table_attr_filter=table_attr_filter
+        html_content, raw_cell_content=raw_cell_content, table_attr_filter=table_attr_filter, filter_skip=filter_skip
     )
 
     if data_table_df.empty:
