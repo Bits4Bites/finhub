@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pandas as pd
 import pytest
+import requests
 
 from app.services import crawler
 
@@ -36,7 +37,7 @@ class TestCrawlerFetching:
             yield
 
     def test_fetch_webpage_content_returns_text(self):
-        fake_response = SimpleNamespace(text="ok", raise_for_status=lambda: None)
+        fake_response = SimpleNamespace(status_code=200, text="ok", raise_for_status=lambda: None)
         fake_scraper = MagicMock()
         fake_scraper.get.return_value = fake_response
 
@@ -59,6 +60,41 @@ class TestCrawlerFetching:
 
         assert result == "cached"
         mock_create_scraper.assert_not_called()
+        self.mock_cache_set.assert_not_awaited()
+
+    @pytest.mark.parametrize("status_code", [400, 403, 429, 499])
+    def test_fetch_webpage_content_does_not_retry_client_errors(self, status_code):
+        response = requests.Response()
+        response.status_code = status_code
+        fake_scraper = MagicMock()
+        fake_scraper.get.return_value = response
+
+        with (
+            patch("app.services.crawler.cloudscraper.create_scraper", return_value=fake_scraper),
+            patch("app.services.crawler.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+        ):
+            result = asyncio.run(crawler.fetch_webpage_content("https://example.test"))
+
+        assert result is None
+        fake_scraper.get.assert_called_once_with("https://example.test", timeout=60)
+        mock_sleep.assert_not_awaited()
+        self.mock_cache_set.assert_not_awaited()
+
+    def test_fetch_webpage_content_retries_server_errors(self):
+        response = requests.Response()
+        response.status_code = 500
+        fake_scraper = MagicMock()
+        fake_scraper.get.return_value = response
+
+        with (
+            patch("app.services.crawler.cloudscraper.create_scraper", return_value=fake_scraper),
+            patch("app.services.crawler.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+        ):
+            result = asyncio.run(crawler.fetch_webpage_content("https://example.test", retries=2))
+
+        assert result is None
+        assert fake_scraper.get.call_count == 2
+        mock_sleep.assert_awaited_once()
         self.mock_cache_set.assert_not_awaited()
 
     def test_fetch_webpage_content_playwright_returns_cached_text(self):
@@ -93,6 +129,34 @@ class TestCrawlerFetching:
             ttl=86400,
         )
 
+    @pytest.mark.parametrize("content", ["<html>ok</html>", ""])
+    def test_fetch_webpage_content_fallback_returns_http_content(self, content):
+        with (
+            patch(
+                "app.services.crawler.fetch_webpage_content", new_callable=AsyncMock, return_value=content
+            ) as mock_http,
+            patch("app.services.crawler.fetch_webpage_content_playwright", new_callable=AsyncMock) as mock_playwright,
+        ):
+            result = asyncio.run(crawler.fetch_webpage_content_fallback_to_playwright("https://example.test"))
+
+        assert result == content
+        mock_http.assert_awaited_once_with("https://example.test", retries=2)
+        mock_playwright.assert_not_awaited()
+
+    @pytest.mark.parametrize("content", ["<html>browser</html>", None])
+    def test_fetch_webpage_content_fallback_uses_playwright_after_http_failure(self, content):
+        with (
+            patch("app.services.crawler.fetch_webpage_content", new_callable=AsyncMock, return_value=None) as mock_http,
+            patch(
+                "app.services.crawler.fetch_webpage_content_playwright", new_callable=AsyncMock, return_value=content
+            ) as mock_playwright,
+        ):
+            result = asyncio.run(crawler.fetch_webpage_content_fallback_to_playwright("https://example.test"))
+
+        assert result == content
+        mock_http.assert_awaited_once_with("https://example.test", retries=2)
+        mock_playwright.assert_awaited_once_with("https://example.test", retries=2)
+
 
 class TestCrawlerScrape:
     def test_scrape_data_table_uses_fetch_and_parse(self):
@@ -100,7 +164,9 @@ class TestCrawlerScrape:
 
         with (
             patch(
-                "app.services.crawler.fetch_webpage_content", new_callable=AsyncMock, return_value="<table></table>"
+                "app.services.crawler.fetch_webpage_content_fallback_to_playwright",
+                new_callable=AsyncMock,
+                return_value="<table></table>",
             ) as mock_fetch,
             patch("app.services.crawler.extract_data_table_from_html", return_value=expected) as mock_extract,
         ):

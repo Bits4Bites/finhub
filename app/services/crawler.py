@@ -92,7 +92,7 @@ def extract_data_table_from_html(html_content: str, *, raw_cell_content=False, t
 
 async def fetch_webpage_content(url: str, *, retries: int = 3, backoff_factor: float = 0.5) -> str | None:
     """
-    Fetches the content of a webpage, with retry logic.
+    Fetches the content of a webpage, retrying failures except HTTP client errors (400-499).
 
     Args:
         url (str): The URL of the webpage to fetch.
@@ -113,6 +113,9 @@ async def fetch_webpage_content(url: str, *, retries: int = 3, backoff_factor: f
     for attempt in range(retries):
         try:
             response = await starlette.concurrency.run_in_threadpool(scraper.get, url, timeout=60)
+            if 400 <= response.status_code < 500:
+                logger.warning("Client error HTTP %s fetching URL: %s. Not retrying.", response.status_code, url)
+                return None
             response.raise_for_status()  # Raise an exception for HTTP errors
             await cache.set(cache_key, response.text, ttl=_HTML_CACHE_TTL)
             logger.info("Fetched content from '%s' in %.2f seconds.", url, time.monotonic() - start_time)
@@ -175,6 +178,14 @@ async def fetch_webpage_content_playwright(
     return None
 
 
+async def fetch_webpage_content_fallback_to_playwright(url: str) -> str | None:
+    """Fetches webpage content over HTTP with up to two attempts, falling back to Playwright on failure."""
+    content = await fetch_webpage_content(url, retries=2)
+    if content is not None:
+        return content
+    return await fetch_webpage_content_playwright(url, retries=2)
+
+
 async def scrape_data_table(url: str, *, raw_cell_content=False, table_attr_filter=None) -> pd.DataFrame:
     """
     Scrapes data from the given URL, assuming main content is in a table, and returns it as a Pandas DataFrame.
@@ -190,7 +201,7 @@ async def scrape_data_table(url: str, *, raw_cell_content=False, table_attr_filt
     """
     # fetch the webpage content
     logger.info("Fetching data from '%s'...", url)
-    html_content = await fetch_webpage_content(url)
+    html_content = await fetch_webpage_content_fallback_to_playwright(url)
     if not html_content:
         logger.error("Failed to fetch content from '%s'.", url)
         return pd.DataFrame()
