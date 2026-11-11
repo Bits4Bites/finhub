@@ -261,7 +261,12 @@ class ListingEvent(event.EventBase):
     )
     issue_price: float | None = Field(
         gt=0,
-        description="Offer price per security, or null when unavailable.",
+        description="Fixed offer price per security or the lower bound of a price range, or null when unavailable.",
+    )
+    issue_price_upper: float | None = Field(
+        default=None,
+        gt=0,
+        description="Upper bound of an issue-price range, or null for a fixed or unavailable price.",
     )
     issue_type: str | None = Field(
         default=None,
@@ -306,3 +311,13 @@ class ListingEvent(event.EventBase):
         default=None,
         description="Structured listing analysis, or null when not completed.",
     )
+
+    @model_validator(mode="after")
+    def validate_issue_price_range(self) -> Self:
+        if (
+            self.issue_price is not None
+            and self.issue_price_upper is not None
+            and self.issue_price > self.issue_price_upper
+        ):
+            raise ValueError("issue_price must not exceed issue_price_upper")
+        return self

@@ -2,8 +2,8 @@ import json
 import logging
 from pathlib import Path
 
-from ..utils.conv import country_to_iso2
 from ..models import market as models_market
+from ..utils.conv import country_to_iso2
 
 _INDEX_FILES = (
     ("ASX20", "asx20.json"),

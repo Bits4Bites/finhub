@@ -9,7 +9,7 @@ Quick-research scope:
   material, and audited documents.
 - Cover essential offer terms and use of funds; business and sector; headline financial and valuation evidence;
   material governance issues; market context; key risks and catalysts; and observed trading for elapsed horizons.
-- Prioritize facts useful for later conditional scenarios: the issue-price anchor, disclosed offer size/share count,
+- Prioritize facts useful for later conditional scenarios: the issue price or disclosed price range, offer size/share count,
   business maturity, funding needs, escrow/free float, underwriting conditions, and relevant market context.
 - Limit each section to at most three material facts. Record unavailable details in data_gaps rather than searching
   exhaustively.

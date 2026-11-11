@@ -417,13 +417,15 @@ class TestUpcomingEarningsAsync:
 
 
 class TestNewListings:
+    @pytest.mark.parametrize("issue_price_upper", [None, 3.0])
     @patch("app.routers.events_listings.services_asx_listings.ai_get_asx_new_listings", new_callable=AsyncMock)
-    def test_au_returns_listings(self, mock_get):
+    def test_au_returns_listings(self, mock_get, issue_price_upper):
         event = models_events_listings.ListingEvent.model_construct(
             symbol="ASX:XYZ",
             company_name="XYZ Corp",
             timestamp_str="2026-06-20",
             issue_price=2.5,
+            issue_price_upper=issue_price_upper,
             capital_to_raise=5_000_000,
         )
         mock_get.return_value = [event]
@@ -436,6 +438,11 @@ class TestNewListings:
         assert len(body["data"]) == 1
         assert body["data"][0]["symbol"] == "ASX:XYZ"
         assert body["data"][0]["timestamp_str"] == "2026-06-20"
+        assert body["data"][0]["issue_price"] == 2.5
+        if issue_price_upper is None:
+            assert "issue_price_upper" not in body["data"][0]
+        else:
+            assert body["data"][0]["issue_price_upper"] == issue_price_upper
         assert "date" not in body["data"][0]
         mock_get.assert_called_once()
 

@@ -371,31 +371,35 @@ unsupported-country message, and no `data`.
 
 For a successful request, `data` is an array of `ListingEvent` objects:
 
-| Field                     | Description                                                            |
-|---------------------------|------------------------------------------------------------------------|
-| `symbol`                  | Canonical exchange-qualified listing symbol.                           |
-| `exchange`                | Exchange code, when available.                                         |
-| `company_name`            | Issuer name, when available.                                           |
-| `timestamp`               | Unix timestamp corresponding to the listing date.                      |
-| `timestamp_str`           | String representation of the listing timestamp.                        |
-| `event_category`          | Event category supplied by the source, when available.                 |
-| `source_name`             | Source name, when available.                                           |
-| `link`                    | Source URL containing listing details, when available.                 |
-| `issue_price`             | Positive offer price per security, when available.                     |
-| `currency`                | Currency used for the offer price and capital raise.                   |
-| `capital_to_raise`        | Positive whole-unit target capital raise, when available.              |
-| `issue_type`              | Security or offer type, when available.                                |
-| `sector` / `industry`     | Issuer sector and industry, when available.                            |
-| `principal_activities`    | Summary of the issuer's principal business activities, when available. |
-| `public_offer_close_date` | Public-offer closing date, when applicable.                            |
-| `is_underwritten`         | Whether underwriting was disclosed.                                    |
-| `underwriters`            | Disclosed underwriting organizations.                                  |
-| `lead_managers`           | Disclosed lead managers.                                               |
-| `analysis_status`         | `NotStarted`, `Completed`, `Failed`, or `Skipped`.                     |
-| `analysis_error`          | Analysis failure detail when `analysis_status=Failed`.                 |
-| `analysis`                | Structured `ListingAnalysis` when analysis completes.                  |
+| Field                     | Description                                                             |
+|---------------------------|-------------------------------------------------------------------------|
+| `symbol`                  | Canonical exchange-qualified listing symbol.                            |
+| `exchange`                | Exchange code, when available.                                          |
+| `company_name`            | Issuer name, when available.                                            |
+| `timestamp`               | Unix timestamp corresponding to the listing date.                       |
+| `timestamp_str`           | String representation of the listing timestamp.                         |
+| `event_category`          | Event category supplied by the source, when available.                  |
+| `source_name`             | Source name, when available.                                            |
+| `link`                    | Source URL containing listing details, when available.                  |
+| `issue_price`             | Positive fixed offer price or lower bound of an offer-price range.      |
+| `issue_price_upper`       | Optional upper bound of an offer-price range; omitted for fixed prices. |
+| `currency`                | Currency used for the offer price and capital raise.                    |
+| `capital_to_raise`        | Positive whole-unit target capital raise, when available.               |
+| `issue_type`              | Security or offer type, when available.                                 |
+| `sector` / `industry`     | Issuer sector and industry, when available.                             |
+| `principal_activities`    | Summary of the issuer's principal business activities, when available.  |
+| `public_offer_close_date` | Public-offer closing date, when applicable.                             |
+| `is_underwritten`         | Whether underwriting was disclosed.                                     |
+| `underwriters`            | Disclosed underwriting organizations.                                   |
+| `lead_managers`           | Disclosed lead managers.                                                |
+| `analysis_status`         | `NotStarted`, `Completed`, `Failed`, or `Skipped`.                      |
+| `analysis_error`          | Analysis failure detail when `analysis_status=Failed`.                  |
+| `analysis`                | Structured `ListingAnalysis` when analysis completes.                   |
 
 Nullable fields are omitted when unavailable because this endpoint excludes `null` response properties.
+
+An offer-price range of `AUD 0.20-0.25` is returned as `issue_price=0.20` and `issue_price_upper=0.25`.
+A fixed price continues to use `issue_price` only.
 
 With `FINHUB_LLM_TOKENOMICS_MODE=Economy`, explicitly non-underwritten listings whose public-offer close date
 is missing or before the current Sydney date return `analysis_status=Skipped` without analysis. Underwritten
@@ -435,6 +439,8 @@ Upcoming ASX assessments include a provisional subjective overview, stance, and 
 factual evidence is sparse. When the issue price is available, all four horizons include subjective base-case trading
 ranges anchored to that price; percentage returns are calculated from the price bounds and issue price. These are
 conditional scenarios, not established fair values, guaranteed trading bounds, or personalized recommendations.
+For ranged offers, the lower issue-price bound remains the anchor; analysis discloses that the final issue price
+and realized returns may differ.
 Without an issue-price anchor, the overview and directional views remain available, but absolute price and return
 ranges are null.
 

@@ -191,9 +191,7 @@ async def fetch_webpage_content_fallback_to_playwright(url: str) -> str | None:
     return await fetch_webpage_content_playwright(url, retries=2)
 
 
-async def scrape_data_table(
-    url: str, *, raw_cell_content=False, table_attr_filter=None, filter_skip=0
-) -> pd.DataFrame:
+async def scrape_data_table(url: str, *, raw_cell_content=False, table_attr_filter=None, filter_skip=0) -> pd.DataFrame:
     """
     Scrapes data from the given URL, assuming main content is in a table, and returns it as a Pandas DataFrame.
 

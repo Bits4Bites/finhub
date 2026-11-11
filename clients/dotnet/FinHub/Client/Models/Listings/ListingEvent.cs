@@ -6,7 +6,10 @@ namespace FinHub.Client.Models.Listings;
 public sealed record ListingEvent : EventBase
 {
     [JsonPropertyName("issue_price")]
-    public required decimal? IssuePrice { get; init; }
+    public decimal? IssuePrice { get; init; }
+
+    [JsonPropertyName("issue_price_upper")]
+    public decimal? IssuePriceUpper { get; init; }
 
     [JsonPropertyName("issue_type")]
     public string? IssueType { get; init; }
@@ -21,10 +24,10 @@ public sealed record ListingEvent : EventBase
     public string? PrincipalActivities { get; init; }
 
     [JsonPropertyName("currency")]
-    public required string Currency { get; init; }
+    public string? Currency { get; init; }
 
     [JsonPropertyName("capital_to_raise")]
-    public required long? CapitalToRaise { get; init; }
+    public long? CapitalToRaise { get; init; }
 
     [JsonPropertyName("public_offer_close_date")]
     public string? PublicOfferCloseDate { get; init; }

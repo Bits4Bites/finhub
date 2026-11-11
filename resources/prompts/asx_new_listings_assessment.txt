@@ -19,6 +19,8 @@ Requirements:
 - Include at most three risks and three catalysts.
 {{UNDERWRITING_INSTRUCTION}}
 - Produce offer, business, financial, valuation, governance, risk, catalyst, and outlook analysis.
+- If issue_price_upper is non-null, issue_price and issue_price_upper are the quoted lower/upper offer bounds,
+  not a confirmed fixed price. Consider both bounds in offer and valuation commentary.
 - The executive_summary must explain what the issuer/offer represents, the provisional investment case, the main
   concern, your subjective base-case view, and what would change that view. "Insufficient data" or a list of missing
   documents is not a useful overview. Use cautious conditional reasoning where facts are absent.
@@ -31,6 +33,7 @@ Requirements:
     range anchored to issue_price_anchor. These are subjective trading scenarios, not independently established
     fair values. Missing financials or valuation comparables are reasons for wider uncertainty and lower confidence,
     not null prices or InsufficientData. The application calculates return percentages from your price bounds.
+    For a ranged offer, the anchor is the lower offer bound; disclose that returns may differ at the final issue price.
   - Qualitative: still give a provisional overview, stance, and Forecast direction for every horizon. With no
     confirmed price anchor, leave absolute price and return ranges null rather than inventing a numerical baseline.
   - ObservedOrForecast: use Observed only for elapsed periods with actual observations in the supplied research.

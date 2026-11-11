@@ -26,6 +26,7 @@ def _candidate_data(**overrides) -> dict[str, object]:
         "company_name": "Alpha Ltd",
         "listing_date": "2099-09-01",
         "issue_price": 1.5,
+        "issue_price_upper": None,
         "issue_type": "Ordinary fully paid shares",
         "capital_to_raise": 10_000_000,
         "is_underwritten": False,
@@ -290,6 +291,7 @@ def test_extracts_structured_listings_and_retains_unavailable_offer_values(mock_
         "listings": [
             _candidate_data(symbol="ASX:LATE", listing_date="2099-09-03"),
             _candidate_data(symbol="ASX:EARLY", listing_date="2099-09-01"),
+            _candidate_data(symbol="ASX:RANGE", issue_price_upper=2.0),
             _candidate_data(symbol="ASX:NO_DATE", listing_date=None),
             _candidate_data(
                 symbol="ASX:EF2",
@@ -302,6 +304,8 @@ def test_extracts_structured_listings_and_retains_unavailable_offer_values(mock_
             ),
             _candidate_data(symbol="ASX:ZERO_PRICE", issue_price=0),
             _candidate_data(symbol="ASX:ZERO_CAPITAL", capital_to_raise=0),
+            _candidate_data(symbol="ASX:BADUPPER", issue_price_upper=0),
+            _candidate_data(symbol="ASX:REVERSED", issue_price_upper=1.0),
             _candidate_data(symbol="INVALID-SYMBOL"),
         ]
     }
@@ -324,7 +328,9 @@ def test_extracts_structured_listings_and_retains_unavailable_offer_values(mock_
     ):
         events = asyncio.run(msai_asx_listings._get_asx_new_listings())
 
-    assert [event.symbol for event in events] == ["ASX:LATE", "ASX:EARLY", "ASX:EF2"]
+    assert [event.symbol for event in events] == ["ASX:LATE", "ASX:EARLY", "ASX:RANGE", "ASX:EF2"]
+    assert events[2].issue_price == 1.5
+    assert events[2].issue_price_upper == 2.0
     assert events[-1].issue_price is None
     assert events[-1].capital_to_raise is None
     assert mock_ai_exec.await_args.args[0] == "ASX_LISTTINGS_EXTRACT"
@@ -568,6 +574,39 @@ def test_assessment_uses_structured_response_and_preserves_source_verification(
     _, mock_cache_set = mock_listings_cache
     mock_cache_set.assert_awaited_once()
     assert mock_cache_set.await_args.kwargs["ttl"] == 24 * 60 * 60
+
+
+def test_assessment_uses_lower_issue_price_bound_for_returns_and_discloses_range():
+    event = _event()
+    event.issue_price_upper = 2.0
+    llm_response = ai_helper.LLMResponse(completion=json.dumps(_analysis_draft_data()))
+
+    with patch.object(
+        msai_asx_listings.ai_helper,
+        "ai_exec_task",
+        new_callable=AsyncMock,
+        return_value=llm_response,
+    ) as mock_ai_exec:
+        analysis = asyncio.run(msai_asx_listings._assess_asx_listing(event, _research_model()))
+
+    prompt = mock_ai_exec.await_args.args[1]
+    context_json = prompt.split("BEGIN_APPLICATION_ASSESSMENT_CONTEXT\n", 1)[1].split(
+        "\nEND_APPLICATION_ASSESSMENT_CONTEXT", 1
+    )[0]
+    context = json.loads(context_json)
+    assert context["issue_price_anchor"] == 1.5
+    assert context["issue_price_upper"] == 2.0
+    assert any("AUD 1.5-2" in assumption for assumption in analysis.executive_summary.assumptions)
+    for period in (
+        analysis.outlook.ipo_day,
+        analysis.outlook.first_week,
+        analysis.outlook.first_two_weeks,
+        analysis.outlook.first_month,
+    ):
+        assert period.expected_return_min_pct == pytest.approx(6.67)
+        assert period.expected_return_max_pct == pytest.approx(20)
+        assert any("lower bound" in assumption and "AUD 1.5-2" in assumption for assumption in period.assumptions)
+        assert any("final issue price may differ" in warning for warning in period.data_gaps)
 
 
 @pytest.mark.parametrize("price_anchor", [1.5, None])

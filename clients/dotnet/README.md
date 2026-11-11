@@ -183,6 +183,9 @@ required, non-null `EventBase.TimestampStr` (`timestamp_str`) contract, while `L
 UTC value described above; `ListingEvent.PublicOfferCloseDate` remains a string to match the current OpenAPI contract,
 while formatted analysis dates use `DateOnly` or `DateTimeOffset`.
 
+For an offer-price range, `IssuePrice` contains the lower bound and optional `IssuePriceUpper` contains the upper
+bound. Fixed-price offers continue to use only `IssuePrice`.
+
 ## Dividend-event analysis
 
 The dividend-analysis contracts cover:

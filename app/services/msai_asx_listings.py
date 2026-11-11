@@ -69,6 +69,7 @@ class _ExtractedListingCandidate(models_ai.StrictAIModel):
     company_name: models_types.NonEmptyString
     listing_date: date | None
     issue_price: float | None
+    issue_price_upper: float | None
     issue_type: str | None
     capital_to_raise: float | None
     is_underwritten: bool | None
@@ -428,6 +429,7 @@ def _validated_listing_event(
             source_name=_ASX_EXCHANGE,
             link=_ASX_LISTINGS_URL,
             issue_price=candidate.issue_price,
+            issue_price_upper=candidate.issue_price_upper,
             issue_type=issue_type,
             sector=sector,
             principal_activities=candidate.principal_activities,
@@ -674,6 +676,7 @@ def _build_listing_assessment_context(
         ),
         "currency": event.currency,
         "issue_price_anchor": price_anchor,
+        "issue_price_upper": event.issue_price_upper,
         "sector": event.sector,
         "fact_counts": fact_counts,
         "sections_without_facts": [name for name, count in fact_counts.items() if not count],
@@ -709,7 +712,18 @@ def _finalize_subjective_assessment(
         anchor_assumption = "The directional view assumes the listing proceeds; no absolute-price estimate is provided."
     else:
         warnings.append("Subjective price ranges are trading scenarios, not guaranteed trading bounds.")
-        anchor_assumption = f"Uses the disclosed issue price of {currency} {price_anchor:g} as a scenario anchor, not proof of fair value."
+        issue_price_upper = context.get("issue_price_upper")
+        if issue_price_upper is None:
+            anchor_assumption = f"Uses the disclosed issue price of {currency} {price_anchor:g} as a scenario anchor, not proof of fair value."
+        else:
+            warnings.append(
+                "Return percentages use the lower bound of the disclosed issue-price range; "
+                "the final issue price may differ."
+            )
+            anchor_assumption = (
+                f"Uses the lower bound of the disclosed issue-price range "
+                f"{currency} {price_anchor:g}-{issue_price_upper:g} as a scenario anchor, not proof of fair value."
+            )
 
     summary = data["executive_summary"]
     if not summary["summary"].casefold().startswith("subjective"):

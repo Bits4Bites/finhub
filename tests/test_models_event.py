@@ -80,6 +80,8 @@ def test_listing_event_requires_whole_unit_capital_to_raise():
     [
         ("issue_price", 0),
         ("issue_price", -1),
+        ("issue_price_upper", 0),
+        ("issue_price_upper", -1),
         ("capital_to_raise", 0),
         ("capital_to_raise", -1),
     ],
@@ -96,6 +98,18 @@ def test_listing_event_rejects_non_positive_monetary_fields(field, value):
 
     with pytest.raises(ValidationError):
         models_events_listings.ListingEvent.model_validate(data)
+
+
+def test_listing_event_rejects_reversed_issue_price_range():
+    with pytest.raises(ValidationError, match="issue_price must not exceed issue_price_upper"):
+        models_events_listings.ListingEvent(
+            symbol="NASDAQ:ABCD",
+            timestamp_str="2026-09-01",
+            issue_price=2.0,
+            issue_price_upper=1.5,
+            currency="USD",
+            capital_to_raise=None,
+        )
 
 
 def test_listing_event_requires_explicit_currency():
