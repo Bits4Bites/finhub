@@ -21,10 +21,10 @@ from ..utils import cache, conv
 from ..utils import data as data_utils
 from . import ai_helper
 
-_ASX_LISTINGS_CACHE_NAMESPACE = "asx-new-listings-analysis-v4"
-_ASX_LISTINGS_EXTRACTION_CACHE_NAMESPACE = "asx-new-listings-extraction-v1"
-_ASX_LISTINGS_RESEARCH_CACHE_NAMESPACE = "asx-new-listings-research-v1"
-_ASX_LISTINGS_ASSESSMENT_CACHE_NAMESPACE = "asx-new-listings-assessment-v1"
+_ASX_LISTINGS_CACHE_NAMESPACE = "asx-new-listings-analysis"
+_ASX_LISTINGS_EXTRACTION_CACHE_NAMESPACE = "asx-new-listings-extraction"
+_ASX_LISTINGS_RESEARCH_CACHE_NAMESPACE = "asx-new-listings-research"
+_ASX_LISTINGS_ASSESSMENT_CACHE_NAMESPACE = "asx-new-listings-assessment"
 _ASX_LISTINGS_EXTRACTION_CACHE_TTL = 24 * 60 * 60
 _ASX_LISTINGS_EXTRACTION_PROMPT = "asx_new_listings_extraction.txt"
 _ASX_LISTINGS_RESEARCH_PROMPT = "asx_new_listings_research.txt"

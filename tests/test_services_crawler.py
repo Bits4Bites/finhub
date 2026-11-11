@@ -174,7 +174,9 @@ class TestCrawlerScrape:
 
         assert result.equals(expected)
         mock_fetch.assert_awaited_once_with("https://example.test")
-        mock_extract.assert_called_once_with("<table></table>", raw_cell_content=False, table_attr_filter=None)
+        mock_extract.assert_called_once_with(
+            "<table></table>", raw_cell_content=False, table_attr_filter=None, filter_skip=0
+        )
 
     def test_scrape_dividends_from_tipranks_adds_ex_dividend_date(self):
         expected = pd.DataFrame({"Name": ["A"]})

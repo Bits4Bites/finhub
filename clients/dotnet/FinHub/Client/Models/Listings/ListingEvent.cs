@@ -24,7 +24,7 @@ public sealed record ListingEvent : EventBase
     public string? PrincipalActivities { get; init; }
 
     [JsonPropertyName("currency")]
-    public string? Currency { get; init; }
+    public string Currency { get; init; } = string.Empty;
 
     [JsonPropertyName("capital_to_raise")]
     public long? CapitalToRaise { get; init; }
