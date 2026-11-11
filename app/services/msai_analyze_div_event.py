@@ -24,7 +24,7 @@ from ..utils import finhub as finhub_utils
 from . import ai_helper
 
 _ALLOWED_QUOTE_TYPES = frozenset({"EQUITY", "ETF", "MUTUALFUND"})
-_ANALYSIS_CACHE_NAMESPACE = "dividend-event-analysis-v2"
+_ANALYSIS_CACHE_NAMESPACE = "dividend-event-analysis"
 _ANALYSIS_PROMPT_VERSION = "6"
 _FAILED_ANALYSIS_CACHE_TTL = 5 * 60
 _DEFAULT_HOLDING_PERIOD_DAYS = 28

@@ -6,6 +6,7 @@ from .. import config
 from ..schemas import async_task
 from ..schemas import events_listings as schemas_events_listings
 from ..services import msai_asx_listings as services_asx_listings
+from ..services import msai_us_listings as services_us_listings
 from ..utils import conv
 from . import async_task as router_async_task
 from . import proxy_handler
@@ -20,6 +21,8 @@ async def _get_new_listings_result(country: str) -> schemas_events_listings.List
     match country:
         case "AU":
             events = await services_asx_listings.ai_get_asx_new_listings()
+        case "US":
+            events = await services_us_listings.ai_get_us_new_listings()
         case _:
             return schemas_events_listings.ListingsResponse(
                 status=501,
@@ -36,11 +39,11 @@ async def _get_new_listings_result(country: str) -> schemas_events_listings.List
 )
 async def get_new_listings(
     request: Request,
-    country: str = Query("", description="Country code to filter events by (only 'AU' is supported)."),
+    country: str = Query("", description="Country code to filter events by (only 'AU' and 'US' are supported)."),
 ) -> schemas_events_listings.ListingsResponse | Response:
     """
     Check for new listing events for a market, using AI assistance.
-    Note: currently only AU is supported.
+    Note: currently only AU and US are supported.
     """
     proxy_response = await proxy_handler.handle_if_proxy(
         config.settings_finhub_proxy.proxy_mode,
@@ -110,7 +113,7 @@ async def start_new_listings_async(
     response: Response,
     country: str = Query(
         "",
-        description="Country code used to start the task; only 'AU' is supported.",
+        description="Country code used to start the task; only 'AU' and 'US' are supported.",
     ),
 ) -> schemas_events_listings.ListingsAsyncResponse | Response:
     """Start a new-listings task."""
@@ -123,10 +126,10 @@ async def start_new_listings_async(
         return proxy_response
 
     country = conv.country_to_iso2(country)
-    if country != "AU":
+    if country not in ("AU", "US"):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="New listings supports only country 'AU'",
+            detail="New listings supports only country 'AU' and 'US'",
         )
 
     task_id, is_new = await router_async_task.start_task(_NEW_LISTINGS_TASK_TYPE, country)

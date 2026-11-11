@@ -25,11 +25,11 @@ from ..utils import cache, conv, yfutils
 from ..utils import finhub as finhub_utils
 from . import ai_helper
 
-_MARKET_CACHE_NAMESPACE = "ticker-analysis-market-v2"
-_RESEARCH_CACHE_NAMESPACE = "ticker-analysis-research-v1"
-_FORECAST_CACHE_NAMESPACE = "ticker-analysis-forecast-v1"
-_RECOMMENDATION_CACHE_NAMESPACE = "ticker-analysis-recommendation-v1"
-_FINAL_CACHE_NAMESPACE = "ticker-analysis-final-v1"
+_MARKET_CACHE_NAMESPACE = "ticker-analysis-market"
+_RESEARCH_CACHE_NAMESPACE = "ticker-analysis-research"
+_FORECAST_CACHE_NAMESPACE = "ticker-analysis-forecast"
+_RECOMMENDATION_CACHE_NAMESPACE = "ticker-analysis-recommendation"
+_FINAL_CACHE_NAMESPACE = "ticker-analysis-final"
 _CACHE_TTL = 60 * 60
 
 _RESEARCH_TASK = "ANALYZE_TICKER_RESEARCH"

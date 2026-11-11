@@ -13,8 +13,8 @@ from ..models import portfolio as models_portfolio
 from ..utils import cache, conv
 from . import stock as services_stock
 
-_CACHE_NAMESPACE = "portfolio-verification-v1"
-_SECURITY_QUOTES_CACHE_NAMESPACE = "portfolio-security-quotes-v3"
+_CACHE_NAMESPACE = "portfolio-verification"
+_SECURITY_QUOTES_CACHE_NAMESPACE = "portfolio-security-quotes"
 _CACHE_TTL = 5 * 60
 
 

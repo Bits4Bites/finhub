@@ -18,10 +18,10 @@ from ..utils import ai_reference as ai_reference_utils
 from ..utils import cache, conv
 from . import ai_helper, portfolio_verification
 
-_PLAN_CACHE_NAMESPACE = "portfolio-spotlight-plan-v1"
-_RESEARCH_CACHE_NAMESPACE = "portfolio-spotlight-research-v1"
-_ASSESSMENT_CACHE_NAMESPACE = "portfolio-spotlight-assessment-v1"
-_ANALYSIS_CACHE_NAMESPACE = "portfolio-spotlight-analysis-v1"
+_PLAN_CACHE_NAMESPACE = "portfolio-spotlight-plan"
+_RESEARCH_CACHE_NAMESPACE = "portfolio-spotlight-research"
+_ASSESSMENT_CACHE_NAMESPACE = "portfolio-spotlight-assessment"
+_ANALYSIS_CACHE_NAMESPACE = "portfolio-spotlight-analysis"
 _AI_STAGE_CACHE_TTL = 60 * 60
 _PLAN_TASK = "SPOTLIGHT_PORTFOLIO_PLAN"
 _RESEARCH_TASK = "SPOTLIGHT_PORTFOLIO_RESEARCH"

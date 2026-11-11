@@ -503,7 +503,7 @@ class TestNewListingsAsync:
             resp = client.get("/events/start_new_listings_async", params={"country": country})
 
         assert resp.status_code == 422
-        assert resp.json()["message"] == "New listings supports only country 'AU'"
+        assert resp.json()["message"] == "New listings supports only country 'AU' and 'US'"
         mock_start_task.assert_not_awaited()
         mock_run_task.assert_not_awaited()
 

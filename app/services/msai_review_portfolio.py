@@ -39,12 +39,12 @@ _ASSESS_SCHEMA_NAME = "portfolio_review_assessment"
 _TARGET_SCHEMA_NAME = "portfolio_review_target"
 _ACTION_PLAN_SCHEMA_NAME = "portfolio_review_action_plan"
 
-_PLAN_CACHE_NAMESPACE = "portfolio-review-plan-v1"
-_RESEARCH_CACHE_NAMESPACE = "portfolio-review-research-v1"
-_ASSESS_CACHE_NAMESPACE = "portfolio-review-assessment-v1"
-_TARGET_CACHE_NAMESPACE = "portfolio-review-target-v1"
-_ACTION_PLAN_CACHE_NAMESPACE = "portfolio-review-action-plan-v1"
-_FINAL_CACHE_NAMESPACE = "portfolio-review-final-v1"
+_PLAN_CACHE_NAMESPACE = "portfolio-review-plan"
+_RESEARCH_CACHE_NAMESPACE = "portfolio-review-research"
+_ASSESS_CACHE_NAMESPACE = "portfolio-review-assessment"
+_TARGET_CACHE_NAMESPACE = "portfolio-review-target"
+_ACTION_PLAN_CACHE_NAMESPACE = "portfolio-review-action-plan"
+_FINAL_CACHE_NAMESPACE = "portfolio-review-final"
 _PLAN_CACHE_TTL = 60 * 60
 _ANALYSIS_CACHE_TTL = 60 * 60
 _ACTION_CACHE_TTL = 60 * 60
@@ -491,7 +491,7 @@ async def ai_review_portfolio(
         )
 
     portfolio_id = cache.generate_hourly_key(
-        "portfolio-review-id-v1",
+        "portfolio-review-id",
         snapshot.model_dump_json(),
         normalized_theme,
         strategy,

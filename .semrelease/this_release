@@ -8,4 +8,4 @@
 - feat(ai/new_listings): provide subjective ASX forecasts despite sparse evidence
 - refactor(crawler): fall back to Playwright on HTTP failures and skip 4xx retries
 - feat(events/new_listings): support IPO issue-price ranges
-- feat(events/new_listings): support IPO issue-price ranges
+- feat(events/new_listings): support fetching US listing events

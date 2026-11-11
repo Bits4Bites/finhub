@@ -34,11 +34,11 @@ _RESEARCH_SCHEMA_NAME = "portfolio_construction_research"
 _CONSTRUCT_SCHEMA_NAME = "portfolio_construction_target"
 _ACTION_PLAN_SCHEMA_NAME = "portfolio_construction_action_plan"
 
-_PLAN_CACHE_NAMESPACE = "portfolio-construction-plan-v2"
-_RESEARCH_CACHE_NAMESPACE = "portfolio-construction-research-v1"
-_CONSTRUCT_CACHE_NAMESPACE = "portfolio-construction-draft-v1"
-_ACTION_PLAN_CACHE_NAMESPACE = "portfolio-construction-action-plan-v1"
-_FINAL_CACHE_NAMESPACE = "portfolio-construction-final-v3"
+_PLAN_CACHE_NAMESPACE = "portfolio-construction-plan"
+_RESEARCH_CACHE_NAMESPACE = "portfolio-construction-research"
+_CONSTRUCT_CACHE_NAMESPACE = "portfolio-construction-draft"
+_ACTION_PLAN_CACHE_NAMESPACE = "portfolio-construction-action-plan"
+_FINAL_CACHE_NAMESPACE = "portfolio-construction-final"
 _AI_STAGE_CACHE_TTL = 60 * 60
 _ALLOCATION_TOLERANCE = 0.01
 
