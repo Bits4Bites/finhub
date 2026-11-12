@@ -358,7 +358,7 @@ for up to five eligible listings.
 
 | Parameter | Type  | Required | Description                                                                  |
 |-----------|-------|----------|------------------------------------------------------------------------------|
-| `country` | query | No       | Country code; defaults to an empty string. Currently only `AU` is supported. |
+| `country` | query | No       | Country code; defaults to an empty string. Supports `AU` and `US`.           |
 
 **Example:**
 
@@ -401,7 +401,7 @@ Nullable fields are omitted when unavailable because this endpoint excludes `nul
 An offer-price range of `AUD 0.20-0.25` is returned as `issue_price=0.20` and `issue_price_upper=0.25`.
 A fixed price continues to use `issue_price` only.
 
-With `FINHUB_LLM_TOKENOMICS_MODE=Economy`, explicitly non-underwritten listings whose public-offer close date
+For AU, with `FINHUB_LLM_TOKENOMICS_MODE=Economy`, explicitly non-underwritten listings whose public-offer close date
 is missing or before the current Sydney date return `analysis_status=Skipped` without analysis. Underwritten
 listings, listings with unknown underwriting, and offers closing today or later remain eligible for analysis.
 `Standard` mode does not apply this skip rule.
@@ -409,6 +409,23 @@ listings, listings with unknown underwriting, and offers closing today or later 
 Economy-skipped listings do not count toward the five analysis attempts; failed research or assessment attempts do.
 Once the limit is reached, every remaining listing is returned with `analysis_status=Skipped`, including underwritten
 listings.
+
+For US, the IPO calendar is fetched once, then company overviews and targeted company-profile, financial-summary
+and linked SEC filing pages are crawled without AI. There is no maximum lead time: important distant IPOs may
+be selected before nearer ones. Explicit SPAC/shell, fund and unsupported security types, inactive offerings,
+unresolved issuer/offer conflicts and insufficient evidence are excluded from deep analysis, not from the response.
+Missing revenue, losses, unavailable offer prices and inaccessible SEC documents are not automatic exclusions;
+issuer-matched filing links and sufficient consistent business/financial evidence are still required.
+
+Eligible US IPOs are ranked deterministically using research-readiness proxies: expected output quality 50%,
+structured-output reliability 20%, task depth 15% and cost efficiency 15%. Close scores are ordered by quality,
+then reliability; gross deal size (with a soft USD 50 million preference) and market cap precede date proximity.
+Up to five candidates are selected. Cached unchanged analyses avoid AI calls; selected research/assessment failures
+are not replaced with additional candidates. All other events remain `Skipped`, and results stay date-ordered.
+Only the selected research and assessment stages invoke AI. References and structured output are validated in code.
+US analysis caches include the crawled evidence, offer terms, prompts, schemas and task configuration so changed
+inputs invalidate old results. Crawl/analysis refresh intervals are 1 hour for listings today/tomorrow, 6 hours for
+2-7 days away and 24 hours for later listings; the calendar refreshes hourly.
 
 `ListingAnalysis` contains:
 
@@ -435,7 +452,7 @@ outlook period identifies whether it is observed, forecast, or unavailable; its 
 price and return ranges, confidence, rationale, drivers, risks, assumptions, gaps, and source IDs. Each reference
 includes source metadata, publication and access timestamps, its canonical HTTPS URL, and `is_verified`.
 
-Upcoming ASX assessments include a provisional subjective overview, stance, and directional forecasts even when
+Upcoming AU/US assessments include a provisional subjective overview, stance, and directional forecasts even when
 factual evidence is sparse. When the issue price is available, all four horizons include subjective base-case trading
 ranges anchored to that price; percentage returns are calculated from the price bounds and issue price. These are
 conditional scenarios, not established fair values, guaranteed trading bounds, or personalized recommendations.
@@ -443,6 +460,8 @@ For ranged offers, the lower issue-price bound remains the anchor; analysis disc
 and realized returns may differ.
 Without an issue-price anchor, the overview and directional views remain available, but absolute price and return
 ranges are null.
+US assessments distinguish hypothetical offer-price allocation returns from aftermarket-entry returns; IPO
+allocations and the offer price may not be accessible to a caller.
 
 Subjectivity labels and cautions use the existing summary/rationale, `assumptions`, and `data_gaps` fields.
 Evidence quality and source-verification flags remain unchanged by the need to provide an opinion; low evidence
@@ -452,14 +471,15 @@ and gaps without an additional prompt-building AI call.
 ### `GET /events/start_new_listings_async` and `GET /events/poll_new_listings_async`
 
 Run the new-listings request in the background. Task state and results expire after one hour.
+AU and US tasks are deduplicated separately; equivalent country names/codes reuse the same market's task.
 
 | Endpoint | Parameter | Type  | Required | Description                                                        |
 |----------|-----------|-------|----------|--------------------------------------------------------------------|
-| Start    | `country` | query | Yes      | Country code used when starting; currently limited to `AU`.        |
+| Start    | `country` | query | Yes      | Country used when starting; supports `AU` and `US`.                 |
 | Poll     | `task_id` | query | Yes      | Task ID returned by the start endpoint.                            |
 
 ```bash
-# Start a task
+# Start an AU task (use country=US for the US market)
 curl 'http://localhost:8000/events/start_new_listings_async?country=AU'
 
 # Poll a task

@@ -417,26 +417,65 @@ class TestUpcomingEarningsAsync:
 
 
 class TestNewListings:
+    @pytest.mark.parametrize("country", ["AU", "US"])
+    @pytest.mark.parametrize("endpoint", ["new_listings", "start_new_listings_async"])
+    def test_redirects_market_through_ai_task_node(self, country, endpoint):
+        with (
+            patch.object(config.settings_finhub_proxy, "proxy_mode", "Redirect"),
+            patch.object(config.settings_finhub_proxy, "url_ai_task_node", "https://proxy.example/finhub/"),
+            patch("app.routers.events_listings._get_new_listings_result", new_callable=AsyncMock) as mock_get_result,
+            patch(
+                "app.routers.events_listings.router_async_task.start_task", new_callable=AsyncMock
+            ) as mock_start_task,
+        ):
+            resp = client.get(f"/events/{endpoint}", params={"country": country}, follow_redirects=False)
+
+        assert resp.status_code == 307
+        assert resp.headers["location"] == f"https://proxy.example/finhub/events/{endpoint}?country={country}"
+        mock_get_result.assert_not_awaited()
+        mock_start_task.assert_not_awaited()
+
+    @pytest.mark.parametrize(
+        ("country", "symbol", "currency"),
+        [
+            ("AU", "ASX:XYZ", "AUD"),
+            ("Australia", "ASX:XYZ", "AUD"),
+            ("US", "NASDAQ:XYZ", "USD"),
+            ("USA", "NYSE:XYZ", "USD"),
+        ],
+    )
     @pytest.mark.parametrize("issue_price_upper", [None, 3.0])
-    @patch("app.routers.events_listings.services_asx_listings.ai_get_asx_new_listings", new_callable=AsyncMock)
-    def test_au_returns_listings(self, mock_get, issue_price_upper):
-        event = models_events_listings.ListingEvent.model_construct(
-            symbol="ASX:XYZ",
+    def test_supported_country_returns_listings(self, country, symbol, currency, issue_price_upper):
+        event = models_events_listings.ListingEvent(
+            symbol=symbol,
+            exchange=symbol.split(":", 1)[0],
             company_name="XYZ Corp",
             timestamp_str="2026-06-20",
             issue_price=2.5,
             issue_price_upper=issue_price_upper,
+            currency=currency,
             capital_to_raise=5_000_000,
         )
-        mock_get.return_value = [event]
+        with (
+            patch(
+                "app.routers.events_listings.services_asx_listings.ai_get_asx_new_listings", new_callable=AsyncMock
+            ) as mock_asx,
+            patch(
+                "app.routers.events_listings.services_us_listings.ai_get_us_new_listings", new_callable=AsyncMock
+            ) as mock_us,
+        ):
+            mock_get, mock_other = (mock_asx, mock_us) if currency == "AUD" else (mock_us, mock_asx)
+            mock_get.return_value = [event]
+            resp = client.get("/events/new_listings", params={"country": country})
 
-        resp = client.get("/events/new_listings", params={"country": "AU"})
         assert resp.status_code == 200
         body = resp.json()
         assert body["status"] == 200
         assert body["message"] == "ok"
         assert len(body["data"]) == 1
-        assert body["data"][0]["symbol"] == "ASX:XYZ"
+        assert body["data"][0]["symbol"] == symbol
+        assert body["data"][0]["exchange"] == symbol.split(":", 1)[0]
+        assert body["data"][0]["currency"] == currency
         assert body["data"][0]["timestamp_str"] == "2026-06-20"
         assert body["data"][0]["issue_price"] == 2.5
         if issue_price_upper is None:
@@ -444,7 +483,8 @@ class TestNewListings:
         else:
             assert body["data"][0]["issue_price_upper"] == issue_price_upper
         assert "date" not in body["data"][0]
-        mock_get.assert_called_once()
+        mock_get.assert_awaited_once_with()
+        mock_other.assert_not_awaited()
 
     def test_unsupported_country_returns_501(self):
         resp = client.get("/events/new_listings", params={"country": "JP"})
@@ -467,16 +507,28 @@ class TestNewListings:
 
 
 class TestNewListingsAsync:
-    def test_starts_task(self):
+    @pytest.mark.parametrize(
+        ("country", "canonical_country"),
+        [
+            ("AU", "AU"),
+            (" au ", "AU"),
+            ("Australia", "AU"),
+            ("US", "US"),
+            ("us", "US"),
+            ("United States", "US"),
+        ],
+    )
+    def test_starts_task(self, country, canonical_country):
         with (
             patch(
                 "app.routers.async_task._generate_task_id",
                 return_value="task-789",
             ) as mock_generate_task_id,
+            patch("app.routers.async_task.cache.get", new_callable=AsyncMock, return_value=None),
             patch("app.routers.async_task.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
             patch("app.routers.events_listings._run_new_listings_task", new_callable=AsyncMock) as mock_run_task,
         ):
-            resp = client.get("/events/start_new_listings_async", params={"country": "AU"})
+            resp = client.get("/events/start_new_listings_async", params={"country": country})
 
         assert resp.status_code == 202
         assert resp.json() == {
@@ -489,8 +541,8 @@ class TestNewListingsAsync:
             {"task_type": "new_listings", "state": async_task.TASK_STATE_RUNNING},
             ttl=3600,
         )
-        mock_generate_task_id.assert_called_once_with("new_listings", "AU")
-        mock_run_task.assert_awaited_once_with("task-789", "AU")
+        mock_generate_task_id.assert_called_once_with("new_listings", canonical_country)
+        mock_run_task.assert_awaited_once_with("task-789", canonical_country)
 
     @pytest.mark.parametrize("country", ["", "JP"])
     def test_rejects_unsupported_country_before_starting_task(self, country):
@@ -507,7 +559,8 @@ class TestNewListingsAsync:
         mock_start_task.assert_not_awaited()
         mock_run_task.assert_not_awaited()
 
-    def test_duplicate_start_returns_existing_task_without_scheduling(self):
+    @pytest.mark.parametrize("country", ["AU", "US"])
+    def test_duplicate_start_returns_existing_task_without_scheduling(self, country):
         task_entry = {"task_type": "new_listings", "state": async_task.TASK_STATE_RUNNING}
         with (
             patch("app.routers.async_task._generate_task_id", return_value="task-789"),
@@ -519,7 +572,7 @@ class TestNewListingsAsync:
             patch("app.routers.async_task.cache.set", new_callable=AsyncMock) as mock_cache_set,
             patch("app.routers.events_listings._run_new_listings_task", new_callable=AsyncMock) as mock_run_task,
         ):
-            resp = client.get("/events/start_new_listings_async", params={"country": "AU"})
+            resp = client.get("/events/start_new_listings_async", params={"country": country})
 
         assert resp.status_code == 202
         assert resp.json()["message"] == "Task is running"
@@ -552,7 +605,8 @@ class TestNewListingsAsync:
         assert resp.status_code == 404
         assert resp.json() == {"status": 404, "message": "Task not found"}
 
-    def test_poll_returns_completed_result(self):
+    @pytest.mark.parametrize(("symbol", "currency"), [("ASX:XYZ", "AUD"), ("NASDAQ:XYZ", "USD")])
+    def test_poll_returns_completed_result(self, symbol, currency):
         task_entry = {
             "task_type": "new_listings",
             "state": async_task.TASK_STATE_COMPLETED,
@@ -561,11 +615,11 @@ class TestNewListingsAsync:
                 "message": "ok",
                 "data": [
                     {
-                        "symbol": "ASX:XYZ",
+                        "symbol": symbol,
                         "company_name": "XYZ Corp",
                         "timestamp_str": "2026-06-20",
                         "issue_price": 2.5,
-                        "currency": "AUD",
+                        "currency": currency,
                         "capital_to_raise": 5_000_000,
                     }
                 ],
@@ -577,25 +631,28 @@ class TestNewListingsAsync:
         assert resp.status_code == 200
         body = resp.json()
         assert body["status"] == 200
-        assert body["data"][0]["symbol"] == "ASX:XYZ"
+        assert body["data"][0]["symbol"] == symbol
+        assert body["data"][0]["currency"] == currency
         assert body["extra"] == {"task_id": "task-789", "state": async_task.TASK_STATE_COMPLETED}
 
-    def test_background_task_caches_result(self):
+    @pytest.mark.parametrize("country", ["AU", "US"])
+    def test_background_task_caches_result(self, country):
         result = schemas_events_listings.ListingsResponse(status=200, message="ok", data=[])
         with (
             patch(
                 "app.routers.events_listings._get_new_listings_result",
                 new_callable=AsyncMock,
                 return_value=result,
-            ),
+            ) as mock_get_result,
             patch(
                 "app.routers.async_task.cache.set",
                 new_callable=AsyncMock,
                 return_value=True,
             ) as mock_cache_set,
         ):
-            asyncio.run(router_events_listings._run_new_listings_task("task-789", "AU"))
+            asyncio.run(router_events_listings._run_new_listings_task("task-789", country))
 
+        mock_get_result.assert_awaited_once_with(country)
         mock_cache_set.assert_awaited_once_with(
             "task-789",
             {
@@ -605,3 +662,77 @@ class TestNewListingsAsync:
             },
             ttl=3600,
         )
+
+    @pytest.mark.parametrize("failed_country", [None, "AU", "US"])
+    def test_market_tasks_are_isolated_and_aliases_reuse_results(self, failed_country):
+        events = {
+            "AU": models_events_listings.ListingEvent(
+                symbol="ASX:XYZ",
+                exchange="ASX",
+                timestamp_str="2026-11-12 00:00:00+11:00",
+                issue_price=2.5,
+                currency="AUD",
+                capital_to_raise=5_000_000,
+                analysis_status="Skipped",
+            ),
+            "US": models_events_listings.ListingEvent(
+                symbol="NASDAQ:IPO",
+                exchange="NASDAQ",
+                timestamp_str="2026-11-12 00:00:00-05:00",
+                issue_price=None,
+                currency="USD",
+                capital_to_raise=None,
+                analysis_status="Skipped",
+            ),
+        }
+        task_entries = {}
+
+        async def store_task(task_id, entry, *, ttl):
+            task_entries[task_id] = entry
+            return True
+
+        with (
+            patch(
+                "app.routers.events_listings.services_asx_listings.ai_get_asx_new_listings",
+                new_callable=AsyncMock,
+                return_value=[events["AU"]],
+            ) as mock_asx,
+            patch(
+                "app.routers.events_listings.services_us_listings.ai_get_us_new_listings",
+                new_callable=AsyncMock,
+                return_value=[events["US"]],
+            ) as mock_us,
+            patch("app.routers.async_task.cache.get", new_callable=AsyncMock, side_effect=task_entries.get),
+            patch("app.routers.async_task.cache.set", new_callable=AsyncMock, side_effect=store_task),
+        ):
+            if failed_country is not None:
+                failed_service = mock_asx if failed_country == "AU" else mock_us
+                failed_service.side_effect = RuntimeError("Market source unavailable")
+
+            task_ids = {}
+            for country in events:
+                started = client.get("/events/start_new_listings_async", params={"country": country})
+                assert started.status_code == 202
+                task_ids[country] = started.json()["extra"]["task_id"]
+
+            assert task_ids["AU"] != task_ids["US"]
+            for country, alias in (("AU", "Australia"), ("US", "United States")):
+                task_id = task_ids[country]
+                polled = client.get("/events/poll_new_listings_async", params={"task_id": task_id})
+                repeated = client.get("/events/start_new_listings_async", params={"country": alias})
+                assert repeated.status_code == polled.status_code
+                assert repeated.json() == polled.json()
+                if country == failed_country:
+                    assert polled.status_code == 500
+                    assert polled.json()["extra"] == {"task_id": task_id, "state": async_task.TASK_STATE_FAILED}
+                    assert "data" not in polled.json()
+                else:
+                    assert polled.status_code == 200
+                    assert polled.json()["data"] == [events[country].model_dump(mode="json", exclude_none=True)]
+                    assert polled.json()["extra"] == {
+                        "task_id": task_id,
+                        "state": async_task.TASK_STATE_COMPLETED,
+                    }
+
+        mock_asx.assert_awaited_once_with()
+        mock_us.assert_awaited_once_with()

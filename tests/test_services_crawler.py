@@ -140,7 +140,7 @@ class TestCrawlerFetching:
             result = asyncio.run(crawler.fetch_webpage_content_fallback_to_playwright("https://example.test"))
 
         assert result == content
-        mock_http.assert_awaited_once_with("https://example.test", retries=2)
+        mock_http.assert_awaited_once_with("https://example.test", retries=2, cache_ttl=86400)
         mock_playwright.assert_not_awaited()
 
     @pytest.mark.parametrize("content", ["<html>browser</html>", None])
@@ -154,8 +154,33 @@ class TestCrawlerFetching:
             result = asyncio.run(crawler.fetch_webpage_content_fallback_to_playwright("https://example.test"))
 
         assert result == content
-        mock_http.assert_awaited_once_with("https://example.test", retries=2)
-        mock_playwright.assert_awaited_once_with("https://example.test", retries=2)
+        mock_http.assert_awaited_once_with("https://example.test", retries=2, cache_ttl=86400)
+        mock_playwright.assert_awaited_once_with("https://example.test", retries=2, cache_ttl=86400)
+
+    def test_shorter_html_lifetime_uses_a_separate_cache_entry(self):
+        fake_response = SimpleNamespace(status_code=200, text="fresh", raise_for_status=lambda: None)
+        fake_scraper = MagicMock()
+        fake_scraper.get.return_value = fake_response
+        with patch("app.services.crawler.cloudscraper.create_scraper", return_value=fake_scraper):
+            result = asyncio.run(crawler.fetch_webpage_content("https://example.test", cache_ttl=3600))
+
+        assert result == "fresh"
+        self.mock_cache_get.assert_awaited_once_with(
+            crawler.cache.generate_key("crawler", "http", "https://example.test", "3600")
+        )
+        self.mock_cache_set.assert_awaited_once_with(
+            crawler.cache.generate_key("crawler", "http", "https://example.test", "3600"), "fresh", ttl=3600
+        )
+
+    def test_fallback_preserves_the_requested_refresh_interval(self):
+        with (
+            patch("app.services.crawler.fetch_webpage_content", new_callable=AsyncMock, return_value=None) as http,
+            patch("app.services.crawler.fetch_webpage_content_playwright", new_callable=AsyncMock) as browser,
+        ):
+            asyncio.run(crawler.fetch_webpage_content_fallback_to_playwright("https://example.test", cache_ttl=3600))
+
+        http.assert_awaited_once_with("https://example.test", retries=2, cache_ttl=3600)
+        browser.assert_awaited_once_with("https://example.test", retries=2, cache_ttl=3600)
 
 
 class TestCrawlerScrape:

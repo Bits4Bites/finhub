@@ -95,7 +95,9 @@ def extract_data_table_from_html(
     return df
 
 
-async def fetch_webpage_content(url: str, *, retries: int = 3, backoff_factor: float = 0.5) -> str | None:
+async def fetch_webpage_content(
+    url: str, *, retries: int = 3, backoff_factor: float = 0.5, cache_ttl: int = _HTML_CACHE_TTL
+) -> str | None:
     """
     Fetches the content of a webpage, retrying failures except HTTP client errors (400-499).
 
@@ -103,11 +105,12 @@ async def fetch_webpage_content(url: str, *, retries: int = 3, backoff_factor: f
         url (str): The URL of the webpage to fetch.
         retries (int, optional): Number of times to retry the request in case of failure. Defaults to 3.
         backoff_factor (float, optional): Factor for calculating sleep time between retries. Defaults to 0.5.
+        cache_ttl (int, optional): Lifetime of cached HTML, in seconds. Defaults to 24 hours.
 
     Returns:
         str: The content of the webpage if successful, otherwise None.
     """
-    cache_key = cache.generate_key("crawler", "http", url)
+    cache_key = cache.generate_key("crawler", "http", url, *([str(cache_ttl)] if cache_ttl != _HTML_CACHE_TTL else []))
     cached_content = await cache.get(cache_key)
     if cached_content is not None:
         logger.info("Using cached content for '%s'.", url)
@@ -122,7 +125,7 @@ async def fetch_webpage_content(url: str, *, retries: int = 3, backoff_factor: f
                 logger.warning("Client error HTTP %s fetching URL: %s. Not retrying.", response.status_code, url)
                 return None
             response.raise_for_status()  # Raise an exception for HTTP errors
-            await cache.set(cache_key, response.text, ttl=_HTML_CACHE_TTL)
+            await cache.set(cache_key, response.text, ttl=cache_ttl)
             logger.info("Fetched content from '%s' in %.2f seconds.", url, time.monotonic() - start_time)
             return response.text
         except Exception as e:
@@ -136,7 +139,12 @@ async def fetch_webpage_content(url: str, *, retries: int = 3, backoff_factor: f
 
 
 async def fetch_webpage_content_playwright(
-    url: str, *, after_load_func_async=None, retries: int = 2, backoff_factor: float = 0.5
+    url: str,
+    *,
+    after_load_func_async=None,
+    retries: int = 2,
+    backoff_factor: float = 0.5,
+    cache_ttl: int = _HTML_CACHE_TTL,
 ) -> str | None:
     """
     Fetches the content of a webpage using Playwright, with retry logic.
@@ -146,11 +154,18 @@ async def fetch_webpage_content_playwright(
         after_load_func_async (callable, optional): A function to execute after the page has loaded, for additional interactions.
         retries (int, optional): Number of times to retry the request in case of failure. Defaults to 2.
         backoff_factor (float, optional): Factor for calculating sleep time between retries. Defaults to 0.5.
+        cache_ttl (int, optional): Lifetime of cached HTML, in seconds. Defaults to 24 hours.
 
     Returns:
         str: The content of the webpage if successful, otherwise None.
     """
-    cache_key = cache.generate_key("crawler", "playwright", _callback_name(after_load_func_async), url)
+    cache_key = cache.generate_key(
+        "crawler",
+        "playwright",
+        _callback_name(after_load_func_async),
+        url,
+        *([str(cache_ttl)] if cache_ttl != _HTML_CACHE_TTL else []),
+    )
     cached_content = await cache.get(cache_key)
     if cached_content is not None:
         logger.info("Using cached Playwright content for '%s'.", url)
@@ -170,7 +185,7 @@ async def fetch_webpage_content_playwright(
                     await after_load_func_async(page)
                 page_content = await page.content()
                 await browser.close()
-                await cache.set(cache_key, page_content, ttl=_HTML_CACHE_TTL)
+                await cache.set(cache_key, page_content, ttl=cache_ttl)
                 logger.info("Fetched content from '%s' in %.2f seconds.", url, time.monotonic() - start_time)
                 return page_content
         except Exception as e:
@@ -183,12 +198,12 @@ async def fetch_webpage_content_playwright(
     return None
 
 
-async def fetch_webpage_content_fallback_to_playwright(url: str) -> str | None:
+async def fetch_webpage_content_fallback_to_playwright(url: str, *, cache_ttl: int = _HTML_CACHE_TTL) -> str | None:
     """Fetches webpage content over HTTP with up to two attempts, falling back to Playwright on failure."""
-    content = await fetch_webpage_content(url, retries=2)
+    content = await fetch_webpage_content(url, retries=2, cache_ttl=cache_ttl)
     if content is not None:
         return content
-    return await fetch_webpage_content_playwright(url, retries=2)
+    return await fetch_webpage_content_playwright(url, retries=2, cache_ttl=cache_ttl)
 
 
 async def scrape_data_table(url: str, *, raw_cell_content=False, table_attr_filter=None, filter_skip=0) -> pd.DataFrame:

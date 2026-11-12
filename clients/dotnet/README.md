@@ -172,7 +172,8 @@ var response = JsonSerializer.Deserialize<GetNewListingsResponse>(json);
 var asyncResponse = JsonSerializer.Deserialize<GetNewListingsAsyncResponse>(asyncJson);
 ```
 
-Call `GET /events/start_new_listings_async?country=AU` to start a task and
+The synchronous and start endpoints support `country=AU` and `country=US`.
+Call `GET /events/start_new_listings_async?country=AU` (or `country=US`) to start a task and
 `GET /events/poll_new_listings_async?task_id=<TASK_ID>` to poll it. Both operations deserialize as
 `GetNewListingsAsyncResponse`; its required `Extra` property uses the shared `AsyncTaskInfo` and `TaskState`
 contracts. Completed polls can include the standard listing collection in `Data`.
