@@ -444,28 +444,41 @@ def test_crawling_retains_pre_revenue_ipo_with_blocked_sec_document(ai_calls):
     ai_calls.assert_not_awaited()
 
 
-def test_sec_filing_uses_browser_fallback_when_http_is_blocked(ai_calls):
+@pytest.mark.parametrize("status_code", [200, 403])
+def test_sec_filing_browser_fallback_retains_only_successful_documents(ai_calls, status_code):
     async def fetch(url, **kwargs):
         if url == _FILING_URL:
             return None
         return _financials_html() if url.endswith("/financials/") else _overview_html()
 
     filing_text = "Registration statement with audited financials and offer terms."
+    page = mock.AsyncMock()
+    page.goto.return_value = mock.Mock(status=status_code)
+    page.content.return_value = f"<main>{filing_text}</main>" if status_code == 200 else "<main>Access Denied</main>"
+    browser = mock.AsyncMock()
+    browser.new_page.return_value = page
+    playwright = mock.MagicMock()
+    playwright.webkit.launch = mock.AsyncMock(return_value=browser)
+    context = mock.AsyncMock()
+    context.__aenter__.return_value = playwright
     with (
         mock.patch.object(msai_us_listings.services_crawler, "fetch_webpage_content", side_effect=fetch),
-        mock.patch.object(
-            msai_us_listings.services_crawler,
-            "fetch_webpage_content_playwright",
-            new_callable=mock.AsyncMock,
-            return_value=f"<main>{filing_text}</main>",
-        ) as browser,
+        mock.patch.object(msai_us_listings.services_crawler, "async_playwright", return_value=context),
     ):
         dossier = asyncio.run(msai_us_listings._crawl_us_listing(_event(), today=_TODAY))
 
-    browser.assert_awaited_once_with(_FILING_URL, retries=2, cache_ttl=3600)
-    assert dossier.filing_text == filing_text
-    assert dossier.sources[_FILING_URL] == filing_text
-    assert not any(_FILING_URL in gap for gap in dossier.data_gaps)
+    page.goto.assert_awaited_once_with(_FILING_URL, timeout=60000)
+    browser.close.assert_awaited_once()
+    assert msai_us_listings._eligible_for_analysis(dossier)
+    if status_code == 200:
+        assert dossier.filing_text == filing_text
+        assert dossier.sources[_FILING_URL] == filing_text
+        assert not any(_FILING_URL in gap for gap in dossier.data_gaps)
+    else:
+        page.content.assert_not_awaited()
+        assert dossier.filing_text == ""
+        assert _FILING_URL not in dossier.sources
+        assert any(_FILING_URL in gap for gap in dossier.data_gaps)
     ai_calls.assert_not_awaited()
 
 

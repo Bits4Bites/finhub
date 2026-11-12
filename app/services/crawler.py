@@ -147,7 +147,7 @@ async def fetch_webpage_content_playwright(
     cache_ttl: int = _HTML_CACHE_TTL,
 ) -> str | None:
     """
-    Fetches the content of a webpage using Playwright, with retry logic.
+    Fetches webpage content using Playwright, retrying failures except HTTP client errors (400-499).
 
     Args:
         url (str): The URL of the webpage to fetch.
@@ -176,15 +176,24 @@ async def fetch_webpage_content_playwright(
         try:
             async with async_playwright() as p:
                 browser = await p.webkit.launch(headless=True)
-                page = await browser.new_page(
-                    screen=ViewportSize(width=1664, height=1110),
-                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0",
-                )
-                await page.goto(url, timeout=60000)
-                if after_load_func_async:
-                    await after_load_func_async(page)
-                page_content = await page.content()
-                await browser.close()
+                try:
+                    page = await browser.new_page(
+                        screen=ViewportSize(width=1664, height=1110),
+                        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0",
+                    )
+                    response = await page.goto(url, timeout=60000)
+                    if response is None:
+                        raise RuntimeError("Navigation returned no HTTP response")
+                    if 400 <= response.status < 500:
+                        logger.warning("Client error HTTP %s fetching URL: %s. Not retrying.", response.status, url)
+                        return None
+                    if response.status >= 500:
+                        raise RuntimeError(f"HTTP {response.status} fetching URL: {url}")
+                    if after_load_func_async:
+                        await after_load_func_async(page)
+                    page_content = await page.content()
+                finally:
+                    await browser.close()
                 await cache.set(cache_key, page_content, ttl=cache_ttl)
                 logger.info("Fetched content from '%s' in %.2f seconds.", url, time.monotonic() - start_time)
                 return page_content

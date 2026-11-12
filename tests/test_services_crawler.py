@@ -36,6 +36,22 @@ class TestCrawlerFetching:
             self.mock_cache_set = mock_set
             yield
 
+    @pytest.fixture
+    def mock_browser(self):
+        fake_page = AsyncMock()
+        fake_page.goto.return_value = SimpleNamespace(status=200)
+        fake_page.content.return_value = "<html>ok</html>"
+        fake_browser = AsyncMock()
+        fake_browser.new_page.return_value = fake_page
+        fake_playwright = MagicMock()
+        fake_playwright.webkit.launch = AsyncMock(return_value=fake_browser)
+        fake_context = MagicMock()
+        fake_context.__aenter__ = AsyncMock(return_value=fake_playwright)
+        fake_context.__aexit__ = AsyncMock(return_value=None)
+
+        with patch("app.services.crawler.async_playwright", return_value=fake_context):
+            yield SimpleNamespace(page=fake_page, browser=fake_browser, playwright=fake_playwright)
+
     def test_fetch_webpage_content_returns_text(self):
         fake_response = SimpleNamespace(status_code=200, text="ok", raise_for_status=lambda: None)
         fake_scraper = MagicMock()
@@ -107,27 +123,59 @@ class TestCrawlerFetching:
         mock_async_playwright.assert_not_called()
         self.mock_cache_set.assert_not_awaited()
 
-    def test_fetch_webpage_content_playwright_caches_text(self):
-        fake_page = AsyncMock()
-        fake_page.content.return_value = "<html>ok</html>"
-        fake_browser = AsyncMock()
-        fake_browser.new_page.return_value = fake_page
-        fake_playwright = MagicMock()
-        fake_playwright.webkit.launch = AsyncMock(return_value=fake_browser)
-        fake_context = MagicMock()
-        fake_context.__aenter__ = AsyncMock(return_value=fake_playwright)
-        fake_context.__aexit__ = AsyncMock(return_value=None)
-
-        with patch("app.services.crawler.async_playwright", return_value=fake_context):
-            result = asyncio.run(crawler.fetch_webpage_content_playwright("https://example.test"))
+    def test_fetch_webpage_content_playwright_caches_text(self, mock_browser):
+        result = asyncio.run(crawler.fetch_webpage_content_playwright("https://example.test"))
 
         assert result == "<html>ok</html>"
-        fake_playwright.webkit.launch.assert_awaited_once_with(headless=True)
+        mock_browser.playwright.webkit.launch.assert_awaited_once_with(headless=True)
+        mock_browser.browser.close.assert_awaited_once()
         self.mock_cache_set.assert_awaited_once_with(
             crawler.cache.generate_key("crawler", "playwright", "", "https://example.test"),
             "<html>ok</html>",
             ttl=86400,
         )
+
+    @pytest.mark.parametrize("status_code", [403, 404])
+    def test_playwright_does_not_read_or_cache_client_error_pages(self, mock_browser, status_code):
+        mock_browser.page.goto.return_value = SimpleNamespace(status=status_code)
+        with patch("app.services.crawler.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+            result = asyncio.run(crawler.fetch_webpage_content_playwright("https://example.test"))
+
+        assert result is None
+        mock_browser.page.goto.assert_awaited_once()
+        mock_browser.page.content.assert_not_awaited()
+        mock_browser.browser.close.assert_awaited_once()
+        mock_sleep.assert_not_awaited()
+        self.mock_cache_set.assert_not_awaited()
+
+    @pytest.mark.parametrize(
+        ("status_codes", "expected"),
+        [([500, 200], "<html>ok</html>"), ([500, 502], None)],
+    )
+    def test_playwright_retries_server_errors_without_caching_them(self, mock_browser, status_codes, expected):
+        mock_browser.page.goto.side_effect = [SimpleNamespace(status=code) for code in status_codes]
+        with patch("app.services.crawler.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+            result = asyncio.run(crawler.fetch_webpage_content_playwright("https://example.test", retries=2))
+
+        assert result == expected
+        assert mock_browser.browser.close.await_count == 2
+        mock_sleep.assert_awaited_once()
+        if expected is None:
+            mock_browser.page.content.assert_not_awaited()
+            self.mock_cache_set.assert_not_awaited()
+        else:
+            mock_browser.page.content.assert_awaited_once()
+            self.mock_cache_set.assert_awaited_once()
+
+    def test_playwright_rejects_navigation_without_an_http_response(self, mock_browser):
+        mock_browser.page.goto.return_value = None
+
+        result = asyncio.run(crawler.fetch_webpage_content_playwright("https://example.test", retries=1))
+
+        assert result is None
+        mock_browser.page.content.assert_not_awaited()
+        mock_browser.browser.close.assert_awaited_once()
+        self.mock_cache_set.assert_not_awaited()
 
     @pytest.mark.parametrize("content", ["<html>ok</html>", ""])
     def test_fetch_webpage_content_fallback_returns_http_content(self, content):
