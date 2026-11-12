@@ -409,6 +409,8 @@ def _analysis_data(symbol: str = "NASDAQ:EXAMPLE") -> dict:
 
 def test_crawling_retains_pre_revenue_ipo_with_blocked_sec_document(ai_calls):
     async def fetch(url, **kwargs):
+        if url == _FILING_URL:
+            return None
         return _financials_html() if url.endswith("/financials/") else _overview_html()
 
     with (
@@ -417,7 +419,7 @@ def test_crawling_retains_pre_revenue_ipo_with_blocked_sec_document(ai_calls):
         ) as pages,
         mock.patch.object(
             msai_us_listings.services_crawler, "fetch_webpage_content", new_callable=mock.AsyncMock, return_value=None
-        ) as filing,
+        ) as direct_http,
     ):
         event = _event()
         dossier = asyncio.run(msai_us_listings._crawl_us_listing(event, today=_TODAY))
@@ -436,8 +438,34 @@ def test_crawling_retains_pre_revenue_ipo_with_blocked_sec_document(ai_calls):
     assert table["columns"] == ["Fiscal Year", "TTM", "FY 2025"]
     assert table["period_ending"] == ["Trailing twelve months ending Jun 30, 2026", "Dec 31, 2025"]
     assert event.industry == "Biotechnology"
-    assert pages.await_count == 3
-    filing.assert_awaited_once_with(_FILING_URL, retries=1, cache_ttl=3600)
+    assert pages.await_count == 4
+    pages.assert_any_await(_FILING_URL, cache_ttl=3600)
+    direct_http.assert_not_awaited()
+    ai_calls.assert_not_awaited()
+
+
+def test_sec_filing_uses_browser_fallback_when_http_is_blocked(ai_calls):
+    async def fetch(url, **kwargs):
+        if url == _FILING_URL:
+            return None
+        return _financials_html() if url.endswith("/financials/") else _overview_html()
+
+    filing_text = "Registration statement with audited financials and offer terms."
+    with (
+        mock.patch.object(msai_us_listings.services_crawler, "fetch_webpage_content", side_effect=fetch),
+        mock.patch.object(
+            msai_us_listings.services_crawler,
+            "fetch_webpage_content_playwright",
+            new_callable=mock.AsyncMock,
+            return_value=f"<main>{filing_text}</main>",
+        ) as browser,
+    ):
+        dossier = asyncio.run(msai_us_listings._crawl_us_listing(_event(), today=_TODAY))
+
+    browser.assert_awaited_once_with(_FILING_URL, retries=2, cache_ttl=3600)
+    assert dossier.filing_text == filing_text
+    assert dossier.sources[_FILING_URL] == filing_text
+    assert not any(_FILING_URL in gap for gap in dossier.data_gaps)
     ai_calls.assert_not_awaited()
 
 
@@ -451,6 +479,8 @@ def test_profile_uses_latest_amendment_instead_of_initial_news_link(ai_calls):
     )
 
     async def fetch(url, **kwargs):
+        if url == amendment_url:
+            return None
         if url.endswith("/company/"):
             return profile
         return _financials_html() if url.endswith("/financials/") else _overview_html()
@@ -458,10 +488,10 @@ def test_profile_uses_latest_amendment_instead_of_initial_news_link(ai_calls):
     with (
         mock.patch.object(
             msai_us_listings.services_crawler, "fetch_webpage_content_fallback_to_playwright", side_effect=fetch
-        ),
+        ) as pages,
         mock.patch.object(
             msai_us_listings.services_crawler, "fetch_webpage_content", new_callable=mock.AsyncMock, return_value=None
-        ) as filing,
+        ) as direct_http,
     ):
         dossier = asyncio.run(msai_us_listings._crawl_us_listing(_event(), today=_TODAY))
 
@@ -469,7 +499,8 @@ def test_profile_uses_latest_amendment_instead_of_initial_news_link(ai_calls):
     assert dossier.filing_form == "S-1/A"
     assert dossier.filing_date == "Nov 11, 2026"
     assert msai_us_listings._eligible_for_analysis(dossier)
-    filing.assert_awaited_once_with(amendment_url, retries=1, cache_ttl=3600)
+    pages.assert_any_await(amendment_url, cache_ttl=3600)
+    direct_http.assert_not_awaited()
     ai_calls.assert_not_awaited()
 
 
@@ -511,6 +542,8 @@ def test_unsupported_inactive_or_conflicting_listings_do_not_reach_ai(overrides,
 
 def test_missing_classification_gets_a_bounded_profile_crawl(ai_calls):
     async def fetch(url, **kwargs):
+        if url == _FILING_URL:
+            return None
         if url.endswith("/financials/"):
             return _financials_html()
         if url.endswith("/company/"):
@@ -529,7 +562,7 @@ def test_missing_classification_gets_a_bounded_profile_crawl(ai_calls):
 
     assert msai_us_listings._eligible_for_analysis(dossier)
     assert dossier.business_description == "Example develops treatments."
-    assert pages.await_count == 3
+    assert pages.await_count == 4
     assert dossier.page_count == 4
     ai_calls.assert_not_awaited()
 

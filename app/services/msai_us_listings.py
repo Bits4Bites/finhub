@@ -498,15 +498,10 @@ async def _load_dossier_page(
     dossier: _ListingDossier,
     *,
     ttl: int,
-    regulatory: bool = False,
 ) -> bs4.BeautifulSoup | bs4.Tag | None:
     dossier.page_count += 1
     try:
-        content = (
-            await services_crawler.fetch_webpage_content(url, retries=1, cache_ttl=ttl)
-            if regulatory
-            else await services_crawler.fetch_webpage_content_fallback_to_playwright(url, cache_ttl=ttl)
-        )
+        content = await services_crawler.fetch_webpage_content_fallback_to_playwright(url, cache_ttl=ttl)
     except Exception:
         logging.exception("[US Listings] Could not crawl '%s'.", url)
         content = None
@@ -614,7 +609,7 @@ async def _crawl_us_listing(
         _check_page_identity(event, financials, _page_fields(financials), dossier)
         _read_financials(financials, dossier, financial_url)
     if dossier.filing_url:
-        filing = await _load_dossier_page(dossier.filing_url, dossier, ttl=ttl, regulatory=True)
+        filing = await _load_dossier_page(dossier.filing_url, dossier, ttl=ttl)
         if filing is not None:
             dossier.filing_text = filing.get_text(" ", strip=True)[:16_000]
             dossier.sources[dossier.filing_url] = dossier.filing_text
