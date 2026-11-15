@@ -3,19 +3,28 @@ from ..services import market as services_market
 
 
 def detect_asset_type(
-    *, quote_type: str = None, sector: str = None, industry: str = None, corp_name: str = None
+    *,
+    quote_type: str | None = None,
+    sector: str | None = None,
+    industry: str | None = None,
+    corp_name: str | None = None,
 ) -> types.AssetType:
-    """
-    Detects the asset type based on ticker info (quote_type, sector, industry, and corporate name).
+    """Classify provider metadata into a supported financial asset category.
 
     Args:
-        quote_type (string): quote type string obtained from YF info object
-        sector (str): sector info obtained from YF info object
-        industry (str): industry info obtained from YF info object
-        corp_name (str): company name obtained from YF info object
+        quote_type: The provider's broad security type.
+        sector: The provider's business-sector description.
+        industry: The provider's industry description.
+        corp_name: The security or issuer name.
 
     Returns:
-        AssetType: asset type
+        The supported asset category, or ``OTHER`` when the supplied metadata
+        does not identify a recognized category.
+
+    Notes:
+        Metadata matching is case-insensitive. Sector, industry, and issuer name
+        are used to distinguish equity subtypes such as REITs, listed investment
+        companies, and hybrid securities.
     """
     quote_type = (quote_type or "").upper()
     sector = (sector or "").upper()
@@ -43,15 +52,20 @@ def detect_asset_type(
 
 
 def is_in_index(*, index: str, symbol: str) -> bool:
-    """
-    Checks if a stock symbol in a market index.
+    """Check whether an exchange-qualified stock symbol belongs to an index.
 
     Args:
-        index (str): The market index.
-        symbol (str): The stock symbol to check, must be in format EXCHANGE:CODE.
+        index: The market-index code, such as ``ASX200`` or ``NASDAQ100``.
+        symbol: The stock symbol in ``EXCHANGE:CODE`` format.
 
     Returns:
-        bool: True if the stock symbol in a market index, False otherwise.
+        ``True`` when the symbol is an index constituent; otherwise ``False``.
+
+    Raises:
+        KeyError: If the requested index is not loaded.
+
+    Notes:
+        Index codes and symbols are matched case-insensitively.
     """
     return symbol.upper() in services_market.market_indices.indices[index.upper()]
 
@@ -59,16 +73,24 @@ def is_in_index(*, index: str, symbol: str) -> bool:
 def classify_market_cap(
     *, country: str, exchange_symbol: str, market_cap: int
 ) -> tuple[types.MarketCapType | None, str | None]:
-    """
-    Classifies a stock market capital.
+    """Classify a company's market-cap tier for its home market.
 
     Args:
-        country (str): The country to classify.
-        exchange_symbol (str): The ticker classify (in format EXCHANGE:CODE).
-        market_cap (int): The ticker's market cap value.
+        country: The listing country as a country name or ISO code.
+        exchange_symbol: The stock symbol in ``EXCHANGE:CODE`` format.
+        market_cap: The company's market capitalization in the home market's
+            currency.
 
     Returns:
-        tuple[models.MarketCapType|None, str|None]: classified market cap and (optional) index (e.g. "NASDAQ100")
+        The market-cap category and the most relevant recognized index containing
+        the company. Unsupported countries return ``(None, None)``.
+
+    Raises:
+        KeyError: If required market-index data is not loaded.
+
+    Notes:
+        Australia, the United States, and Vietnam use market-specific thresholds.
+        Recognized index membership may adjust the threshold-only category.
     """
     cap_size: types.MarketCapType = None
     market_index = None
@@ -103,7 +125,7 @@ def classify_market_cap(
             market_index = "SP600"
             cap_size = types.SMALL_CAP
 
-        if market_index is None:
+        if country == "AU" and market_index is None:
             if is_in_index(index="ASX100", symbol=exchange_symbol):
                 # if in ASX100, move up 1 tier (mid -> large, small -> mid)
                 market_index = "ASX100"
@@ -118,7 +140,7 @@ def classify_market_cap(
                 elif cap_size == types.MID_CAP:
                     cap_size = types.SMALL_CAP
 
-        if market_index is None:
+        if country == "AU" and market_index is None:
             for index in ["ASX50", "ASX100", "ASX200", "ASX300"]:
                 if is_in_index(index=index, symbol=exchange_symbol):
                     market_index = index
@@ -154,7 +176,7 @@ def classify_market_cap(
 
         if exchange_symbol.startswith("HNX:"):
             if is_in_index(index="HNX30", symbol=exchange_symbol):
-                market_index = "HN30"
+                market_index = "HNX30"
                 if cap_size == types.SMALL_CAP:
                     cap_size = types.MID_CAP
             else:

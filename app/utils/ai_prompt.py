@@ -16,7 +16,22 @@ class PromptLoadError(RuntimeError):
 
 
 def load_prompt(file_name: str) -> str:
-    """Load and cache a non-empty prompt from the shared prompt directory."""
+    """Load an application-managed prompt template for an AI workflow.
+
+    Args:
+        file_name: The file name or relative path under the project's
+            ``resources/prompts`` directory.
+
+    Returns:
+        The non-empty prompt text with surrounding whitespace removed.
+
+    Raises:
+        PromptLoadError: If the file name is invalid, the file cannot be
+            loaded, or its content is empty.
+
+    Notes:
+        Prompt files must remain within the ``resources/prompts`` directory.
+    """
     normalized_name = file_name.strip()
     if not normalized_name:
         raise PromptLoadError("Prompt file name is required")
@@ -33,7 +48,25 @@ def render_prompt(
     file_name: str,
     replacements: Mapping[str, str],
 ) -> str:
-    """Load a cached prompt template and replace its declared placeholders once."""
+    """Render an AI prompt template with task-specific values.
+
+    Args:
+        file_name: The file name or relative path under the project's
+            ``resources/prompts`` directory.
+        replacements: Text values keyed by placeholder name. The keys must
+            exactly match all ``{{NAME}}`` placeholders declared by the template.
+
+    Returns:
+        The rendered prompt text.
+
+    Raises:
+        PromptLoadError: If the template cannot be loaded or the replacement
+            names do not exactly match its placeholders.
+
+    Notes:
+        Replacement text is inserted literally and is not interpreted as
+        another placeholder.
+    """
     prompt = load_prompt(file_name)
     placeholders = set(_PROMPT_PLACEHOLDER_PATTERN.findall(prompt))
     replacement_names = set(replacements)

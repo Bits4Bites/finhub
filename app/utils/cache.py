@@ -1,5 +1,6 @@
 """Asynchronous in-memory cache with expiring entries."""
 
+import dataclasses
 import re
 from datetime import UTC, datetime
 from typing import Any
@@ -18,11 +19,30 @@ _ISO_DATETIME_PATTERN = re.compile(
     r"(?:Z|[+-]\d{2}:\d{2})"
     r"(?!\d)"
 )
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class _CacheEntry:
+    value: Any
+
+
 _cache = SimpleMemoryCache()
 
 
 def generate_key(*items: str) -> str:
-    """Generate a version-aware XXH3-128 cache key from arbitrary strings."""
+    """Generate an application-version-scoped key for cached business data.
+
+    Args:
+        items: Ordered string components that identify the cached result.
+
+    Returns:
+        A deterministic cache key for the application version and supplied
+        components.
+
+    Notes:
+        Component order and boundaries are significant. Changing the application
+        version invalidates previously generated keys.
+    """
     hasher = xxhash.xxh3_128()
     for item in (version.VERSION, *items):
         encoded_item = item.encode()
@@ -32,7 +52,20 @@ def generate_key(*items: str) -> str:
 
 
 def generate_hourly_key(*items: str) -> str:
-    """Generate a cache key after normalizing embedded ISO datetimes to UTC hours."""
+    """Generate a cache key that groups timestamped inputs by UTC hour.
+
+    Args:
+        items: Ordered string components that may contain timezone-qualified ISO
+            8601 datetimes.
+
+    Returns:
+        A version-scoped cache key with recognized datetimes grouped into their
+        UTC hour.
+
+    Notes:
+        Datetimes must include seconds and either ``Z`` or a numeric UTC offset.
+        Components without recognized datetimes behave like ``generate_key``.
+    """
     return generate_key(*(_ISO_DATETIME_PATTERN.sub(_normalize_datetime_hour, item) for item in items))
 
 
@@ -46,27 +79,73 @@ def _normalize_datetime_hour(match: re.Match[str]) -> str:
 
 
 async def get(key: str, default: Any = None) -> Any:
-    """Return a cached value, or the default when the key is absent or expired."""
-    return await _cache.get(key, default=default)
+    """Retrieve an unexpired value from the application cache.
+
+    Args:
+        key: The cache key identifying the stored value.
+        default: The value returned when the key is absent or expired.
+
+    Returns:
+        The cached value, including a cached ``None``, or ``default`` when no
+        unexpired entry exists.
+    """
+    entry = await _cache.get(key)
+    return entry.value if isinstance(entry, _CacheEntry) else default
 
 
 async def set(key: str, value: Any, ttl: float = _DEFAULT_TTL) -> bool:
-    """Cache a value, using the one-hour default when TTL is non-positive."""
+    """Store a value in the application cache for a limited time.
+
+    Args:
+        key: The cache key identifying the value.
+        value: The value to cache.
+        ttl: Lifetime in seconds. The one-hour default is used when the supplied
+            value is non-positive.
+
+    Returns:
+        ``True`` when the value is stored successfully.
+    """
     if ttl <= 0:
         ttl = _DEFAULT_TTL
-    return await _cache.set(key, value, ttl=ttl)
+    return await _cache.set(key, _CacheEntry(value), ttl=ttl)
 
 
 async def exists(key: str) -> bool:
-    """Return whether an unexpired value exists for the key."""
+    """Check whether an unexpired cache entry exists.
+
+    Args:
+        key: The cache key to check.
+
+    Returns:
+        ``True`` when an unexpired entry exists; otherwise ``False``.
+    """
     return await _cache.exists(key)
 
 
 async def delete(key: str) -> bool:
-    """Delete a cached value and return whether it existed."""
+    """Delete one value from the application cache.
+
+    Args:
+        key: The cache key to delete.
+
+    Returns:
+        ``True`` when an entry was deleted; otherwise ``False``.
+    """
     return bool(await _cache.delete(key))
 
 
 async def clear() -> bool:
-    """Delete all cached values."""
-    return await _cache.clear()
+    """Delete every value from the application cache.
+
+    Returns:
+        ``True`` when the cache is cleared successfully.
+
+    Notes:
+        Expiry schedules belonging to cleared entries cannot affect values stored
+        after the clear.
+    """
+    global _cache
+
+    cache_to_clear = _cache
+    _cache = SimpleMemoryCache()
+    return await cache_to_clear.clear()

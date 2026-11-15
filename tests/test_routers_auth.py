@@ -1,12 +1,15 @@
+import asyncio
 import datetime
 from unittest.mock import patch
 
+import fastapi
 import pytest
 from fastapi.testclient import TestClient
 
 from app import config
 from app.main import app
 from app.models import market_data as models_market_data
+from app.utils import auth
 
 client = TestClient(app)
 
@@ -27,17 +30,16 @@ def configured_api_key(monkeypatch):
 
 
 class TestApiKeyAuth:
-    def test_missing_key_is_rejected(self, configured_api_key):
-        response = client.get(PROTECTED_URL)
+    @pytest.mark.parametrize("header_value", [None, "wrong-key"])
+    def test_missing_or_invalid_key_is_rejected(self, configured_api_key, header_value):
+        headers = {} if header_value is None else {"X-API-Key": header_value}
+
+        response = client.get(PROTECTED_URL, headers=headers)
+
         assert response.status_code == 401
         body = response.json()
         assert body["status"] == 401
-        assert "API key" in body["message"]
-
-    def test_invalid_key_is_rejected(self, configured_api_key):
-        response = client.get(PROTECTED_URL, headers={"X-API-Key": "wrong-key"})
-        assert response.status_code == 401
-        assert response.json()["status"] == 401
+        assert body["message"] == "Invalid or missing API key"
 
     def test_valid_key_is_accepted(self, configured_api_key):
         with patch("app.services.toz.get_gold_quote", return_value=_make_stock_quote()):
@@ -57,6 +59,16 @@ class TestApiKeyAuth:
         with patch("app.services.toz.get_gold_quote", return_value=_make_stock_quote()):
             response = client.get(PROTECTED_URL)
         assert response.status_code == 200
+
+    def test_unicode_keys_are_compared_without_server_errors(self, monkeypatch):
+        monkeypatch.setattr(config.settings_app, "api_key", "clé-secrète")
+
+        assert asyncio.run(auth.verify_api_key("clé-secrète")) is None
+
+        with pytest.raises(fastapi.HTTPException) as exc_info:
+            asyncio.run(auth.verify_api_key("clé-incorrecte"))
+
+        assert exc_info.value.status_code == 401
 
     def test_open_endpoints_do_not_require_key(self, configured_api_key):
         # Root, health, and info endpoints are not protected.

@@ -1,34 +1,39 @@
+import shutil
+import uuid
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
 from app.utils import ai_prompt as ai_prompt_utils
 
-
-def test_load_prompt_strips_and_caches_content():
-    with patch.object(Path, "read_text", return_value="\n  Prompt content  \n") as mock_read:
-        first = ai_prompt_utils.load_prompt("cached-prompt.txt")
-        second = ai_prompt_utils.load_prompt("cached-prompt.txt")
-
-    assert first == "Prompt content"
-    assert second == first
-    mock_read.assert_called_once_with(encoding="utf-8")
+_PROMPT_DIRECTORY = Path(__file__).resolve().parents[1] / "resources" / "prompts"
 
 
-def test_load_prompt_uses_normalized_path_as_cache_key():
-    with patch.object(Path, "read_text", return_value="Prompt content") as mock_read:
-        ai_prompt_utils.load_prompt("normalized-prompt.txt")
-        ai_prompt_utils.load_prompt(str(Path(".") / "normalized-prompt.txt"))
+@pytest.fixture
+def prompt_file():
+    test_directory = _PROMPT_DIRECTORY / f".pytest-{uuid.uuid4().hex}"
 
-    mock_read.assert_called_once_with(encoding="utf-8")
+    def create(file_name: str, content: str) -> str:
+        prompt_path = test_directory / file_name
+        prompt_path.parent.mkdir(parents=True, exist_ok=True)
+        prompt_path.write_text(content, encoding="utf-8")
+        return str(prompt_path.relative_to(_PROMPT_DIRECTORY))
+
+    yield create
+
+    if test_directory.exists():
+        shutil.rmtree(test_directory)
 
 
-def test_load_prompt_rejects_path_outside_prompt_directory():
-    outside_path = str(Path("..") / "outside.txt")
+def test_load_prompt_returns_prompt_text(prompt_file):
+    file_name = prompt_file(
+        "analysis/overview.txt",
+        "\n  Analyze {{SYMBOL}} for material financial events.  \n",
+    )
 
-    with pytest.raises(ai_prompt_utils.PromptLoadError, match="outside the prompt directory"):
-        ai_prompt_utils.load_prompt(outside_path)
+    result = ai_prompt_utils.load_prompt(file_name)
+
+    assert result == "Analyze {{SYMBOL}} for material financial events."
 
 
 def test_load_prompt_rejects_empty_file_name():
@@ -36,52 +41,73 @@ def test_load_prompt_rejects_empty_file_name():
         ai_prompt_utils.load_prompt("  ")
 
 
-def test_load_prompt_wraps_file_errors():
-    with (
-        patch.object(Path, "read_text", side_effect=OSError("disk failure")) as mock_read,
-        pytest.raises(ai_prompt_utils.PromptLoadError, match="Unable to load prompt"),
-    ):
-        ai_prompt_utils.load_prompt("missing-prompt.txt")
-
-    mock_read.assert_called_once_with(encoding="utf-8")
+def test_load_prompt_rejects_path_outside_prompt_directory():
+    with pytest.raises(ai_prompt_utils.PromptLoadError, match="outside the prompt directory"):
+        ai_prompt_utils.load_prompt("../outside.txt")
 
 
-def test_load_prompt_rejects_empty_content_without_caching_failure():
-    with patch.object(Path, "read_text", return_value="  ") as mock_read:
-        for _ in range(2):
-            with pytest.raises(ai_prompt_utils.PromptLoadError, match="is empty"):
-                ai_prompt_utils.load_prompt("empty-prompt.txt")
+def test_load_prompt_reports_missing_prompt():
+    file_name = f".pytest-{uuid.uuid4().hex}/missing-prompt.txt"
 
-    assert mock_read.call_count == 2
+    with pytest.raises(ai_prompt_utils.PromptLoadError, match="Unable to load prompt"):
+        ai_prompt_utils.load_prompt(file_name)
 
 
-def test_render_prompt_does_not_reprocess_replacement_placeholders():
-    with patch.object(
-        ai_prompt_utils,
-        "load_prompt",
-        return_value="{{FIRST}} / {{SECOND}}",
-    ):
-        prompt = ai_prompt_utils.render_prompt(
-            "unused.txt",
-            {
-                "FIRST": "{{SECOND}}",
-                "SECOND": "trusted",
-            },
-        )
+def test_load_prompt_rejects_empty_prompt(prompt_file):
+    file_name = prompt_file("empty-prompt.txt", " \n ")
 
-    assert prompt == "{{SECOND}} / trusted"
+    with pytest.raises(ai_prompt_utils.PromptLoadError, match="is empty"):
+        ai_prompt_utils.load_prompt(file_name)
+
+
+def test_render_prompt_replaces_all_declared_placeholders(prompt_file):
+    file_name = prompt_file(
+        "ticker/research.txt",
+        "Analyze {{SYMBOL}} on {{EXCHANGE}}. Recheck {{SYMBOL}}.",
+    )
+
+    result = ai_prompt_utils.render_prompt(
+        file_name,
+        {
+            "SYMBOL": "AAPL",
+            "EXCHANGE": "NASDAQ",
+        },
+    )
+
+    assert result == "Analyze AAPL on NASDAQ. Recheck AAPL."
+
+
+def test_render_prompt_supports_templates_without_placeholders(prompt_file):
+    file_name = prompt_file("market-summary.txt", "Summarize current market conditions.")
+
+    result = ai_prompt_utils.render_prompt(file_name, {})
+
+    assert result == "Summarize current market conditions."
+
+
+def test_render_prompt_inserts_replacement_text_literally(prompt_file):
+    file_name = prompt_file("literal.txt", "{{FIRST}} / {{SECOND}}")
+
+    result = ai_prompt_utils.render_prompt(
+        file_name,
+        {
+            "FIRST": "{{SECOND}}",
+            "SECOND": "trusted",
+        },
+    )
+
+    assert result == "{{SECOND}} / trusted"
 
 
 @pytest.mark.parametrize(
     "replacements",
     [
         {},
-        {"FIRST": "value", "UNEXPECTED": "value"},
+        {"SYMBOL": "AAPL", "UNEXPECTED": "value"},
     ],
 )
-def test_render_prompt_rejects_placeholder_mismatch(replacements):
-    with (
-        patch.object(ai_prompt_utils, "load_prompt", return_value="{{FIRST}}"),
-        pytest.raises(ai_prompt_utils.PromptLoadError, match="placeholders do not match"),
-    ):
-        ai_prompt_utils.render_prompt("unused.txt", replacements)
+def test_render_prompt_rejects_placeholder_mismatch(prompt_file, replacements):
+    file_name = prompt_file("research.txt", "Analyze {{SYMBOL}}.")
+
+    with pytest.raises(ai_prompt_utils.PromptLoadError, match="placeholders do not match"):
+        ai_prompt_utils.render_prompt(file_name, replacements)
