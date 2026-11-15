@@ -3,7 +3,7 @@ import logging
 from pathlib import Path
 
 from ..models import market as models_market
-from ..utils.conv import country_to_iso2
+from ..utils import conv
 
 _INDEX_FILES = (
     ("ASX20", "asx20.json"),
@@ -43,7 +43,6 @@ class MarketIndexStore:
             if normalized_index.startswith("VN") or normalized_index.startswith("HNX")
             else "US"
         )
-        code_company_mapping: dict[str, models_market.CompanyBriefInfo] = {}
         for entry in index_data["data"]:
             symbol = entry["symbol"].upper()
             company = models_market.CompanyBriefInfo(
@@ -54,10 +53,14 @@ class MarketIndexStore:
                 country=country,
             )
             companies[symbol] = company
-            code_company_mapping[company.extract_exchange_code()[1]] = company
-        self.company_revert_mappings[country] = code_company_mapping
         self.raw_json[normalized_index] = json_content
         self.indices[normalized_index] = companies
+        self.company_revert_mappings[country] = {
+            company.extract_exchange_code()[1]: company
+            for index_companies in self.indices.values()
+            for company in index_companies.values()
+            if company.country == country
+        }
 
     def revert_lookup_company(self, country: str, code: str) -> models_market.CompanyBriefInfo | None:
         """Reverse lookup of company info from country and code.
@@ -69,7 +72,7 @@ class MarketIndexStore:
         Returns:
             The CompanyBriefInfo if found, otherwise None.
         """
-        normalized_country = country_to_iso2(country)
+        normalized_country = conv.country_to_iso2(country)
         normalized_code = code.upper()
         return self.company_revert_mappings.get(normalized_country, {}).get(normalized_code)
 
@@ -78,6 +81,18 @@ market_indices = MarketIndexStore()
 
 
 def load_default_indices() -> None:
+    """Load the bundled market-index datasets into the process-local store.
+
+    Returns:
+        ``None``. Successfully parsed datasets update ``market_indices``.
+
+    Notes:
+        The loader reads the fixed files under ``resources\\indices``. Missing,
+        unreadable, or empty files are logged and skipped so other indexes can
+        still load. Invalid JSON or invalid company records are not suppressed
+        and propagate to the caller. Repeated calls replace data for indexes
+        that load successfully.
+    """
     indices_dir = Path(__file__).resolve().parents[2] / "resources" / "indices"
     for index, filename in _INDEX_FILES:
         file_path = indices_dir / filename

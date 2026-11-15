@@ -136,7 +136,38 @@ async def ai_spotlight_portfolio(
     country: str,
     investor_theme: str,
 ) -> models_spotlight.PortfolioSpotlightAnalysis:
-    """Verify and perform a quick structured review of current portfolio risks."""
+    """Produce a concise, research-backed spotlight of current portfolio risks.
+
+    Args:
+        portfolio: Current holdings. Zero-share entries are ignored, and at
+            least one positive position must remain for analysis.
+        country: Country name or code used to normalize the market and verify
+            each active holding.
+        investor_theme: Non-blank goals, preferences, constraints, and risk
+            context used to focus the assessment.
+
+    Returns:
+        A ``PortfolioSpotlightAnalysis`` containing the verified snapshot, up to
+        four severity-ordered risks with bounded response timing, canonical
+        references, data gaps and validation warnings, and ``YES`` for
+        rebalancing exactly when a returned action changes portfolio composition
+        or allocation.
+
+    Raises:
+        PortfolioInputError: If the country or theme is invalid, no positive
+            position remains, or portfolio verification rejects the holdings.
+        PortfolioVerificationError: If a holding cannot be resolved against
+            market data.
+        PortfolioSpotlightAIError: If planning, research, or assessment fails,
+            remains rate limited, returns invalid structured output, or the final
+            analysis fails validation.
+        RuntimeError: If a cached stage or final analysis is invalid.
+
+    Notes:
+        Verification always precedes the final-analysis cache lookup so the
+        cache identity reflects current market data. Validated AI stages and
+        final analyses are cached for one hour.
+    """
 
     normalized_country = conv.country_to_iso2(country.strip())
     if not normalized_country:
@@ -226,7 +257,7 @@ async def _build_analysis_plan(
             response_json_schema=_PortfolioAnalysisPlan.model_json_schema(),
             schema_name=_PLAN_SCHEMA_NAME,
         )
-    except (OSError, ValueError, openai.APIError) as exc:
+    except (OSError, ValueError, openai.APIError, ai_helper.LLMRateLimitError) as exc:
         logging.exception("[Portfolio Spotlight] Planning provider call failed.")
         raise PortfolioSpotlightAIError("Portfolio spotlight planning provider failed") from exc
     if response.is_error:
@@ -288,7 +319,7 @@ async def _research_portfolio(
             response_json_schema=_PortfolioResearchDraft.model_json_schema(),
             schema_name=_RESEARCH_SCHEMA_NAME,
         )
-    except (OSError, ValueError, openai.APIError) as exc:
+    except (OSError, ValueError, openai.APIError, ai_helper.LLMRateLimitError) as exc:
         logging.exception("[Portfolio Spotlight] Research provider call failed.")
         raise PortfolioSpotlightAIError("Portfolio spotlight research provider failed") from exc
     if response.is_error:
@@ -422,7 +453,7 @@ async def _assess_portfolio(
             response_json_schema=_PortfolioAssessmentDraft.model_json_schema(),
             schema_name=_ASSESSMENT_SCHEMA_NAME,
         )
-    except (OSError, ValueError, openai.APIError) as exc:
+    except (OSError, ValueError, openai.APIError, ai_helper.LLMRateLimitError) as exc:
         logging.exception("[Portfolio Spotlight] Assessment provider call failed.")
         raise PortfolioSpotlightAIError("Portfolio spotlight assessment provider failed") from exc
     if response.is_error:

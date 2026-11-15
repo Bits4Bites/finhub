@@ -8,7 +8,6 @@ import cloudscraper
 import pandas as pd
 import starlette.concurrency
 from playwright import async_api as playwright_async_api
-from playwright.async_api import Browser
 
 from ..utils import cache
 
@@ -24,22 +23,33 @@ def _callback_name(callback) -> str:
 
 
 def extract_data_table_from_html(
-    html_content: str, *, raw_cell_content=False, table_attr_filter=None, filter_skip=0
+    html_content: str,
+    *,
+    raw_cell_content: bool = False,
+    table_attr_filter: dict[str, str] | None = None,
+    filter_skip: int = 0,
 ) -> pd.DataFrame:
-    """
-    Extracts data from the given HTML content, assuming main content is in a table, and returns it as a Pandas DataFrame.
+    """Convert a matching HTML table into tabular event-source data.
 
     Args:
-        html_content (str): The HTML content to parse.
-        raw_cell_content (bool, optional): If False, cell content will be cleaned-up; otherwise cell's raw content will be returned.
-        table_attr_filter (dict[str, str], optional): A dictionary of attribute name and values to filter the table.
-            For example, {"id": "event-content"} to find a table with id="event-content".
-        filter_skip (int, optional): The number of tables that match the filter to skip.
-            This is useful when there are multiple tables on the page and you want to select a specific one.
+        html_content: The page HTML to inspect.
+        raw_cell_content: Preserve each cell's inner HTML when ``True``;
+            otherwise return normalized visible text.
+        table_attr_filter: Optional table attributes that must match, such as
+            ``{"id": "event-content"}``.
+        filter_skip: Number of matching tables to skip before selecting one.
 
     Returns:
-        DataFrame: A Pandas DataFrame containing the extracted data.
+        A DataFrame whose columns come from the selected table's header and whose
+        rows come from its data cells. Returns an empty DataFrame when no table
+        matches or the selected table has no data rows.
+
+    Raises:
+        ValueError: If ``filter_skip`` is negative.
     """
+    if filter_skip < 0:
+        raise ValueError("filter_skip must not be negative")
+
     soup = bs4.BeautifulSoup(html_content, "html.parser")
 
     # Find the main data table(s), skip first `filter_skip` tables that match the filter
@@ -96,18 +106,34 @@ def extract_data_table_from_html(
 async def fetch_webpage_content(
     url: str, *, retries: int = 3, backoff_factor: float = 0.5, cache_ttl: int = _HTML_CACHE_TTL
 ) -> str | None:
-    """
-    Fetches the content of a webpage, retrying failures except HTTP client errors (400-499).
+    """Fetch cacheable HTML for a crawler that does not require a browser.
 
     Args:
-        url (str): The URL of the webpage to fetch.
-        retries (int, optional): Number of times to retry the request in case of failure. Defaults to 3.
-        backoff_factor (float, optional): Factor for calculating sleep time between retries. Defaults to 0.5.
-        cache_ttl (int, optional): Lifetime of cached HTML, in seconds. Defaults to 24 hours.
+        url: The webpage URL.
+        retries: Maximum number of request attempts, including the first
+            attempt. HTTP 4xx responses are never retried.
+        backoff_factor: Base delay in seconds for exponential backoff between
+            retryable attempts.
+        cache_ttl: Lifetime of successful HTML in seconds.
 
     Returns:
-        str: The content of the webpage if successful, otherwise None.
+        Cached or newly fetched HTML, or ``None`` after a client error or after
+        all attempts fail.
+
+    Raises:
+        ValueError: If ``retries`` is less than one or ``backoff_factor`` is
+            negative.
+
+    Notes:
+        HTTP 5xx responses, transport failures, and unsuccessful response
+        validation consume an attempt. Failures are reported as ``None`` rather
+        than raised after the configured attempts are exhausted.
     """
+    if retries < 1:
+        raise ValueError("retries must be at least 1")
+    if backoff_factor < 0:
+        raise ValueError("backoff_factor must not be negative")
+
     cache_key = cache.generate_key("crawler", "http", url, *([str(cache_ttl)] if cache_ttl != _HTML_CACHE_TTL else []))
     cached_content = await cache.get(cache_key)
     if cached_content is not None:
@@ -144,19 +170,35 @@ async def fetch_webpage_content_playwright(
     backoff_factor: float = 0.5,
     cache_ttl: int = _HTML_CACHE_TTL,
 ) -> str | None:
-    """
-    Fetches webpage content using Playwright, retrying failures except HTTP client errors (400-499).
+    """Fetch cacheable HTML from a browser-rendered webpage.
 
     Args:
-        url (str): The URL of the webpage to fetch.
-        after_load_func_async (callable, optional): A function to execute after the page has loaded, for additional interactions.
-        retries (int, optional): Number of times to retry the request in case of failure. Defaults to 2.
-        backoff_factor (float, optional): Factor for calculating sleep time between retries. Defaults to 0.5.
-        cache_ttl (int, optional): Lifetime of cached HTML, in seconds. Defaults to 24 hours.
+        url: The webpage URL.
+        after_load_func_async: Optional async callback that prepares the loaded
+            page before its HTML is captured.
+        retries: Maximum number of browser attempts, including the first
+            attempt. HTTP 4xx responses are never retried.
+        backoff_factor: Base delay in seconds for exponential backoff between
+            retryable attempts.
+        cache_ttl: Lifetime of successful HTML in seconds.
 
     Returns:
-        str: The content of the webpage if successful, otherwise None.
+        Cached or newly rendered HTML, or ``None`` after a client error or after
+        all attempts fail.
+
+    Raises:
+        ValueError: If ``retries`` is less than one or ``backoff_factor`` is
+            negative.
+
+    Notes:
+        HTTP 5xx responses, browser/navigation failures, and callback failures
+        consume an attempt. No failed page content is cached.
     """
+    if retries < 1:
+        raise ValueError("retries must be at least 1")
+    if backoff_factor < 0:
+        raise ValueError("backoff_factor must not be negative")
+
     cache_key = cache.generate_key(
         "crawler",
         "playwright",
@@ -212,17 +254,32 @@ async def fetch_multi_webpages_content_playwright(
     delay_between_requests: float = 0.0,
     cache_ttl: int = _HTML_CACHE_TTL,
 ) -> list[str | None]:
-    """
-    Fetches multiple webpages content using Playwright concurrently, retrying failures except HTTP client errors (400-499).
+    """Fetch several browser-rendered pages in input order.
 
     Args:
-        urls (list[str]): A list of URLs of the webpages to fetch.
-        after_load_func_async (callable, optional): A function to execute after each page has loaded, for additional interactions.
-        delay_between_requests (float, optional): Delay between requests in seconds. Defaults to 0.0.
-        cache_ttl (int, optional): Lifetime of cached HTML, in seconds. Defaults to 24 hours.
+        urls: Webpage URLs to fetch.
+        after_load_func_async: Optional async callback that prepares each loaded
+            page before its HTML is captured.
+        delay_between_requests: Delay in seconds between consecutive URLs.
+        cache_ttl: Lifetime of each successful page's cached HTML in seconds.
+
     Returns:
-        list[str | None]: A list of webpage contents corresponding to the input URLs. Each entry is the content of the webpage if successful, otherwise None.
+        One entry per input URL in the same order. Successful entries contain
+        HTML; cached entries are reused; failed entries are ``None``.
+
+    Raises:
+        ValueError: If ``delay_between_requests`` is negative.
+
+    Notes:
+        URLs are processed serially with one browser. Each uncached URL is
+        attempted once; an individual navigation, HTTP, callback, or page-read
+        failure does not stop later URLs. Failures to start or close the shared
+        browser are surfaced to the caller.
     """
+    if delay_between_requests < 0:
+        raise ValueError("delay_between_requests must not be negative")
+    if not urls:
+        return []
 
     async def _check_cached_content(url: str) -> str | None:
         cache_key = cache.generate_key(
@@ -246,13 +303,14 @@ async def fetch_multi_webpages_content_playwright(
 
     user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0"
 
-    async def _fetch_single_page(browser: Browser, url: str) -> str | None:
+    async def _fetch_single_page(browser: playwright_async_api.Browser, url: str) -> str | None:
         cached_content = await _check_cached_content(url)
         if cached_content is not None:
             logger.info("Using cached Playwright content for '%s'.", url)
             return cached_content
 
         start_time = time.monotonic()
+        page = None
         try:
             page = await browser.new_page(
                 screen=playwright_async_api.ViewportSize(width=1664, height=1110),
@@ -274,16 +332,22 @@ async def fetch_multi_webpages_content_playwright(
         except Exception as e:
             logger.error(f"Failed to create a new page for URL: {url}. Error: {e}")
             return None
+        finally:
+            if page is not None:
+                try:
+                    await page.close()
+                except Exception:
+                    logger.warning("Failed to close page for URL: %s.", url, exc_info=True)
 
     result = []
 
     async with playwright_async_api.async_playwright() as p:
         browser = await p.webkit.launch(headless=True)
         try:
-            for url in urls:
+            for index, url in enumerate(urls):
                 page_content = await _fetch_single_page(browser, url)
                 result.append(page_content if page_content else None)
-                if delay_between_requests > 0:
+                if delay_between_requests > 0 and index < len(urls) - 1:
                     await asyncio.sleep(delay_between_requests)
         finally:
             await browser.close()
@@ -292,28 +356,54 @@ async def fetch_multi_webpages_content_playwright(
 
 
 async def fetch_webpage_content_fallback_to_playwright(url: str, *, cache_ttl: int = _HTML_CACHE_TTL) -> str | None:
-    """Fetches webpage content over HTTP with up to two attempts, falling back to Playwright on failure."""
+    """Fetch HTML over HTTP, then use a browser when HTTP fetching fails.
+
+    Args:
+        url: The webpage URL.
+        cache_ttl: Lifetime of successful HTML in seconds for either fetch
+            strategy.
+
+    Returns:
+        HTML from the HTTP fetch when it returns any non-``None`` value;
+        otherwise HTML from Playwright. Returns ``None`` when both strategies
+        exhaust their two attempts.
+    """
     content = await fetch_webpage_content(url, retries=2, cache_ttl=cache_ttl)
     if content is not None:
         return content
     return await fetch_webpage_content_playwright(url, retries=2, cache_ttl=cache_ttl)
 
 
-async def scrape_data_table(url: str, *, raw_cell_content=False, table_attr_filter=None, filter_skip=0) -> pd.DataFrame:
-    """
-    Scrapes data from the given URL, assuming main content is in a table, and returns it as a Pandas DataFrame.
+async def scrape_data_table(
+    url: str,
+    *,
+    raw_cell_content: bool = False,
+    table_attr_filter: dict[str, str] | None = None,
+    filter_skip: int = 0,
+) -> pd.DataFrame:
+    """Fetch a webpage and return one matching HTML table.
 
     Args:
-        url (str): The URL of the webpage containing the data table to scrape.
-        raw_cell_content (bool, optional): If False, cell content will be cleaned-up; otherwise cell's raw content will be returned.
-        table_attr_filter (dict[str, str], optional): A dictionary of attribute name and values to filter the table.
-            For example, {"id": "event-content"} to find a table with id="event-content".
-        filter_skip (int, optional): The number of tables that match the filter to skip.
-            This is useful when there are multiple tables on the page and you want to select a specific one.
+        url: URL containing the source table.
+        raw_cell_content: Preserve cell inner HTML instead of normalized visible
+            text.
+        table_attr_filter: Optional table attributes that must match.
+        filter_skip: Number of matching tables to skip.
 
     Returns:
-        DataFrame: A Pandas DataFrame containing the data table extracted from the webpage.
+        The selected table as a DataFrame. Returns an empty DataFrame when both
+        fetch strategies fail, no table matches, or the selected table has no
+        data rows.
+
+    Raises:
+        ValueError: If ``filter_skip`` is negative.
+
+    Notes:
+        Invalid skip values are rejected without contacting the source.
     """
+    if filter_skip < 0:
+        raise ValueError("filter_skip must not be negative")
+
     # fetch the webpage content
     logger.info("Fetching data from '%s'...", url)
     html_content = await fetch_webpage_content_fallback_to_playwright(url)
@@ -334,23 +424,38 @@ async def scrape_data_table(url: str, *, raw_cell_content=False, table_attr_filt
 
 
 async def scrape_data_table_playwright(
-    url: str, *, raw_cell_content=False, after_load_func_async=None, table_attr_filter=None, filter_skip=0
+    url: str,
+    *,
+    raw_cell_content: bool = False,
+    after_load_func_async=None,
+    table_attr_filter: dict[str, str] | None = None,
+    filter_skip: int = 0,
 ) -> pd.DataFrame:
-    """
-    Scrapes data from the given URL using Playwright, assuming main content is in a table, and returns it as a Pandas DataFrame.
+    """Render a webpage and return one matching HTML table.
 
     Args:
-        url (str): The URL of the webpage containing the data table to scrape.
-        raw_cell_content (bool, optional): If False, cell content will be cleaned-up; otherwise cell's raw content will be returned.
-        after_load_func_async (callable, optional): A function to execute after the page has loaded, for additional interactions.
-        table_attr_filter (dict[str, str], optional): A dictionary of attribute name and values to filter the table.
-            For example, {"id": "event-content"} to find a table with id="event-content".
-        filter_skip (int, optional): The number of tables that match the filter to skip.
-            This is useful when there are multiple tables on the page and you want to select a specific one.
+        url: URL containing the browser-rendered source table.
+        raw_cell_content: Preserve cell inner HTML instead of normalized visible
+            text.
+        after_load_func_async: Optional async callback that prepares the page
+            before extraction.
+        table_attr_filter: Optional table attributes that must match.
+        filter_skip: Number of matching tables to skip.
 
     Returns:
-        DataFrame: A Pandas DataFrame containing the data table extracted from the webpage.
+        The selected table as a DataFrame. Returns an empty DataFrame when the
+        browser fetch fails, no table matches, or the selected table has no data
+        rows.
+
+    Raises:
+        ValueError: If ``filter_skip`` is negative.
+
+    Notes:
+        Invalid skip values are rejected without starting a browser.
     """
+    if filter_skip < 0:
+        raise ValueError("filter_skip must not be negative")
+
     # fetch the webpage content
     logger.info("Fetching data from '%s'...", url)
     html_content = await fetch_webpage_content_playwright(

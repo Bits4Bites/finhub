@@ -1,13 +1,17 @@
 """Unit tests for app.services module."""
 
 import asyncio
-from datetime import date
+import logging
+from datetime import datetime, time, timedelta
 from unittest.mock import AsyncMock, patch
+from zoneinfo import ZoneInfo
 
 import pytest
 
+from app import services
 from app.models import events_listings as models_events_listings
 from app.services import msai_asx_listings
+from app.services import stock as services_stock
 
 # ===========================================================================
 # Tests for get_symbol_info_raw
@@ -19,15 +23,13 @@ class TestGetSymbolInfoRaw:
 
     @patch("app.services.stock.yf.Ticker")
     def test_converts_camel_case_to_snake_case(self, mock_ticker_cls):
-        from app.services.stock import get_symbol_info_raw
-
         mock_ticker_cls.return_value.info = {
             "longName": "Apple Inc.",
             "marketCap": 3_000_000_000_000,
             "regularMarketPrice": 195.0,
         }
 
-        result = get_symbol_info_raw("AAPL")
+        result = services_stock.get_symbol_info_raw("AAPL")
         assert "long_name" in result
         assert result["long_name"] == "Apple Inc."
         assert "market_cap" in result
@@ -35,20 +37,28 @@ class TestGetSymbolInfoRaw:
 
     @patch("app.services.stock.yf.Ticker")
     def test_handles_empty_info(self, mock_ticker_cls):
-        from app.services.stock import get_symbol_info_raw
-
         mock_ticker_cls.return_value.info = {}
-        result = get_symbol_info_raw("INVALID")
+        result = services_stock.get_symbol_info_raw("INVALID")
         assert result == {}
 
     @patch("app.services.stock.yf.Ticker")
     def test_preserves_lowercase_keys(self, mock_ticker_cls):
-        from app.services.stock import get_symbol_info_raw
-
         mock_ticker_cls.return_value.info = {"symbol": "AAPL", "exchange": "NMS"}
-        result = get_symbol_info_raw("AAPL")
+        result = services_stock.get_symbol_info_raw("AAPL")
         assert "symbol" in result
         assert "exchange" in result
+
+    @patch("app.services.stock.yf.Ticker")
+    def test_provider_metadata_failure_propagates(self, mock_ticker_cls):
+        class FailingTicker:
+            @property
+            def info(self):
+                raise RuntimeError("metadata unavailable")
+
+        mock_ticker_cls.return_value = FailingTicker()
+
+        with pytest.raises(RuntimeError, match="metadata unavailable"):
+            services_stock.get_symbol_info_raw("AAPL")
 
 
 # ===========================================================================
@@ -56,206 +66,176 @@ class TestGetSymbolInfoRaw:
 # ===========================================================================
 
 
-def _make_listing_event(
-    symbol: str = "ASX:XYZ",
-    timestamp_str: str = "2026-06-15",
+def _asx_listing_html() -> str:
+    return """
+    <div class="multi-column-height">
+      Example issuer. Listing date and offer details are available.
+    </div>
+    """
+
+
+def _asx_candidate(
     *,
+    listing_date,
     issue_price: float | None = 2.5,
-    capital_to_raise: int | None = 5_000_000,
-    analysis_status: str = "NotStarted",
+) -> dict[str, object]:
+    return {
+        "symbol": "XYZ",
+        "company_name": "XYZ Corp",
+        "listing_date": listing_date.isoformat(),
+        "issue_price": issue_price,
+        "issue_price_upper": None,
+        "issue_type": "Ordinary shares",
+        "capital_to_raise": 5_000_000,
+        "is_underwritten": False,
+        "underwriters": [],
+        "lead_managers": [],
+        "principal_activities": "Technology services",
+        "sector": "TECHNOLOGY",
+        "public_offer_close_date": None,
+    }
+
+
+def _make_cached_listing_event(
+    listing_date,
+    *,
+    issue_price: float = 2.5,
 ) -> models_events_listings.ListingEvent:
+    listing_at = datetime.combine(
+        listing_date,
+        time.min,
+        tzinfo=ZoneInfo("Australia/Sydney"),
+    )
     return models_events_listings.ListingEvent(
-        symbol=symbol,
+        symbol="ASX:XYZ",
         exchange="ASX",
-        timestamp_str=timestamp_str,
+        company_name="XYZ Corp",
+        timestamp=int(listing_at.timestamp()),
+        timestamp_str=listing_at.isoformat(sep=" "),
         issue_price=issue_price,
         currency="AUD",
-        capital_to_raise=capital_to_raise,
-        analysis_status=analysis_status,
+        capital_to_raise=5_000_000,
+        analysis_status="Completed",
     )
 
 
 class TestAiGetAsxNewListings:
-    """Tests for ai_get_asx_new_listings function."""
+    """Public-contract tests for ai_get_asx_new_listings."""
 
-    @pytest.fixture(autouse=True)
-    def mock_cache(self):
+    def test_returns_empty_list_when_page_has_no_listing_blocks(self):
         with (
-            patch("app.services.msai_asx_listings.cache.get", new_callable=AsyncMock, return_value=None) as mock_get,
-            patch("app.services.msai_asx_listings.cache.set", new_callable=AsyncMock, return_value=True) as mock_set,
-            patch("app.services.msai_asx_listings._current_asx_date", return_value=date(2026, 6, 15)),
-            patch("app.services.msai_asx_listings.config.settings_llm_task.tokenomics_mode", "Standard"),
+            patch(
+                "app.services.msai_asx_listings.services_crawler_core.fetch_webpage_content",
+                new_callable=AsyncMock,
+                return_value="<html></html>",
+            ),
+            patch(
+                "app.services.msai_asx_listings.cache.get",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
+                "app.services.msai_asx_listings.cache.set",
+                new_callable=AsyncMock,
+                return_value=True,
+            ),
         ):
-            self.mock_cache_get = mock_get
-            self.mock_cache_set = mock_set
-            yield
+            result = asyncio.run(msai_asx_listings.ai_get_asx_new_listings())
 
-    @patch("app.services.msai_asx_listings._analyze_asx_listings", new_callable=AsyncMock)
-    @patch("app.services.msai_asx_listings._get_asx_new_listings", new_callable=AsyncMock)
-    def test_returns_empty_list_when_no_listings(self, mock_get, mock_analyze):
-        from app.services.msai_asx_listings import ai_get_asx_new_listings
-
-        mock_get.return_value = []
-        mock_analyze.return_value = []
-
-        result = asyncio.run(ai_get_asx_new_listings())
         assert result == []
 
-    @patch("app.services.msai_asx_listings._analyze_asx_listings", new_callable=AsyncMock)
-    @patch("app.services.msai_asx_listings._get_asx_new_listings", new_callable=AsyncMock)
-    def test_converts_dates_and_timestamps(self, mock_get, mock_analyze):
-        from app.services.msai_asx_listings import ai_get_asx_new_listings
-
-        event = _make_listing_event(analysis_status="Completed")
-        event.company_name = "XYZ Corp"
-        mock_get.return_value = [event]
-        mock_analyze.return_value = [event]
-
-        result = asyncio.run(ai_get_asx_new_listings())
-        assert len(result) == 1
-        assert result[0].timestamp_str.startswith("2026-06-15")
-        assert result[0].timestamp > 0
-        self.mock_cache_set.assert_awaited_once()
-        assert self.mock_cache_set.await_args.kwargs["ttl"] == 3600
-
-    @patch("app.services.msai_asx_listings._analyze_asx_listings", new_callable=AsyncMock)
-    @patch("app.services.msai_asx_listings._get_asx_new_listings", new_callable=AsyncMock)
-    def test_calls_analyze_after_get(self, mock_get, mock_analyze):
-        from app.services.msai_asx_listings import ai_get_asx_new_listings
-
-        mock_get.return_value = []
-        mock_analyze.return_value = []
-
-        asyncio.run(ai_get_asx_new_listings())
-        mock_get.assert_called_once()
-        mock_analyze.assert_called_once()
-
-    @patch("app.services.msai_asx_listings._analyze_asx_listings", new_callable=AsyncMock)
-    @patch("app.services.msai_asx_listings._get_asx_new_listings", new_callable=AsyncMock)
-    def test_returns_cached_analysis(self, mock_get, mock_analyze):
-        from app.services.msai_asx_listings import ai_get_asx_new_listings
-
-        extracted_event = _make_listing_event()
-        cached_events = [
-            _make_listing_event(
-                timestamp_str="2026-06-15T00:00:00+10:00",
-                analysis_status="Completed",
-            )
-        ]
-        mock_get.return_value = [extracted_event]
-        self.mock_cache_get.return_value = cached_events
-
-        result = asyncio.run(ai_get_asx_new_listings())
-
-        assert result == cached_events
-        assert result is not cached_events
-        mock_analyze.assert_not_awaited()
-        self.mock_cache_set.assert_not_awaited()
-
-    @patch("app.services.msai_asx_listings.cache.generate_key", return_value="cache-key")
-    @patch("app.services.msai_asx_listings._analyze_asx_listings", new_callable=AsyncMock)
-    @patch("app.services.msai_asx_listings._get_asx_new_listings", new_callable=AsyncMock)
-    def test_cache_key_uses_sorted_listing_fields(self, mock_get, mock_analyze, mock_generate_key):
-        from app.services.msai_asx_listings import ai_get_asx_new_listings
-
-        events = [
-            _make_listing_event(
-                symbol="ASX:ZZZ",
-                timestamp_str="2026-08-02",
-                issue_price=2.5,
-                capital_to_raise=10_000_000,
-                analysis_status="Completed",
-            ),
-            _make_listing_event(
-                symbol="ASX:AAA",
-                timestamp_str="2026-08-01",
-                issue_price=1.25,
-                capital_to_raise=5_000_000,
-                analysis_status="Completed",
-            ),
-        ]
-        events[0].public_offer_close_date = "2026-07-28"
-        events[0].is_underwritten = None
-        events[1].is_underwritten = False
-        mock_get.return_value = events
-        mock_analyze.side_effect = lambda selected: selected
+    def test_returns_validated_cached_analysis_without_invoking_ai(self):
+        listing_date = datetime.now(ZoneInfo("Australia/Sydney")).date() + timedelta(days=2)
+        extracted = {"listings": [_asx_candidate(listing_date=listing_date)]}
+        cached_event = _make_cached_listing_event(listing_date)
+        cache_values = iter([extracted, [cached_event]])
 
         with (
             patch(
-                "app.services.msai_asx_listings._task_cache_identity",
-                side_effect=lambda task_id: f"task:{task_id}",
+                "app.services.msai_asx_listings.services_crawler_core.fetch_webpage_content",
+                new_callable=AsyncMock,
+                return_value=_asx_listing_html(),
             ),
             patch(
-                "app.services.msai_asx_listings._event_input_json",
-                side_effect=lambda event: f"event:{event.symbol}",
+                "app.services.msai_asx_listings.cache.get",
+                new_callable=AsyncMock,
+                side_effect=lambda _key: next(cache_values),
             ),
+            patch(
+                "app.services.msai_asx_listings.ai_helper.ai_exec_task",
+                new_callable=AsyncMock,
+            ) as ai_exec,
         ):
-            asyncio.run(ai_get_asx_new_listings())
+            result = asyncio.run(msai_asx_listings.ai_get_asx_new_listings())
 
-        mock_generate_key.assert_called_once_with(
-            "asx-new-listings-analysis",
-            "2026-06-15",
-            "Standard",
-            "task:ASX_LISTTINGS_EXTRACT",
-            "task:ASX_LISTTINGS_RESEARCH",
-            "task:ASX_LISTTINGS_ANALYZE",
-            "task:ASX_LISTTINGS_UNDERWRITTEN_RESEARCH",
-            "task:ASX_LISTTINGS_UNDERWRITTEN_ANALYZE",
-            "event:ASX:AAA",
-            "event:ASX:ZZZ",
-        )
-        assert [event.symbol for event in mock_analyze.await_args.args[0]] == ["ASX:AAA", "ASX:ZZZ"]
-        cached_events = self.mock_cache_set.await_args.args[1]
-        assert [event["symbol"] for event in cached_events] == ["ASX:AAA", "ASX:ZZZ"]
-        assert self.mock_cache_set.await_args.kwargs["ttl"] == 86400
+        assert result == [cached_event]
+        assert result[0] is not cached_event
+        ai_exec.assert_not_awaited()
 
-    @patch("app.services.msai_asx_listings._MAX_LISTINGS_TO_ANALYZE", 2)
-    @patch("app.services.msai_asx_listings._analyze_asx_listings", new_callable=AsyncMock)
-    @patch("app.services.msai_asx_listings._get_asx_new_listings", new_callable=AsyncMock)
-    def test_passes_all_current_and_future_listings_to_analysis(self, mock_get, mock_analyze):
-        events = [
-            _make_listing_event(
-                symbol=f"ASX:A{day}",
-                timestamp_str=f"2026-09-0{day}",
-                analysis_status="Completed",
-            )
-            for day in range(6, 0, -1)
-        ]
-        mock_get.return_value = events
-        mock_analyze.side_effect = lambda selected: selected
+    def test_changed_listing_terms_do_not_return_stale_cached_analysis(self):
+        listing_date = datetime.now(ZoneInfo("Australia/Sydney")).date() + timedelta(days=5)
+        issue_price = 1.25
+        cache_get_count = 0
+        cached_analyses = {}
 
-        result = asyncio.run(msai_asx_listings.ai_get_asx_new_listings())
+        async def cache_get(key):
+            nonlocal cache_get_count
+            cache_get_count += 1
+            if cache_get_count % 2:
+                return {
+                    "listings": [
+                        _asx_candidate(
+                            listing_date=listing_date,
+                            issue_price=issue_price,
+                        )
+                    ]
+                }
+            if not cached_analyses:
+                cached_analyses[key] = [
+                    _make_cached_listing_event(
+                        listing_date,
+                        issue_price=issue_price,
+                    )
+                ]
+            return cached_analyses.get(key)
 
-        expected_symbols = ["ASX:A1", "ASX:A2", "ASX:A3", "ASX:A4", "ASX:A5", "ASX:A6"]
-        assert [event.symbol for event in result] == expected_symbols
-        assert [event.symbol for event in mock_analyze.await_args.args[0]] == expected_symbols
-
-    @patch("app.services.msai_asx_listings._analyze_asx_listings", new_callable=AsyncMock)
-    @patch("app.services.msai_asx_listings._get_asx_new_listings", new_callable=AsyncMock)
-    def test_filters_past_listings_without_truncating_current_and_future_events(self, mock_get, mock_analyze):
-        events = [
-            _make_listing_event(symbol="ASX:F5", timestamp_str="2026-06-20", analysis_status="Completed"),
-            _make_listing_event(symbol="ASX:F1", timestamp_str="2026-06-16", analysis_status="Completed"),
-            _make_listing_event(symbol="ASX:PAST", timestamp_str="2026-06-14", analysis_status="Completed"),
-            _make_listing_event(
-                symbol="ASX:EF2",
-                timestamp_str="2026-06-15",
-                issue_price=None,
-                capital_to_raise=None,
-                analysis_status="Completed",
+        with (
+            patch(
+                "app.services.msai_asx_listings.services_crawler_core.fetch_webpage_content",
+                new_callable=AsyncMock,
+                return_value=_asx_listing_html(),
             ),
-            _make_listing_event(symbol="ASX:F4", timestamp_str="2026-06-19", analysis_status="Completed"),
-            _make_listing_event(symbol="ASX:F3", timestamp_str="2026-06-18", analysis_status="Completed"),
-            _make_listing_event(symbol="ASX:F2", timestamp_str="2026-06-17", analysis_status="Completed"),
-        ]
-        mock_get.return_value = events
-        mock_analyze.side_effect = lambda selected: selected
+            patch(
+                "app.services.msai_asx_listings.cache.get",
+                side_effect=cache_get,
+            ),
+            patch(
+                "app.services.msai_asx_listings.cache.set",
+                new_callable=AsyncMock,
+                return_value=True,
+            ) as cache_set,
+            patch(
+                "app.services.msai_asx_listings.config.settings_llm_task.tokenomics_mode",
+                "Economy",
+            ),
+            patch(
+                "app.services.msai_asx_listings.ai_helper.ai_exec_task",
+                new_callable=AsyncMock,
+            ) as ai_exec,
+        ):
+            first = asyncio.run(msai_asx_listings.ai_get_asx_new_listings())
+            second = asyncio.run(msai_asx_listings.ai_get_asx_new_listings())
+            issue_price = 2.5
+            changed = asyncio.run(msai_asx_listings.ai_get_asx_new_listings())
 
-        result = asyncio.run(msai_asx_listings.ai_get_asx_new_listings())
-
-        expected_symbols = ["ASX:EF2", "ASX:F1", "ASX:F2", "ASX:F3", "ASX:F4", "ASX:F5"]
-        assert [event.symbol for event in result] == expected_symbols
-        assert [event.symbol for event in mock_analyze.await_args.args[0]] == expected_symbols
+        assert first == second
+        assert first[0].issue_price == 1.25
+        assert first[0].analysis_status == "Completed"
+        assert changed[0].issue_price == 2.5
+        assert changed[0].analysis_status == "Skipped"
+        assert changed != first
+        ai_exec.assert_not_awaited()
+        cache_set.assert_not_awaited()
 
 
 # ===========================================================================
@@ -266,35 +246,38 @@ class TestAiGetAsxNewListings:
 class TestReadFileAsSingleString:
     """Tests for read_file_as_single_string function."""
 
-    def test_reads_file_content(self, tmp_path):
-        from app.services import read_file_as_single_string
-
+    def test_accepts_pathlike_and_reads_file_content(self, tmp_path):
         test_file = tmp_path / "test.txt"
         test_file.write_text("line1\nline2\nline3\n", encoding="utf-8")
 
-        result = read_file_as_single_string(str(test_file))
+        result = services.read_file_as_single_string(test_file)
         assert result == "line1\nline2\nline3"
 
     def test_strips_trailing_whitespace_per_line(self, tmp_path):
-        from app.services import read_file_as_single_string
-
         test_file = tmp_path / "test.txt"
         test_file.write_text("line1   \nline2\t\n", encoding="utf-8")
 
-        result = read_file_as_single_string(str(test_file))
+        result = services.read_file_as_single_string(test_file)
         assert result == "line1\nline2"
 
     def test_returns_empty_string_for_missing_file(self):
-        from app.services import read_file_as_single_string
-
-        result = read_file_as_single_string("/nonexistent/path/file.txt")
+        result = services.read_file_as_single_string("/nonexistent/path/file.txt")
         assert result == ""
 
     def test_returns_empty_string_for_empty_file(self, tmp_path):
-        from app.services import read_file_as_single_string
-
         test_file = tmp_path / "empty.txt"
         test_file.write_text("", encoding="utf-8")
 
-        result = read_file_as_single_string(str(test_file))
+        result = services.read_file_as_single_string(test_file)
         assert result == ""
+
+    def test_logs_non_missing_read_failure(self, caplog):
+        with (
+            patch("builtins.open", side_effect=OSError("storage unavailable")),
+            caplog.at_level(logging.ERROR),
+        ):
+            result = services.read_file_as_single_string("prompt.txt")
+
+        assert result == ""
+        assert "An unexpected error occurred while reading file 'prompt.txt'" in caplog.text
+        assert "storage unavailable" in caplog.text

@@ -56,7 +56,23 @@ def log_structured_validation_failure(
     stage: str,
     error: Exception,
 ) -> None:
-    """Log structured-output validation details without including rejected input values."""
+    """Log a safe summary of a structured-output validation failure.
+
+    Args:
+        feature: Non-sensitive business-feature label used to identify the log entry.
+        stage: Non-sensitive processing-stage label used to identify the failure.
+        error: Validation failure to summarize. Pydantic validation errors contribute
+            only error counts and types; other exceptions contribute only their
+            class name.
+
+    Returns:
+        None.
+
+    Notes:
+        Rejected values, exception messages, and validation context are never logged.
+        Callers must keep ``feature`` and ``stage`` free of sensitive data because
+        those labels are included verbatim.
+    """
 
     if isinstance(error, ValidationError):
         errors = error.errors(
@@ -64,15 +80,12 @@ def log_structured_validation_failure(
             include_context=False,
             include_input=False,
         )
-        details = []
-        for item in errors[:8]:
-            location = ".".join(str(part) for part in item["loc"]) or "<root>"
-            details.append(f"{location}: {item['msg']} [{item['type']}]")
-        if len(errors) > len(details):
-            details.append(f"{len(errors) - len(details)} additional error(s)")
-        summary = "; ".join(details)
+        error_types = [str(item["type"]) for item in errors[:8]]
+        if len(errors) > len(error_types):
+            error_types.append(f"{len(errors) - len(error_types)} additional")
+        summary = f"{len(errors)} validation error(s): {'; '.join(error_types)}"
     else:
-        summary = str(error)
+        summary = type(error).__name__
 
     logging.warning(
         "[%s] %s structured-output validation failed: %s",
@@ -158,8 +171,34 @@ async def ai_exec_task(
     response_json_schema: Mapping[str, object] | None = None,
     schema_name: str = "json_responses",
 ) -> LLMResponse:
-    """
-    Executes a task using the appropriate LLM based on the task configuration.
+    """Execute a configured AI task and return its normalized provider response.
+
+    Args:
+        task_id: Exact key in ``settings_llm_task.tasks`` identifying the model,
+            vendor, tier, reasoning, and web-search configuration to use.
+        prompt: Complete prompt text sent to the configured provider.
+        country: Optional ISO country code used as approximate web-search context
+            by providers that support it.
+        response_json_schema: Optional JSON schema requested for structured output.
+        schema_name: Provider-facing name for ``response_json_schema``.
+
+    Returns:
+        An :class:`LLMResponse` containing generated text, provider error state,
+        token usage, elapsed time, and any provider URL citations.
+
+    Raises:
+        ValueError: If ``task_id`` is not configured or its vendor is unsupported.
+        OSError: If the configured vendor client is unavailable.
+        LLMRateLimitError: If a retryable OpenAI-compatible rate limit outlasts
+            the configured wait budget.
+        openai.RateLimitError: If an OpenAI-compatible provider reports a
+            non-retryable quota or billing limit.
+        Exception: Provider SDK, authentication, network, and configuration
+            failures are propagated to the caller.
+
+    Notes:
+        Task lookup is exact and case-sensitive. Vendor names are interpreted by
+        :func:`ai_exec_prompt`.
     """
     task_cfg = config.settings_llm_task.tasks.get(task_id)
     if not task_cfg:
@@ -181,8 +220,35 @@ async def ai_exec_prompt(
     response_json_schema: Mapping[str, object] | None = None,
     schema_name: str = "json_responses",
 ) -> LLMResponse:
-    """
-    Executes a prompt using the specified LLM task configuration.
+    """Execute a prompt using an explicit AI task configuration.
+
+    Args:
+        task_cfg: Vendor, tier, model, reasoning, and web-search settings for
+            this request.
+        prompt: Complete prompt text sent to the provider.
+        country: Optional ISO country code used as approximate web-search context
+            by providers that support it.
+        response_json_schema: Optional JSON schema requested for structured output.
+        schema_name: Provider-facing name for ``response_json_schema``.
+
+    Returns:
+        An :class:`LLMResponse` containing generated text, provider error state,
+        token usage, elapsed time, and any provider URL citations.
+
+    Raises:
+        ValueError: If the configured vendor is unsupported.
+        OSError: If the selected vendor client is not configured.
+        LLMRateLimitError: If a retryable OpenAI-compatible rate limit outlasts
+            the configured wait budget.
+        openai.RateLimitError: If an OpenAI-compatible provider reports a
+            non-retryable quota or billing limit.
+        Exception: Provider SDK, authentication, network, and other configuration
+            failures are propagated to the caller.
+
+    Notes:
+        Vendor matching is case-insensitive. Supported names are ``OPENAI`` and
+        ``GEMINI``; ``AZUREOPENAI`` and ``OPENROUTER`` also accept space,
+        underscore, or hyphen separators.
     """
     used_vendor = task_cfg.vendor.upper()
     match used_vendor:

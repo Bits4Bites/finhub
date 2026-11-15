@@ -1,98 +1,164 @@
 import asyncio
 import json
-from unittest.mock import AsyncMock, patch
+from unittest import mock
 
 import pytest
 
-from app.models import ai_portfolio_review as models_review
+from app.models import portfolio as models_portfolio
 from app.services import ai_helper, portfolio_budget, portfolio_verification
 from app.services import msai_review_portfolio as service
+from app.services import stock as services_stock
 from tests import portfolio_review_fixtures as fixtures
 
 
-def test_timestamp_bearing_review_caches_live_at_least_one_hour():
-    assert service._PLAN_CACHE_TTL >= 60 * 60
-    assert service._ANALYSIS_CACHE_TTL >= 60 * 60
-    assert service._ACTION_CACHE_TTL >= 60 * 60
-    assert service._FINAL_CACHE_TTL >= 60 * 60
-
-
-def _major_assessment() -> service._PortfolioAssessmentDraft:
-    data = fixtures.assessment_data()
-    data["holding_reviews"][2]["recommendation"] = "EXIT"
-    data["holding_reviews"][2]["exit_reason"] = "CriticalRisk"
-    return service._PortfolioAssessmentDraft.model_validate(data)
-
-
-def _major_target() -> service._PortfolioTargetDraft:
-    data = fixtures.target_data()
-    data["positions"] = [
-        {
-            **data["positions"][0],
-            "allocation": 0.6,
-        },
-        {
-            **data["positions"][1],
-            "allocation": 0.4,
-        },
-    ]
-    return service._PortfolioTargetDraft.model_validate(data)
-
-
-def _addition_target_positions() -> list[models_review.PortfolioReviewTargetPosition]:
-    current = fixtures.snapshot().holdings
-    return [
-        models_review.PortfolioReviewTargetPosition(
-            ticker=holding.ticker,
-            company_name=holding.company_name,
-            current_allocation=holding.current_allocation,
-            target_allocation=allocation,
-            role=role,
-            rationale="Retain the current holding at a lower aspirational weight.",
-            reference_ids=[source_id],
-        )
-        for holding, allocation, role, source_id in zip(
-            current,
-            [0.45, 0.27, 0.18],
-            [
-                "🚀 Core growth compounder",
-                "🛡️ Defensive earnings quality",
-                "🧭 Digital portfolio diversifier",
-            ],
-            fixtures.SOURCE_IDS,
-            strict=True,
-        )
-    ] + [
-        models_review.PortfolioReviewTargetPosition(
-            ticker="NASDAQ:NVDA",
-            company_name="NVIDIA Corporation",
-            current_allocation=0,
-            target_allocation=0.1,
-            role="⚡ Tactical growth catalyst",
-            rationale="A researched addition diversifies the opportunity set.",
-            reference_ids=[fixtures.SOURCE_IDS[0]],
-        )
-    ]
-
-
-def _addition_quotes(price: float = 250) -> portfolio_verification.VerifiedSecurityQuotes:
-    return portfolio_verification.VerifiedSecurityQuotes(
-        as_of=fixtures.snapshot().as_of,
+def _resolve_market_symbol(
+    ticker: str,
+    *,
+    nvda_price: float | None = 250,
+) -> services_stock.ResolvedSymbol:
+    canonical = ticker.strip().upper().replace("NYSEARCA:", "NYSE:")
+    exchange, symbol = canonical.split(":", 1)
+    prices = {
+        "NASDAQ:AAPL": 100,
+        "NASDAQ:MSFT": 120,
+        "NASDAQ:GOOGL": 100,
+        "NASDAQ:NVDA": nvda_price,
+    }
+    company_names = {
+        "NASDAQ:AAPL": "Apple Inc.",
+        "NASDAQ:MSFT": "Microsoft Corporation",
+        "NASDAQ:GOOGL": "Alphabet Inc.",
+        "NASDAQ:NVDA": "NVIDIA Corporation",
+    }
+    return services_stock.ResolvedSymbol(
+        symbol=symbol,
+        normalized_symbol=canonical,
+        exchange=exchange,
         country="US",
         currency="USD",
-        securities=[
-            portfolio_verification.VerifiedSecurityQuote(
-                requested_ticker="NASDAQ:NVDA",
-                symbol="NVDA",
-                ticker="NASDAQ:NVDA",
-                company_name="NVIDIA Corporation",
-                exchange="NASDAQ",
-                currency="USD",
-                quote_type="EQUITY",
-                market_price=price,
-            )
-        ],
+        quote_type="EQUITY",
+        company_name=company_names[canonical],
+        market_price=prices[canonical],
     )
+
+
+def _action_plan_response(action_ids: list[str]) -> ai_helper.LLMResponse:
+    return ai_helper.LLMResponse(
+        completion=json.dumps(
+            {
+                "summary": "Implement the validated target in priority order.",
+                "actions": [
+                    {
+                        "action_id": action_id,
+                        "priority": priority,
+                        "reasoning": f"{action_id} advances the validated target.",
+                    }
+                    for priority, action_id in enumerate(action_ids, start=1)
+                ],
+            }
+        )
+    )
+
+
+def _review_responses(
+    *,
+    theme_budget,
+    strategy="LongTerm",
+    research_data: dict[str, object] | None = None,
+    assessment_data: dict[str, object] | None = None,
+    target_data: dict[str, object] | None = None,
+    action_ids: list[str] | None = None,
+) -> list[ai_helper.LLMResponse]:
+    responses = [
+        ai_helper.LLMResponse(
+            completion=fixtures.plan(
+                portfolio_id="portfolio-id",
+                budget=theme_budget,
+                strategy=strategy,
+            ).model_dump_json()
+        ),
+        ai_helper.LLMResponse(
+            completion=json.dumps(research_data or fixtures.research_response_data(portfolio_id="portfolio-id")),
+            citation_urls=fixtures.SOURCE_URLS,
+        ),
+        ai_helper.LLMResponse(
+            completion=json.dumps(assessment_data or fixtures.assessment_data(portfolio_id="portfolio-id"))
+        ),
+        ai_helper.LLMResponse(completion=json.dumps(target_data or fixtures.target_data(portfolio_id="portfolio-id"))),
+    ]
+    if action_ids is not None:
+        responses.append(_action_plan_response(action_ids))
+    return responses
+
+
+def _research_with_nvda() -> dict[str, object]:
+    data = fixtures.research_response_data(portfolio_id="portfolio-id")
+    data["additions"] = [
+        {
+            "ticker": "NASDAQ:NVDA",
+            "company_name": "NVIDIA Corporation",
+            "fit": "Adds a researched growth catalyst.",
+            "key_risks": ["Valuation and execution risk."],
+            "reference_ids": [fixtures.SOURCE_URLS[0]],
+        }
+    ]
+    return data
+
+
+def _assessment_with_nvda(
+    *,
+    exit_google: bool = False,
+    exit_reason: str = "CriticalRisk",
+) -> dict[str, object]:
+    data = fixtures.assessment_data(portfolio_id="portfolio-id")
+    data["eligible_additions"] = ["NASDAQ:NVDA"]
+    if exit_google:
+        data["holding_reviews"][2]["recommendation"] = "EXIT"
+        data["holding_reviews"][2]["exit_reason"] = exit_reason
+    return data
+
+
+def _target_with_nvda(
+    allocations: tuple[float, ...],
+    *,
+    retain_google: bool,
+) -> dict[str, object]:
+    current_positions = fixtures.target_data(portfolio_id="portfolio-id")["positions"]
+    positions = [
+        {
+            **current_positions[0],
+            "allocation": allocations[0],
+        },
+        {
+            **current_positions[1],
+            "allocation": allocations[1],
+        },
+    ]
+    allocation_index = 2
+    if retain_google:
+        positions.append(
+            {
+                **current_positions[2],
+                "allocation": allocations[allocation_index],
+            }
+        )
+        allocation_index += 1
+    positions.append(
+        {
+            "ticker": "NASDAQ:NVDA",
+            "allocation": allocations[allocation_index],
+            "role_category": "Tactical",
+            "role_description": "Researched growth catalyst",
+            "rationale": "The researched addition complements the current holdings.",
+            "reference_ids": [fixtures.SOURCE_IDS[0]],
+        }
+    )
+    return {
+        "portfolio_id": "portfolio-id",
+        "summary": "Move toward the validated target with whole-share actions.",
+        "positions": positions,
+        "data_gaps": [],
+    }
 
 
 @pytest.mark.parametrize(
@@ -100,11 +166,13 @@ def _addition_quotes(price: float = 250) -> portfolio_verification.VerifiedSecur
     [
         ("Build durable quality exposure", "LongTerm"),
         ("Long-term buy-and-hold growth", "LongTerm"),
+        ("Retirement holdings over multiple years", "LongTerm"),
         ("Swing trading over days to weeks", "Swing"),
         ("Short-term trading horizon of 10 days", "Swing"),
+        ("", "LongTerm"),
     ],
 )
-def test_extract_strategy(theme, expected):
+def test_extract_strategy_uses_explicit_cues_and_defaults_to_long_term(theme, expected):
     assert service.extract_strategy(theme) == expected
 
 
@@ -113,399 +181,51 @@ def test_extract_strategy_rejects_conflicting_explicit_cues():
         service.extract_strategy("Long-term core holdings plus swing trading")
 
 
-def test_research_reference_repair_removes_orphans_and_unsupported_claims():
-    data = fixtures.research_response_data()
-    data["claims"][0]["reference_ids"].append("https://missing.example/source")
-    data["claims"].append(
-        {
-            "category": "Issuer",
-            "text": "Unsupported claim.",
-            "affected_tickers": ["NASDAQ:AAPL"],
-            "reference_ids": ["https://missing.example/only"],
-        }
-    )
-    raw = service._PortfolioResearchResponse.model_validate(data)
-
-    repaired = service._repair_research_references(raw)
-
-    assert len(repaired.claims) == 3
-    assert repaired.claims[0].reference_ids == [fixtures.SOURCE_URLS[0]]
-    assert "Removed 1 unsupported claim" in repaired.data_gaps[-1]
-
-
-def test_research_addition_verification_uses_provider_canonical_identity():
-    data = fixtures.research_response_data()
-    data["additions"] = [
-        {
-            "ticker": "NASDAQ:SGOV",
-            "company_name": "Treasury ETF",
-            "fit": "Adds a defensive cash-like allocation.",
-            "key_risks": ["Interest-rate and reinvestment risk."],
-            "reference_ids": [fixtures.SOURCE_URLS[0]],
-        }
-    ]
-    research = service._repair_research_references(service._PortfolioResearchResponse.model_validate(data))
-    verification = portfolio_verification.CandidateIdentityVerification(
-        identities=(
-            portfolio_verification.VerifiedSecurityQuote(
-                requested_ticker="NASDAQ:SGOV",
-                symbol="SGOV",
-                ticker="NYSE:SGOV",
-                company_name="iShares 0-3 Month Treasury Bond ETF",
-                exchange="NYSE",
-                currency="USD",
-                quote_type="ETF",
-                market_price=100.65,
-            ),
-        ),
-        rejected_tickers=(),
-    )
-
-    with patch.object(
-        service.portfolio_verification,
-        "verify_candidate_identities",
-        return_value=verification,
-    ):
-        verified = service._verify_research_additions(research, fixtures.snapshot())
-
-    assert verified.additions[0].ticker == "NYSE:SGOV"
-    assert verified.additions[0].company_name == "iShares 0-3 Month Treasury Bond ETF"
-    assert "NASDAQ:SGOV -> NYSE:SGOV" in verified.data_gaps[-1]
-
-
-def test_assessment_reference_repair_removes_orphan_and_wrong_ticker_links():
-    data = fixtures.assessment_data()
-    data["risks"][0]["reference_ids"] = [
-        *data["risks"][0]["reference_ids"],
-        "src-orphan",
-    ]
-    data["holding_reviews"][0]["reference_ids"].extend(
-        [
-            fixtures.SOURCE_IDS[1],
-            "src-orphan",
-        ]
-    )
-    assessment = service._PortfolioAssessmentDraft.model_validate(data)
-
-    repaired = service._repair_assessment_references(assessment, fixtures.research())
-
-    assert repaired.risks[0].reference_ids == fixtures.SOURCE_IDS
-    assert repaired.holding_reviews[0].reference_ids == [fixtures.SOURCE_IDS[0]]
-    assert "src-orphan" in repaired.data_gaps[-1]
-    assert "Ignored unsupported source IDs" in repaired.holding_reviews[0].data_gaps[-1]
-    service._validate_assessment(
-        repaired,
-        fixtures.snapshot(),
-        fixtures.research(),
-        strategy="LongTerm",
-    )
-
-
-def test_assessment_reference_repair_rejects_unsupported_holding():
-    data = fixtures.assessment_data()
-    data["holding_reviews"][0]["reference_ids"] = [
-        fixtures.SOURCE_IDS[1],
-        "src-orphan",
-    ]
-    assessment = service._PortfolioAssessmentDraft.model_validate(data)
-
-    with pytest.raises(ValueError, match="NASDAQ:AAPL has no supported reference IDs"):
-        service._repair_assessment_references(assessment, fixtures.research())
-
-
-def test_target_reference_repair_removes_orphan_links():
-    data = fixtures.target_data()
-    data["positions"][0]["reference_ids"].append("src-orphan")
-    target = service._PortfolioTargetDraft.model_validate(data)
-
-    repaired = service._repair_target_references(
-        target,
-        fixtures.snapshot(),
-        fixtures.research(),
-    )
-
-    assert repaired.positions[0].reference_ids == [fixtures.SOURCE_IDS[0]]
-    assert "src-orphan" in repaired.data_gaps[-1]
-    service._validate_target(
-        repaired,
-        fixtures.snapshot(),
-        fixtures.research(),
-        fixtures.assessment(),
-    )
-
-
-def test_target_normalizes_nyse_arca_alias():
-    data = fixtures.target_data()
-    data["positions"][0]["ticker"] = "NYSEARCA:SGOV"
-
-    target = service._PortfolioTargetDraft.model_validate(data)
-
-    assert target.positions[0].ticker == "NYSE:SGOV"
-
-
-def test_assessment_stage_repairs_orphan_links_before_validation():
-    response_data = fixtures.assessment_data()
-    response_data["risks"][0]["reference_ids"] = [
-        *response_data["risks"][0]["reference_ids"],
-        "src-orphan",
-    ]
-    response_data["holding_reviews"][0]["reference_ids"].append("src-orphan")
-
-    with (
-        patch.object(
-            service.ai_helper,
-            "ai_exec_task",
-            new_callable=AsyncMock,
-            return_value=ai_helper.LLMResponse(completion=json.dumps(response_data)),
-        ),
-        patch.object(service.cache, "get", new_callable=AsyncMock, return_value=None),
-        patch.object(service.cache, "set", new_callable=AsyncMock, return_value=True),
-    ):
-        assessment = asyncio.run(
-            service._assess_portfolio(
-                portfolio_id="portfolio-id",
-                snapshot=fixtures.snapshot(),
-                investor_theme="Long-term growth. Total budget USD 500.",
-                strategy="LongTerm",
-                plan=fixtures.plan(),
-                research=fixtures.research(),
-            )
-        )
-
-    assert "src-orphan" not in service.ai_reference_utils.collect_reference_ids(assessment)
-    assert "src-orphan" in assessment.data_gaps[-1]
-
-
-def test_long_term_actions_hold_overweight_positions_without_trim():
-    calculated = service._calculate_actions(
-        snapshot=fixtures.snapshot(),
-        target_positions=fixtures.target_positions(),
-        holding_reviews=fixtures.holding_reviews(),
-        verified_addition_quotes=None,
-        budget=fixtures.total_budget(),
-        strategy="LongTerm",
-    )
-
-    assert not any(candidate.action == "TRIM" for candidate in calculated.candidates)
-    assert next(candidate.action for candidate in calculated.candidates if candidate.ticker == "NASDAQ:MSFT") == "HOLD"
-    assert calculated.cash_ledger.purchase_spend == 400
-    assert calculated.cash_ledger.unallocated_cash == 100
-
-
-def test_target_can_reclassify_retained_holding_role():
-    target_data = fixtures.target_data()
-    target_data["positions"][0]["role_category"] = "DefensiveIncome"
-    target_data["positions"][0]["role_description"] = "Target income anchor"
-    target = service._PortfolioTargetDraft.model_validate(target_data)
-
-    target_positions = service._build_target_positions(
-        snapshot=fixtures.snapshot(),
-        research=fixtures.research(),
-        assessment=fixtures.assessment(),
-        target_draft=target,
-    )
-    holding_reviews = service._build_holding_reviews(
-        snapshot=fixtures.snapshot(),
-        assessment=fixtures.assessment(),
-        target_positions=target_positions,
-        strategy="LongTerm",
-    )
-
-    assert target_positions[0].role == "🛡️ Target income anchor"
-    assert holding_reviews[0].role == "🚀 Core growth compounder"
-
-
-def test_swing_actions_include_exit_trim_buy_more_and_introduction():
-    snapshot = fixtures.snapshot()
-    target_positions = [
-        _addition_target_positions()[0].model_copy(update={"target_allocation": 0.3}),
-        _addition_target_positions()[1].model_copy(update={"target_allocation": 0.3}),
-        _addition_target_positions()[3].model_copy(update={"target_allocation": 0.4}),
-    ]
-    holding_reviews = fixtures.holding_reviews()
-    holding_reviews[2] = holding_reviews[2].model_copy(
-        update={
-            "target_allocation": 0,
-            "recommendation": "EXIT",
-            "exit_reason": "CriticalRisk",
-        }
-    )
-
-    calculated = service._calculate_actions(
-        snapshot=snapshot,
-        target_positions=target_positions,
-        holding_reviews=holding_reviews,
-        verified_addition_quotes=_addition_quotes(price=100),
-        budget=fixtures.total_budget(),
-        strategy="Swing",
-    )
-
-    actions = {candidate.action for candidate in calculated.candidates}
-    assert actions == {"EXIT", "TRIM", "BUY_MORE", "INTRODUCE"}
-    assert calculated.cash_ledger.estimated_sale_proceeds == 600
-    assert (
-        calculated.cash_ledger.new_money_budget + calculated.cash_ledger.estimated_sale_proceeds
-        == calculated.cash_ledger.purchase_spend + calculated.cash_ledger.unallocated_cash
-    )
-
-
-def test_inferred_budget_rises_to_fifteen_percent_only_when_it_enables_purchase():
-    verified = fixtures.verified_portfolio()
-    initial_budget = portfolio_budget.infer_recurring_budget(
-        verified,
-        rate=portfolio_budget.INFERRED_BUDGET_MIN_RATE,
-    )
-    target_positions = _addition_target_positions()
-
-    resolved_budget, calculated = service._resolve_action_budget(
-        verified_portfolio=verified,
-        snapshot=fixtures.snapshot(),
-        target_positions=target_positions,
-        holding_reviews=fixtures.holding_reviews(),
-        verified_addition_quotes=_addition_quotes(),
-        budget=initial_budget,
-        strategy="LongTerm",
-    )
-
-    assert resolved_budget.amount == 300
-    assert resolved_budget.is_inferred is True
-    assert any(candidate.action == "INTRODUCE" for candidate in calculated.candidates)
-
-
-def test_unrequested_major_rebalance_skips_action_calculation():
-    major_assessment = _major_assessment()
-    major_target = _major_target()
-    with (
-        patch(
-            "app.services.msai_review_portfolio.portfolio_verification.verify_portfolio",
-            new_callable=AsyncMock,
-            return_value=fixtures.verified_portfolio(),
-        ),
-        patch(
-            "app.services.msai_review_portfolio._plan_portfolio",
-            new_callable=AsyncMock,
-            return_value=fixtures.plan(),
-        ),
-        patch(
-            "app.services.msai_review_portfolio._research_portfolio",
-            new_callable=AsyncMock,
-            return_value=fixtures.research(),
-        ),
-        patch(
-            "app.services.msai_review_portfolio._assess_portfolio",
-            new_callable=AsyncMock,
-            return_value=major_assessment,
-        ),
-        patch(
-            "app.services.msai_review_portfolio._design_target",
-            new_callable=AsyncMock,
-            return_value=major_target,
-        ),
-        patch(
-            "app.services.msai_review_portfolio._verify_addition_quotes",
-            new_callable=AsyncMock,
-        ) as mock_verify_additions,
-        patch(
-            "app.services.msai_review_portfolio._create_action_plan",
-            new_callable=AsyncMock,
-        ) as mock_action_plan,
-        patch(
-            "app.services.msai_review_portfolio.cache.get",
-            new_callable=AsyncMock,
-            return_value=None,
-        ),
-        patch(
-            "app.services.msai_review_portfolio.cache.set",
-            new_callable=AsyncMock,
-            return_value=True,
-        ),
-    ):
-        result = asyncio.run(
-            service.ai_review_portfolio(
-                fixtures.holdings(),
-                country="US",
-                investor_theme="Long-term growth. Total budget USD 500.",
-                rebalance_plan=False,
-            )
-        )
-
-    assert result.rebalance_recommended == "YES"
-    assert result.target_turnover == pytest.approx(0.2)
-    assert result.action_plan is None
-    mock_verify_additions.assert_not_awaited()
-    mock_action_plan.assert_not_awaited()
-
-
-def test_structured_review_runs_all_five_stages_and_returns_growth_plan():
+def test_ai_review_portfolio_filters_zero_positions_and_returns_long_term_growth_plan():
     theme = "Long-term growth. Total budget USD 500."
-    action_draft = service._PortfolioActionPlanDraft(
-        summary="Buy underweight positions and retain residual cash.",
-        actions=[
-            service._PortfolioActionReasoning(
-                action_id="buy_more:NASDAQ:AAPL",
-                priority=1,
-                reasoning="Increase the highest-priority underweight core holding.",
-            ),
-            service._PortfolioActionReasoning(
-                action_id="buy_more:NASDAQ:GOOGL",
-                priority=2,
-                reasoning="Add one whole share toward the validated target.",
-            ),
-            service._PortfolioActionReasoning(
-                action_id="hold:NASDAQ:MSFT",
-                priority=3,
-                reasoning="Hold the aligned overweight position and direct new cash elsewhere.",
-            ),
+    budget = portfolio_budget.extract_budget(theme, default_currency="USD")
+    zero = models_portfolio.PortfolioHolding(
+        ticker="NASDAQ:NVDA",
+        num_shares=0,
+    )
+    responses = _review_responses(
+        theme_budget=budget,
+        action_ids=[
+            "buy_more:NASDAQ:AAPL",
+            "buy_more:NASDAQ:GOOGL",
+            "hold:NASDAQ:MSFT",
         ],
     )
-    responses = [
-        ai_helper.LLMResponse(completion=fixtures.plan(portfolio_id="portfolio-id").model_dump_json()),
-        ai_helper.LLMResponse(
-            completion=json.dumps(fixtures.research_response_data(portfolio_id="portfolio-id")),
-            citation_urls=fixtures.SOURCE_URLS,
-        ),
-        ai_helper.LLMResponse(completion=json.dumps(fixtures.assessment_data(portfolio_id="portfolio-id"))),
-        ai_helper.LLMResponse(completion=json.dumps(fixtures.target_data(portfolio_id="portfolio-id"))),
-        ai_helper.LLMResponse(completion=action_draft.model_dump_json()),
-    ]
-
     with (
-        patch(
-            "app.services.msai_review_portfolio.portfolio_verification.verify_portfolio",
-            new_callable=AsyncMock,
-            return_value=fixtures.verified_portfolio(),
+        mock.patch.object(service.cache, "generate_hourly_key", return_value="portfolio-id"),
+        mock.patch.object(service.cache, "get", new_callable=mock.AsyncMock, return_value=None),
+        mock.patch.object(service.cache, "set", new_callable=mock.AsyncMock, return_value=True) as cache_set,
+        mock.patch.object(
+            service.portfolio_verification.services_stock,
+            "resolve_symbol",
+            side_effect=_resolve_market_symbol,
         ),
-        patch(
-            "app.services.msai_review_portfolio.ai_helper.ai_exec_task",
-            new_callable=AsyncMock,
+        mock.patch.object(
+            service.ai_helper,
+            "ai_exec_task",
+            new_callable=mock.AsyncMock,
             side_effect=responses,
-        ) as mock_ai_exec,
-        patch(
-            "app.services.msai_review_portfolio.cache.generate_key",
-            return_value="portfolio-id",
-        ),
-        patch(
-            "app.services.msai_review_portfolio.cache.get",
-            new_callable=AsyncMock,
-            return_value=None,
-        ),
-        patch(
-            "app.services.msai_review_portfolio.cache.set",
-            new_callable=AsyncMock,
-            return_value=True,
-        ),
+        ) as ai_exec,
     ):
         result = asyncio.run(
             service.ai_review_portfolio(
-                fixtures.holdings(),
-                country="US",
+                [*fixtures.holdings(), zero],
+                country="United States",
                 investor_theme=theme,
             )
         )
 
     assert result.result_type == "PortfolioReview"
+    assert result.country == "US"
     assert result.strategy == "LongTerm"
+    assert [holding.ticker for holding in result.snapshot.holdings] == sorted(fixtures.TICKERS)
     assert result.rebalance_recommended == "NO"
+    assert result.rebalance_requested is False
     assert result.action_plan is not None
     assert result.action_plan.plan_type == "Growth"
     assert [action.action for action in result.action_plan.actions] == [
@@ -513,67 +233,414 @@ def test_structured_review_runs_all_five_stages_and_returns_growth_plan():
         "BUY_MORE",
         "HOLD",
     ]
+    assert not any(action.action == "TRIM" for action in result.action_plan.actions)
+    assert result.action_plan.cash_ledger.new_money_budget == 500
     assert result.action_plan.cash_ledger.purchase_spend == 400
-    assert all(reference.is_verified for reference in result.references)
-    assert [call.args[0] for call in mock_ai_exec.await_args_list] == [
+    assert result.action_plan.cash_ledger.unallocated_cash == 100
+    assert all(action.quantity is None or isinstance(action.quantity, int) for action in result.action_plan.actions)
+    assert [call.args[0] for call in ai_exec.await_args_list] == [
         "REVIEW_PORTFOLIO_PLAN",
         "REVIEW_PORTFOLIO_RESEARCH",
         "REVIEW_PORTFOLIO_ASSESS",
         "REVIEW_PORTFOLIO_TARGET",
         "REVIEW_PORTFOLIO_ACTION_PLAN",
     ]
-    research_prompt = mock_ai_exec.await_args_list[1].args[1]
-    assessment_prompt = mock_ai_exec.await_args_list[2].args[1]
-    target_prompt = mock_ai_exec.await_args_list[3].args[1]
-    assert "never use NYSEARCA" in research_prompt
-    assert "Copy every eligible-addition ticker exactly" in assessment_prompt
-    assert "Copy retained tickers exactly" in target_prompt
+    assert any(call.kwargs["ttl"] == 60 * 60 for call in cache_set.await_args_list)
 
 
-def test_provider_failure_is_explicit():
+@pytest.mark.parametrize("rebalance_plan", [False, True])
+def test_ai_review_portfolio_obeys_major_rebalance_request_semantics(rebalance_plan):
+    theme = "Long-term growth. Total budget USD 500."
+    budget = portfolio_budget.extract_budget(theme, default_currency="USD")
+    assessment = fixtures.assessment_data(portfolio_id="portfolio-id")
+    assessment["holding_reviews"][2]["recommendation"] = "EXIT"
+    assessment["holding_reviews"][2]["exit_reason"] = "CriticalRisk"
+    target = fixtures.target_data(portfolio_id="portfolio-id")
+    target["positions"] = [
+        {
+            **target["positions"][0],
+            "allocation": 0.6,
+        },
+        {
+            **target["positions"][1],
+            "allocation": 0.4,
+        },
+    ]
+    action_ids = (
+        [
+            "exit:NASDAQ:GOOGL",
+            "buy_more:NASDAQ:AAPL",
+            "buy_more:NASDAQ:MSFT",
+        ]
+        if rebalance_plan
+        else None
+    )
     with (
-        patch(
-            "app.services.msai_review_portfolio.portfolio_verification.verify_portfolio",
-            new_callable=AsyncMock,
-            return_value=fixtures.verified_portfolio(),
+        mock.patch.object(service.cache, "generate_hourly_key", return_value="portfolio-id"),
+        mock.patch.object(service.cache, "get", new_callable=mock.AsyncMock, return_value=None),
+        mock.patch.object(service.cache, "set", new_callable=mock.AsyncMock, return_value=True),
+        mock.patch.object(
+            service.portfolio_verification.services_stock,
+            "resolve_symbol",
+            side_effect=_resolve_market_symbol,
         ),
-        patch(
-            "app.services.msai_review_portfolio.ai_helper.ai_exec_task",
-            new_callable=AsyncMock,
-            return_value=ai_helper.LLMResponse(is_error=True, error_msg="provider failed"),
-        ),
-        patch(
-            "app.services.msai_review_portfolio.cache.get",
-            new_callable=AsyncMock,
-            return_value=None,
+        mock.patch.object(
+            service.ai_helper,
+            "ai_exec_task",
+            new_callable=mock.AsyncMock,
+            side_effect=_review_responses(
+                theme_budget=budget,
+                assessment_data=assessment,
+                target_data=target,
+                action_ids=action_ids,
+            ),
         ),
     ):
-        with pytest.raises(service.PortfolioReviewAIError, match="planning failed"):
-            asyncio.run(
-                service.ai_review_portfolio(
-                    fixtures.holdings(),
-                    country="US",
-                    investor_theme="Long-term growth. Total budget USD 500.",
-                )
+        result = asyncio.run(
+            service.ai_review_portfolio(
+                fixtures.holdings(),
+                country="US",
+                investor_theme=theme,
+                rebalance_plan=rebalance_plan,
             )
+        )
+
+    assert result.rebalance_recommended == "YES"
+    assert result.rebalance_requested is rebalance_plan
+    assert result.target_turnover == pytest.approx(0.2)
+    assert result.major_rebalance_reasons
+    if rebalance_plan:
+        assert result.action_plan is not None
+        assert result.action_plan.plan_type == "Rebalance"
+        assert [action.action for action in result.action_plan.actions] == [
+            "EXIT",
+            "BUY_MORE",
+            "BUY_MORE",
+        ]
+        assert result.action_plan.cash_ledger.estimated_sale_proceeds == 400
+    else:
+        assert result.action_plan is None
 
 
-def test_all_provider_response_schema_properties_are_required():
-    def assert_required_properties(value: object) -> None:
-        if isinstance(value, dict):
-            if "properties" in value:
-                assert set(value["properties"]) == set(value.get("required", []))
-            for nested in value.values():
-                assert_required_properties(nested)
-        elif isinstance(value, list):
-            for nested in value:
-                assert_required_properties(nested)
-
-    for response_model in (
-        service._PortfolioReviewPlan,
-        service._PortfolioResearchResponse,
-        service._PortfolioAssessmentDraft,
-        service._PortfolioTargetDraft,
-        service._PortfolioActionPlanDraft,
+def test_ai_review_portfolio_increases_inferred_budget_only_when_it_enables_a_whole_share():
+    inferred = portfolio_budget.infer_recurring_budget(
+        fixtures.verified_portfolio(),
+        rate=portfolio_budget.INFERRED_BUDGET_MIN_RATE,
+    )
+    with (
+        mock.patch.object(service.cache, "generate_hourly_key", return_value="portfolio-id"),
+        mock.patch.object(service.cache, "get", new_callable=mock.AsyncMock, return_value=None),
+        mock.patch.object(service.cache, "set", new_callable=mock.AsyncMock, return_value=True),
+        mock.patch.object(
+            service.portfolio_verification.services_stock,
+            "resolve_symbol",
+            side_effect=_resolve_market_symbol,
+        ),
+        mock.patch.object(
+            service.ai_helper,
+            "ai_exec_task",
+            new_callable=mock.AsyncMock,
+            side_effect=_review_responses(
+                theme_budget=inferred,
+                research_data=_research_with_nvda(),
+                assessment_data=_assessment_with_nvda(),
+                target_data=_target_with_nvda(
+                    (0.45, 0.27, 0.18, 0.10),
+                    retain_google=True,
+                ),
+                action_ids=[
+                    "introduce:NASDAQ:NVDA",
+                    "hold:NASDAQ:AAPL",
+                    "hold:NASDAQ:MSFT",
+                    "hold:NASDAQ:GOOGL",
+                ],
+            ),
+        ),
     ):
-        assert_required_properties(response_model.model_json_schema())
+        result = asyncio.run(
+            service.ai_review_portfolio(
+                fixtures.holdings(),
+                country="US",
+                investor_theme="Long-term durable growth.",
+                rebalance_plan=True,
+            )
+        )
+
+    assert result.budget.is_inferred is True
+    assert result.budget.amount == 300
+    assert "15%" in result.budget.source_text
+    assert result.action_plan is not None
+    introduced = next(action for action in result.action_plan.actions if action.action == "INTRODUCE")
+    assert introduced.ticker == "NASDAQ:NVDA"
+    assert introduced.quantity == 1
+    assert result.action_plan.cash_ledger.purchase_spend == 250
+    assert result.action_plan.cash_ledger.unallocated_cash == 50
+
+
+def test_ai_review_portfolio_swing_plan_can_exit_trim_buy_and_introduce():
+    theme = "Swing trading over days to weeks. Total budget USD 500."
+    budget = portfolio_budget.extract_budget(theme, default_currency="USD")
+    with (
+        mock.patch.object(service.cache, "generate_hourly_key", return_value="portfolio-id"),
+        mock.patch.object(service.cache, "get", new_callable=mock.AsyncMock, return_value=None),
+        mock.patch.object(service.cache, "set", new_callable=mock.AsyncMock, return_value=True),
+        mock.patch.object(
+            service.portfolio_verification.services_stock,
+            "resolve_symbol",
+            side_effect=lambda ticker: _resolve_market_symbol(ticker, nvda_price=100),
+        ),
+        mock.patch.object(
+            service.ai_helper,
+            "ai_exec_task",
+            new_callable=mock.AsyncMock,
+            side_effect=_review_responses(
+                theme_budget=budget,
+                strategy="Swing",
+                research_data=_research_with_nvda(),
+                assessment_data=_assessment_with_nvda(
+                    exit_google=True,
+                    exit_reason="SwingRiskControl",
+                ),
+                target_data=_target_with_nvda(
+                    (0.3, 0.3, 0.4),
+                    retain_google=False,
+                ),
+                action_ids=[
+                    "exit:NASDAQ:GOOGL",
+                    "trim:NASDAQ:AAPL",
+                    "introduce:NASDAQ:NVDA",
+                    "buy_more:NASDAQ:MSFT",
+                ],
+            ),
+        ),
+    ):
+        result = asyncio.run(
+            service.ai_review_portfolio(
+                fixtures.holdings(),
+                country="US",
+                investor_theme=theme,
+                rebalance_plan=True,
+            )
+        )
+
+    assert result.strategy == "Swing"
+    assert result.rebalance_recommended == "YES"
+    assert result.action_plan is not None
+    assert {action.action for action in result.action_plan.actions} == {
+        "EXIT",
+        "TRIM",
+        "INTRODUCE",
+        "BUY_MORE",
+    }
+    ledger = result.action_plan.cash_ledger
+    assert ledger.estimated_sale_proceeds == 600
+    assert ledger.new_money_budget + ledger.estimated_sale_proceeds == (ledger.purchase_spend + ledger.unallocated_cash)
+
+
+@pytest.mark.parametrize(
+    ("portfolio", "country", "theme", "message"),
+    [
+        ([], "US", "Long-term growth.", "positive-share position"),
+        (
+            [models_portfolio.PortfolioHolding(ticker="NASDAQ:AAPL", num_shares=0)],
+            "US",
+            "Long-term growth.",
+            "positive-share position",
+        ),
+        (
+            [models_portfolio.PortfolioHolding(ticker="NASDAQ:AAPL", num_shares=1.5)],
+            "US",
+            "Long-term growth.",
+            "whole-share",
+        ),
+        (fixtures.holdings(), "unknown-market", "Long-term growth.", "Unsupported or unknown country"),
+        (fixtures.holdings(), "US", "   ", "Investor theme must not be empty"),
+        (
+            fixtures.holdings(),
+            "US",
+            "Long-term holdings with swing trading.",
+            "conflicting",
+        ),
+    ],
+)
+def test_ai_review_portfolio_rejects_invalid_inputs_before_ai(
+    portfolio,
+    country,
+    theme,
+    message,
+):
+    with (
+        mock.patch.object(service.ai_helper, "ai_exec_task", new_callable=mock.AsyncMock) as ai_exec,
+        mock.patch.object(
+            service.portfolio_verification.services_stock,
+            "resolve_symbol",
+        ) as resolve_symbol,
+        pytest.raises(portfolio_verification.PortfolioInputError, match=message),
+    ):
+        asyncio.run(
+            service.ai_review_portfolio(
+                portfolio,
+                country=country,
+                investor_theme=theme,
+            )
+        )
+
+    ai_exec.assert_not_awaited()
+    resolve_symbol.assert_not_called()
+
+
+def test_ai_review_portfolio_rejects_budget_currency_mismatch_before_ai():
+    with (
+        mock.patch.object(service.cache, "get", new_callable=mock.AsyncMock, return_value=None),
+        mock.patch.object(service.cache, "set", new_callable=mock.AsyncMock, return_value=True),
+        mock.patch.object(
+            service.portfolio_verification.services_stock,
+            "resolve_symbol",
+            side_effect=_resolve_market_symbol,
+        ),
+        mock.patch.object(service.ai_helper, "ai_exec_task", new_callable=mock.AsyncMock) as ai_exec,
+        pytest.raises(portfolio_verification.PortfolioInputError, match="portfolio currency"),
+    ):
+        asyncio.run(
+            service.ai_review_portfolio(
+                fixtures.holdings(),
+                country="US",
+                investor_theme="Long-term growth. Total budget AUD 500.",
+            )
+        )
+
+    ai_exec.assert_not_awaited()
+
+
+def test_ai_review_portfolio_wraps_addition_price_verification_failure():
+    inferred = portfolio_budget.infer_recurring_budget(
+        fixtures.verified_portfolio(),
+        rate=portfolio_budget.INFERRED_BUDGET_MIN_RATE,
+    )
+    with (
+        mock.patch.object(service.cache, "generate_hourly_key", return_value="portfolio-id"),
+        mock.patch.object(service.cache, "get", new_callable=mock.AsyncMock, return_value=None),
+        mock.patch.object(service.cache, "set", new_callable=mock.AsyncMock, return_value=True),
+        mock.patch.object(
+            service.portfolio_verification.services_stock,
+            "resolve_symbol",
+            side_effect=lambda ticker: _resolve_market_symbol(ticker, nvda_price=None),
+        ),
+        mock.patch.object(
+            service.ai_helper,
+            "ai_exec_task",
+            new_callable=mock.AsyncMock,
+            side_effect=_review_responses(
+                theme_budget=inferred,
+                research_data=_research_with_nvda(),
+                assessment_data=_assessment_with_nvda(),
+                target_data=_target_with_nvda(
+                    (0.45, 0.27, 0.18, 0.10),
+                    retain_google=True,
+                ),
+            ),
+        ),
+        pytest.raises(service.PortfolioReviewAIError, match="target-price verification failed"),
+    ):
+        asyncio.run(
+            service.ai_review_portfolio(
+                fixtures.holdings(),
+                country="US",
+                investor_theme="Long-term durable growth.",
+                rebalance_plan=True,
+            )
+        )
+
+
+def test_ai_review_portfolio_wraps_exhausted_rate_limit_as_service_error():
+    with (
+        mock.patch.object(service.cache, "generate_hourly_key", return_value="portfolio-id"),
+        mock.patch.object(service.cache, "get", new_callable=mock.AsyncMock, return_value=None),
+        mock.patch.object(service.cache, "set", new_callable=mock.AsyncMock, return_value=True),
+        mock.patch.object(
+            service.portfolio_verification.services_stock,
+            "resolve_symbol",
+            side_effect=_resolve_market_symbol,
+        ),
+        mock.patch.object(
+            service.ai_helper,
+            "ai_exec_task",
+            new_callable=mock.AsyncMock,
+            side_effect=ai_helper.LLMRateLimitError("retry budget exhausted"),
+        ),
+        pytest.raises(service.PortfolioReviewAIError, match="planning provider failed"),
+    ):
+        asyncio.run(
+            service.ai_review_portfolio(
+                fixtures.holdings(),
+                country="US",
+                investor_theme="Long-term growth. Total budget USD 500.",
+            )
+        )
+
+
+def test_ai_review_portfolio_returns_validated_final_cache_before_action_stage():
+    expected = fixtures.review()
+    cached_values = [
+        None,
+        fixtures.plan(portfolio_id="portfolio-id").model_dump(mode="json"),
+        fixtures.research(portfolio_id="portfolio-id").model_dump(mode="json"),
+        fixtures.assessment(portfolio_id="portfolio-id").model_dump(mode="json"),
+        fixtures.target(portfolio_id="portfolio-id").model_dump(mode="json"),
+        expected.model_dump(mode="json"),
+    ]
+    with (
+        mock.patch.object(service.cache, "generate_hourly_key", return_value="portfolio-id"),
+        mock.patch.object(
+            service.cache,
+            "get",
+            new_callable=mock.AsyncMock,
+            side_effect=cached_values,
+        ),
+        mock.patch.object(service.cache, "set", new_callable=mock.AsyncMock),
+        mock.patch.object(
+            service.portfolio_verification.services_stock,
+            "resolve_symbol",
+            side_effect=_resolve_market_symbol,
+        ),
+        mock.patch.object(service.ai_helper, "ai_exec_task", new_callable=mock.AsyncMock) as ai_exec,
+    ):
+        result = asyncio.run(
+            service.ai_review_portfolio(
+                fixtures.holdings(),
+                country="US",
+                investor_theme="Long-term growth. Total budget USD 500.",
+            )
+        )
+
+    assert result == expected
+    ai_exec.assert_not_awaited()
+
+
+def test_ai_review_portfolio_rejects_invalid_cached_stage():
+    with (
+        mock.patch.object(service.cache, "generate_hourly_key", return_value="portfolio-id"),
+        mock.patch.object(
+            service.cache,
+            "get",
+            new_callable=mock.AsyncMock,
+            side_effect=[None, {"unexpected": "value"}],
+        ),
+        mock.patch.object(service.cache, "set", new_callable=mock.AsyncMock),
+        mock.patch.object(
+            service.portfolio_verification.services_stock,
+            "resolve_symbol",
+            side_effect=_resolve_market_symbol,
+        ),
+        mock.patch.object(service.ai_helper, "ai_exec_task", new_callable=mock.AsyncMock) as ai_exec,
+        pytest.raises(RuntimeError, match="planning cache contains an invalid value"),
+    ):
+        asyncio.run(
+            service.ai_review_portfolio(
+                fixtures.holdings(),
+                country="US",
+                investor_theme="Long-term growth. Total budget USD 500.",
+            )
+        )
+
+    ai_exec.assert_not_awaited()

@@ -1,5 +1,6 @@
+import json
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -47,6 +48,178 @@ def test_market_index_files_are_preloaded_verbatim():
     expected_json = Path("resources/indices/asx20.json").read_text(encoding="utf-8")
 
     assert services_market.market_indices.raw_json["ASX20"] == expected_json
+
+
+def test_load_default_indices_populates_the_process_store(monkeypatch):
+    store = services_market.MarketIndexStore()
+    monkeypatch.setattr(services_market, "market_indices", store)
+    monkeypatch.setattr(services_market, "_INDEX_FILES", (("ASX20", "asx20.json"),))
+    monkeypatch.setattr(services_market.Path, "read_text", MagicMock(return_value=INDEX_JSON))
+
+    services_market.load_default_indices()
+
+    assert store.raw_json["ASX20"] == INDEX_JSON
+    assert "ASX:CBA" in store.indices["ASX20"]
+
+
+@pytest.mark.parametrize(
+    "file_result",
+    [
+        "",
+        FileNotFoundError(),
+        PermissionError(),
+        OSError(),
+    ],
+)
+def test_load_default_indices_skips_unavailable_resources(monkeypatch, file_result):
+    store = services_market.MarketIndexStore()
+    monkeypatch.setattr(services_market, "market_indices", store)
+    monkeypatch.setattr(services_market, "_INDEX_FILES", (("ASX20", "asx20.json"),))
+    read_text = MagicMock(return_value=file_result)
+    if isinstance(file_result, Exception):
+        read_text.side_effect = file_result
+    monkeypatch.setattr(services_market.Path, "read_text", read_text)
+
+    services_market.load_default_indices()
+
+    assert store.raw_json == {}
+    assert store.indices == {}
+
+
+def test_load_default_indices_propagates_invalid_index_data(monkeypatch):
+    store = services_market.MarketIndexStore()
+    monkeypatch.setattr(services_market, "market_indices", store)
+    monkeypatch.setattr(services_market, "_INDEX_FILES", (("ASX20", "asx20.json"),))
+    monkeypatch.setattr(services_market.Path, "read_text", MagicMock(return_value="not json"))
+
+    with pytest.raises(json.JSONDecodeError):
+        services_market.load_default_indices()
+
+
+def test_load_default_indices_continues_after_an_unreadable_resource(monkeypatch):
+    store = services_market.MarketIndexStore()
+    monkeypatch.setattr(services_market, "market_indices", store)
+    monkeypatch.setattr(
+        services_market,
+        "_INDEX_FILES",
+        (("ASX20", "asx20.json"), ("ASX50", "asx50.json")),
+    )
+
+    def read_text(path, **_kwargs):
+        if path.name == "asx20.json":
+            raise OSError("storage unavailable")
+        return INDEX_JSON
+
+    monkeypatch.setattr(services_market.Path, "read_text", read_text)
+
+    services_market.load_default_indices()
+
+    assert "ASX20" not in store.indices
+    assert store.raw_json["ASX50"] == INDEX_JSON
+    assert "ASX:CBA" in store.indices["ASX50"]
+
+
+def test_load_default_indices_propagates_invalid_company_records(monkeypatch):
+    invalid_company_json = json.dumps(
+        {
+            "data": [
+                {
+                    "symbol": "ASX:CBA",
+                    "company": "COMMONWEALTH BANK OF AUSTRALIA",
+                    "market_cap": "not-a-number",
+                }
+            ]
+        }
+    )
+    store = services_market.MarketIndexStore()
+    monkeypatch.setattr(services_market, "market_indices", store)
+    monkeypatch.setattr(services_market, "_INDEX_FILES", (("ASX20", "asx20.json"),))
+    monkeypatch.setattr(
+        services_market.Path,
+        "read_text",
+        MagicMock(return_value=invalid_company_json),
+    )
+
+    with pytest.raises(ValueError):
+        services_market.load_default_indices()
+
+
+def test_load_default_indices_replaces_previous_successful_data(monkeypatch):
+    first_json = INDEX_JSON
+    second_json = json.dumps(
+        {
+            "data": [
+                {
+                    "symbol": "ASX:BHP",
+                    "company": "BHP GROUP LIMITED",
+                    "sector": "Materials",
+                }
+            ]
+        }
+    )
+    contents = iter((first_json, second_json))
+    store = services_market.MarketIndexStore()
+    monkeypatch.setattr(services_market, "market_indices", store)
+    monkeypatch.setattr(services_market, "_INDEX_FILES", (("ASX20", "asx20.json"),))
+    monkeypatch.setattr(
+        services_market.Path,
+        "read_text",
+        lambda _path, **_kwargs: next(contents),
+    )
+
+    services_market.load_default_indices()
+    services_market.load_default_indices()
+
+    assert store.raw_json["ASX20"] == second_json
+    assert set(store.indices["ASX20"]) == {"ASX:BHP"}
+    assert store.revert_lookup_company("AU", "CBA") is None
+    assert store.revert_lookup_company("AU", "BHP").name == "BHP GROUP LIMITED"
+
+
+def test_reverse_lookup_aggregates_indexes_and_rebuilds_replaced_index():
+    sp500_json = json.dumps(
+        {
+            "data": [
+                {
+                    "symbol": "NASDAQ:AAPL",
+                    "company": "Apple Inc.",
+                }
+            ]
+        }
+    )
+    nasdaq100_json = json.dumps(
+        {
+            "data": [
+                {
+                    "symbol": "NASDAQ:MSFT",
+                    "company": "Microsoft Corporation",
+                }
+            ]
+        }
+    )
+    replacement_sp500_json = json.dumps(
+        {
+            "data": [
+                {
+                    "symbol": "NYSE:JNJ",
+                    "company": "Johnson & Johnson",
+                }
+            ]
+        }
+    )
+    store = services_market.MarketIndexStore()
+
+    store.load("SP500", sp500_json)
+    store.load("NASDAQ100", nasdaq100_json)
+
+    assert store.revert_lookup_company("US", "AAPL").name == "Apple Inc."
+    assert store.revert_lookup_company("United States", "MSFT").name == "Microsoft Corporation"
+
+    store.load("SP500", replacement_sp500_json)
+
+    assert store.revert_lookup_company("US", "AAPL") is None
+    assert store.revert_lookup_company("US", "JNJ").name == "Johnson & Johnson"
+    assert store.revert_lookup_company("US", "MSFT").name == "Microsoft Corporation"
 
 
 @patch("app.routers.market.services_market.market_indices")

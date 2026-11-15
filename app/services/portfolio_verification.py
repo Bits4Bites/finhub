@@ -102,20 +102,55 @@ async def verify_portfolio(
     *,
     country: str,
 ) -> VerifiedPortfolio:
+    """Verify and value the positive positions in an existing portfolio.
+
+    Args:
+        portfolio: One to 50 holdings. Every supplied position must have a
+            positive share count; tickers may use Yahoo or ``EXCHANGE:CODE``
+            notation, and optional client prices are used only when current
+            market data has no price.
+        country: Country name or code that can be normalized to an ISO
+            two-letter market country.
+
+    Returns:
+        A five-minute-cacheable snapshot with canonical provider identities,
+        one shared trading currency, current values and allocations, optional
+        allocation drift and profit/loss, and data gaps identifying any
+        client-price fallback.
+
+    Raises:
+        PortfolioInputError: If the holding count is outside one to 50, the
+            country or portfolio is invalid, a security is unsupported, a price
+            or market value is not positive, canonical tickers are duplicated,
+            or verified holdings use multiple currencies.
+        PortfolioVerificationError: If market-data identity resolution fails.
+        RuntimeError: If a cached portfolio cannot be validated.
+
+    Notes:
+        Current provider prices take precedence over client prices. Cache hits
+        are validated and returned as independent model instances.
+    """
+    if not portfolio:
+        raise PortfolioInputError("Portfolio must contain at least one holding")
+    if len(portfolio) > 50:
+        raise PortfolioInputError("Portfolio must contain at most 50 holdings")
+    normalized_country = conv.country_to_iso2(country.strip())
+    if not normalized_country:
+        raise PortfolioInputError("Unsupported or unknown country")
     serialized_positions = json.dumps(
         [position.model_dump(mode="json") for position in sorted(portfolio, key=lambda position: position.ticker)],
         sort_keys=True,
     )
     cache_key = cache.generate_key(
         _CACHE_NAMESPACE,
-        country,
+        normalized_country,
         serialized_positions,
     )
     cached_portfolio = await cache.get(cache_key)
     if cached_portfolio is not None:
         return _cached_portfolio(cached_portfolio)
 
-    verified_portfolio = _build_verified_portfolio(portfolio, country=country)
+    verified_portfolio = _build_verified_portfolio(portfolio, country=normalized_country)
     await cache.set(
         cache_key,
         verified_portfolio.model_dump(mode="json"),
@@ -129,9 +164,36 @@ async def verify_security_quotes(
     *,
     country: str,
 ) -> VerifiedSecurityQuotes:
-    """Verify target-security prices without creating synthetic portfolio holdings."""
+    """Verify current prices for securities considered for portfolio actions.
+
+    Args:
+        tickers: One to 20 unique canonical ``EXCHANGE:CODE`` identifiers.
+            Exchange aliases are normalized before duplicate checks, and provider
+            identities may further canonicalize the returned tickers.
+        country: Country name or code that can be normalized to an ISO
+            two-letter market country.
+
+    Returns:
+        A five-minute-cacheable, timezone-stamped collection of canonical
+        identities and positive current prices. Every returned security uses the
+        single declared currency; no synthetic holdings are created.
+
+    Raises:
+        PortfolioInputError: If the ticker count is outside one to 20, inputs
+            are malformed or duplicated, a security or current price is
+            unsupported, provider canonicalization creates a duplicate, or
+            currencies are mixed.
+        PortfolioVerificationError: If market-data identity resolution fails.
+        RuntimeError: If cached quotes cannot be validated.
+
+    Notes:
+        Unlike portfolio verification, this function has no client-price
+        fallback. Cache hits are validated and returned as independent models.
+    """
     if not tickers:
         raise PortfolioInputError("At least one target-security ticker is required")
+    if len(tickers) > 20:
+        raise PortfolioInputError("At most 20 target-security tickers are allowed")
     normalized_country = conv.country_to_iso2(country.strip())
     if not normalized_country:
         raise PortfolioInputError("Unsupported or unknown country")
@@ -169,11 +231,35 @@ def verify_candidate_identities(
     country: str,
     expected_currency: str,
 ) -> CandidateIdentityVerification:
+    """Screen researched security candidates against provider identities.
+
+    Args:
+        tickers: Canonical ``EXCHANGE:CODE`` candidates to verify in order.
+            Exchange aliases are normalized before provider resolution.
+        country: Country name or code used to validate the requested market.
+        expected_currency: Three-letter currency that every accepted candidate
+            must use.
+
+    Returns:
+        Accepted canonical identities and rejected normalized input tickers,
+        each preserving request order. Provider canonicalization is reflected in
+        accepted identities, market prices are not required, and one bad
+        candidate does not prevent other candidates from being returned.
+
+    Raises:
+        PortfolioInputError: If the country, expected currency, or any requested
+            ticker format is invalid.
+
+    Notes:
+        Unsupported securities, provider failures, currency mismatches, and
+        identities that duplicate an earlier accepted canonical ticker are
+        reported in ``rejected_tickers`` rather than raised.
+    """
     normalized_country = conv.country_to_iso2(country.strip())
     if not normalized_country:
         raise PortfolioInputError("Unsupported or unknown country")
     normalized_currency = expected_currency.strip().upper()
-    if len(normalized_currency) != 3:
+    if len(normalized_currency) != 3 or not normalized_currency.isascii() or not normalized_currency.isalpha():
         raise PortfolioInputError("Expected candidate currency must use a three-letter code")
 
     try:
@@ -260,6 +346,8 @@ def _load_security_quote(
         market_price = fallback_market_price
     if market_price is None:
         raise PortfolioInputError(f"Ticker '{identity.ticker}' has no current market price")
+    if not math.isfinite(float(market_price)) or market_price <= 0:
+        raise PortfolioInputError(f"Ticker '{identity.ticker}' has no positive current market price")
 
     return (
         VerifiedSecurityQuote(

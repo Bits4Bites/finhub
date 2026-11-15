@@ -56,6 +56,32 @@ def extract_budget(
     *,
     default_currency: str,
 ) -> models_portfolio.PortfolioBudget:
+    """Extract one total or recurring investment budget from an investor theme.
+
+    Args:
+        investor_theme: Investor goals and constraints that may contain a positive
+            amount expressed with a currency code or symbol, common budget or
+            contribution wording, optional ``k``/``m`` scaling, and grouped
+            digits. A recurring amount must also state a weekly, fortnightly,
+            monthly, quarterly, or annual frequency.
+        default_currency: Three-letter currency used when the amount omits a
+            currency and to interpret ambiguous ``$`` or ``¥`` symbols.
+
+    Returns:
+        A normalized supplied budget, including the matching theme excerpt. When
+        no budget expression is present, returns ``NotProvided`` with no amount,
+        currency, frequency, or source text; the default currency is not copied
+        into that result.
+
+    Raises:
+        PortfolioInputError: If an amount is non-positive or unsupported, a
+            recurring amount lacks a frequency, its currency cannot be resolved,
+            or distinct budget expressions make the available amount ambiguous.
+
+    Notes:
+        Price limits, percentages, salaries, and similar non-budget amounts are
+        ignored unless the surrounding text identifies them as investable funds.
+    """
     if _NEGATIVE_BUDGET_PATTERN.search(investor_theme):
         raise portfolio_verification.PortfolioInputError("Investment budget must be a positive finite amount")
     matches: list[tuple[int, int, Decimal, str, str, bool]] = []
@@ -175,6 +201,27 @@ def infer_recurring_budget(
     *,
     rate: Decimal,
 ) -> models_portfolio.PortfolioBudget:
+    """Create an application-inferred contribution for the next action iteration.
+
+    Args:
+        verified_portfolio: Positive, single-currency portfolio whose current
+            market value supplies the inference base.
+        rate: Positive finite proportion of the verified market value to make
+            available as new money.
+
+    Returns:
+        An inferred recurring budget in the portfolio currency. The amount is
+        rounded to six decimal places and deliberately has no invented calendar
+        frequency.
+
+    Raises:
+        PortfolioInputError: If ``rate`` is not positive and finite or the
+            contribution rounds to zero at six-decimal money precision.
+    """
+    if not rate.is_finite() or rate <= 0:
+        raise portfolio_verification.PortfolioInputError(
+            "Investment budget inference rate must be a positive finite value"
+        )
     amount = (Decimal(str(verified_portfolio.total_market_value)) * rate).quantize(MONEY_QUANTUM)
     if amount <= 0:
         raise portfolio_verification.PortfolioInputError(
@@ -198,6 +245,38 @@ def allocate_whole_shares(
     desired_amounts: dict[str, Decimal],
     prices: dict[str, Decimal],
 ) -> tuple[dict[str, int], Decimal]:
+    """Allocate a positive budget across desired positions using whole shares.
+
+    Args:
+        budget: Positive finite amount available for purchases.
+        desired_amounts: Non-empty mapping from each ticker to its non-negative
+            finite desired spend.
+        prices: Positive finite per-share prices for exactly the same tickers as
+            ``desired_amounts``.
+
+    Returns:
+        A quantity mapping containing every requested ticker and the exact
+        utilized budget as a ``Decimal``. Quantities are non-negative integers,
+        and utilized budget is the sum of quantity times price without exceeding
+        ``budget``. Affordable extra shares are included only when they improve
+        alignment with the requested spends.
+
+    Raises:
+        ValueError: If the budget, desired amounts, or prices violate the input
+            constraints, their ticker sets differ, or the requested allocation
+            would exceed the available budget.
+    """
+    if not budget.is_finite() or budget <= 0:
+        raise ValueError("Whole-share allocation budget must be a positive finite amount")
+    if not desired_amounts:
+        raise ValueError("Whole-share allocation requires at least one desired position")
+    if set(desired_amounts) != set(prices):
+        raise ValueError("Whole-share allocation desired amounts and prices must use the same tickers")
+    if any(not amount.is_finite() or amount < 0 for amount in desired_amounts.values()):
+        raise ValueError("Whole-share allocation desired amounts must be non-negative finite values")
+    if any(not price.is_finite() or price <= 0 for price in prices.values()):
+        raise ValueError("Whole-share allocation prices must be positive finite values")
+
     quantities = {
         ticker: int((desired_amounts[ticker] / prices[ticker]).to_integral_value(rounding=ROUND_FLOOR))
         for ticker in desired_amounts
@@ -230,6 +309,20 @@ def allocate_whole_shares(
 
 
 def round_money(amount: Decimal) -> float:
+    """Round a finite money amount to six decimal places.
+
+    Args:
+        amount: Finite decimal money value, including zero or a negative amount.
+
+    Returns:
+        The value rounded to the nearest six decimal places using the active
+        decimal rounding rule, represented as a float.
+
+    Raises:
+        ValueError: If ``amount`` is not finite.
+    """
+    if not amount.is_finite():
+        raise ValueError("Money amount must be finite")
     return float(amount.quantize(MONEY_QUANTUM))
 
 
@@ -292,12 +385,13 @@ def _budget_source_excerpt(
 
 def _resolve_budget_currency(marker: str | None, *, default_currency: str) -> str:
     normalized_marker = marker.strip().upper() if marker else ""
+    normalized_default_currency = default_currency.strip().upper()
     if not normalized_marker:
-        if not default_currency:
+        if not normalized_default_currency:
             raise portfolio_verification.PortfolioInputError(
                 "Investment budget currency could not be inferred from the selected country"
             )
-        return default_currency
+        return normalized_default_currency
     if len(normalized_marker) == 3 and normalized_marker.isalpha():
         return normalized_marker
     if normalized_marker == "€":
@@ -305,11 +399,15 @@ def _resolve_budget_currency(marker: str | None, *, default_currency: str) -> st
     if normalized_marker == "£":
         return "GBP"
     if normalized_marker == "¥":
-        return default_currency if default_currency in {"CNY", "JPY"} else "JPY"
+        return normalized_default_currency if normalized_default_currency in {"CNY", "JPY"} else "JPY"
     if normalized_marker == "A$":
         return "AUD"
     if normalized_marker == "$":
-        return default_currency if default_currency in {"AUD", "CAD", "HKD", "NZD", "SGD", "USD"} else "USD"
+        return (
+            normalized_default_currency
+            if normalized_default_currency in {"AUD", "CAD", "HKD", "NZD", "SGD", "USD"}
+            else "USD"
+        )
     raise portfolio_verification.PortfolioInputError(f"Unsupported investment budget currency marker: {marker}")
 
 

@@ -189,19 +189,31 @@ class _PricedListingAnalysisDraft(_SubjectiveListingAnalysisDraft):
 
 
 async def ai_get_asx_new_listings() -> list[models_events_listings.ListingEvent]:
-    """
-    Fetch all current or upcoming ASX listings and analyze up to five eligible events.
+    """Return confirmed current and future ASX listings with bounded AI analysis.
 
-    Listings before the current Sydney date are excluded. Today's listings are
-    included, and results are ordered by the soonest confirmed listing date. Entries
-    without a confirmed date or with supplied non-positive monetary values are
-    excluded. Unavailable issue prices and capital amounts are retained as null.
-    Economy mode skips analysis for explicitly non-underwritten listings with a
-    missing public-offer close date or one before today. Economy-skipped events do
-    not consume the analysis limit, but failed analysis attempts do. Once the limit
-    is reached, remaining events are returned with their analysis status set to Skipped.
-    Upcoming assessments give explicitly subjective base cases anchored to the issue
-    price when available, or qualitative views otherwise, with evidence gaps and cautions.
+    Returns:
+        Listing events whose confirmed listing date is today or later in Sydney,
+        ordered by date and then symbol. Missing issue price, price-range upper bound,
+        or capital-to-raise values remain ``None``; supplied non-positive monetary
+        values and unconfirmed dates are excluded. Up to five attempted analyses are
+        marked ``Completed`` or ``Failed`` and retained. Events excluded by Economy
+        screening or beyond the attempt cap are retained as ``Skipped``.
+
+    Raises:
+        RuntimeError: If the ASX page cannot be fetched, an extraction or analysis
+            cache contains invalid data, or AI extraction reports failure.
+        ValueError: If AI extraction returns invalid structured listing data.
+        ai_helper.LLMRateLimitError: If extraction remains provider-rate-limited
+            beyond the retry budget.
+        Exception: Crawler, cache-backend, provider configuration, and unexpected
+            extraction-provider failures are propagated.
+
+    Notes:
+        Failed analysis attempts consume the five-attempt cap; Economy skips do not.
+        Per-listing research or assessment failures are represented as ``Failed``
+        events rather than aborting the list. Upcoming price outlooks are explicitly
+        subjective and use the issue price only when one is available. The complete
+        list is cached only when every returned event completed analysis.
     """
     today = _current_asx_date()
     events = _select_current_and_future_listings(

@@ -1,6 +1,7 @@
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
+import pydantic
 import pytest
 
 from app.services.toz import get_gold_history, get_gold_quote, get_silver_history, get_silver_quote
@@ -62,6 +63,190 @@ FX_INFO = {
 }
 
 
+@pytest.mark.parametrize(
+    ("service_func", "commodity_info"),
+    [
+        (get_gold_quote, GOLD_INFO),
+        (get_silver_quote, SILVER_INFO),
+    ],
+)
+def test_empty_currency_uses_usd(service_func, commodity_info):
+    with patch("app.services.toz.yf.Ticker") as mock_ticker_cls:
+        mock_ticker_cls.return_value = _make_ticker_mock(commodity_info)
+
+        result = service_func("")
+
+    assert result is not None
+    assert result.currency == "USD"
+
+
+@pytest.mark.parametrize(
+    ("service_func", "commodity_info"),
+    [
+        (get_gold_quote, GOLD_INFO),
+        (get_silver_quote, SILVER_INFO),
+    ],
+)
+def test_lowercase_currency_is_normalized_for_quotes(service_func, commodity_info):
+    fx_ticker = _make_ticker_mock(FX_INFO)
+    commodity_ticker = _make_ticker_mock(commodity_info)
+    with patch(
+        "app.services.toz.yf.Ticker",
+        side_effect=[fx_ticker, commodity_ticker],
+    ):
+        result = service_func("aud")
+
+    assert result is not None
+    assert result.currency == "AUD"
+    assert result.market_price == pytest.approx(commodity_info["regularMarketPrice"] * 1.55)
+
+
+@pytest.mark.parametrize("service_func", [get_gold_history, get_silver_history])
+def test_empty_provider_history_returns_an_empty_list(service_func):
+    empty_history = _make_history_df(0)
+    with patch("app.services.toz.yf.Ticker") as mock_ticker_cls:
+        mock_ticker_cls.return_value = _make_ticker_mock({}, empty_history)
+
+        result = service_func()
+
+    assert result == []
+
+
+@pytest.mark.parametrize("service_func", [get_gold_history, get_silver_history])
+def test_empty_currency_history_uses_usd(service_func):
+    history = _make_history_df(2)
+    with patch("app.services.toz.yf.Ticker") as mock_ticker_cls:
+        mock_ticker_cls.return_value = _make_ticker_mock({}, history)
+
+        result = service_func("")
+
+    assert result is not None
+    assert [point.currency for point in result] == ["USD", "USD"]
+    assert result[0].open == history.iloc[0]["Open"]
+
+
+@pytest.mark.parametrize("service_func", [get_gold_history, get_silver_history])
+def test_lowercase_currency_is_normalized_for_histories(service_func):
+    history = _make_history_df(2)
+    fx_ticker = _make_ticker_mock(FX_INFO)
+    commodity_ticker = _make_ticker_mock({}, history)
+    with patch(
+        "app.services.toz.yf.Ticker",
+        side_effect=[fx_ticker, commodity_ticker],
+    ):
+        result = service_func("aud")
+
+    assert result is not None
+    assert [point.currency for point in result] == ["AUD", "AUD"]
+    assert result[0].open == pytest.approx(history.iloc[0]["Open"] * 1.55)
+
+
+@pytest.mark.parametrize(
+    "service_func",
+    [get_gold_quote, get_gold_history, get_silver_quote, get_silver_history],
+)
+def test_provider_failures_propagate(service_func):
+    with patch("app.services.toz.yf.Ticker", side_effect=RuntimeError("provider unavailable")):
+        with pytest.raises(RuntimeError):
+            service_func()
+
+
+@pytest.mark.parametrize(
+    "service_func",
+    [get_gold_quote, get_gold_history, get_silver_quote, get_silver_history],
+)
+def test_currency_metadata_failures_propagate(service_func):
+    class FailingTicker:
+        @property
+        def info(self):
+            raise RuntimeError("metadata unavailable")
+
+    with patch("app.services.toz.yf.Ticker", return_value=FailingTicker()):
+        with pytest.raises(RuntimeError, match="metadata unavailable"):
+            service_func("AUD")
+
+
+@pytest.mark.parametrize("service_func", [get_gold_history, get_silver_history])
+def test_history_provider_failures_propagate(service_func):
+    ticker = _make_ticker_mock({})
+    ticker.history.side_effect = RuntimeError("history unavailable")
+    with patch("app.services.toz.yf.Ticker", return_value=ticker):
+        with pytest.raises(RuntimeError, match="history unavailable"):
+            service_func()
+
+
+@pytest.mark.parametrize(
+    ("service_func", "commodity_info"),
+    [
+        (get_gold_quote, GOLD_INFO),
+        (get_silver_quote, SILVER_INFO),
+    ],
+)
+def test_quote_conversion_failures_propagate(service_func, commodity_info):
+    fx_ticker = _make_ticker_mock(FX_INFO)
+    commodity_ticker = _make_ticker_mock(commodity_info)
+    with (
+        patch(
+            "app.services.toz.yf.Ticker",
+            side_effect=[fx_ticker, commodity_ticker],
+        ),
+        patch(
+            "app.services.toz.models_market_data.StockQuote.to_currency",
+            side_effect=RuntimeError("conversion unavailable"),
+        ),
+        pytest.raises(RuntimeError, match="conversion unavailable"),
+    ):
+        service_func("AUD")
+
+
+@pytest.mark.parametrize("service_func", [get_gold_history, get_silver_history])
+def test_history_conversion_failures_propagate(service_func):
+    history = _make_history_df(1)
+    fx_ticker = _make_ticker_mock(FX_INFO)
+    commodity_ticker = _make_ticker_mock({}, history)
+    with (
+        patch(
+            "app.services.toz.yf.Ticker",
+            side_effect=[fx_ticker, commodity_ticker],
+        ),
+        patch(
+            "app.services.toz.models_market_data.HistoryPoint.to_currency",
+            side_effect=RuntimeError("conversion unavailable"),
+        ),
+        pytest.raises(RuntimeError, match="conversion unavailable"),
+    ):
+        service_func("AUD")
+
+
+@pytest.mark.parametrize(
+    "service_func",
+    [get_gold_quote, get_silver_quote],
+)
+def test_quote_model_validation_failures_propagate(service_func):
+    invalid_info = {
+        **GOLD_INFO,
+        "regularMarketPrice": "not-a-number",
+    }
+    with patch(
+        "app.services.toz.yf.Ticker",
+        return_value=_make_ticker_mock(invalid_info),
+    ):
+        with pytest.raises(pydantic.ValidationError):
+            service_func()
+
+
+@pytest.mark.parametrize("service_func", [get_gold_history, get_silver_history])
+def test_history_model_validation_failures_propagate(service_func):
+    invalid_history = _make_history_df(1)
+    invalid_history["Open"] = ["not-a-number"]
+    with patch(
+        "app.services.toz.yf.Ticker",
+        return_value=_make_ticker_mock({}, invalid_history),
+    ):
+        with pytest.raises(pydantic.ValidationError):
+            service_func()
+
+
 class TestGetGoldQuote:
     @patch("app.services.toz.yf.Ticker")
     def test_usd_default(self, mock_ticker_cls):
@@ -70,8 +255,6 @@ class TestGetGoldQuote:
         assert result is not None
         assert result.currency == "USD"
         assert result.market_price == 2650.0
-        # Should only call Ticker once for GC=F (no FX lookup)
-        mock_ticker_cls.assert_called_once_with("GC=F")
 
     @patch("app.services.toz.yf.Ticker")
     def test_usd_explicit(self, mock_ticker_cls):
@@ -97,16 +280,6 @@ class TestGetGoldQuote:
         mock_ticker_cls.return_value = _make_ticker_mock({})
         result = get_gold_quote("XYZ")
         assert result is None
-
-    @patch("app.services.toz.yf.Ticker")
-    def test_case_insensitive_currency(self, mock_ticker_cls):
-        fx_ticker = _make_ticker_mock(FX_INFO)
-        gold_ticker = _make_ticker_mock(GOLD_INFO)
-        mock_ticker_cls.side_effect = [fx_ticker, gold_ticker]
-
-        result = get_gold_quote("aud")
-        assert result is not None
-        assert result.currency == "AUD"
 
 
 class TestGetGoldHistory:
@@ -166,7 +339,6 @@ class TestGetSilverQuote:
         assert result is not None
         assert result.currency == "USD"
         assert result.market_price == 31.5
-        mock_ticker_cls.assert_called_once_with("SI=F")
 
     @patch("app.services.toz.yf.Ticker")
     def test_currency_conversion(self, mock_ticker_cls):

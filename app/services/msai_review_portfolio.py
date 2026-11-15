@@ -453,7 +453,49 @@ async def ai_review_portfolio(
     investor_theme: str,
     rebalance_plan: bool = False,
 ) -> models_review.PortfolioReview:
-    """Verify and review an existing portfolio using structured, cached AI stages."""
+    """Review a verified portfolio and optionally produce executable actions.
+
+    Args:
+        portfolio: Existing holdings. Zero-share entries are ignored; at least
+            one positive position is required, and every active position must
+            use a whole-share quantity.
+        country: Country name or code used to normalize the market and verify
+            holdings and any researched additions.
+        investor_theme: Non-blank goals, horizon, risk context, constraints, and
+            optional single total or recurring contribution budget.
+        rebalance_plan: Request executable actions when the validated target
+            requires a major rebalance. This flag does not force a rebalance
+            recommendation.
+
+    Returns:
+        A ``PortfolioReview`` with the verified snapshot, deterministic
+        ``LongTerm`` or ``Swing`` strategy, normalized budget, research-backed
+        strengths, risks, holding recommendations and target weights, turnover,
+        rebalance decision, references, and an action plan when permitted.
+
+    Raises:
+        PortfolioInputError: If country, theme, holdings, strategy cues, or
+            budget details are invalid, holdings are fractional, or the budget
+            currency differs from the verified portfolio currency.
+        PortfolioVerificationError: If current holdings cannot be resolved
+            against market data.
+        PortfolioReviewAIError: If an AI stage fails, remains rate limited,
+            returns invalid structured output, addition prices cannot be
+            verified, or final review validation fails.
+        RuntimeError: If a cached stage or final review is invalid.
+
+    Notes:
+        Missing budgets are inferred at 10% of current value and may rise to 15%
+        only when that enables a whole-share purchase. ``LongTerm`` reviews do
+        not trim retained overweight holdings and restrict exits to validated
+        critical or structural reasons; ``Swing`` reviews may use trims and
+        risk-control exits. An exit, a new target holding, or at least 20%
+        one-way turnover recommends a major rebalance. Without
+        ``rebalance_plan``, such a recommendation intentionally has no action
+        plan; otherwise actions use a balanced cash ledger and whole shares.
+        Non-major reviews receive a growth action plan. Validated stages and
+        final results are cached for one hour.
+    """
 
     normalized_country = conv.country_to_iso2(country.strip())
     if not normalized_country:
@@ -622,7 +664,23 @@ async def ai_review_portfolio(
 
 
 def extract_strategy(investor_theme: str) -> models_review.PortfolioReviewStrategy:
-    """Extract an explicit portfolio style, defaulting to LongTerm."""
+    """Classify the investor's stated review horizon.
+
+    Args:
+        investor_theme: Free-text investor goals and horizon. Matching is
+            case-insensitive and recognizes explicit swing or short trading
+            horizons and explicit long-term, buy-and-hold, retirement, or
+            multi-year cues.
+
+    Returns:
+        ``Swing`` when a swing cue is present; otherwise ``LongTerm``. Themes
+        with no recognized strategy, including blank text when called directly,
+        deliberately default to ``LongTerm``.
+
+    Raises:
+        PortfolioInputError: If explicit swing and long-term cues both occur,
+            because the requested strategy is ambiguous.
+    """
 
     has_swing = bool(_SWING_PATTERN.search(investor_theme))
     has_long_term = bool(_LONG_TERM_PATTERN.search(investor_theme))
@@ -963,7 +1021,7 @@ async def _execute_stage(
             response_json_schema=response_model.model_json_schema(),
             schema_name=schema_name,
         )
-    except (OSError, ValueError, openai.APIError) as exc:
+    except (OSError, ValueError, openai.APIError, ai_helper.LLMRateLimitError) as exc:
         logging.exception("[Portfolio Review] %s provider call failed.", stage_name.capitalize())
         raise PortfolioReviewAIError(f"Portfolio review {stage_name} provider failed") from exc
     if response.is_error:

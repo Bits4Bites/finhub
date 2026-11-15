@@ -24,7 +24,20 @@ class ResolvedSymbol:
 
 
 def resolve_symbol(symbol: str) -> ResolvedSymbol:
-    """Resolve one accepted symbol into provider-native and canonical market identity."""
+    """Resolve a stock identifier into its Yahoo and canonical market identity.
+
+    Args:
+        symbol: A Yahoo symbol or an ``EXCHANGE:CODE`` identifier.
+
+    Returns:
+        The provider symbol, exchange-qualified symbol, market metadata, and a
+        positive current price when one is available.
+
+    Notes:
+        ``regularMarketPrice`` is preferred over ``currentPrice``. Missing or
+        non-positive prices produce ``None``. Missing country metadata defaults
+        to the United States. Provider and symbol-conversion errors propagate.
+    """
     yf_symbol = conv.to_yf_symbol_format(symbol)
     ticker = yf.Ticker(yf_symbol)
     info = dict(ticker.info or {})
@@ -51,14 +64,16 @@ def _positive_finite_number(value: object) -> float | None:
 
 
 def get_symbol_info_raw(symbol: str) -> dict[str, Any]:
-    """
-    Fetches detailed information about a ticker symbol.
+    """Fetch provider metadata using Python-friendly field names.
 
     Args:
-        symbol (str): The stock symbol to fetch information for.
+        symbol: The Yahoo Finance symbol to query.
 
     Returns:
-        dict[str, Any]: A dictionary containing the raw information about the symbol.
+        The provider metadata with camelCase keys converted to snake_case.
+
+    Notes:
+        Metadata values are preserved unchanged. Provider failures propagate.
     """
     ticker = yf.Ticker(symbol)
     info = ticker.info
@@ -72,14 +87,18 @@ def get_symbol_info_raw(symbol: str) -> dict[str, Any]:
 
 
 def get_symbol_info(symbol: str) -> models_stocks.SymbolInfo | None:
-    """
-    Fetches detailed information about a ticker symbol.
+    """Build detailed information for a supported financial security.
 
     Args:
-        symbol (str): The stock symbol to fetch information for, accepting YF format (e.g. ABC.AX) or EXCHANGE:CODE (e.g. NASDAQ:XYZ).
+        symbol: A Yahoo symbol or an ``EXCHANGE:CODE`` identifier.
 
     Returns:
-        models_stocks.SymbolInfo | None: Symbol information, or None.
+        Detailed symbol information when Yahoo reports an equity
+        (``EQUITY``), ETF (``ETF``), or mutual fund (``MUTUALFUND``);
+        otherwise ``None``.
+
+    Notes:
+        Provider, conversion, and model-validation failures propagate.
     """
     yf_symbol = conv.to_yf_symbol_format(symbol)
     ticker = yf.Ticker(yf_symbol)
@@ -90,14 +109,17 @@ def get_symbol_info(symbol: str) -> models_stocks.SymbolInfo | None:
 
 
 def get_symbol_overview(symbol: str) -> models_stocks.SymbolOverview | None:
-    """
-    Fetches overview information about a ticker symbol.
+    """Build a market overview for a supported financial security.
 
     Args:
-        symbol (str): The stock symbol to fetch information for, accepting YF format (e.g. ABC.AX) or EXCHANGE:CODE (e.g. NASDAQ:XYZ).
+        symbol: A Yahoo symbol or an ``EXCHANGE:CODE`` identifier.
 
     Returns:
-        models_stocks.SymbolOverview | None: Symbol overview information, or None.
+        Overview information when Yahoo reports an equity (``EQUITY``), ETF
+        (``ETF``), or mutual fund (``MUTUALFUND``); otherwise ``None``.
+
+    Notes:
+        Provider, conversion, and model-validation failures propagate.
     """
     yf_symbol = conv.to_yf_symbol_format(symbol)
     ticker = yf.Ticker(yf_symbol)
@@ -108,15 +130,23 @@ def get_symbol_overview(symbol: str) -> models_stocks.SymbolOverview | None:
 
 
 def get_stock_quotes(symbols: list[str]) -> dict[str, models_market_data.StockQuote]:
-    """
-    Fetches stock quotes for a list of ticker symbols.
+    """Fetch current quotes for supported financial securities.
 
     Args:
-        symbols (list[str]): A list of stock symbols to fetch quotes for, accepting YF format (e.g. ABC.AX) or EXCHANGE:CODE (e.g. NASDAQ:XYZ).
+        symbols: Yahoo symbols or ``EXCHANGE:CODE`` identifiers.
 
     Returns:
-        dict[str, models_market_data.StockQuote]: Quotes keyed by requested symbol.
+        Quotes for equities (``EQUITY``), ETFs (``ETF``), and mutual funds
+        (``MUTUALFUND``), keyed by the original requested symbols. Missing
+        symbols and other or missing quote types are omitted. An empty input
+        returns an empty dictionary.
+
+    Notes:
+        Provider, conversion, and model-validation failures propagate.
     """
+    if not symbols:
+        return {}
+
     yf_symbols = [conv.to_yf_symbol_format(s) for s in symbols]
     tickers = yf.Tickers(" ".join(yf_symbols))
     quotes = {}
@@ -132,30 +162,40 @@ def get_stock_quotes(symbols: list[str]) -> dict[str, models_market_data.StockQu
 
 
 def get_stock_quote_at_date(symbol: str, date_str: str) -> models_market_data.HistoryPoint | None:
-    """
-    Fetches stock quote information for a given ticker symbol at a specific date.
+    """Fetch the latest available daily quote on or before a requested date.
 
     Args:
-        symbol (str): The stock symbol to fetch information for, accepting YF format (e.g. ABC.AX) or EXCHANGE:CODE (e.g. NASDAQ:XYZ).
-        date_str (str): The date to fetch the quote for (format: YYYY-MM-DD).
+        symbol: A Yahoo symbol or an ``EXCHANGE:CODE`` identifier.
+        date_str: Requested date in ``YYYY-MM-DD`` format.
 
     Returns:
-        models_market_data.HistoryPoint | None: The quote for the requested date, or None.
+        The most recent daily quote on or before the requested date within the
+        preceding 14 calendar days for an equity (``EQUITY``), ETF (``ETF``),
+        or mutual fund (``MUTUALFUND``). Returns ``None`` for an invalid date,
+        another or missing quote type, or unavailable history.
+
+    Notes:
+        Provider, conversion, and model-validation failures propagate.
     """
     yf_symbol = conv.to_yf_symbol_format(symbol)
     ticker = yf.Ticker(yf_symbol)
     quote_type = ticker.info.get("quoteType")
     if quote_type in config.ALLOWED_QUOTE_TYPES:
         try:
-            start_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+            requested_date = datetime.strptime(date_str, "%Y-%m-%d").date()
         except ValueError:
             return None
-        end_date = start_date + timedelta(days=1)
-        start_date = start_date - timedelta(days=14)  # to account for weekends and holidays
+        end_date = requested_date + timedelta(days=1)
+        start_date = requested_date - timedelta(days=14)
 
         history = ticker.history(start=start_date, end=end_date, interval="1d", auto_adjust=False)
         if not history.empty:
-            point = history.iloc[-1]
+            eligible_history = history[
+                (history.index.date >= start_date) & (history.index.date <= requested_date)
+            ].sort_index()
+            if eligible_history.empty:
+                return None
+            point = eligible_history.iloc[-1]
             return models_market_data.HistoryPoint(
                 timestamp=point.name.timestamp(),
                 timestamp_str=point.name.isoformat(sep=" ", timespec="seconds"),
@@ -170,15 +210,20 @@ def get_stock_quote_at_date(symbol: str, date_str: str) -> models_market_data.Hi
 
 
 def get_symbol_history(symbol: str, days: int = 100) -> list[models_market_data.HistoryPoint] | None:
-    """
-    Fetches historical stock price data for a given ticker symbol.
+    """Fetch ordered daily price history for a supported financial security.
 
     Args:
-        symbol (str): The stock symbol to fetch information for, accepting YF format (e.g. ABC.AX) or EXCHANGE:CODE (e.g. NASDAQ:XYZ).
-        days (int): The number of days of historical data to retrieve (default is 100).
+        symbol: A Yahoo symbol or an ``EXCHANGE:CODE`` identifier.
+        days: Requested history length. Non-positive values use 100 days.
 
     Returns:
-        list[models_market_data.HistoryPoint] | None: Historical prices, or None.
+        History points in provider order for equities (``EQUITY``), ETFs
+        (``ETF``), and mutual funds (``MUTUALFUND``), or an empty list when no
+        observations are available. Returns ``None`` for another or missing
+        quote type.
+
+    Notes:
+        Provider, conversion, and model-validation failures propagate.
     """
     yf_symbol = conv.to_yf_symbol_format(symbol)
     ticker = yf.Ticker(yf_symbol)

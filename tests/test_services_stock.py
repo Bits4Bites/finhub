@@ -1,6 +1,8 @@
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
+import pydantic
+import pytest
 
 from app.services.stock import (
     get_stock_quote_at_date,
@@ -118,9 +120,8 @@ def _make_history_df(num_rows: int = 3) -> pd.DataFrame:
     )
 
 
-@patch("app.utils.conv.to_yf_symbol_format", return_value="SGOV")
 @patch("app.services.stock.yf.Ticker")
-def test_resolve_symbol_returns_provider_and_canonical_identity(mock_ticker_cls, mock_to_yf):
+def test_resolve_symbol_returns_provider_and_canonical_identity(mock_ticker_cls):
     info = {
         **ETF_INFO,
         "symbol": "SGOV",
@@ -128,12 +129,11 @@ def test_resolve_symbol_returns_provider_and_canonical_identity(mock_ticker_cls,
         "regularMarketPrice": 100.65,
         "longName": "iShares 0-3 Month Treasury Bond ETF",
     }
-    mock_ticker_cls.return_value = _make_ticker_mock(info)
+    ticker = _make_ticker_mock(info)
+    mock_ticker_cls.side_effect = {"SGOV": ticker}.__getitem__
 
     result = resolve_symbol("NYSE:SGOV")
 
-    mock_to_yf.assert_called_once_with("NYSE:SGOV")
-    mock_ticker_cls.assert_called_once_with("SGOV")
     assert result.symbol == "SGOV"
     assert result.normalized_symbol == "NYSE:SGOV"
     assert result.exchange == "NYSE"
@@ -157,11 +157,118 @@ def test_resolve_symbol_normalizes_cboe_us_to_nyse(mock_ticker_cls, mock_to_yf):
 
     result = resolve_symbol("NYSE:GOVT")
 
-    mock_to_yf.assert_called_once_with("NYSE:GOVT")
-    mock_ticker_cls.assert_called_once_with("GOVT")
     assert result.symbol == "GOVT"
     assert result.normalized_symbol == "NYSE:GOVT"
     assert result.exchange == "NYSE"
+
+
+@patch("app.utils.conv.to_yf_symbol_format", return_value="ACME")
+@patch("app.services.stock.yf.Ticker")
+def test_resolve_symbol_uses_current_price_when_regular_price_is_unavailable(mock_ticker_cls, mock_to_yf):
+    info = {
+        **EQUITY_INFO,
+        "symbol": "ACME",
+        "regularMarketPrice": 0,
+        "currentPrice": 123.45,
+    }
+    mock_ticker_cls.return_value = _make_ticker_mock(info)
+
+    result = resolve_symbol("ACME")
+
+    assert result.market_price == 123.45
+
+
+@patch("app.services.stock.yf.Ticker")
+def test_resolve_symbol_defaults_country_and_rejects_unusable_prices(mock_ticker_cls):
+    info = {
+        **EQUITY_INFO,
+        "country": None,
+        "regularMarketPrice": 0,
+        "currentPrice": float("nan"),
+    }
+    mock_ticker_cls.return_value = _make_ticker_mock(info)
+
+    result = resolve_symbol("AAPL")
+
+    assert result.country == "US"
+    assert result.market_price is None
+
+
+@pytest.mark.parametrize(
+    "service_call",
+    [
+        lambda: resolve_symbol("AAPL"),
+        lambda: get_symbol_info("AAPL"),
+        lambda: get_symbol_overview("AAPL"),
+        lambda: get_stock_quote_at_date("AAPL", "2026-01-01"),
+        lambda: get_symbol_history("AAPL"),
+    ],
+)
+@patch("app.services.stock.yf.Ticker", side_effect=RuntimeError("provider unavailable"))
+def test_single_symbol_provider_failures_propagate(mock_ticker_cls, service_call):
+    with pytest.raises(RuntimeError):
+        service_call()
+
+
+@pytest.mark.parametrize(
+    "service_call",
+    [
+        lambda: resolve_symbol("AAPL"),
+        lambda: get_symbol_info("AAPL"),
+        lambda: get_symbol_overview("AAPL"),
+        lambda: get_stock_quote_at_date("AAPL", "2026-01-01"),
+        lambda: get_symbol_history("AAPL"),
+    ],
+)
+@patch("app.services.stock.yf.Ticker")
+def test_single_symbol_metadata_failures_propagate(mock_ticker_cls, service_call):
+    class FailingTicker:
+        @property
+        def info(self):
+            raise RuntimeError("metadata unavailable")
+
+    mock_ticker_cls.return_value = FailingTicker()
+
+    with pytest.raises(RuntimeError, match="metadata unavailable"):
+        service_call()
+
+
+@pytest.mark.parametrize(
+    "service_call",
+    [
+        lambda: get_symbol_info("AAPL"),
+        lambda: get_stock_quote_at_date("AAPL", "2026-01-01"),
+        lambda: get_symbol_history("AAPL"),
+    ],
+)
+@patch("app.services.stock.yf.Ticker")
+def test_history_provider_failures_propagate(mock_ticker_cls, service_call):
+    ticker = _make_ticker_mock(EQUITY_INFO)
+    ticker.history.side_effect = RuntimeError("history unavailable")
+    mock_ticker_cls.return_value = ticker
+
+    with pytest.raises(RuntimeError, match="history unavailable"):
+        service_call()
+
+
+@pytest.mark.parametrize(
+    "service_call",
+    [
+        lambda: resolve_symbol("ASX:CBA"),
+        lambda: get_symbol_info("ASX:CBA"),
+        lambda: get_symbol_overview("ASX:CBA"),
+        lambda: get_stock_quotes(["ASX:CBA"]),
+        lambda: get_stock_quote_at_date("ASX:CBA", "2026-01-01"),
+        lambda: get_symbol_history("ASX:CBA"),
+    ],
+)
+@patch(
+    "app.services.stock.conv.to_yf_symbol_format",
+    side_effect=RuntimeError("conversion unavailable"),
+)
+def test_symbol_conversion_failures_propagate(mock_conversion, service_call):
+    with pytest.raises(RuntimeError, match="conversion unavailable"):
+        service_call()
 
 
 # ---------------------------------------------------------------------------
@@ -177,7 +284,6 @@ class TestGetSymbolInfo:
         result = get_symbol_info("AAPL")
         assert result is not None
         assert result.symbol == "AAPL"
-        mock_to_yf.assert_called_once_with("AAPL")
 
     @patch("app.utils.conv.to_yf_symbol_format", return_value="SPY")
     @patch("app.services.stock.yf.Ticker")
@@ -210,12 +316,32 @@ class TestGetSymbolInfo:
         result = get_symbol_info("FAKE")
         assert result is None
 
-    @patch("app.utils.conv.to_yf_symbol_format", return_value="CBA.AX")
     @patch("app.services.stock.yf.Ticker")
-    def test_converts_exchange_code_format(self, mock_ticker_cls, mock_to_yf):
-        mock_ticker_cls.return_value = _make_ticker_mock(EQUITY_INFO)
-        get_symbol_info("ASX:CBA")
-        mock_to_yf.assert_called_once_with("ASX:CBA")
+    def test_accepts_exchange_qualified_symbols(self, mock_ticker_cls):
+        info = {
+            **EQUITY_INFO,
+            "symbol": "CBA.AX",
+            "fullExchangeName": "ASX",
+            "country": "Australia",
+        }
+        ticker = _make_ticker_mock(info)
+        mock_ticker_cls.side_effect = {"CBA.AX": ticker}.__getitem__
+
+        result = get_symbol_info("ASX:CBA")
+
+        assert result is not None
+        assert result.normalized_symbol == "ASX:CBA"
+
+    @patch("app.services.stock.yf.Ticker")
+    def test_model_validation_failures_propagate(self, mock_ticker_cls):
+        invalid_info = {
+            **EQUITY_INFO,
+            "regularMarketPrice": "not-a-number",
+        }
+        mock_ticker_cls.return_value = _make_ticker_mock(invalid_info)
+
+        with pytest.raises(pydantic.ValidationError):
+            get_symbol_info("AAPL")
 
 
 # ---------------------------------------------------------------------------
@@ -241,12 +367,68 @@ class TestGetSymbolOverview:
         assert result is not None
         assert result.normalized_symbol == "NASDAQ:AAPL"
 
+    @pytest.mark.parametrize(
+        ("info", "expected_quote_type"),
+        [
+            (ETF_INFO, "ETF"),
+            (MUTUAL_FUND_INFO, "MUTUALFUND"),
+        ],
+    )
+    @patch("app.services.stock.yf.Ticker")
+    def test_returns_overview_for_supported_fund_types(
+        self,
+        mock_ticker_cls,
+        info,
+        expected_quote_type,
+    ):
+        mock_ticker_cls.return_value = _make_ticker_mock(info)
+
+        result = get_symbol_overview(info["symbol"])
+
+        assert result is not None
+        assert result.quote_type == expected_quote_type
+
     @patch("app.utils.conv.to_yf_symbol_format", return_value="VTSAX")
     @patch("app.services.stock.yf.Ticker")
     def test_returns_none_for_unsupported_quote_type(self, mock_ticker_cls, mock_to_yf):
         mock_ticker_cls.return_value = _make_ticker_mock(UNSUPPORTED_INFO)
         result = get_symbol_overview("VTSAX")
         assert result is None
+
+    @patch("app.services.stock.yf.Ticker")
+    def test_returns_none_when_quote_type_is_missing(self, mock_ticker_cls):
+        mock_ticker_cls.return_value = _make_ticker_mock(NONE_QUOTE_TYPE_INFO)
+
+        result = get_symbol_overview("FAKE")
+
+        assert result is None
+
+    @patch("app.services.stock.yf.Ticker")
+    def test_accepts_exchange_qualified_symbols(self, mock_ticker_cls):
+        info = {
+            **EQUITY_INFO,
+            "symbol": "CBA.AX",
+            "fullExchangeName": "ASX",
+            "country": "Australia",
+        }
+        ticker = _make_ticker_mock(info)
+        mock_ticker_cls.side_effect = {"CBA.AX": ticker}.__getitem__
+
+        result = get_symbol_overview("ASX:CBA")
+
+        assert result is not None
+        assert result.normalized_symbol == "ASX:CBA"
+
+    @patch("app.services.stock.yf.Ticker")
+    def test_model_validation_failures_propagate(self, mock_ticker_cls):
+        invalid_info = {
+            **EQUITY_INFO,
+            "symbol": None,
+        }
+        mock_ticker_cls.return_value = _make_ticker_mock(invalid_info)
+
+        with pytest.raises(pydantic.ValidationError):
+            get_symbol_overview("AAPL")
 
 
 # ---------------------------------------------------------------------------
@@ -296,6 +478,23 @@ class TestGetStockQuotes:
         assert "VTSAX" in result
         assert result["VTSAX"].market_price == 450.0
 
+    @patch("app.services.stock.yf.Tickers")
+    def test_accepts_exchange_qualified_symbols(self, mock_tickers_cls):
+        info = {
+            **EQUITY_INFO,
+            "symbol": "CBA.AX",
+            "fullExchangeName": "ASX",
+            "country": "Australia",
+        }
+        tickers = MagicMock()
+        tickers.tickers = {"CBA.AX": _make_ticker_mock(info)}
+        mock_tickers_cls.side_effect = {"CBA.AX": tickers}.__getitem__
+
+        result = get_stock_quotes(["ASX:CBA"])
+
+        assert list(result) == ["ASX:CBA"]
+        assert result["ASX:CBA"].market_price == 195.0
+
     @patch("app.utils.conv.to_yf_symbol_format", side_effect=lambda s: s)
     @patch("app.services.stock.yf.Tickers")
     def test_handles_symbol_not_in_tickers(self, mock_tickers_cls, mock_to_yf):
@@ -316,6 +515,48 @@ class TestGetStockQuotes:
         result = get_stock_quotes([])
         assert result == {}
 
+    @patch("app.services.stock.yf.Tickers")
+    def test_omits_symbols_with_missing_quote_type(self, mock_tickers_cls):
+        tickers = MagicMock()
+        tickers.tickers = {"FAKE": _make_ticker_mock(NONE_QUOTE_TYPE_INFO)}
+        mock_tickers_cls.return_value = tickers
+
+        result = get_stock_quotes(["FAKE"])
+
+        assert result == {}
+
+    @patch("app.services.stock.yf.Tickers", side_effect=RuntimeError("provider unavailable"))
+    def test_provider_failures_propagate(self, mock_tickers_cls):
+        with pytest.raises(RuntimeError):
+            get_stock_quotes(["AAPL"])
+
+    @patch("app.services.stock.yf.Tickers")
+    def test_metadata_failures_propagate(self, mock_tickers_cls):
+        class FailingTicker:
+            @property
+            def info(self):
+                raise RuntimeError("metadata unavailable")
+
+        tickers = MagicMock()
+        tickers.tickers = {"AAPL": FailingTicker()}
+        mock_tickers_cls.return_value = tickers
+
+        with pytest.raises(RuntimeError, match="metadata unavailable"):
+            get_stock_quotes(["AAPL"])
+
+    @patch("app.services.stock.yf.Tickers")
+    def test_model_validation_failures_propagate(self, mock_tickers_cls):
+        invalid_info = {
+            **EQUITY_INFO,
+            "regularMarketPrice": "not-a-number",
+        }
+        tickers = MagicMock()
+        tickers.tickers = {"AAPL": _make_ticker_mock(invalid_info)}
+        mock_tickers_cls.return_value = tickers
+
+        with pytest.raises(pydantic.ValidationError):
+            get_stock_quotes(["AAPL"])
+
 
 # ---------------------------------------------------------------------------
 # get_stock_quote_at_date
@@ -325,15 +566,39 @@ class TestGetStockQuotes:
 class TestGetStockQuoteAtDate:
     @patch("app.utils.conv.to_yf_symbol_format", return_value="AAPL")
     @patch("app.services.stock.yf.Ticker")
-    def test_returns_history_point_for_valid_date(self, mock_ticker_cls, mock_to_yf):
+    def test_returns_latest_quote_no_later_than_the_requested_date(self, mock_ticker_cls, mock_to_yf):
         hist_df = _make_history_df(5)
         ticker = _make_ticker_mock(EQUITY_INFO, hist_df)
         mock_ticker_cls.return_value = ticker
 
         result = get_stock_quote_at_date("AAPL", "2026-01-03")
+
+        assert result is not None
+        assert result.close == hist_df.iloc[2]["Close"]
+        assert result.volume == int(hist_df.iloc[2]["Volume"])
+
+    @patch("app.utils.conv.to_yf_symbol_format", return_value="AAPL")
+    @patch("app.services.stock.yf.Ticker")
+    def test_uses_the_previous_trading_day_for_a_weekend(self, mock_ticker_cls, mock_to_yf):
+        hist_df = _make_history_df(5).loc[["2026-01-02", "2026-01-05"]]
+        ticker = _make_ticker_mock(EQUITY_INFO, hist_df)
+        mock_ticker_cls.return_value = ticker
+
+        result = get_stock_quote_at_date("AAPL", "2026-01-04")
+
+        assert result is not None
+        assert result.close == hist_df.iloc[0]["Close"]
+
+    @pytest.mark.parametrize("info", [ETF_INFO, MUTUAL_FUND_INFO])
+    @patch("app.services.stock.yf.Ticker")
+    def test_returns_quotes_for_supported_fund_types(self, mock_ticker_cls, info):
+        hist_df = _make_history_df(2)
+        mock_ticker_cls.return_value = _make_ticker_mock(info, hist_df)
+
+        result = get_stock_quote_at_date(info["symbol"], "2026-01-02")
+
         assert result is not None
         assert result.close == hist_df.iloc[-1]["Close"]
-        assert result.volume == int(hist_df.iloc[-1]["Volume"])
 
     @patch("app.utils.conv.to_yf_symbol_format", return_value="AAPL")
     @patch("app.services.stock.yf.Ticker")
@@ -349,11 +614,64 @@ class TestGetStockQuoteAtDate:
         result = get_stock_quote_at_date("AAPL", "2026-01-01")
         assert result is None
 
+    @patch("app.services.stock.yf.Ticker")
+    def test_returns_none_when_quote_type_is_missing(self, mock_ticker_cls):
+        mock_ticker_cls.return_value = _make_ticker_mock(NONE_QUOTE_TYPE_INFO)
+
+        result = get_stock_quote_at_date("FAKE", "2026-01-01")
+
+        assert result is None
+
     @patch("app.utils.conv.to_yf_symbol_format", return_value="AAPL")
     @patch("app.services.stock.yf.Ticker")
     def test_returns_none_when_history_empty(self, mock_ticker_cls, mock_to_yf):
+        empty_df = pd.DataFrame(columns=["Open", "High", "Low", "Close", "Volume", "Dividends"])
+        mock_ticker_cls.return_value = _make_ticker_mock(EQUITY_INFO, empty_df)
+
         result = get_stock_quote_at_date("AAPL", "2026-01-01")
+
         assert result is None
+
+    @patch("app.utils.conv.to_yf_symbol_format", return_value="AAPL")
+    @patch("app.services.stock.yf.Ticker")
+    def test_returns_none_when_only_history_older_than_the_lookback_is_available(
+        self,
+        mock_ticker_cls,
+        mock_to_yf,
+    ):
+        old_history = _make_history_df(1)
+        ticker = _make_ticker_mock(EQUITY_INFO, old_history)
+        mock_ticker_cls.return_value = ticker
+
+        result = get_stock_quote_at_date("AAPL", "2026-02-01")
+
+        assert result is None
+
+    @patch("app.services.stock.yf.Ticker")
+    def test_accepts_exchange_qualified_symbols(self, mock_ticker_cls):
+        info = {
+            **EQUITY_INFO,
+            "symbol": "CBA.AX",
+            "fullExchangeName": "ASX",
+            "country": "Australia",
+        }
+        history = _make_history_df(1)
+        ticker = _make_ticker_mock(info, history)
+        mock_ticker_cls.side_effect = {"CBA.AX": ticker}.__getitem__
+
+        result = get_stock_quote_at_date("ASX:CBA", "2026-01-01")
+
+        assert result is not None
+        assert result.close == history.iloc[0]["Close"]
+
+    @patch("app.services.stock.yf.Ticker")
+    def test_model_validation_failures_propagate(self, mock_ticker_cls):
+        invalid_history = _make_history_df(1)
+        invalid_history["Open"] = ["not-a-number"]
+        mock_ticker_cls.return_value = _make_ticker_mock(EQUITY_INFO, invalid_history)
+
+        with pytest.raises(pydantic.ValidationError):
+            get_stock_quote_at_date("AAPL", "2026-01-01")
 
 
 # ---------------------------------------------------------------------------
@@ -376,6 +694,17 @@ class TestGetSymbolHistory:
         assert result[0].close == hist_df.iloc[0]["Close"]
         assert result[0].volume == int(hist_df.iloc[0]["Volume"])
         assert result[0].timestamp == int(hist_df.index[0].timestamp())
+
+    @pytest.mark.parametrize("info", [ETF_INFO, MUTUAL_FUND_INFO])
+    @patch("app.services.stock.yf.Ticker")
+    def test_returns_history_for_supported_fund_types(self, mock_ticker_cls, info):
+        hist_df = _make_history_df(2)
+        mock_ticker_cls.return_value = _make_ticker_mock(info, hist_df)
+
+        result = get_symbol_history(info["symbol"], 2)
+
+        assert result is not None
+        assert [point.close for point in result] == list(hist_df["Close"])
 
     @patch("app.utils.conv.to_yf_symbol_format", return_value="AAPL")
     @patch("app.services.stock.yf.Ticker")
@@ -420,3 +749,29 @@ class TestGetSymbolHistory:
 
         result = get_symbol_history("AAPL", 30)
         assert result == []
+
+    @patch("app.services.stock.yf.Ticker")
+    def test_accepts_exchange_qualified_symbols(self, mock_ticker_cls):
+        info = {
+            **EQUITY_INFO,
+            "symbol": "CBA.AX",
+            "fullExchangeName": "ASX",
+            "country": "Australia",
+        }
+        history = _make_history_df(2)
+        ticker = _make_ticker_mock(info, history)
+        mock_ticker_cls.side_effect = {"CBA.AX": ticker}.__getitem__
+
+        result = get_symbol_history("ASX:CBA", 2)
+
+        assert result is not None
+        assert [point.close for point in result] == list(history["Close"])
+
+    @patch("app.services.stock.yf.Ticker")
+    def test_model_validation_failures_propagate(self, mock_ticker_cls):
+        invalid_history = _make_history_df(1)
+        invalid_history["Open"] = ["not-a-number"]
+        mock_ticker_cls.return_value = _make_ticker_mock(EQUITY_INFO, invalid_history)
+
+        with pytest.raises(pydantic.ValidationError):
+            get_symbol_history("AAPL", 1)

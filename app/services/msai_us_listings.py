@@ -183,11 +183,26 @@ class _PricedListingAnalysisDraft(_ListingAnalysisDraft):
 
 
 async def ai_get_us_new_listings() -> list[models_events_listings.ListingEvent]:
-    """Return all current/upcoming US listings and analyze up to five crawl-ranked IPOs.
+    """Return confirmed current and future US listings with bounded AI analysis.
 
-    Screening has no maximum lead time and invokes no AI. Unsupported offerings,
-    unresolved evidence conflicts and unselected listings remain in the response as
-    Skipped. Cached analyses are reused; failed selected attempts are not replaced.
+    Returns:
+        Calendar events dated today or later in New York, ordered by date and then
+        symbol. Calendar rows may retain ``None`` for unavailable offer prices and
+        deal sizes. Up to five crawl-ranked eligible IPOs receive cached or fresh
+        analysis and are marked ``Completed``. Unsupported, conflicting, ineligible,
+        crawl-failed, and unselected events remain ``Skipped``; selected events whose
+        cache or AI analysis fails are retained as ``Failed``.
+
+    Raises:
+        RuntimeError: If the IPO calendar cannot be fetched.
+        Exception: Calendar crawler/cache failures and unexpected calendar extraction
+            errors are propagated.
+
+    Notes:
+        Per-company crawling performs screening without AI and has no maximum lead
+        time. Per-company crawl failures do not abort the response. Cached analysis
+        is reused only when it matches the event; cache, research, or assessment
+        failures for a selected event are reported through that event's status.
     """
     today = _current_ny_date()
     events = _select_current_and_future_listings(
