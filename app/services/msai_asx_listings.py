@@ -14,7 +14,7 @@ from .. import config
 from ..models import ai as models_ai
 from ..models import events_listings as models_events_listings
 from ..models import types as models_types
-from ..services import crawler as services_crawler
+from ..services import crawler_core as services_crawler_core
 from ..utils import ai_prompt as ai_prompt_utils
 from ..utils import ai_reference as ai_reference_utils
 from ..utils import cache, conv
@@ -326,7 +326,7 @@ def _validate_cached_events(cached_events: object) -> list[models_events_listing
 
 
 async def _get_asx_new_listings() -> list[models_events_listings.ListingEvent]:
-    html_content = await services_crawler.fetch_webpage_content(_ASX_LISTINGS_URL)
+    html_content = await services_crawler_core.fetch_webpage_content(_ASX_LISTINGS_URL)
     if not html_content:
         raise RuntimeError("[ASX Listings] Failed to fetch the ASX upcoming-listings page.")
 

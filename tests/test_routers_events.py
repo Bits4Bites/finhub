@@ -10,6 +10,7 @@ from app import config
 from app.main import app
 from app.models import events_listings as models_events_listings
 from app.models.event import UpcomingDividendEvent, UpcomingEarningsEvent
+from app.routers import events_div as router_events_div
 from app.routers import events_listings as router_events_listings
 from app.schemas import async_task
 from app.schemas import events_listings as schemas_events_listings
@@ -43,7 +44,7 @@ class TestUpcomingDividends:
             resp.headers["location"] == "https://proxy.example/finhub/events/upcoming_dividends?country=AU&index=ASX200"
         )
 
-    @patch("app.routers.events.services_event.get_asx_upcoming_dividends_events", new_callable=AsyncMock)
+    @patch("app.routers.events_div.services_events_div.get_asx_upcoming_dividends_events", new_callable=AsyncMock)
     def test_au_returns_dividends(self, mock_get):
         event = UpcomingDividendEvent.model_construct(
             symbol="ASX:CBA",
@@ -55,7 +56,12 @@ class TestUpcomingDividends:
         )
         mock_get.return_value = [event]
 
-        resp = client.get("/events/upcoming_dividends", params={"country": "AU", "index": ""})
+        with patch(
+            "app.routers.events_div.services_events_div.analyse_dividend_event",
+            new_callable=AsyncMock,
+            return_value=None,
+        ):
+            resp = client.get("/events/upcoming_dividends", params={"country": "AU", "index": ""})
         assert resp.status_code == 200
         body = resp.json()
         assert body["status"] == 200
@@ -66,7 +72,7 @@ class TestUpcomingDividends:
         assert "date" not in body["data"][0]
         mock_get.assert_called_once_with("")
 
-    @patch("app.routers.events.services_event.get_us_upcoming_dividends_events", new_callable=AsyncMock)
+    @patch("app.routers.events_div.services_events_div.get_us_upcoming_dividends_events", new_callable=AsyncMock)
     def test_us_returns_dividends(self, mock_get):
         mock_get.return_value = []
 
@@ -77,7 +83,7 @@ class TestUpcomingDividends:
         assert body["data"] == []
         mock_get.assert_called_once_with("SP500")
 
-    @patch("app.routers.events.services_event.get_vn_upcoming_dividends_events", new_callable=AsyncMock)
+    @patch("app.routers.events_div.services_events_div.get_vn_upcoming_dividends_events", new_callable=AsyncMock)
     def test_vn_returns_dividends(self, mock_get):
         mock_get.return_value = []
 
@@ -130,7 +136,7 @@ class TestUpcomingDividendsAsync:
         with (
             patch("app.routers.async_task._generate_task_id", return_value="task-123"),
             patch("app.routers.async_task.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
-            patch("app.routers.events._run_upcoming_dividends_event_task", new_callable=AsyncMock) as mock_run_task,
+            patch("app.routers.events_div._run_upcoming_dividends_event_task", new_callable=AsyncMock) as mock_run_task,
         ):
             resp = client.get(
                 "/events/start_upcoming_dividends_async",
@@ -197,19 +203,18 @@ class TestUpcomingDividendsAsync:
         assert body["extra"] == {"task_id": "task-123", "state": async_task.TASK_STATE_COMPLETED}
 
     def test_background_task_caches_result(self):
-        from app.routers import events
         from app.schemas import events as schemas_event
 
         result = schemas_event.UpcomingDividendsResponse(status=200, message="ok", data=[])
         with (
             patch(
-                "app.routers.events._get_upcoming_dividends_event_result",
+                "app.routers.events_div._get_upcoming_dividends_event_result",
                 new_callable=AsyncMock,
                 return_value=result,
             ),
             patch("app.routers.async_task.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
         ):
-            asyncio.run(events._run_upcoming_dividends_event_task("task-123", "AU", "ASX200"))
+            asyncio.run(router_events_div._run_upcoming_dividends_event_task("task-123", "AU", "ASX200"))
 
         mock_cache_set.assert_awaited_once_with(
             "task-123",

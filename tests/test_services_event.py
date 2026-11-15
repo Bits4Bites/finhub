@@ -1,4 +1,4 @@
-"""Unit tests for app.services.event module."""
+"""Unit tests for the dividend and earnings event services."""
 
 import asyncio
 from datetime import datetime, timedelta
@@ -8,13 +8,11 @@ from zoneinfo import ZoneInfo
 import numpy as np
 import pandas as pd
 
+from app.services import events_div
 from app.services.event import (
     _calc_end_date_to_fetch_events,
-    get_asx_upcoming_dividends_events,
     get_asx_upcoming_earnings_events,
-    get_us_upcoming_dividends_events,
     get_us_upcoming_earnings_events,
-    get_vn_upcoming_dividends_events,
 )
 
 # ===========================================================================
@@ -60,32 +58,32 @@ class TestCalcEndDateToFetchEvents:
 
 
 class TestAsxUpcomingDividendsEvents:
-    @patch("app.services.event._get_upcoming_dividends_events", new_callable=AsyncMock, return_value=[])
+    @patch("app.services.events_div._get_upcoming_dividends_events", new_callable=AsyncMock, return_value=[])
     def test_invalid_index_returns_empty_without_calling_service(self, mock_get_events):
-        result = asyncio.run(get_asx_upcoming_dividends_events("INVALID_INDEX"))
+        result = asyncio.run(events_div.get_asx_upcoming_dividends_events("INVALID_INDEX"))
         assert result == []
         mock_get_events.assert_not_called()
 
-    @patch("app.services.event._get_upcoming_dividends_events", new_callable=AsyncMock, return_value=[])
+    @patch("app.services.events_div._get_upcoming_dividends_events", new_callable=AsyncMock, return_value=[])
     def test_valid_index_calls_service(self, mock_get_events):
-        result = asyncio.run(get_asx_upcoming_dividends_events("ASX200"))
+        result = asyncio.run(events_div.get_asx_upcoming_dividends_events("ASX200"))
         assert result == []
         mock_get_events.assert_called_once()
 
-    @patch("app.services.event._get_upcoming_dividends_events", new_callable=AsyncMock, return_value=[])
+    @patch("app.services.events_div._get_upcoming_dividends_events", new_callable=AsyncMock, return_value=[])
     def test_no_index_calls_service(self, mock_get_events):
-        result = asyncio.run(get_asx_upcoming_dividends_events(""))
+        result = asyncio.run(events_div.get_asx_upcoming_dividends_events(""))
         assert result == []
         mock_get_events.assert_called_once()
 
-    @patch("app.services.event._get_upcoming_dividends_events", new_callable=AsyncMock, return_value=[])
+    @patch("app.services.events_div._get_upcoming_dividends_events", new_callable=AsyncMock, return_value=[])
     def test_case_insensitive_index(self, mock_get_events):
-        result = asyncio.run(get_asx_upcoming_dividends_events("asx50"))
+        result = asyncio.run(events_div.get_asx_upcoming_dividends_events("asx50"))
         assert result == []
         mock_get_events.assert_called_once()
 
-    @patch("app.services.event.asset_utils.is_in_index", return_value=True)
-    @patch("app.services.event._get_upcoming_dividends_events", new_callable=AsyncMock)
+    @patch("app.services.events_div.asset_utils.is_in_index", return_value=True)
+    @patch("app.services.events_div._get_upcoming_dividends_events", new_callable=AsyncMock)
     def test_filters_by_index_and_adds_link(self, mock_get_events, mock_is_in_index):
         from app.models.event import UpcomingDividendEvent
 
@@ -98,7 +96,7 @@ class TestAsxUpcomingDividendsEvents:
         )
         mock_get_events.return_value = [mock_event]
 
-        result = asyncio.run(get_asx_upcoming_dividends_events("ASX200"))
+        result = asyncio.run(events_div.get_asx_upcoming_dividends_events("ASX200"))
         assert len(result) == 1
         assert "asx.com.au" in result[0].link
 
@@ -109,26 +107,26 @@ class TestAsxUpcomingDividendsEvents:
 
 
 class TestUsUpcomingDividendsEvents:
-    @patch("app.services.event._get_upcoming_dividends_events", new_callable=AsyncMock, return_value=[])
+    @patch("app.services.events_div._get_upcoming_dividends_events", new_callable=AsyncMock, return_value=[])
     def test_invalid_index_returns_empty(self, mock_get_events):
-        result = asyncio.run(get_us_upcoming_dividends_events("INVALID"))
+        result = asyncio.run(events_div.get_us_upcoming_dividends_events("INVALID"))
         assert result == []
         mock_get_events.assert_not_called()
 
-    @patch("app.services.event._get_upcoming_dividends_events", new_callable=AsyncMock, return_value=[])
+    @patch("app.services.events_div._get_upcoming_dividends_events", new_callable=AsyncMock, return_value=[])
     def test_valid_index_sp500(self, mock_get_events):
-        result = asyncio.run(get_us_upcoming_dividends_events("SP500"))
+        result = asyncio.run(events_div.get_us_upcoming_dividends_events("SP500"))
         assert result == []
         mock_get_events.assert_called_once()
 
-    @patch("app.services.event._get_upcoming_dividends_events", new_callable=AsyncMock, return_value=[])
+    @patch("app.services.events_div._get_upcoming_dividends_events", new_callable=AsyncMock, return_value=[])
     def test_valid_index_nasdaq100(self, mock_get_events):
-        result = asyncio.run(get_us_upcoming_dividends_events("NASDAQ100"))
+        result = asyncio.run(events_div.get_us_upcoming_dividends_events("NASDAQ100"))
         assert result == []
         mock_get_events.assert_called_once()
 
-    @patch("app.services.event.asset_utils.is_in_index", return_value=True)
-    @patch("app.services.event._get_upcoming_dividends_events", new_callable=AsyncMock)
+    @patch("app.services.events_div.asset_utils.is_in_index", return_value=True)
+    @patch("app.services.events_div._get_upcoming_dividends_events", new_callable=AsyncMock)
     def test_adds_stockanalysis_link(self, mock_get_events, mock_is_in_index):
         from app.models.event import UpcomingDividendEvent
 
@@ -141,7 +139,7 @@ class TestUsUpcomingDividendsEvents:
         )
         mock_get_events.return_value = [mock_event]
 
-        result = asyncio.run(get_us_upcoming_dividends_events("NASDAQ100"))
+        result = asyncio.run(events_div.get_us_upcoming_dividends_events("NASDAQ100"))
         assert len(result) == 1
         assert "stockanalysis.com" in result[0].link
         assert "aapl" in result[0].link
@@ -153,20 +151,20 @@ class TestUsUpcomingDividendsEvents:
 
 
 class TestVnUpcomingDividendsEvents:
-    @patch("app.services.event._get_upcoming_dividends_events", new_callable=AsyncMock, return_value=[])
+    @patch("app.services.events_div._get_upcoming_dividends_events", new_callable=AsyncMock, return_value=[])
     def test_invalid_index_returns_empty(self, mock_get_events):
-        result = asyncio.run(get_vn_upcoming_dividends_events("INVALID"))
+        result = asyncio.run(events_div.get_vn_upcoming_dividends_events("INVALID"))
         assert result == []
         mock_get_events.assert_not_called()
 
-    @patch("app.services.event._get_upcoming_dividends_events", new_callable=AsyncMock, return_value=[])
+    @patch("app.services.events_div._get_upcoming_dividends_events", new_callable=AsyncMock, return_value=[])
     def test_valid_index_vn30(self, mock_get_events):
-        result = asyncio.run(get_vn_upcoming_dividends_events("VN30"))
+        result = asyncio.run(events_div.get_vn_upcoming_dividends_events("VN30"))
         assert result == []
         mock_get_events.assert_called_once()
 
-    @patch("app.services.event.asset_utils.is_in_index", return_value=True)
-    @patch("app.services.event._get_upcoming_dividends_events", new_callable=AsyncMock)
+    @patch("app.services.events_div.asset_utils.is_in_index", return_value=True)
+    @patch("app.services.events_div._get_upcoming_dividends_events", new_callable=AsyncMock)
     def test_adds_vietstock_link(self, mock_get_events, mock_is_in_index):
         from app.models.event import UpcomingDividendEvent
 
@@ -179,7 +177,7 @@ class TestVnUpcomingDividendsEvents:
         )
         mock_get_events.return_value = [mock_event]
 
-        result = asyncio.run(get_vn_upcoming_dividends_events("VN30"))
+        result = asyncio.run(events_div.get_vn_upcoming_dividends_events("VN30"))
         assert len(result) == 1
         assert "vietstock.vn" in result[0].link
 
@@ -264,19 +262,15 @@ class TestUsUpcomingEarningsEvents:
 
 
 class TestGetUpcomingDividendsEvents:
-    @patch("app.services.event.services_crawler.scrape_dividends_asx", new_callable=AsyncMock)
+    @patch("app.services.events_div.services_crawler_div.scrape_dividends_asx", new_callable=AsyncMock)
     def test_empty_dataframe_returns_empty_list(self, mock_scrape):
-        from app.services.event import _get_upcoming_dividends_events
-
         mock_scrape.return_value = pd.DataFrame()
         tz = ZoneInfo("Australia/Sydney")
-        result = asyncio.run(_get_upcoming_dividends_events("AU", tz))
+        result = asyncio.run(events_div._get_upcoming_dividends_events("AU", tz))
         assert result == []
 
-    @patch("app.services.event.services_crawler.scrape_dividends_asx", new_callable=AsyncMock)
+    @patch("app.services.events_div.services_crawler_div.scrape_dividends_asx", new_callable=AsyncMock)
     def test_au_processes_raw_data_into_events(self, mock_scrape):
-        from app.services.event import _get_upcoming_dividends_events
-
         raw_data = pd.DataFrame(
             {
                 "Symbol": ["CBA"],
@@ -292,7 +286,7 @@ class TestGetUpcomingDividendsEvents:
         tz = ZoneInfo("Australia/Sydney")
         default_vals = {"exchange": "ASX", "src": "ASX", "currency": "AUD", "status": "declared"}
 
-        result = asyncio.run(_get_upcoming_dividends_events("AU", tz, default_vals=default_vals))
+        result = asyncio.run(events_div._get_upcoming_dividends_events("AU", tz, default_vals=default_vals))
         assert len(result) == 1
         assert result[0].symbol == "ASX:CBA"
         assert result[0].company_name == "Commonwealth Bank"
@@ -301,10 +295,8 @@ class TestGetUpcomingDividendsEvents:
         assert result[0].amount == 2.5
         assert result[0].event_category == "dividend"
 
-    @patch("app.services.event.services_crawler.scrape_dividends_asx", new_callable=AsyncMock)
+    @patch("app.services.events_div.services_crawler_div.scrape_dividends_asx", new_callable=AsyncMock)
     def test_au_filters_low_yield(self, mock_scrape):
-        from app.services.event import _get_upcoming_dividends_events
-
         raw_data = pd.DataFrame(
             {
                 "Symbol": ["LOW", "HIGH"],
@@ -320,14 +312,12 @@ class TestGetUpcomingDividendsEvents:
         tz = ZoneInfo("Australia/Sydney")
         default_vals = {"exchange": "ASX", "src": "ASX", "currency": "AUD", "status": "declared"}
 
-        result = asyncio.run(_get_upcoming_dividends_events("AU", tz, default_vals=default_vals))
+        result = asyncio.run(events_div._get_upcoming_dividends_events("AU", tz, default_vals=default_vals))
         assert len(result) == 1
         assert result[0].symbol == "ASX:HIGH"
 
-    @patch("app.services.event.services_crawler.scrape_dividends_asx", new_callable=AsyncMock)
+    @patch("app.services.events_div.services_crawler_div.scrape_dividends_asx", new_callable=AsyncMock)
     def test_au_classifies_distribution_for_trust(self, mock_scrape):
-        from app.services.event import _get_upcoming_dividends_events
-
         raw_data = pd.DataFrame(
             {
                 "Symbol": ["VAS"],
@@ -343,14 +333,12 @@ class TestGetUpcomingDividendsEvents:
         tz = ZoneInfo("Australia/Sydney")
         default_vals = {"exchange": "ASX", "src": "ASX", "currency": "AUD", "status": "declared"}
 
-        result = asyncio.run(_get_upcoming_dividends_events("AU", tz, default_vals=default_vals))
+        result = asyncio.run(events_div._get_upcoming_dividends_events("AU", tz, default_vals=default_vals))
         assert len(result) == 1
         assert result[0].event_category == "distribution"
 
-    @patch("app.services.event.services_crawler.scrape_dividends_us", new_callable=AsyncMock)
+    @patch("app.services.events_div.services_crawler_div.scrape_dividends_us", new_callable=AsyncMock)
     def test_us_filters_non_major_exchanges(self, mock_scrape):
-        from app.services.event import _get_upcoming_dividends_events
-
         raw_data = pd.DataFrame(
             {
                 "Symbol": ["AAPL", "OTC1"],
@@ -366,14 +354,12 @@ class TestGetUpcomingDividendsEvents:
         tz = ZoneInfo("America/New_York")
         default_vals = {"src": "StockAnalysis", "currency": "USD", "status": "declared"}
 
-        result = asyncio.run(_get_upcoming_dividends_events("US", tz, default_vals=default_vals))
+        result = asyncio.run(events_div._get_upcoming_dividends_events("US", tz, default_vals=default_vals))
         assert len(result) == 1
         assert result[0].symbol == "NASDAQ:AAPL"
 
-    @patch("app.services.event.services_crawler.scrape_dividends_asx", new_callable=AsyncMock)
+    @patch("app.services.events_div.services_crawler_div.scrape_dividends_asx", new_callable=AsyncMock)
     def test_removes_url_column(self, mock_scrape):
-        from app.services.event import _get_upcoming_dividends_events
-
         raw_data = pd.DataFrame(
             {
                 "Symbol": ["BHP"],
@@ -390,7 +376,7 @@ class TestGetUpcomingDividendsEvents:
         tz = ZoneInfo("Australia/Sydney")
         default_vals = {"exchange": "ASX", "src": "ASX", "currency": "AUD", "status": "declared"}
 
-        result = asyncio.run(_get_upcoming_dividends_events("AU", tz, default_vals=default_vals))
+        result = asyncio.run(events_div._get_upcoming_dividends_events("AU", tz, default_vals=default_vals))
         assert len(result) == 1
 
 
@@ -400,7 +386,7 @@ class TestGetUpcomingDividendsEvents:
 
 
 class TestGetUpcomingEarningsEvents:
-    @patch("app.services.event.services_crawler.scrape_earnings_asx", new_callable=AsyncMock)
+    @patch("app.services.event.services_crawler_earnings.scrape_earnings_asx", new_callable=AsyncMock)
     def test_empty_dataframe_returns_empty_list(self, mock_scrape):
         from app.services.event import _get_upcoming_earnings_events
 
@@ -409,7 +395,7 @@ class TestGetUpcomingEarningsEvents:
         result = asyncio.run(_get_upcoming_earnings_events("AU", tz))
         assert result == []
 
-    @patch("app.services.event.services_crawler.scrape_earnings_asx", new_callable=AsyncMock)
+    @patch("app.services.event.services_crawler_earnings.scrape_earnings_asx", new_callable=AsyncMock)
     def test_au_processes_raw_data(self, mock_scrape):
         from app.services.event import _get_upcoming_earnings_events
 
@@ -432,7 +418,7 @@ class TestGetUpcomingEarningsEvents:
         assert result[0].timestamp_str.startswith("2025-08-15")
         assert result[0].timestamp > 0
 
-    @patch("app.services.event.services_crawler.scrape_earnings_us", new_callable=AsyncMock)
+    @patch("app.services.event.services_crawler_earnings.scrape_earnings_us", new_callable=AsyncMock)
     def test_us_filters_non_major_exchanges(self, mock_scrape):
         from app.services.event import _get_upcoming_earnings_events
 
@@ -482,32 +468,28 @@ def _make_history_df(num_days=200, base_price=100.0, div_days=None):
 
 
 class TestAnalyseDividendEvent:
-    @patch("app.services.event.yfutils.lookup_peer_yf_static_symbol", return_value=None)
-    @patch("app.services.event.yfutils.lookup_index_yf_static_symbol", return_value=None)
-    @patch("app.services.event.yf.Ticker")
+    @patch("app.services.events_div.yfutils.lookup_peer_yf_static_symbol", return_value=None)
+    @patch("app.services.events_div.yfutils.lookup_index_yf_static_symbol", return_value=None)
+    @patch("app.services.events_div.yf.Ticker")
     def test_returns_none_for_quote_type_none(self, mock_ticker_cls, mock_lookup_idx, mock_lookup_peer):
-        from app.services.event import analyse_dividend_event
-
         mock_ticker_cls.return_value.info = {"quoteType": "NONE", "country": "Australia"}
-        result = asyncio.run(analyse_dividend_event(symbol="ASX:CBA", ex_date="2025-08-15", div_amount=2.5))
+        result = asyncio.run(events_div.analyse_dividend_event(symbol="ASX:CBA", ex_date="2025-08-15", div_amount=2.5))
         assert result is None
 
-    @patch("app.services.event.yf.Ticker")
+    @patch("app.services.events_div.yf.Ticker")
     def test_returns_none_for_unsupported_quote_type(self, mock_ticker_cls):
-        from app.services.event import analyse_dividend_event
-
         mock_ticker_cls.return_value.info = {"quoteType": "CURRENCY", "country": "US"}
 
-        result = asyncio.run(analyse_dividend_event(symbol="NASDAQ:AAPL", ex_date="2025-08-15", div_amount=1.0))
+        result = asyncio.run(
+            events_div.analyse_dividend_event(symbol="NASDAQ:AAPL", ex_date="2025-08-15", div_amount=1.0)
+        )
 
         assert result is None
 
-    @patch("app.services.event.yfutils.lookup_peer_yf_static_symbol", return_value=None)
-    @patch("app.services.event.yfutils.lookup_index_yf_static_symbol", return_value=None)
-    @patch("app.services.event.yf.Ticker")
+    @patch("app.services.events_div.yfutils.lookup_peer_yf_static_symbol", return_value=None)
+    @patch("app.services.events_div.yfutils.lookup_index_yf_static_symbol", return_value=None)
+    @patch("app.services.events_div.yf.Ticker")
     def test_returns_none_for_insufficient_history(self, mock_ticker_cls, mock_lookup_idx, mock_lookup_peer):
-        from app.services.event import analyse_dividend_event
-
         mock_ticker = mock_ticker_cls.return_value
         mock_ticker.info = {
             "quoteType": "EQUITY",
@@ -520,15 +502,13 @@ class TestAnalyseDividendEvent:
         # Only 50 days of history (< 90 required)
         mock_ticker.history.return_value = _make_history_df(num_days=50)
 
-        result = asyncio.run(analyse_dividend_event(symbol="ASX:CBA", ex_date="2025-08-15", div_amount=2.5))
+        result = asyncio.run(events_div.analyse_dividend_event(symbol="ASX:CBA", ex_date="2025-08-15", div_amount=2.5))
         assert result is None
 
-    @patch("app.services.event.yfutils.lookup_peer_yf_static_symbol", return_value=None)
-    @patch("app.services.event.yfutils.lookup_index_yf_static_symbol", return_value=None)
-    @patch("app.services.event.yf.Ticker")
+    @patch("app.services.events_div.yfutils.lookup_peer_yf_static_symbol", return_value=None)
+    @patch("app.services.events_div.yfutils.lookup_index_yf_static_symbol", return_value=None)
+    @patch("app.services.events_div.yf.Ticker")
     def test_returns_analysis_with_sufficient_data(self, mock_ticker_cls, mock_lookup_idx, mock_lookup_peer):
-        from app.services.event import analyse_dividend_event
-
         mock_ticker = mock_ticker_cls.return_value
         mock_ticker.info = {
             "quoteType": "EQUITY",
@@ -543,7 +523,7 @@ class TestAnalyseDividendEvent:
         history = _make_history_df(num_days=500, base_price=120.0, div_days=[100, 200, 300, 400])
         mock_ticker.history.return_value = history
 
-        result = asyncio.run(analyse_dividend_event(symbol="ASX:CBA", ex_date="2025-08-15", div_amount=2.5))
+        result = asyncio.run(events_div.analyse_dividend_event(symbol="ASX:CBA", ex_date="2025-08-15", div_amount=2.5))
         assert result is not None
         assert result.symbol == "CBA.AX"
         assert result.exchange == "ASX"
@@ -557,12 +537,10 @@ class TestAnalyseDividendEvent:
         assert result.beta == 1.1
         assert result.rsi14 > 0
 
-    @patch("app.services.event.yfutils.lookup_peer_yf_static_symbol", return_value=None)
-    @patch("app.services.event.yfutils.lookup_index_yf_static_symbol", return_value=None)
-    @patch("app.services.event.yf.Ticker")
+    @patch("app.services.events_div.yfutils.lookup_peer_yf_static_symbol", return_value=None)
+    @patch("app.services.events_div.yfutils.lookup_index_yf_static_symbol", return_value=None)
+    @patch("app.services.events_div.yf.Ticker")
     def test_uses_provided_ticker(self, mock_ticker_cls, mock_lookup_idx, mock_lookup_peer):
-        from app.services.event import analyse_dividend_event
-
         provided_ticker = MagicMock()
         provided_ticker.info = {
             "quoteType": "EQUITY",
@@ -577,19 +555,19 @@ class TestAnalyseDividendEvent:
         provided_ticker.history.return_value = history
 
         result = asyncio.run(
-            analyse_dividend_event(ticker=provided_ticker, symbol="ASX:BHP", ex_date="2025-08-15", div_amount=1.5)
+            events_div.analyse_dividend_event(
+                ticker=provided_ticker, symbol="ASX:BHP", ex_date="2025-08-15", div_amount=1.5
+            )
         )
         assert result is not None
         assert result.symbol == "BHP.AX"
         # Should NOT have created a new Ticker
         mock_ticker_cls.assert_not_called()
 
-    @patch("app.services.event.yfutils.lookup_peer_yf_static_symbol", return_value=None)
-    @patch("app.services.event.yfutils.lookup_index_yf_static_symbol", return_value=None)
-    @patch("app.services.event.yf.Ticker")
+    @patch("app.services.events_div.yfutils.lookup_peer_yf_static_symbol", return_value=None)
+    @patch("app.services.events_div.yfutils.lookup_index_yf_static_symbol", return_value=None)
+    @patch("app.services.events_div.yf.Ticker")
     def test_returns_none_when_no_past_dividends(self, mock_ticker_cls, mock_lookup_idx, mock_lookup_peer):
-        from app.services.event import analyse_dividend_event
-
         mock_ticker = mock_ticker_cls.return_value
         mock_ticker.info = {
             "quoteType": "EQUITY",
@@ -603,15 +581,13 @@ class TestAnalyseDividendEvent:
         history = _make_history_df(num_days=200, base_price=100.0, div_days=[])
         mock_ticker.history.return_value = history
 
-        result = asyncio.run(analyse_dividend_event(symbol="ASX:NEW", ex_date="2025-08-15", div_amount=1.0))
+        result = asyncio.run(events_div.analyse_dividend_event(symbol="ASX:NEW", ex_date="2025-08-15", div_amount=1.0))
         assert result is None
 
-    @patch("app.services.event.yfutils.lookup_peer_yf_static_symbol", return_value="^AXFJ")
-    @patch("app.services.event.yfutils.lookup_index_yf_static_symbol", return_value="^AXJO")
-    @patch("app.services.event.yf.Ticker")
+    @patch("app.services.events_div.yfutils.lookup_peer_yf_static_symbol", return_value="^AXFJ")
+    @patch("app.services.events_div.yfutils.lookup_index_yf_static_symbol", return_value="^AXJO")
+    @patch("app.services.events_div.yf.Ticker")
     def test_fetches_market_and_peer_trends(self, mock_ticker_cls, mock_lookup_idx, mock_lookup_peer):
-        from app.services.event import analyse_dividend_event
-
         main_ticker = MagicMock()
         main_ticker.info = {
             "quoteType": "EQUITY",
@@ -636,7 +612,7 @@ class TestAnalyseDividendEvent:
         # First call returns main_ticker, second market, third peer
         mock_ticker_cls.side_effect = [main_ticker, market_ticker, peer_ticker]
 
-        result = asyncio.run(analyse_dividend_event(symbol="ASX:CBA", ex_date="2025-08-15", div_amount=2.5))
+        result = asyncio.run(events_div.analyse_dividend_event(symbol="ASX:CBA", ex_date="2025-08-15", div_amount=2.5))
         assert result is not None
         # market and peer trends should be populated
         assert result.market_trend_60d is not None

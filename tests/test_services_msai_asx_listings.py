@@ -314,7 +314,7 @@ def test_extracts_structured_listings_and_retains_unavailable_offer_values(mock_
 
     with (
         patch.object(
-            msai_asx_listings.services_crawler,
+            msai_asx_listings.services_crawler_core,
             "fetch_webpage_content",
             new_callable=AsyncMock,
             return_value=html,
@@ -350,7 +350,7 @@ def test_extraction_reuses_cached_structured_result(mock_listings_cache):
 
     with (
         patch.object(
-            msai_asx_listings.services_crawler,
+            msai_asx_listings.services_crawler_core,
             "fetch_webpage_content",
             new_callable=AsyncMock,
             return_value=html,

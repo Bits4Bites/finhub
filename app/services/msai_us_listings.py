@@ -16,7 +16,7 @@ from .. import config
 from ..models import ai as models_ai
 from ..models import events_listings as models_events_listings
 from ..models import types as models_types
-from ..services import crawler as services_crawler
+from ..services import crawler_core as services_crawler_core
 from ..utils import ai_prompt as ai_prompt_utils
 from ..utils import ai_reference as ai_reference_utils
 from ..utils import cache, conv
@@ -258,7 +258,7 @@ def _listing_cache_ttl(
 async def _get_us_new_listings() -> list[models_events_listings.ListingEvent]:
     """Extract confirmed listing events from the Stock Analysis IPO calendar."""
     url = _US_LISTINGS_URL
-    html_content = await services_crawler.fetch_webpage_content_fallback_to_playwright(url, cache_ttl=60 * 60)
+    html_content = await services_crawler_core.fetch_webpage_content_fallback_to_playwright(url, cache_ttl=60 * 60)
     if not html_content:
         raise RuntimeError("[US Listings] Failed to fetch the IPO calendar.")
     table_count = len(bs4.BeautifulSoup(html_content, "html.parser").select("table#main-table"))
@@ -266,7 +266,7 @@ async def _get_us_new_listings() -> list[models_events_listings.ListingEvent]:
     events: list[models_events_listings.ListingEvent] = []
     seen_symbols: set[str] = set()
     for index in range(table_count):
-        frame = services_crawler.extract_data_table_from_html(
+        frame = services_crawler_core.extract_data_table_from_html(
             html_content, table_attr_filter={"id": "main-table"}, filter_skip=index
         )
         for row in frame.to_dict(orient="records"):
@@ -501,7 +501,7 @@ async def _load_dossier_page(
 ) -> bs4.BeautifulSoup | bs4.Tag | None:
     dossier.page_count += 1
     try:
-        content = await services_crawler.fetch_webpage_content_fallback_to_playwright(url, cache_ttl=ttl)
+        content = await services_crawler_core.fetch_webpage_content_fallback_to_playwright(url, cache_ttl=ttl)
     except Exception:
         logging.exception("[US Listings] Could not crawl '%s'.", url)
         content = None

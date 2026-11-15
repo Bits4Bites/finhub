@@ -106,7 +106,7 @@ def test_extracts_prices_and_deal_sizes_from_all_three_tables():
     ]
 
     with mock.patch.object(
-        msai_us_listings.services_crawler,
+        msai_us_listings.services_crawler_core,
         "fetch_webpage_content_fallback_to_playwright",
         new_callable=mock.AsyncMock,
         return_value=_calendar_html(tables),
@@ -152,7 +152,7 @@ def test_retains_listings_with_unavailable_offer_values(unavailable):
         pd.DataFrame(),
     ]
     with mock.patch.object(
-        msai_us_listings.services_crawler,
+        msai_us_listings.services_crawler_core,
         "fetch_webpage_content_fallback_to_playwright",
         new_callable=mock.AsyncMock,
         return_value=_calendar_html(tables),
@@ -185,7 +185,7 @@ def test_invalid_rows_do_not_abort_other_listings():
         pd.DataFrame(),
     ]
     with mock.patch.object(
-        msai_us_listings.services_crawler,
+        msai_us_listings.services_crawler_core,
         "fetch_webpage_content_fallback_to_playwright",
         new_callable=mock.AsyncMock,
         return_value=_calendar_html(tables),
@@ -197,7 +197,7 @@ def test_invalid_rows_do_not_abort_other_listings():
 
 def test_returns_no_listings_when_calendar_tables_are_empty():
     with mock.patch.object(
-        msai_us_listings.services_crawler,
+        msai_us_listings.services_crawler_core,
         "fetch_webpage_content_fallback_to_playwright",
         new_callable=mock.AsyncMock,
         return_value=_calendar_html([pd.DataFrame(), pd.DataFrame(), pd.DataFrame()]),
@@ -415,10 +415,13 @@ def test_crawling_retains_pre_revenue_ipo_with_blocked_sec_document(ai_calls):
 
     with (
         mock.patch.object(
-            msai_us_listings.services_crawler, "fetch_webpage_content_fallback_to_playwright", side_effect=fetch
+            msai_us_listings.services_crawler_core, "fetch_webpage_content_fallback_to_playwright", side_effect=fetch
         ) as pages,
         mock.patch.object(
-            msai_us_listings.services_crawler, "fetch_webpage_content", new_callable=mock.AsyncMock, return_value=None
+            msai_us_listings.services_crawler_core,
+            "fetch_webpage_content",
+            new_callable=mock.AsyncMock,
+            return_value=None,
         ) as direct_http,
     ):
         event = _event()
@@ -462,8 +465,10 @@ def test_sec_filing_browser_fallback_retains_only_successful_documents(ai_calls,
     context = mock.AsyncMock()
     context.__aenter__.return_value = playwright
     with (
-        mock.patch.object(msai_us_listings.services_crawler, "fetch_webpage_content", side_effect=fetch),
-        mock.patch.object(msai_us_listings.services_crawler, "async_playwright", return_value=context),
+        mock.patch.object(msai_us_listings.services_crawler_core, "fetch_webpage_content", side_effect=fetch),
+        mock.patch.object(
+            msai_us_listings.services_crawler_core.playwright_async_api, "async_playwright", return_value=context
+        ),
     ):
         dossier = asyncio.run(msai_us_listings._crawl_us_listing(_event(), today=_TODAY))
 
@@ -500,10 +505,13 @@ def test_profile_uses_latest_amendment_instead_of_initial_news_link(ai_calls):
 
     with (
         mock.patch.object(
-            msai_us_listings.services_crawler, "fetch_webpage_content_fallback_to_playwright", side_effect=fetch
+            msai_us_listings.services_crawler_core, "fetch_webpage_content_fallback_to_playwright", side_effect=fetch
         ) as pages,
         mock.patch.object(
-            msai_us_listings.services_crawler, "fetch_webpage_content", new_callable=mock.AsyncMock, return_value=None
+            msai_us_listings.services_crawler_core,
+            "fetch_webpage_content",
+            new_callable=mock.AsyncMock,
+            return_value=None,
         ) as direct_http,
     ):
         dossier = asyncio.run(msai_us_listings._crawl_us_listing(_event(), today=_TODAY))
@@ -539,10 +547,13 @@ def test_unsupported_inactive_or_conflicting_listings_do_not_reach_ai(overrides,
     event = _event()
     with (
         mock.patch.object(
-            msai_us_listings.services_crawler, "fetch_webpage_content_fallback_to_playwright", side_effect=fetch
+            msai_us_listings.services_crawler_core, "fetch_webpage_content_fallback_to_playwright", side_effect=fetch
         ),
         mock.patch.object(
-            msai_us_listings.services_crawler, "fetch_webpage_content", new_callable=mock.AsyncMock, return_value=None
+            msai_us_listings.services_crawler_core,
+            "fetch_webpage_content",
+            new_callable=mock.AsyncMock,
+            return_value=None,
         ),
     ):
         events = asyncio.run(msai_us_listings._analyze_us_listings([event]))
@@ -565,10 +576,13 @@ def test_missing_classification_gets_a_bounded_profile_crawl(ai_calls):
 
     with (
         mock.patch.object(
-            msai_us_listings.services_crawler, "fetch_webpage_content_fallback_to_playwright", side_effect=fetch
+            msai_us_listings.services_crawler_core, "fetch_webpage_content_fallback_to_playwright", side_effect=fetch
         ) as pages,
         mock.patch.object(
-            msai_us_listings.services_crawler, "fetch_webpage_content", new_callable=mock.AsyncMock, return_value=None
+            msai_us_listings.services_crawler_core,
+            "fetch_webpage_content",
+            new_callable=mock.AsyncMock,
+            return_value=None,
         ),
     ):
         dossier = asyncio.run(msai_us_listings._crawl_us_listing(_event(), today=_TODAY))

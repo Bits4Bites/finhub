@@ -16,12 +16,12 @@ class EventBase(BaseModel):
     """Common identity, timing, and provenance fields for market events."""
 
     symbol: str = Field(description="Security symbol associated with the event.")
-    exchange: str | None = Field(
-        default=None,
+    exchange: str = Field(
+        default="",
         description="Exchange code associated with the security, when available.",
     )
-    company_name: str | None = Field(
-        default=None,
+    company_name: str = Field(
+        default="",
         description="Company or issuer name, when available.",
     )
     timestamp: int = Field(

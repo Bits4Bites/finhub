@@ -36,14 +36,26 @@ class MarketIndexStore:
         normalized_index = index.upper()
         index_data = json.loads(json_content)
         companies: dict[str, models_market.CompanyBriefInfo] = {}
+        country = (
+            "AU"
+            if normalized_index.startswith("ASX")
+            else "VN"
+            if normalized_index.startswith("VN") or normalized_index.startswith("HNX")
+            else "US"
+        )
+        code_company_mapping: dict[str, models_market.CompanyBriefInfo] = {}
         for entry in index_data["data"]:
             symbol = entry["symbol"].upper()
-            companies[symbol] = models_market.CompanyBriefInfo(
+            company = models_market.CompanyBriefInfo(
                 symbol=symbol,
                 name=entry.get("company", symbol),
                 sector=entry.get("sector", symbol),
                 market_cap=int(entry.get("market_cap", 0)),
+                country=country,
             )
+            companies[symbol] = company
+            code_company_mapping[company.extract_exchange_code()[1]] = company
+        self.company_revert_mappings[country] = code_company_mapping
         self.raw_json[normalized_index] = json_content
         self.indices[normalized_index] = companies
 

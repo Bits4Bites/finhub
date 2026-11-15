@@ -1,4 +1,5 @@
 qnd.*
+qnd_*.*
 /run_local.sh
 /run_qnd.sh
 

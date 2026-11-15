@@ -127,7 +127,7 @@ def normalize_exchange_code(exchange: str) -> str:
     return e
 
 
-def to_exch_symb_format(*, ticker: yf.Ticker = None, symbol: str = None) -> str:
+def to_exch_symb_format(*, ticker: yf.Ticker | None = None, symbol: str | None = None) -> str:
     """
     Converts a stock symbol to EXCHANGE:CODE format.
     - If symbol is already in format EXCHANGE:CODE, it is returned as is.
@@ -213,7 +213,7 @@ def number_to_human_format(num: int | float, precision: int = 2):
     return f"{sign}{formatted}{suffixes[idx]}"
 
 
-def yyyymmdd_to_iso(yyyy_mm_dd: str, tz: ZoneInfo = None, tz_name: str = None) -> str | None:
+def yyyymmdd_to_iso(yyyy_mm_dd: str, tz: ZoneInfo | None = None, tz_name: str | None = None) -> str | None:
     """
     Converts a date string in the format 'YYYY-MM-DD' to ISO format 'YYYY-MM-DD 00:00:00+hh:mm'.
 
