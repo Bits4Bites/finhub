@@ -9,7 +9,7 @@ import yfinance as yf
 
 from app import config
 from app.models import stocks as models_stocks
-from app.services import crawler as crawler_service
+from app.services import crawler_core as crawler_core_service
 
 
 def load_csv_with_pandas(file_path):
@@ -26,7 +26,7 @@ def load_csv_with_pandas(file_path):
 
 async def main():
     # fetch data from web as CSV
-    csv_data = await crawler_service.fetch_webpage_content(
+    csv_data = await crawler_core_service.fetch_webpage_content(
         "https://asx.api.markitdigital.com/asx-research/1.0/companies/directory/file"
     )
 
