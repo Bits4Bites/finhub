@@ -15,6 +15,23 @@ PortfolioBudgetFrequency = Literal["Weekly", "Fortnightly", "Monthly", "Quarterl
 
 
 def normalize_canonical_ticker(value: object) -> object:
+    """Normalize an exchange-qualified ticker for portfolio contracts.
+
+    Args:
+        value: A candidate ticker. String values must use ``EXCHANGE:CODE``
+            format; surrounding whitespace is trimmed, letters are uppercased,
+            and recognized exchange aliases are replaced with their canonical
+            exchange code. Non-string values are returned unchanged so a
+            Pydantic before-validator can report the target field's type error.
+
+    Returns:
+        The normalized ``EXCHANGE:CODE`` string, preserving an unknown exchange
+        after trimming and uppercasing, or the original non-string value.
+
+    Raises:
+        ValueError: If a string has an empty exchange or code, embedded
+            whitespace, or anything other than one separating colon.
+    """
     if not isinstance(value, str):
         return value
     normalized = value.strip().upper()

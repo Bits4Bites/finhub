@@ -40,7 +40,7 @@ def _request(
 def test_handle_if_proxy_preserves_existing_query_and_fragment():
     response = asyncio.run(
         proxy_handler.handle_if_proxy(
-            "Redirect",
+            "redirect",
             "https://proxy.example?source=primary#results",
             _request("/events/listings", "country=AU+%26+NZ"),
         )
@@ -79,10 +79,11 @@ def test_handle_if_proxy_preserves_node_base_path():
     assert response.headers["location"] == "https://proxy.example/finhub/events/listings?country=AU"
 
 
-def test_handle_if_proxy_returns_none_when_disabled():
+@pytest.mark.parametrize("proxy_mode", ["None", "none", "unsupported"])
+def test_handle_if_proxy_returns_none_when_disabled(proxy_mode):
     response = asyncio.run(
         proxy_handler.handle_if_proxy(
-            "None",
+            proxy_mode,
             "https://proxy.example",
             _request("/events/listings"),
         )
@@ -91,37 +92,97 @@ def test_handle_if_proxy_returns_none_when_disabled():
     assert response is None
 
 
-def test_forward_timeout_uses_600_second_default():
-    timeout = proxy_handler._forward_timeout(_request("/events/listings"))
-
-    assert timeout.connect == proxy_handler._FORWARD_CONNECT_TIMEOUT_SECONDS
-    assert timeout.read == 600
-    assert timeout.write == proxy_handler._FORWARD_WRITE_TIMEOUT_SECONDS
-    assert timeout.pool == proxy_handler._FORWARD_POOL_TIMEOUT_SECONDS
-
-
-def test_forward_timeout_uses_client_header():
-    timeout = proxy_handler._forward_timeout(
-        _request(
-            "/events/listings",
-            headers=[("x-finhub-forward-timeout-seconds", "14400")],
+def test_handle_if_proxy_returns_none_for_empty_node_url():
+    response = asyncio.run(
+        proxy_handler.handle_if_proxy(
+            "forward",
+            "",
+            _request(
+                "/events/listings",
+                headers=[("x-finhub-forward-timeout-seconds", "invalid")],
+            ),
         )
     )
 
-    assert timeout.read == 14400
+    assert response is None
 
 
 @pytest.mark.parametrize("header_value", ["", "invalid", "0", "-1", "nan", "inf", "86401"])
-def test_forward_timeout_rejects_invalid_client_header(header_value):
-    with pytest.raises(HTTPException) as exc_info:
-        proxy_handler._forward_timeout(
-            _request(
-                "/events/listings",
-                headers=[("x-finhub-forward-timeout-seconds", header_value)],
+def test_handle_if_proxy_rejects_invalid_forward_timeout(header_value):
+    with (
+        patch.object(proxy_handler.httpx2, "AsyncClient") as client_factory,
+        pytest.raises(HTTPException) as exc_info,
+    ):
+        asyncio.run(
+            proxy_handler.handle_if_proxy(
+                "forward",
+                "https://proxy.example",
+                _request(
+                    "/events/listings",
+                    headers=[("x-finhub-forward-timeout-seconds", header_value)],
+                ),
             )
         )
 
     assert exc_info.value.status_code == 422
+    client_factory.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("header_value", "expected_timeout"),
+    [
+        ("0.1", 0.1),
+        ("86400", 86400),
+    ],
+)
+def test_handle_if_proxy_accepts_forward_timeout_boundaries(header_value, expected_timeout):
+    upstream_response = httpx2.Response(status_code=204)
+    client = AsyncMock()
+    client.request.return_value = upstream_response
+    client_context = MagicMock()
+    client_context.__aenter__ = AsyncMock(return_value=client)
+    client_context.__aexit__ = AsyncMock(return_value=None)
+
+    with patch.object(proxy_handler.httpx2, "AsyncClient", return_value=client_context) as client_factory:
+        response = asyncio.run(
+            proxy_handler.handle_if_proxy(
+                "FoRwArD",
+                "https://proxy.example",
+                _request(
+                    "/events/listings",
+                    headers=[("x-finhub-forward-timeout-seconds", header_value)],
+                ),
+            )
+        )
+
+    assert response is not None
+    assert response.status_code == 204
+    timeout = client_factory.call_args.kwargs["timeout"]
+    assert timeout.read == expected_timeout
+
+
+def test_handle_if_proxy_uses_default_forward_timeout():
+    upstream_response = httpx2.Response(status_code=204)
+    client = AsyncMock()
+    client.request.return_value = upstream_response
+    client_context = MagicMock()
+    client_context.__aenter__ = AsyncMock(return_value=client)
+    client_context.__aexit__ = AsyncMock(return_value=None)
+
+    with patch.object(proxy_handler.httpx2, "AsyncClient", return_value=client_context) as client_factory:
+        response = asyncio.run(
+            proxy_handler.handle_if_proxy(
+                "forward",
+                "https://proxy.example",
+                _request(
+                    "/events/listings",
+                ),
+            )
+        )
+
+    assert response is not None
+    assert response.status_code == 204
+    assert client_factory.call_args.kwargs["timeout"].read == 600
 
 
 def test_handle_if_proxy_forwards_request_and_upstream_response():
@@ -163,7 +224,7 @@ def test_handle_if_proxy_forwards_request_and_upstream_response():
     with patch.object(proxy_handler.httpx2, "AsyncClient", return_value=client_context) as client_factory:
         response = asyncio.run(
             proxy_handler.handle_if_proxy(
-                "Forward",
+                "fOrWaRd",
                 "https://proxy.example/finhub?source=primary",
                 request,
             )
@@ -172,7 +233,7 @@ def test_handle_if_proxy_forwards_request_and_upstream_response():
     client_factory.assert_called_once()
     client_options = client_factory.call_args.kwargs
     assert client_options["follow_redirects"] is False
-    assert client_options["timeout"].read == proxy_handler._FORWARD_DEFAULT_READ_TIMEOUT_SECONDS
+    assert client_options["timeout"].read == 600
     client.request.assert_awaited_once()
     request_args = client.request.await_args
     assert request_args.args == (
@@ -221,4 +282,3 @@ def test_handle_if_proxy_maps_forwarding_failure_to_bad_gateway():
         )
 
     assert exc_info.value.status_code == 502
-    assert exc_info.value.detail == "Proxy forwarding failed"

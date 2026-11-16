@@ -17,6 +17,18 @@ SOURCE_URLS = [
     "https://example.com/googl",
 ]
 SOURCE_IDS = [ai_reference.generate_source_id(url) for url in SOURCE_URLS]
+CURRENT_ALLOCATIONS = [0.5, 0.3, 0.2]
+TARGET_ALLOCATIONS = [0.52, 0.28, 0.20]
+ROLES = [
+    "🚀 Core growth compounder",
+    "🛡️ Defensive earnings quality",
+    "🧭 Digital portfolio diversifier",
+]
+RECOMMENDATIONS: list[models_review.PortfolioReviewHoldingRecommendation] = [
+    "BUY_MORE",
+    "HOLD",
+    "BUY_MORE",
+]
 
 
 def holdings() -> list[models_portfolio.PortfolioHolding]:
@@ -249,25 +261,89 @@ def target(*, portfolio_id: str = "portfolio-id") -> service._PortfolioTargetDra
 
 
 def target_positions() -> list[models_review.PortfolioReviewTargetPosition]:
-    return service._build_target_positions(
-        snapshot=snapshot(),
-        research=research(),
-        assessment=assessment(),
-        target_draft=target(),
-    )
+    return [
+        models_review.PortfolioReviewTargetPosition(
+            ticker=ticker,
+            company_name=company_name,
+            current_allocation=current_allocation,
+            target_allocation=target_allocation,
+            role=role,
+            rationale=f"The evidence supports the target weight for {ticker}.",
+            reference_ids=[source_id],
+        )
+        for ticker, company_name, current_allocation, target_allocation, role, source_id in zip(
+            TICKERS,
+            COMPANY_NAMES,
+            CURRENT_ALLOCATIONS,
+            TARGET_ALLOCATIONS,
+            ROLES,
+            SOURCE_IDS,
+            strict=True,
+        )
+    ]
 
 
 def holding_reviews() -> list[models_review.PortfolioHoldingReview]:
-    return service._build_holding_reviews(
-        snapshot=snapshot(),
-        assessment=assessment(),
-        target_positions=target_positions(),
-        strategy="LongTerm",
-    )
+    return [
+        models_review.PortfolioHoldingReview(
+            ticker=ticker,
+            company_name=company_name,
+            role=role,
+            current_allocation=current_allocation,
+            target_allocation=target_allocation,
+            thesis=f"The current evidence supports retaining {ticker}.",
+            strengths=["Established competitive position."],
+            risks=["Valuation and execution remain relevant."],
+            recommendation=recommendation,
+            exit_reason=None,
+            confidence=82,
+            data_gaps=[],
+            reference_ids=[source_id],
+        )
+        for (
+            ticker,
+            company_name,
+            role,
+            current_allocation,
+            target_allocation,
+            recommendation,
+            source_id,
+        ) in zip(
+            TICKERS,
+            COMPANY_NAMES,
+            ROLES,
+            CURRENT_ALLOCATIONS,
+            TARGET_ALLOCATIONS,
+            RECOMMENDATIONS,
+            SOURCE_IDS,
+            strict=True,
+        )
+    ]
 
 
 def reference(index: int) -> models_ai.ReferenceSource:
-    return research().references[index]
+    return _references()[index]
+
+
+def _references() -> list[models_ai.ReferenceSource]:
+    return [
+        models_ai.ReferenceSource(
+            id=source_id,
+            title=f"{company_name} research",
+            publisher="Example Research",
+            source_type="Research",
+            published_at=datetime(2026, 8, 22, tzinfo=UTC),
+            accessed_at=datetime(2026, 8, 23, tzinfo=UTC),
+            url=source_url,
+            is_verified=True,
+        )
+        for source_id, company_name, source_url in zip(
+            SOURCE_IDS,
+            COMPANY_NAMES,
+            SOURCE_URLS,
+            strict=True,
+        )
+    ]
 
 
 def review(*, action_plan: bool = True) -> models_review.PortfolioReview:
@@ -366,9 +442,29 @@ def review(*, action_plan: bool = True) -> models_review.PortfolioReview:
         investor_theme="Long-term growth. Total budget USD 500.",
         snapshot=snapshot(),
         budget=total_budget(),
-        summary=assessment().summary,
-        strengths=[models_review.PortfolioReviewStrength.model_validate(assessment().strengths[0].model_dump())],
-        risks=[models_review.PortfolioReviewRisk.model_validate(assessment().risks[0].model_dump())],
+        summary="The portfolio has strong quality exposure with manageable concentration risk.",
+        strengths=[
+            models_review.PortfolioReviewStrength(
+                title="Durable platforms",
+                analysis="The current holdings provide established platform exposure.",
+                affected_tickers=["NASDAQ:AAPL", "NASDAQ:MSFT"],
+                confidence=85,
+                data_gaps=[],
+                reference_ids=SOURCE_IDS[:2],
+            )
+        ],
+        risks=[
+            models_review.PortfolioReviewRisk(
+                level="Medium",
+                risk="Technology concentration can amplify correlated drawdowns.",
+                impact="A sector-wide repricing could affect all three holdings.",
+                mitigation="Direct new cash according to the validated target and monitor concentration.",
+                affected_tickers=TICKERS,
+                confidence=80,
+                data_gaps=[],
+                reference_ids=list(SOURCE_IDS),
+            )
+        ],
         holding_reviews=holding_items,
         target_portfolio=target_items,
         target_turnover=0.02,
@@ -379,5 +475,5 @@ def review(*, action_plan: bool = True) -> models_review.PortfolioReview:
         overall_data_quality="High",
         data_gaps=[],
         validation_warnings=[],
-        references=research().references,
+        references=_references(),
     )

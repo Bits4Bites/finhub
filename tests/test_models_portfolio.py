@@ -14,15 +14,47 @@ def test_portfolio_holding_normalizes_ticker_and_tags():
     assert holding.tags == "growth"
 
 
-def test_portfolio_holding_normalizes_nyse_arca_alias():
-    holding = models_portfolio.PortfolioHolding(ticker="NYSEARCA:SGOV")
-
-    assert holding.ticker == "NYSE:SGOV"
+def test_normalize_canonical_ticker_trims_uppercases_and_normalizes_alias():
+    assert models_portfolio.normalize_canonical_ticker(" nysearca:sgov ") == "NYSE:SGOV"
 
 
-def test_portfolio_holding_rejects_long_ticker():
-    with pytest.raises(ValidationError):
-        models_portfolio.PortfolioHolding(ticker="A" * 33)
+def test_normalize_canonical_ticker_preserves_unknown_exchange():
+    assert models_portfolio.normalize_canonical_ticker(" custom:abc ") == "CUSTOM:ABC"
+
+
+def test_normalize_canonical_ticker_returns_valid_canonical_output():
+    assert models_portfolio.normalize_canonical_ticker(" asx:cba ") == "ASX:CBA"
+
+
+@pytest.mark.parametrize(
+    "ticker",
+    [
+        pytest.param("AAPL", id="missing-exchange"),
+        pytest.param(":AAPL", id="empty-exchange"),
+        pytest.param("NASDAQ:", id="empty-code"),
+        pytest.param("NASDAQ:AAPL:US", id="extra-colon"),
+        pytest.param("NASDAQ:AA PL", id="embedded-whitespace"),
+    ],
+)
+def test_normalize_canonical_ticker_rejects_invalid_strings(ticker):
+    with pytest.raises(ValueError):
+        models_portfolio.normalize_canonical_ticker(ticker)
+
+
+def test_normalize_canonical_ticker_passes_non_strings_to_model_validation():
+    value = object()
+
+    assert models_portfolio.normalize_canonical_ticker(value) is value
+
+
+def test_portfolio_holding_rejects_long_canonical_ticker_by_length():
+    long_ticker = f"UNKNOWN:{'A' * 25}"
+    assert len(long_ticker) == 33
+
+    with pytest.raises(ValidationError) as exc_info:
+        models_portfolio.PortfolioHolding(ticker=long_ticker)
+
+    assert any(error["loc"] == ("ticker",) and error["type"] == "string_too_long" for error in exc_info.value.errors())
 
 
 def test_portfolio_holding_rejects_negative_and_non_finite_values():
@@ -37,7 +69,7 @@ def test_portfolio_holding_rejects_negative_and_non_finite_values():
 @pytest.mark.parametrize(
     ("field_name", "value"),
     [
-        ("ticker", "A" * 33),
+        ("ticker", f"UNKNOWN:{'A' * 25}"),
         ("company_name", "A" * 201),
         ("exchange", "A" * 33),
         ("currency", "US"),

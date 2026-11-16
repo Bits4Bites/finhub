@@ -5,6 +5,8 @@ from fastapi import APIRouter, BackgroundTasks, Body, HTTPException, Query, Requ
 from .. import config
 from ..schemas import ai_dividend as schemas_ai_dividend
 from ..schemas import async_task
+from ..schemas.base_req_resp import BaseResponse
+from ..services import ai_helper
 from ..services import msai_analyze_div_event as services_dividend
 from . import async_task as router_async_task
 from . import proxy_handler
@@ -12,6 +14,44 @@ from . import proxy_handler
 router = APIRouter(prefix="/ai", tags=["ai"])
 
 _TASK_TYPE = "analyze_dividend_event"
+_SYNC_RESPONSES = {
+    400: {"model": BaseResponse, "description": "The dividend request or resolved security is invalid."},
+    422: {
+        "model": BaseResponse,
+        "description": "The request body is invalid or market history is insufficient for analysis.",
+    },
+    500: {"model": BaseResponse, "description": "An unexpected dependency or server failure occurred."},
+    502: {
+        "model": schemas_ai_dividend.AnalyzeDividendEventResponse | BaseResponse,
+        "description": "The AI provider, rate-limit budget, or structured analysis failed.",
+    },
+}
+_ASYNC_STATE_RESPONSES = {
+    202: {
+        "model": schemas_ai_dividend.AnalyzeDividendEventAsyncResponse,
+        "description": "The dividend-analysis task started or is still running.",
+    },
+    400: {
+        "model": schemas_ai_dividend.AnalyzeDividendEventAsyncResponse | BaseResponse,
+        "description": "The task request or resolved security is invalid.",
+    },
+    404: {"model": BaseResponse, "description": "The task was not found."},
+    422: {
+        "model": schemas_ai_dividend.AnalyzeDividendEventAsyncResponse | BaseResponse,
+        "description": "The request is invalid or market history is insufficient for analysis.",
+    },
+    500: {
+        "model": schemas_ai_dividend.AnalyzeDividendEventAsyncResponse | BaseResponse,
+        "description": "The task state is invalid or the background task failed unexpectedly.",
+    },
+    502: {
+        "model": schemas_ai_dividend.AnalyzeDividendEventAsyncResponse,
+        "description": "The AI provider, rate-limit budget, or structured analysis failed.",
+    },
+}
+_ASYNC_START_RESPONSES = {
+    **_ASYNC_STATE_RESPONSES,
+}
 
 
 async def _analyze(
@@ -28,8 +68,8 @@ async def _analyze(
     except services_dividend.DividendEventInputError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except services_dividend.DividendEventInsufficientDataError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
-    except services_dividend.DividendEventAIError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
+    except (services_dividend.DividendEventAIError, ai_helper.LLMRateLimitError) as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
     if result.analysis_status == "Failed":
         return schemas_ai_dividend.AnalyzeDividendEventResponse(
@@ -48,12 +88,34 @@ async def _analyze(
     "/analyze_dividend_event",
     response_model=schemas_ai_dividend.AnalyzeDividendEventResponse,
     response_model_exclude_none=True,
+    responses=_SYNC_RESPONSES,
 )
 async def analyze_dividend_event(
     http_request: Request,
     request: schemas_ai_dividend.AnalyzeDividendEventRequest,
     response: Response,
 ) -> schemas_ai_dividend.AnalyzeDividendEventResponse | Response:
+    """Analyze one dividend event and return the assessment immediately.
+
+    Args:
+        http_request: Incoming HTTP request, forwarded when AI proxy mode is enabled.
+        request: Validated symbol, ex-date, dividend amount, costs, and holding window.
+        response: HTTP response whose status is aligned with the analysis outcome.
+
+    Returns:
+        A proxy response when configured; otherwise a dividend-analysis envelope.
+        Complete analyses use status 200, while a validated failed analysis preserves
+        its baseline data and uses status 502.
+
+    Raises:
+        HTTPException: With status 400 for invalid or unsupported input, 422 when
+            market data cannot support a baseline, or 502 for AI-provider,
+            rate-limit, or structured-analysis failures.
+
+    Notes:
+        Request-schema violations are reported as HTTP 422 before the handler runs.
+        The symbol is uppercased before analysis.
+    """
     proxy_response = await proxy_handler.handle_if_proxy(
         config.settings_finhub_proxy.proxy_mode,
         config.settings_finhub_proxy.url_ai_task_node,
@@ -152,6 +214,8 @@ async def _poll_task(
     "/start_analyze_dividend_event_async",
     response_model=schemas_ai_dividend.AnalyzeDividendEventAsyncResponse,
     response_model_exclude_none=True,
+    responses=_ASYNC_START_RESPONSES,
+    openapi_extra={"requestBody": {"required": True}},
 )
 async def start_analyze_dividend_event_async(
     background_tasks: BackgroundTasks,
@@ -162,6 +226,29 @@ async def start_analyze_dividend_event_async(
         description="The dividend-event analysis request.",
     ),
 ) -> schemas_ai_dividend.AnalyzeDividendEventAsyncResponse | Response:
+    """Start or reuse a background dividend-event analysis.
+
+    Args:
+        background_tasks: FastAPI scheduler used to run a newly created analysis.
+        response: HTTP response updated to the task's current public status.
+        http_request: Incoming HTTP request, forwarded when AI proxy mode is enabled.
+        request: Required dividend-event request body.
+
+    Returns:
+        A proxy response when configured. A new or running task returns HTTP 202;
+        an identical completed or failed task returns its persisted result and status.
+
+    Raises:
+        HTTPException: With status 400 and the established missing-body response
+            when no JSON body is supplied, 404 if a reused task disappears, or 500
+            when persisted task state is malformed.
+
+    Notes:
+        The OpenAPI contract marks the body as required while the optional Python
+        annotation preserves the caller-visible HTTP 400 response for an omitted
+        body. Identical running, completed, and failed requests are deduplicated.
+        Invalid bodies are reported as HTTP 422.
+    """
     proxy_response = await proxy_handler.handle_if_proxy(
         config.settings_finhub_proxy.proxy_mode,
         config.settings_finhub_proxy.url_ai_task_node,
@@ -196,12 +283,30 @@ async def start_analyze_dividend_event_async(
     "/poll_analyze_dividend_event_async",
     response_model=schemas_ai_dividend.AnalyzeDividendEventAsyncResponse,
     response_model_exclude_none=True,
+    responses=_ASYNC_STATE_RESPONSES,
 )
 async def poll_analyze_dividend_event_async(
     response: Response,
     http_request: Request,
     task_id: str = Query(description="Task ID returned by the corresponding start endpoint."),
 ) -> schemas_ai_dividend.AnalyzeDividendEventAsyncResponse | Response:
+    """Return the current public state of a dividend-analysis task.
+
+    Args:
+        response: HTTP response updated to the running or failed task status.
+        http_request: Incoming HTTP request, forwarded when AI proxy mode is enabled.
+        task_id: Identifier returned by ``start_analyze_dividend_event_async``;
+            surrounding whitespace is ignored.
+
+    Returns:
+        A proxy response when configured. Running tasks return HTTP 202, completed
+        tasks return their analysis, and failed tasks return their stored 4xx/5xx
+        status with any preserved baseline data.
+
+    Raises:
+        HTTPException: With status 404 when the task is missing or belongs to
+            another workflow, or 500 when its persisted state is malformed.
+    """
     proxy_response = await proxy_handler.handle_if_proxy(
         config.settings_finhub_proxy.proxy_mode,
         config.settings_finhub_proxy.url_ai_task_node,

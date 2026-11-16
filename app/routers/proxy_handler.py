@@ -116,6 +116,34 @@ async def _forward_request(target_url: str, request: Request) -> Response:
 
 
 async def handle_if_proxy(proxy_mode: str, node_url: str, request: Request, /) -> Response | None:
+    """Apply the configured redirect or forwarding behavior to a request.
+
+    Args:
+        proxy_mode: Case-insensitive mode name. ``Redirect`` returns a
+            temporary redirect, ``Forward`` sends the request to the node, and
+            ``None`` or any unrecognized value leaves handling to the caller.
+        node_url: Base node URL. An empty value disables proxying regardless
+            of the selected mode.
+        request: Incoming request whose path and query are appended to the
+            node URL. Forwarding also carries its method, body, and
+            end-to-end headers.
+
+    Returns:
+        ``None`` when proxying is disabled, a 307 redirect response in
+        redirect mode, or a response carrying the upstream status, body, and
+        forwardable headers in forward mode.
+
+    Raises:
+        HTTPException: HTTP 422 in forward mode when
+            ``X-FinHub-Forward-Timeout-Seconds`` is not a finite number greater
+            than zero and no more than 86400, or HTTP 502 when the upstream
+            request cannot be completed.
+
+    Notes:
+        Forward reads default to 600 seconds when the timeout header is
+        omitted. Upstream redirects are returned to the caller rather than
+        followed by FinHub.
+    """
     if not node_url:
         return None
 

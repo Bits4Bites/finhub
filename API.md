@@ -473,10 +473,10 @@ and gaps without an additional prompt-building AI call.
 Run the new-listings request in the background. Task state and results expire after one hour.
 AU and US tasks are deduplicated separately; equivalent country names/codes reuse the same market's task.
 
-| Endpoint | Parameter | Type  | Required | Description                                                        |
-|----------|-----------|-------|----------|--------------------------------------------------------------------|
-| Start    | `country` | query | Yes      | Country used when starting; supports `AU` and `US`.                 |
-| Poll     | `task_id` | query | Yes      | Task ID returned by the start endpoint.                            |
+| Endpoint | Parameter | Type  | Required | Description                                         |
+|----------|-----------|-------|----------|-----------------------------------------------------|
+| Start    | `country` | query | Yes      | Country used when starting; supports `AU` and `US`. |
+| Poll     | `task_id` | query | Yes      | Task ID returned by the start endpoint.             |
 
 ```bash
 # Start an AU task (use country=US for the US market)
@@ -501,13 +501,13 @@ Starting a task returns HTTP `202`:
 
 Polling returns:
 
-| HTTP status | Task state  | Result                                                                                |
-|-------------|-------------|---------------------------------------------------------------------------------------|
-| `202`       | `RUNNING`   | The task is still running.                                                            |
-| `200`       | `COMPLETED` | The standard new-listings payload in `data`.                                          |
-| `500`       | `FAILED`    | The background task failed.                                                           |
-| `404`       | —           | The task ID is unknown or its cache entry expired.                                    |
-| `422`       | —           | A start omitted `country` or supplied a country other than `AU`; no task was created. |
+| HTTP status | Task state  | Result                                                                                        |
+|-------------|-------------|-----------------------------------------------------------------------------------------------|
+| `202`       | `RUNNING`   | The task is still running.                                                                    |
+| `200`       | `COMPLETED` | The standard new-listings payload in `data`.                                                  |
+| `500`       | `FAILED`    | The background task failed.                                                                   |
+| `404`       | —           | The task ID is unknown or its cache entry expired.                                            |
+| `422`       | —           | A start omitted `country` or supplied a country other than `AU` or `US`; no task was created. |
 
 Missing or unsupported countries are rejected before task creation.
 
@@ -884,7 +884,7 @@ The `data` object contains:
 |-------------------------|----------------------------------------------------------------------------------------------------|
 | `as_of`                 | Timezone-aware analysis timestamp.                                                                 |
 | `analysis_status`       | `Complete` or `CompleteWithWarnings`.                                                              |
-| `portfolio_empty`       | `false` for successful analyses; requests without positive-share positions are rejected.          |
+| `portfolio_empty`       | `false` for successful analyses; requests without positive-share positions are rejected.           |
 | `overall_data_quality`  | `High`, `Medium`, `Low`, or `Insufficient`.                                                        |
 | `snapshot`              | Verified holdings, allocations, valuation, price source, P/L, target drift, and verification gaps. |
 | `risks`                 | Up to four ranked `PortfolioSpotlightRiskAction` objects.                                          |

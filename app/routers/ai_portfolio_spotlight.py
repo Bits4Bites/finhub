@@ -5,6 +5,7 @@ from fastapi import APIRouter, BackgroundTasks, Body, HTTPException, Query, Requ
 from .. import config
 from ..schemas import ai_portfolio_spotlight as schemas_spotlight
 from ..schemas import async_task
+from ..schemas.base_req_resp import BaseResponse
 from ..services import msai_spotlight_portfolio as services_spotlight
 from ..services import portfolio_verification
 from . import async_task as router_async_task
@@ -13,6 +14,25 @@ from . import proxy_handler
 router = APIRouter(prefix="/ai", tags=["ai"])
 
 _TASK_TYPE = "spotlight_portfolio"
+_ASYNC_RESPONSES = {
+    202: {
+        "model": schemas_spotlight.PortfolioSpotlightAsyncResponse,
+        "description": "The portfolio-spotlight task started or is still running.",
+    },
+    404: {"model": BaseResponse, "description": "The task was not found."},
+    422: {
+        "model": schemas_spotlight.PortfolioSpotlightAsyncResponse | BaseResponse,
+        "description": "The start request or verified portfolio input is invalid.",
+    },
+    500: {
+        "model": schemas_spotlight.PortfolioSpotlightAsyncResponse | BaseResponse,
+        "description": "The background task or retained task state failed unexpectedly.",
+    },
+    502: {
+        "model": schemas_spotlight.PortfolioSpotlightAsyncResponse,
+        "description": "Market verification, AI execution, structured output, or final validation failed.",
+    },
+}
 
 
 async def _analyze(
@@ -51,12 +71,48 @@ async def _analyze(
     "/spotlight_portfolio",
     response_model=schemas_spotlight.PortfolioSpotlightResponse,
     response_model_exclude_none=True,
+    responses={
+        422: {
+            "model": BaseResponse,
+            "description": "The request or verified portfolio input is invalid.",
+        },
+        502: {
+            "model": BaseResponse,
+            "description": "Market verification, AI execution, structured output, or final validation failed.",
+        },
+    },
 )
 async def spotlight_portfolio(
     http_request: Request,
-    request: schemas_spotlight.PortfolioSpotlightRequest,
+    request: schemas_spotlight.PortfolioSpotlightRequest = Body(description="The portfolio spotlight request."),
 ) -> schemas_spotlight.PortfolioSpotlightResponse | Response:
-    """Review a verified portfolio and return ranked structured risks and actions."""
+    """Return a concise, verified spotlight of portfolio risks and actions.
+
+    Args:
+        http_request: Incoming HTTP request used when an AI-task proxy node is
+            configured.
+        request: Validated country, investor theme, and one or more unique
+            holdings, with at least one positive-share position.
+
+    Returns:
+        HTTP 200 with the verified portfolio snapshot, severity-ranked risks,
+        recommended actions, rebalance flag, data gaps, warnings, and cited
+        sources. Redirect proxy mode instead returns HTTP 307, while forward
+        mode relays the upstream response and status.
+
+    Raises:
+        HTTPException: With HTTP 422 when portfolio input is rejected, or HTTP
+            502 when market verification, provider execution, structured
+            output, or provider-independent final result validation fails.
+
+    Notes:
+        Zero-share entries are excluded and every positive holding is verified
+        against current market data before cached analysis can be reused.
+        Duplicate normalized tickers and requests without a positive holding
+        fail request validation with HTTP 422. Unexpected local failures return
+        HTTP 500, authentication can return HTTP 401, and a configured proxy
+        short-circuits local analysis after request validation.
+    """
 
     proxy_response = await proxy_handler.handle_if_proxy(
         config.settings_finhub_proxy.proxy_mode,
@@ -137,6 +193,14 @@ async def _poll_task(
     "/start_spotlight_portfolio_async",
     response_model=schemas_spotlight.PortfolioSpotlightAsyncResponse,
     response_model_exclude_none=True,
+    responses={
+        400: {
+            "model": BaseResponse,
+            "description": "A request body is required to start a task.",
+        },
+        **_ASYNC_RESPONSES,
+    },
+    openapi_extra={"requestBody": {"required": True}},
 )
 async def start_spotlight_portfolio_async(
     background_tasks: BackgroundTasks,
@@ -147,7 +211,41 @@ async def start_spotlight_portfolio_async(
         description="The portfolio spotlight request.",
     ),
 ) -> schemas_spotlight.PortfolioSpotlightAsyncResponse | Response:
-    """Start a portfolio-spotlight task."""
+    """Start or reuse an asynchronous portfolio-spotlight task.
+
+    Args:
+        background_tasks: FastAPI task collector that runs a newly accepted
+            spotlight after the start response is prepared.
+        response: Outgoing response whose HTTP status reflects the returned task
+            state.
+        http_request: Incoming HTTP request used when an AI-task proxy node is
+            configured.
+        request: Validated spotlight request. ``None`` represents an omitted or
+            JSON-null body so the endpoint can preserve its HTTP 400 contract.
+
+    Returns:
+        HTTP 202 with a task ID for a new or already-running task. Repeating an
+        equivalent request while its state is retained returns HTTP 200 with the
+        completed spotlight or the stored HTTP 422, 502, or 500 failure.
+        Redirect proxy mode returns HTTP 307; forward mode relays the upstream
+        response and status.
+
+    Raises:
+        HTTPException: With HTTP 400 when the local request body is missing or
+            null, HTTP 404 if a reused task expires before it can be read, or
+            HTTP 500 for invalid retained task state.
+
+    Notes:
+        OpenAPI marks the body as required even though the nullable handler
+        parameter distinguishes a missing body (HTTP 400) from an invalid body
+        (HTTP 422). Equivalent validated requests are deduplicated across
+        running, completed, and failed states. Each state expires one hour after
+        its latest lifecycle update; after expiry the request can run again and
+        polling returns HTTP 404. Portfolio input failures become HTTP 422,
+        verification, provider, structured-output, and final-validation
+        failures become HTTP 502, and unexpected failures become HTTP 500.
+        Authentication can return HTTP 401 before invocation.
+    """
 
     proxy_response = await proxy_handler.handle_if_proxy(
         config.settings_finhub_proxy.proxy_mode,
@@ -183,13 +281,40 @@ async def start_spotlight_portfolio_async(
     "/poll_spotlight_portfolio_async",
     response_model=schemas_spotlight.PortfolioSpotlightAsyncResponse,
     response_model_exclude_none=True,
+    responses=_ASYNC_RESPONSES,
 )
 async def poll_spotlight_portfolio_async(
     response: Response,
     http_request: Request,
     task_id: str = Query(description="Task ID returned by the corresponding start endpoint."),
 ) -> schemas_spotlight.PortfolioSpotlightAsyncResponse | Response:
-    """Poll a portfolio-spotlight task."""
+    """Read the current public state of a portfolio-spotlight task.
+
+    Args:
+        response: Outgoing response whose HTTP status is updated to match the
+            task state.
+        http_request: Incoming HTTP request used when an AI-task proxy node is
+            configured.
+        task_id: Identifier returned by ``start_spotlight_portfolio_async``;
+            surrounding whitespace is ignored.
+
+    Returns:
+        HTTP 202 with ``RUNNING``, HTTP 200 with the completed spotlight, or
+        ``FAILED`` with the stored HTTP 422, 502, or 500 status. Redirect proxy
+        mode returns HTTP 307; forward mode relays the upstream response and
+        status.
+
+    Raises:
+        HTTPException: With HTTP 404 when the task is unknown, belongs to
+            another task type, or has expired; or HTTP 500 when retained state
+            is invalid. Omitting the required query parameter returns HTTP 422
+            before this function is called.
+
+    Notes:
+        Task states expire one hour after their latest lifecycle update. Polling
+        never restarts expired analysis. Authentication can return HTTP 401
+        before invocation.
+    """
 
     proxy_response = await proxy_handler.handle_if_proxy(
         config.settings_finhub_proxy.proxy_mode,

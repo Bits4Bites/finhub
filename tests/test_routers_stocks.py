@@ -1,5 +1,6 @@
 from unittest.mock import patch
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -34,6 +35,7 @@ def test_get_stock_quotes_multiple_symbols(mock_get_quotes):
 
     resp = client.get("/stocks/quotes", params={"symbols": "CBA.AX, BHP.AX"})
     assert resp.status_code == 200
+    assert resp.json()["data"] == {}
     mock_get_quotes.assert_called_once_with(["CBA.AX", "BHP.AX"])
 
 
@@ -44,6 +46,43 @@ def test_get_stock_quotes_uppercases_symbols(mock_get_quotes):
     resp = client.get("/stocks/quotes", params={"symbols": "cba.ax"})
     assert resp.status_code == 200
     mock_get_quotes.assert_called_once_with(["CBA.AX"])
+
+
+@patch("app.routers.stocks.stock_service.get_stock_quotes")
+def test_get_stock_quotes_trims_and_deduplicates_symbols(mock_get_quotes):
+    mock_get_quotes.return_value = {}
+
+    resp = client.get(
+        "/stocks/quotes",
+        params={"symbols": " cba.ax, BHP.AX , cba.ax "},
+    )
+
+    assert resp.status_code == 200
+    mock_get_quotes.assert_called_once_with(["CBA.AX", "BHP.AX"])
+
+
+@pytest.mark.parametrize("symbols", ["", "   ", ",", "CBA.AX,,BHP.AX", "CBA.AX,"])
+@patch("app.routers.stocks.stock_service.get_stock_quotes")
+def test_get_stock_quotes_rejects_empty_entries(mock_get_quotes, symbols):
+    resp = client.get("/stocks/quotes", params={"symbols": symbols})
+
+    assert resp.status_code == 422
+    assert resp.json()["status"] == 422
+    mock_get_quotes.assert_not_called()
+
+
+@patch("app.routers.stocks.stock_service.get_stock_quotes")
+def test_get_stock_quotes_omits_unavailable_provider_results(mock_get_quotes):
+    quote = models_market_data.StockQuote.model_construct(currency="AUD", market_price=110.5)
+    mock_get_quotes.return_value = {"CBA.AX": quote}
+
+    resp = client.get(
+        "/stocks/quotes",
+        params={"symbols": "CBA.AX,BHP.AX"},
+    )
+
+    assert resp.status_code == 200
+    assert list(resp.json()["data"]) == ["CBA.AX"]
 
 
 def test_get_stock_quotes_missing_param():
@@ -59,7 +98,7 @@ def test_get_symbol_overview_success(mock_get_overview):
     overview = models_stocks.SymbolOverview.model_construct(short_name="CBA", long_name="Commonwealth Bank")
     mock_get_overview.return_value = overview
 
-    resp = client.get("/stocks/CBA.AX/overview")
+    resp = client.get("/stocks/cba.ax/overview")
     assert resp.status_code == 200
     body = resp.json()
     assert body["status"] == 200
@@ -78,7 +117,7 @@ def test_get_symbol_overview_not_found(mock_get_overview):
     body = resp.json()
     assert body["status"] == 404
     assert body["message"] == "Symbol not found"
-    assert body.get("data") is None
+    assert "data" not in body
 
 
 # --- GET /stocks/{symbol}/info ---
@@ -89,7 +128,7 @@ def test_get_symbol_info_success(mock_get_info):
     info = models_stocks.SymbolInfo.model_construct(short_name="CBA", long_name="Commonwealth Bank")
     mock_get_info.return_value = info
 
-    resp = client.get("/stocks/CBA.AX/info")
+    resp = client.get("/stocks/cba.ax/info")
     assert resp.status_code == 200
     body = resp.json()
     assert body["status"] == 200
@@ -108,7 +147,7 @@ def test_get_symbol_info_not_found(mock_get_info):
     body = resp.json()
     assert body["status"] == 404
     assert body["message"] == "Symbol not found"
-    assert body.get("data") is None
+    assert "data" not in body
 
 
 # --- GET /stocks/{symbol}/quote_at/{date_str} ---
@@ -123,7 +162,7 @@ def test_get_quote_at_date_success(mock_get_quote):
     )
     mock_get_quote.return_value = history_point
 
-    resp = client.get("/stocks/CBA.AX/quote_at/2025-01-15")
+    resp = client.get("/stocks/cba.ax/quote_at/2025-01-15")
     assert resp.status_code == 200
     body = resp.json()
     assert body["status"] == 200
@@ -131,6 +170,46 @@ def test_get_quote_at_date_success(mock_get_quote):
     assert body["data"] is not None
     assert body["data"]["close"] == 105.0
     mock_get_quote.assert_called_once_with("CBA.AX", "2025-01-15")
+
+
+@pytest.mark.parametrize(
+    "date_str",
+    [
+        "not-a-date",
+        "2025-1-15",
+        "2025-01-5",
+        "2025-02-29",
+        "20250115",
+    ],
+)
+@patch("app.routers.stocks.stock_service.get_stock_quote_at_date")
+def test_get_quote_at_date_rejects_invalid_fixed_width_dates(mock_get_quote, date_str):
+    resp = client.get(f"/stocks/CBA.AX/quote_at/{date_str}")
+
+    assert resp.status_code == 422
+    assert resp.json() == {
+        "status": 422,
+        "message": "date must be a valid date in YYYY-MM-DD format",
+    }
+    mock_get_quote.assert_not_called()
+
+
+@patch("app.routers.stocks.stock_service.get_stock_quote_at_date")
+def test_get_quote_at_date_returns_prior_trading_day(mock_get_quote):
+    mock_get_quote.return_value = models_market_data.HistoryPoint.model_construct(
+        timestamp=1737072000,
+        timestamp_str="2025-01-17 00:00:00",
+        close=104.0,
+    )
+
+    resp = client.get("/stocks/CBA.AX/quote_at/2025-01-19")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == 200
+    assert body["data"]["timestamp_str"] == "2025-01-17 00:00:00"
+    assert body["data"]["close"] == 104.0
+    mock_get_quote.assert_called_once_with("CBA.AX", "2025-01-19")
 
 
 @patch("app.routers.stocks.stock_service.get_stock_quote_at_date")
@@ -142,7 +221,7 @@ def test_get_quote_at_date_not_found(mock_get_quote):
     body = resp.json()
     assert body["status"] == 404
     assert body["message"] == "Symbol or quote not found"
-    assert body.get("data") is None
+    assert "data" not in body
 
 
 # --- GET /stocks/{symbol}/history ---
@@ -164,7 +243,7 @@ def test_get_symbol_history_success(mock_get_history):
     ]
     mock_get_history.return_value = points
 
-    resp = client.get("/stocks/CBA.AX/history?days=30")
+    resp = client.get("/stocks/cba.ax/history?days=30")
     assert resp.status_code == 200
     body = resp.json()
     assert body["status"] == 200
@@ -183,6 +262,19 @@ def test_get_symbol_history_defaults_days(mock_get_history):
     assert resp.status_code == 200
     body = resp.json()
     assert body["status"] == 200
+    assert body["data"] == []
+    mock_get_history.assert_called_once_with("CBA.AX", 100)
+
+
+@pytest.mark.parametrize("days", [0, -7])
+@patch("app.routers.stocks.stock_service.get_symbol_history")
+def test_get_symbol_history_uses_default_for_non_positive_days(mock_get_history, days):
+    mock_get_history.return_value = []
+
+    resp = client.get("/stocks/CBA.AX/history", params={"days": days})
+
+    assert resp.status_code == 200
+    assert resp.json()["data"] == []
     mock_get_history.assert_called_once_with("CBA.AX", 100)
 
 
@@ -195,7 +287,15 @@ def test_get_symbol_history_none(mock_get_history):
     body = resp.json()
     assert body["status"] == 200
     assert body["message"] == "ok"
-    assert body.get("data") is None
+    assert "data" not in body
+
+
+@patch("app.routers.stocks.stock_service.get_symbol_history")
+def test_get_symbol_history_rejects_non_integer_days(mock_get_history):
+    resp = client.get("/stocks/CBA.AX/history", params={"days": "thirty"})
+
+    assert resp.status_code == 422
+    mock_get_history.assert_not_called()
 
 
 # --- GET /stocks/index/{index}/companies ---
@@ -203,21 +303,33 @@ def test_get_symbol_history_none(mock_get_history):
 
 @patch("app.routers.stocks.market_service.market_indices")
 def test_get_index_companies_success(mock_market_indices):
-    company = models_market.CompanyBriefInfo(
-        symbol="CBA.AX",
-        name="Commonwealth Bank",
-        sector="Financials",
-        market_cap=200000000000,
+    companies = (
+        models_market.CompanyBriefInfo(
+            symbol="CBA.AX",
+            name="Commonwealth Bank",
+            sector="Financials",
+            market_cap=200000000000,
+        ),
+        models_market.CompanyBriefInfo(
+            symbol="BHP.AX",
+            name="BHP Group",
+            sector="Materials",
+            market_cap=100000000000,
+        ),
     )
-    mock_market_indices.indices = {"ASX20": {"CBA.AX": company}}
+    mock_market_indices.indices = {
+        "ASX20": {
+            "CBA.AX": companies[0],
+            "BHP.AX": companies[1],
+        }
+    }
 
     resp = client.get("/stocks/index/ASX20/companies")
     assert resp.status_code == 200
     body = resp.json()
     assert body["status"] == 200
     assert body["message"] == "ok"
-    assert len(body["data"]) == 1
-    assert body["data"][0]["symbol"] == "CBA.AX"
+    assert [company["symbol"] for company in body["data"]] == ["CBA.AX", "BHP.AX"]
 
 
 @patch("app.routers.stocks.market_service.market_indices")
@@ -247,6 +359,16 @@ def test_get_index_companies_unknown_index(mock_market_indices):
     assert body["data"] == []
 
 
+@patch("app.routers.stocks.market_service.market_indices")
+def test_get_index_companies_supported_empty_index(mock_market_indices):
+    mock_market_indices.indices = {"ASX20": {}}
+
+    resp = client.get("/stocks/index/ASX20/companies")
+
+    assert resp.status_code == 200
+    assert resp.json()["data"] == []
+
+
 # --- GET /stocks/{symbol}/info_debug ---
 
 
@@ -254,7 +376,7 @@ def test_get_index_companies_unknown_index(mock_market_indices):
 def test_get_symbol_info_debug_success(mock_get_raw):
     mock_get_raw.return_value = {"long_name": "Apple Inc.", "market_cap": 3000000000000}
 
-    resp = client.get("/stocks/AAPL/info_debug")
+    resp = client.get("/stocks/aapl/info_debug")
     assert resp.status_code == 200
     body = resp.json()
     assert body["status"] == 200
@@ -272,3 +394,48 @@ def test_get_symbol_info_debug_empty(mock_get_raw):
     body = resp.json()
     assert body["status"] == 200
     assert body["data"] == {}
+
+
+@pytest.mark.parametrize(
+    ("target", "path", "params"),
+    [
+        (
+            "app.routers.stocks.stock_service.get_stock_quotes",
+            "/stocks/quotes",
+            {"symbols": "AAPL"},
+        ),
+        (
+            "app.routers.stocks.stock_service.get_symbol_overview",
+            "/stocks/AAPL/overview",
+            None,
+        ),
+        (
+            "app.routers.stocks.stock_service.get_symbol_info",
+            "/stocks/AAPL/info",
+            None,
+        ),
+        (
+            "app.routers.stocks.stock_service.get_symbol_history",
+            "/stocks/AAPL/history",
+            None,
+        ),
+        (
+            "app.routers.stocks.stock_service.get_stock_quote_at_date",
+            "/stocks/AAPL/quote_at/2025-01-15",
+            None,
+        ),
+        (
+            "app.routers.stocks.stock_service.get_symbol_info_raw",
+            "/stocks/AAPL/info_debug",
+            None,
+        ),
+    ],
+)
+def test_stock_provider_failures_return_http_500(target, path, params):
+    with patch(target, side_effect=RuntimeError("provider unavailable")):
+        resp = client.get(path, params=params)
+
+    assert resp.status_code == 500
+    body = resp.json()
+    assert body["status"] == 500
+    assert "message" in body
