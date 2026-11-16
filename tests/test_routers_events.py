@@ -1,600 +1,784 @@
-"""Unit tests for the event routers."""
-
-import asyncio
-from unittest.mock import AsyncMock, patch
+from unittest import mock
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app import config
 from app.main import app
+from app.models import event as models_event
 from app.models import events_listings as models_events_listings
-from app.models.event import UpcomingDividendEvent, UpcomingEarningsEvent
-from app.routers import events_listings as router_events_listings
-from app.schemas import async_task
-from app.schemas import events_listings as schemas_events_listings
+from app.routers import events_div as router_events_div
 
 client = TestClient(app)
 
 
-# ===========================================================================
-# Tests for GET /events/upcoming_dividends
-# ===========================================================================
+@pytest.fixture(autouse=True)
+def isolate_event_routes(monkeypatch):
+    monkeypatch.setattr(config.settings_finhub_proxy, "proxy_mode", "None")
+    monkeypatch.setattr(config.settings_finhub_proxy, "url_web_crawl_node", "")
+    monkeypatch.setattr(config.settings_finhub_proxy, "url_ai_task_node", "")
+    monkeypatch.setattr(
+        router_events_div.asset_utils,
+        "is_in_index",
+        lambda *, index, symbol: False,
+    )
 
 
-class TestUpcomingDividends:
-    def test_redirects_through_shared_proxy_handler(self):
-        with (
-            patch.object(config.settings_finhub_proxy, "proxy_mode", "Redirect"),
-            patch.object(
-                config.settings_finhub_proxy,
-                "url_web_crawl_node",
-                "https://proxy.example/finhub/",
-            ),
-        ):
-            resp = client.get(
+def _dividend_event(
+    symbol: str = "ASX:ROUTEAU",
+    *,
+    timestamp_str: str = "2026-06-10 00:00:00+10:00",
+    amount: float = 1.25,
+) -> models_event.UpcomingDividendEvent:
+    return models_event.UpcomingDividendEvent(
+        symbol=symbol,
+        exchange=symbol.split(":", 1)[0],
+        company_name="Example Dividend Co",
+        timestamp_str=timestamp_str,
+        status="declared",
+        amount=amount,
+        dividend_yield=0.03,
+        currency="AUD" if symbol.startswith("ASX:") else "USD",
+        payment_date=None,
+    )
+
+
+def _earnings_event(symbol: str = "NASDAQ:ROUTEUS") -> models_event.UpcomingEarningsEvent:
+    return models_event.UpcomingEarningsEvent(
+        symbol=symbol,
+        exchange=symbol.split(":", 1)[0],
+        company_name="Example Earnings Co",
+        timestamp_str="2026-08-15 00:00:00-04:00",
+        status="estimated",
+        report_period=None,
+    )
+
+
+def _listing_analysis(
+    symbol: str,
+    *,
+    listing_status: models_events_listings.ListingStatus = "Upcoming",
+) -> models_events_listings.ListingAnalysis:
+    source_id = "listing-source"
+    section = {
+        "facts": [
+            {
+                "text": "The exchange published verified listing information.",
+                "reference_ids": [source_id],
+            }
+        ],
+        "data_gaps": [],
+        "reference_ids": [source_id],
+        "summary": "Verified listing information supports the assessment.",
+        "data_quality": "High",
+        "assumptions": [],
+    }
+    outlook = {
+        "assessment_type": "Forecast",
+        "period_end": "2026-12-31",
+        "direction": "Flat",
+        "expected_price_min": 0.20,
+        "expected_price_max": 0.25,
+        "expected_return_min_pct": -5,
+        "expected_return_max_pct": 5,
+        "confidence": 60,
+        "rationale": "The verified offer terms support a neutral outlook.",
+        "key_drivers": ["Offer demand"],
+        "risk_factors": ["Market volatility"],
+        "assumptions": [],
+        "data_gaps": [],
+        "reference_ids": [source_id],
+    }
+    return models_events_listings.ListingAnalysis.model_validate(
+        {
+            "symbol": symbol,
+            "as_of": "2026-11-30T00:00:00Z",
+            "listing_status": listing_status,
+            "overall_data_quality": "High",
+            "executive_summary": section,
+            "overall_stance": "Neutral",
+            "overall_confidence": 60,
+            "offer": {
+                **section,
+                "issue_price_assessment": "The offer range is supported by disclosed terms.",
+                "capital_raise_assessment": "The raise supports the stated listing plan.",
+                "underwriting_assessment": "No material underwriting concern was identified.",
+                "use_of_funds": ["Fund expansion"],
+                "dilution_and_escrow": None,
+            },
+            "business": {
+                **section,
+                "business_model": "The issuer provides financial services.",
+                "revenue_sources": ["Service fees"],
+                "competitive_position": "The issuer serves a defined market.",
+                "sector_context": "Sector conditions are stable.",
+            },
+            "financials": {
+                **section,
+                "historical_performance": "Available performance is stable.",
+                "profitability_and_cash_flow": "Cash flow supports current operations.",
+                "balance_sheet_and_funding": "The offer improves funding capacity.",
+                "forecast_quality": "Forecasts use disclosed assumptions.",
+            },
+            "valuation": {
+                **section,
+                "valuation_view": "The offer valuation is balanced.",
+                "implied_market_cap": 25_000_000,
+                "peer_comparison": "The valuation is within the peer range.",
+                "sensitivity": "Demand and execution drive valuation sensitivity.",
+            },
+            "governance": {
+                **section,
+                "board_and_management": "Management has relevant experience.",
+                "ownership_and_escrow": "Ownership terms are disclosed.",
+                "governance_concerns": [],
+            },
+            "risks_and_catalysts": {
+                **section,
+                "risks": [],
+                "catalysts": [],
+            },
+            "outlook": {
+                "ipo_day": outlook,
+                "first_week": outlook,
+                "first_two_weeks": outlook,
+                "first_month": outlook,
+            },
+            "references": [
+                {
+                    "id": source_id,
+                    "title": "Listing announcement",
+                    "publisher": "ASX",
+                    "source_type": "Exchange",
+                    "published_at": "2026-11-29T00:00:00Z",
+                    "accessed_at": "2026-11-30T00:00:00Z",
+                    "url": "https://example.com/listing-announcement",
+                    "is_verified": True,
+                }
+            ],
+        }
+    )
+
+
+def _listing_event(
+    symbol: str,
+    timestamp_str: str,
+    *,
+    analysis_status: models_events_listings.ListingAnalysisStatus = "Skipped",
+    issue_price: float | None = None,
+    issue_price_upper: float | None = None,
+    analysis_error: str | None = None,
+    listing_status: models_events_listings.ListingStatus = "Upcoming",
+) -> models_events_listings.ListingEvent:
+    return models_events_listings.ListingEvent(
+        symbol=symbol,
+        exchange=symbol.split(":", 1)[0],
+        company_name=f"{symbol} Holdings",
+        timestamp_str=timestamp_str,
+        issue_price=issue_price,
+        issue_price_upper=issue_price_upper,
+        currency="AUD" if symbol.startswith("ASX:") else "USD",
+        capital_to_raise=None,
+        analysis_status=analysis_status,
+        analysis_error=analysis_error,
+        analysis=(_listing_analysis(symbol, listing_status=listing_status) if analysis_status == "Completed" else None),
+    )
+
+
+def test_dividend_country_aliases_select_the_documented_market():
+    async def au(index):
+        return [_dividend_event("ASX:ROUTEAU")]
+
+    async def us(index):
+        return [_dividend_event("NASDAQ:ROUTEUS")]
+
+    async def vn(index):
+        return [_dividend_event("HOSE:ROUTEVN")]
+
+    patches = [
+        mock.patch(
+            "app.routers.events_div.services_events_div.get_asx_upcoming_dividends_events",
+            new=au,
+        ),
+        mock.patch(
+            "app.routers.events_div.services_events_div.get_us_upcoming_dividends_events",
+            new=us,
+        ),
+        mock.patch(
+            "app.routers.events_div.services_events_div.get_vn_upcoming_dividends_events",
+            new=vn,
+        ),
+    ]
+    with patches[0], patches[1], patches[2]:
+        responses = [
+            client.get(
                 "/events/upcoming_dividends",
-                params={"country": "AU", "index": "ASX200"},
-                follow_redirects=False,
+                params={"country": country, "index": index},
             )
+            for country, index in [
+                (" Australia ", "asx200"),
+                ("u.s.a.", "sp500"),
+                ("vNm", "vn30"),
+            ]
+        ]
 
-        assert resp.status_code == 307
-        assert (
-            resp.headers["location"] == "https://proxy.example/finhub/events/upcoming_dividends?country=AU&index=ASX200"
-        )
-
-    @patch("app.routers.events.services_event.get_asx_upcoming_dividends_events", new_callable=AsyncMock)
-    def test_au_returns_dividends(self, mock_get):
-        event = UpcomingDividendEvent.model_construct(
-            symbol="ASX:CBA",
-            company_name="CBA",
-            timestamp_str="2026-06-10",
-            amount=2.0,
-            dividend_yield=0.03,
-            payment_date="2026-07-01",
-        )
-        mock_get.return_value = [event]
-
-        resp = client.get("/events/upcoming_dividends", params={"country": "AU", "index": ""})
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["status"] == 200
-        assert body["message"] == "ok"
-        assert len(body["data"]) == 1
-        assert body["data"][0]["symbol"] == "ASX:CBA"
-        assert body["data"][0]["timestamp_str"] == "2026-06-10"
-        assert "date" not in body["data"][0]
-        mock_get.assert_called_once_with("")
-
-    @patch("app.routers.events.services_event.get_us_upcoming_dividends_events", new_callable=AsyncMock)
-    def test_us_returns_dividends(self, mock_get):
-        mock_get.return_value = []
-
-        resp = client.get("/events/upcoming_dividends", params={"country": "US", "index": "SP500"})
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["status"] == 200
-        assert body["data"] == []
-        mock_get.assert_called_once_with("SP500")
-
-    @patch("app.routers.events.services_event.get_vn_upcoming_dividends_events", new_callable=AsyncMock)
-    def test_vn_returns_dividends(self, mock_get):
-        mock_get.return_value = []
-
-        resp = client.get("/events/upcoming_dividends", params={"country": "VN", "index": ""})
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["status"] == 200
-        mock_get.assert_called_once_with("")
-
-    def test_unsupported_country_returns_501(self):
-        resp = client.get("/events/upcoming_dividends", params={"country": "JP", "index": ""})
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["status"] == 501
-        assert "Unsupported" in body["message"]
-
-    def test_missing_country_returns_422(self):
-        resp = client.get("/events/upcoming_dividends")
-        assert resp.status_code == 422
+    assert [response.status_code for response in responses] == [200, 200, 200]
+    assert [response.json()["data"][0]["symbol"] for response in responses] == [
+        "ASX:ROUTEAU",
+        "NASDAQ:ROUTEUS",
+        "HOSE:ROUTEVN",
+    ]
+    assert all("analysis" not in response.json()["data"][0] for response in responses)
 
 
-# ===========================================================================
-# Tests for GET /events/start_upcoming_dividends_async and /events/poll_upcoming_dividends_async
-# ===========================================================================
+def test_major_index_dividend_event_includes_available_analysis(monkeypatch):
+    event = _dividend_event("NASDAQ:AAPL")
+    analysis = models_event.DividendEventAnalysis(
+        symbol="NASDAQ:AAPL",
+        exchange="NASDAQ",
+        company_name="Apple",
+        timestamp_str="2026-06-10",
+        price=200.0,
+        div_amount=event.amount,
+        div_yield=0.00625,
+    )
 
+    async def events(index):
+        return [event]
 
-class TestUpcomingDividendsAsync:
-    def test_redirects_through_shared_proxy_handler(self):
-        with (
-            patch.object(config.settings_finhub_proxy, "proxy_mode", "Redirect"),
-            patch.object(
-                config.settings_finhub_proxy,
-                "url_web_crawl_node",
-                "https://proxy.example/finhub/",
-            ),
-        ):
-            resp = client.get(
-                "/events/poll_upcoming_dividends_async",
-                params={"task_id": "task-123"},
-                follow_redirects=False,
-            )
-
-        assert resp.status_code == 307
-        assert (
-            resp.headers["location"]
-            == "https://proxy.example/finhub/events/poll_upcoming_dividends_async?task_id=task-123"
-        )
-
-    def test_starts_task(self):
-        with (
-            patch("app.routers.async_task._generate_task_id", return_value="task-123"),
-            patch("app.routers.async_task.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
-            patch("app.routers.events._run_upcoming_dividends_event_task", new_callable=AsyncMock) as mock_run_task,
-        ):
-            resp = client.get(
-                "/events/start_upcoming_dividends_async",
-                params={"country": "AU", "index": "ASX200"},
-            )
-
-        assert resp.status_code == 202
-        assert resp.json() == {
-            "status": 202,
-            "message": "Task started",
-            "extra": {"task_id": "task-123", "state": async_task.TASK_STATE_RUNNING},
-        }
-        mock_cache_set.assert_awaited_once_with(
-            "task-123",
-            {"task_type": "upcoming_dividends", "state": async_task.TASK_STATE_RUNNING},
-            ttl=3600,
-        )
-        mock_run_task.assert_awaited_once_with("task-123", "AU", "ASX200")
-
-    def test_poll_returns_running_status(self):
-        task_entry = {"task_type": "upcoming_dividends", "state": async_task.TASK_STATE_RUNNING}
-        with patch(
-            "app.routers.async_task.cache.get", new_callable=AsyncMock, return_value=task_entry
-        ) as mock_cache_get:
-            resp = client.get("/events/poll_upcoming_dividends_async", params={"task_id": "task-123"})
-
-        assert resp.status_code == 202
-        assert resp.json()["message"] == "Task is running"
-        assert resp.json()["extra"] == {"task_id": "task-123", "state": async_task.TASK_STATE_RUNNING}
-        mock_cache_get.assert_awaited_once_with("task-123")
-
-    def test_poll_returns_404_for_missing_task(self):
-        with patch("app.routers.async_task.cache.get", new_callable=AsyncMock, return_value=None):
-            resp = client.get("/events/poll_upcoming_dividends_async", params={"task_id": "missing"})
-
-        assert resp.status_code == 404
-        assert resp.json() == {"status": 404, "message": "Task not found"}
-
-    def test_poll_returns_completed_result(self):
-        task_entry = {
-            "task_type": "upcoming_dividends",
-            "state": async_task.TASK_STATE_COMPLETED,
-            "result": {
-                "status": 200,
-                "message": "ok",
-                "data": [
-                    {
-                        "symbol": "ASX:CBA",
-                        "company_name": "CBA",
-                        "timestamp_str": "2026-06-10",
-                        "amount": 2.0,
-                        "payment_date": "2026-07-01",
-                    }
-                ],
-            },
-        }
-        with patch("app.routers.async_task.cache.get", new_callable=AsyncMock, return_value=task_entry):
-            resp = client.get("/events/poll_upcoming_dividends_async", params={"task_id": "task-123"})
-
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["status"] == 200
-        assert body["data"][0]["symbol"] == "ASX:CBA"
-        assert body["extra"] == {"task_id": "task-123", "state": async_task.TASK_STATE_COMPLETED}
-
-    def test_background_task_caches_result(self):
-        from app.routers import events
-        from app.schemas import events as schemas_event
-
-        result = schemas_event.UpcomingDividendsResponse(status=200, message="ok", data=[])
-        with (
-            patch(
-                "app.routers.events._get_upcoming_dividends_event_result",
-                new_callable=AsyncMock,
-                return_value=result,
-            ),
-            patch("app.routers.async_task.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
-        ):
-            asyncio.run(events._run_upcoming_dividends_event_task("task-123", "AU", "ASX200"))
-
-        mock_cache_set.assert_awaited_once_with(
-            "task-123",
+    async def analyze(*, symbol, div_amount, ex_date):
+        analysis_data = analysis.model_dump(mode="python")
+        analysis_data.update(
             {
-                "task_type": "upcoming_dividends",
-                "state": async_task.TASK_STATE_COMPLETED,
-                "result": {"status": 200, "message": "ok", "data": [], "extra": None},
-            },
-            ttl=3600,
+                "symbol": symbol,
+                "div_amount": div_amount,
+                "timestamp_str": ex_date,
+            }
+        )
+        return models_event.DividendEventAnalysis.model_validate(analysis_data)
+
+    monkeypatch.setattr(
+        router_events_div.asset_utils,
+        "is_in_index",
+        lambda *, index, symbol: index == "SP500" and symbol == "NASDAQ:AAPL",
+    )
+    with (
+        mock.patch(
+            "app.routers.events_div.services_events_div.get_us_upcoming_dividends_events",
+            new=events,
+        ),
+        mock.patch(
+            "app.routers.events_div.services_events_div.analyse_dividend_event",
+            new=analyze,
+        ),
+    ):
+        response = client.get(
+            "/events/upcoming_dividends",
+            params={"country": "US", "index": "sp500"},
         )
 
+    assert response.status_code == 200
+    returned = response.json()["data"][0]
+    assert returned["analysis"]["symbol"] == "NASDAQ:AAPL"
+    assert returned["analysis"]["div_amount"] == 1.25
+    assert returned["analysis"]["timestamp_str"] == "2026-06-10"
 
-# ===========================================================================
-# Tests for GET /events/upcoming_earnings
-# ===========================================================================
 
+@pytest.mark.parametrize("analysis_outcome", [None, RuntimeError("analysis unavailable")])
+def test_unavailable_analysis_is_omitted_but_analysis_failure_is_500(monkeypatch, analysis_outcome):
+    async def events(index):
+        return [_dividend_event("NASDAQ:AAPL")]
 
-class TestUpcomingEarnings:
-    def test_redirects_through_shared_proxy_handler(self):
-        with (
-            patch.object(config.settings_finhub_proxy, "proxy_mode", "Redirect"),
-            patch.object(
-                config.settings_finhub_proxy,
-                "url_web_crawl_node",
-                "https://proxy.example/finhub/",
-            ),
-        ):
-            resp = client.get(
-                "/events/upcoming_earnings",
-                params={"country": "US", "index": "SP500"},
-                follow_redirects=False,
-            )
+    async def analyze(**kwargs):
+        if isinstance(analysis_outcome, Exception):
+            raise analysis_outcome
+        return analysis_outcome
 
-        assert resp.status_code == 307
-        assert (
-            resp.headers["location"] == "https://proxy.example/finhub/events/upcoming_earnings?country=US&index=SP500"
+    monkeypatch.setattr(
+        router_events_div.asset_utils,
+        "is_in_index",
+        lambda *, index, symbol: True,
+    )
+    with (
+        mock.patch(
+            "app.routers.events_div.services_events_div.get_us_upcoming_dividends_events",
+            new=events,
+        ),
+        mock.patch(
+            "app.routers.events_div.services_events_div.analyse_dividend_event",
+            new=analyze,
+        ),
+    ):
+        response = client.get(
+            "/events/upcoming_dividends",
+            params={"country": "US", "index": "SP500"},
         )
 
-    @patch("app.routers.events.services_event.get_asx_upcoming_earnings_events", new_callable=AsyncMock)
-    def test_au_returns_earnings(self, mock_get):
-        event = UpcomingEarningsEvent.model_construct(
-            symbol="ASX:BHP",
-            company_name="BHP Group",
-            timestamp_str="2026-08-15",
-        )
-        mock_get.return_value = [event]
-
-        resp = client.get("/events/upcoming_earnings", params={"country": "AU", "index": ""})
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["status"] == 200
-        assert len(body["data"]) == 1
-        assert body["data"][0]["symbol"] == "ASX:BHP"
-        assert body["data"][0]["timestamp_str"] == "2026-08-15"
-        assert "date" not in body["data"][0]
-        mock_get.assert_called_once_with("")
-
-    @patch("app.routers.events.services_event.get_us_upcoming_earnings_events", new_callable=AsyncMock)
-    def test_us_returns_earnings(self, mock_get):
-        mock_get.return_value = []
-
-        resp = client.get("/events/upcoming_earnings", params={"country": "US", "index": "NASDAQ100"})
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["status"] == 200
-        assert body["data"] == []
-        mock_get.assert_called_once_with("NASDAQ100")
-
-    def test_unsupported_country_returns_501(self):
-        resp = client.get("/events/upcoming_earnings", params={"country": "JP", "index": ""})
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["status"] == 501
-        assert "Unsupported" in body["message"]
-
-    def test_missing_country_returns_422(self):
-        resp = client.get("/events/upcoming_earnings")
-        assert resp.status_code == 422
+    if analysis_outcome is None:
+        assert response.status_code == 200
+        assert "analysis" not in response.json()["data"][0]
+    else:
+        assert response.status_code == 500
+        assert response.json()["status"] == 500
+        assert "data" not in response.json()
 
 
-# ===========================================================================
-# Tests for GET /events/start_upcoming_earnings_async and /events/poll_upcoming_earnings_async
-# ===========================================================================
+@pytest.mark.parametrize(
+    ("country", "index"),
+    [("AU", "SP500"), ("US", "ASX200"), ("Vietnam", "NOT-AN-INDEX")],
+)
+def test_invalid_or_cross_market_dividend_index_returns_empty_data(country, index):
+    async def no_events(selected_index):
+        return []
 
-
-class TestUpcomingEarningsAsync:
-    def test_redirects_through_shared_proxy_handler(self):
-        with (
-            patch.object(config.settings_finhub_proxy, "proxy_mode", "Redirect"),
-            patch.object(
-                config.settings_finhub_proxy,
-                "url_web_crawl_node",
-                "https://proxy.example/finhub/",
-            ),
-        ):
-            resp = client.get(
-                "/events/poll_upcoming_earnings_async",
-                params={"task_id": "task-456"},
-                follow_redirects=False,
-            )
-
-        assert resp.status_code == 307
-        assert (
-            resp.headers["location"]
-            == "https://proxy.example/finhub/events/poll_upcoming_earnings_async?task_id=task-456"
+    with (
+        mock.patch(
+            "app.routers.events_div.services_events_div.get_asx_upcoming_dividends_events",
+            new=no_events,
+        ),
+        mock.patch(
+            "app.routers.events_div.services_events_div.get_us_upcoming_dividends_events",
+            new=no_events,
+        ),
+        mock.patch(
+            "app.routers.events_div.services_events_div.get_vn_upcoming_dividends_events",
+            new=no_events,
+        ),
+    ):
+        response = client.get(
+            "/events/upcoming_dividends",
+            params={"country": country, "index": index},
         )
 
-    def test_starts_task(self):
-        with (
-            patch("app.routers.async_task._generate_task_id", return_value="task-456"),
-            patch("app.routers.async_task.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
-            patch("app.routers.events._run_upcoming_earnings_event_task", new_callable=AsyncMock) as mock_run_task,
-        ):
-            resp = client.get(
-                "/events/start_upcoming_earnings_async",
-                params={"country": "US", "index": "SP500"},
-            )
+    assert response.status_code == 200
+    assert response.json()["data"] == []
 
-        assert resp.status_code == 202
-        assert resp.json() == {
-            "status": 202,
-            "message": "Task started",
-            "extra": {"task_id": "task-456", "state": async_task.TASK_STATE_RUNNING},
-        }
-        mock_cache_set.assert_awaited_once_with(
-            "task-456",
-            {"task_type": "upcoming_earnings", "state": async_task.TASK_STATE_RUNNING},
-            ttl=3600,
+
+@pytest.mark.parametrize("country", ["", "JP", "unknown"])
+def test_unsupported_dividend_country_returns_application_501(country):
+    response = client.get(
+        "/events/upcoming_dividends",
+        params={"country": country},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == 501
+    assert "data" not in response.json()
+
+
+def test_sync_dividend_country_is_required():
+    response = client.get("/events/upcoming_dividends")
+
+    assert response.status_code == 422
+
+
+def test_earnings_country_aliases_select_the_documented_market():
+    async def au(index):
+        return [_earnings_event("ASX:ROUTEAU")]
+
+    async def us(index):
+        return [_earnings_event("NASDAQ:ROUTEUS")]
+
+    with (
+        mock.patch(
+            "app.routers.events.services_event.get_asx_upcoming_earnings_events",
+            new=au,
+        ),
+        mock.patch(
+            "app.routers.events.services_event.get_us_upcoming_earnings_events",
+            new=us,
+        ),
+    ):
+        australia = client.get(
+            "/events/upcoming_earnings",
+            params={"country": " Australia ", "index": "asx200"},
         )
-        mock_run_task.assert_awaited_once_with("task-456", "US", "SP500")
-
-    def test_poll_returns_running_status(self):
-        task_entry = {"task_type": "upcoming_earnings", "state": async_task.TASK_STATE_RUNNING}
-        with patch(
-            "app.routers.async_task.cache.get", new_callable=AsyncMock, return_value=task_entry
-        ) as mock_cache_get:
-            resp = client.get("/events/poll_upcoming_earnings_async", params={"task_id": "task-456"})
-
-        assert resp.status_code == 202
-        assert resp.json()["message"] == "Task is running"
-        assert resp.json()["extra"] == {"task_id": "task-456", "state": async_task.TASK_STATE_RUNNING}
-        mock_cache_get.assert_awaited_once_with("task-456")
-
-    def test_poll_returns_404_for_missing_task(self):
-        with patch("app.routers.async_task.cache.get", new_callable=AsyncMock, return_value=None):
-            resp = client.get("/events/poll_upcoming_earnings_async", params={"task_id": "missing"})
-
-        assert resp.status_code == 404
-        assert resp.json() == {"status": 404, "message": "Task not found"}
-
-    def test_poll_returns_completed_result(self):
-        task_entry = {
-            "task_type": "upcoming_earnings",
-            "state": async_task.TASK_STATE_COMPLETED,
-            "result": {
-                "status": 200,
-                "message": "ok",
-                "data": [
-                    {
-                        "symbol": "NASDAQ:AAPL",
-                        "company_name": "Apple Inc.",
-                        "timestamp_str": "2026-08-15",
-                    }
-                ],
-            },
-        }
-        with patch("app.routers.async_task.cache.get", new_callable=AsyncMock, return_value=task_entry):
-            resp = client.get("/events/poll_upcoming_earnings_async", params={"task_id": "task-456"})
-
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["status"] == 200
-        assert body["data"][0]["symbol"] == "NASDAQ:AAPL"
-        assert body["extra"] == {"task_id": "task-456", "state": async_task.TASK_STATE_COMPLETED}
-
-    def test_background_task_caches_result(self):
-        from app.routers import events
-        from app.schemas import events as schemas_event
-
-        result = schemas_event.UpcomingEarningsResponse(status=200, message="ok", data=[])
-        with (
-            patch(
-                "app.routers.events._get_upcoming_earnings_event_result",
-                new_callable=AsyncMock,
-                return_value=result,
-            ),
-            patch("app.routers.async_task.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
-        ):
-            asyncio.run(events._run_upcoming_earnings_event_task("task-456", "US", "SP500"))
-
-        mock_cache_set.assert_awaited_once_with(
-            "task-456",
-            {
-                "task_type": "upcoming_earnings",
-                "state": async_task.TASK_STATE_COMPLETED,
-                "result": {"status": 200, "message": "ok", "data": [], "extra": None},
-            },
-            ttl=3600,
+        united_states = client.get(
+            "/events/upcoming_earnings",
+            params={"country": "U.S.A.", "index": "sp500"},
         )
 
+    assert australia.status_code == united_states.status_code == 200
+    assert australia.json()["data"][0]["symbol"] == "ASX:ROUTEAU"
+    assert united_states.json()["data"][0]["symbol"] == "NASDAQ:ROUTEUS"
+    assert "report_period" not in united_states.json()["data"][0]
 
-# ===========================================================================
-# Tests for GET /events/new_listings
-# ===========================================================================
 
+@pytest.mark.parametrize(
+    ("country", "index"),
+    [("AU", "SP500"), ("US", "ASX200"), ("US", "NOT-AN-INDEX")],
+)
+def test_invalid_or_cross_market_earnings_index_returns_empty_data(country, index):
+    async def no_events(selected_index):
+        return []
 
-class TestNewListings:
-    @patch("app.routers.events_listings.services_asx_listings.ai_get_asx_new_listings", new_callable=AsyncMock)
-    def test_au_returns_listings(self, mock_get):
-        event = models_events_listings.ListingEvent.model_construct(
-            symbol="ASX:XYZ",
-            company_name="XYZ Corp",
-            timestamp_str="2026-06-20",
-            issue_price=2.5,
-            capital_to_raise=5_000_000,
+    with (
+        mock.patch(
+            "app.routers.events.services_event.get_asx_upcoming_earnings_events",
+            new=no_events,
+        ),
+        mock.patch(
+            "app.routers.events.services_event.get_us_upcoming_earnings_events",
+            new=no_events,
+        ),
+    ):
+        response = client.get(
+            "/events/upcoming_earnings",
+            params={"country": country, "index": index},
         )
-        mock_get.return_value = [event]
 
-        resp = client.get("/events/new_listings", params={"country": "AU"})
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["status"] == 200
-        assert body["message"] == "ok"
-        assert len(body["data"]) == 1
-        assert body["data"][0]["symbol"] == "ASX:XYZ"
-        assert body["data"][0]["timestamp_str"] == "2026-06-20"
-        assert "date" not in body["data"][0]
-        mock_get.assert_called_once()
-
-    def test_unsupported_country_returns_501(self):
-        resp = client.get("/events/new_listings", params={"country": "JP"})
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["status"] == 501
-        assert "Unsupported" in body["message"]
-
-    @patch("app.routers.events_listings.services_asx_listings.ai_get_asx_new_listings", new_callable=AsyncMock)
-    def test_empty_country_defaults_unsupported(self, mock_get):
-        resp = client.get("/events/new_listings", params={"country": ""})
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["status"] == 501
+    assert response.status_code == 200
+    assert response.json()["data"] == []
 
 
-# ===========================================================================
-# Tests for GET /events/start_new_listings_async and /events/poll_new_listings_async
-# ===========================================================================
+@pytest.mark.parametrize("country", ["", "JP"])
+def test_unsupported_earnings_country_returns_application_501(country):
+    response = client.get(
+        "/events/upcoming_earnings",
+        params={"country": country},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == 501
+    assert "data" not in response.json()
 
 
-class TestNewListingsAsync:
-    def test_starts_task(self):
-        with (
-            patch(
-                "app.routers.async_task._generate_task_id",
-                return_value="task-789",
-            ) as mock_generate_task_id,
-            patch("app.routers.async_task.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
-            patch("app.routers.events_listings._run_new_listings_task", new_callable=AsyncMock) as mock_run_task,
-        ):
-            resp = client.get("/events/start_new_listings_async", params={"country": "AU"})
+def test_sync_earnings_country_is_required():
+    response = client.get("/events/upcoming_earnings")
 
-        assert resp.status_code == 202
-        assert resp.json() == {
-            "status": 202,
-            "message": "Task started",
-            "extra": {"task_id": "task-789", "state": async_task.TASK_STATE_RUNNING},
-        }
-        mock_cache_set.assert_awaited_once_with(
-            "task-789",
-            {"task_type": "new_listings", "state": async_task.TASK_STATE_RUNNING},
-            ttl=3600,
+    assert response.status_code == 422
+
+
+def test_listing_country_aliases_select_the_documented_market():
+    async def au():
+        return [_listing_event("ASX:IPO", "2026-12-01", issue_price=2.5)]
+
+    async def us():
+        return [_listing_event("NASDAQ:IPO", "2026-12-02", issue_price=12.0)]
+
+    with (
+        mock.patch(
+            "app.routers.events_listings.services_asx_listings.ai_get_asx_new_listings",
+            new=au,
+        ),
+        mock.patch(
+            "app.routers.events_listings.services_us_listings.ai_get_us_new_listings",
+            new=us,
+        ),
+    ):
+        australia = client.get("/events/new_listings", params={"country": " aUsTrAlIa "})
+        united_states = client.get("/events/new_listings", params={"country": "U.S.A."})
+
+    assert australia.status_code == united_states.status_code == 200
+    assert australia.json()["data"][0]["symbol"] == "ASX:IPO"
+    assert united_states.json()["data"][0]["symbol"] == "NASDAQ:IPO"
+
+
+def test_listing_order_price_range_nullable_fields_and_analysis_outcomes_are_preserved():
+    events = [
+        _listing_event("ASX:AAA", "2026-12-01", analysis_status="Skipped"),
+        _listing_event(
+            "ASX:BBB",
+            "2026-12-02",
+            analysis_status="Completed",
+            issue_price=0.20,
+            issue_price_upper=0.25,
+        ),
+        _listing_event(
+            "ASX:CCC",
+            "2026-12-03",
+            analysis_status="Failed",
+            analysis_error="Analysis unavailable",
+        ),
+    ]
+
+    async def listings():
+        return events
+
+    with mock.patch(
+        "app.routers.events_listings.services_asx_listings.ai_get_asx_new_listings",
+        new=listings,
+    ):
+        response = client.get("/events/new_listings", params={"country": "AU"})
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert [item["symbol"] for item in data] == ["ASX:AAA", "ASX:BBB", "ASX:CCC"]
+    assert [item["analysis_status"] for item in data] == ["Skipped", "Completed", "Failed"]
+    assert data[1]["issue_price"] == 0.20
+    assert data[1]["issue_price_upper"] == 0.25
+    assert data[1]["analysis"]["symbol"] == "ASX:BBB"
+    assert data[2]["analysis_error"] == "Analysis unavailable"
+    assert "issue_price" not in data[2]
+    assert "capital_to_raise" not in data[2]
+    assert "analysis" not in data[2]
+
+
+def test_completed_listing_analyses_preserve_upcoming_and_listed_statuses():
+    events = [
+        _listing_event(
+            "ASX:LISTED",
+            "2026-11-01",
+            analysis_status="Completed",
+            listing_status="Listed",
+        ),
+        _listing_event(
+            "ASX:UPCOMING",
+            "2026-12-01",
+            analysis_status="Completed",
+            listing_status="Upcoming",
+        ),
+    ]
+
+    async def listings():
+        return events
+
+    with mock.patch(
+        "app.routers.events_listings.services_asx_listings.ai_get_asx_new_listings",
+        new=listings,
+    ):
+        response = client.get("/events/new_listings", params={"country": "AU"})
+
+    assert response.status_code == 200
+    assert [event["analysis"]["listing_status"] for event in response.json()["data"]] == [
+        "Listed",
+        "Upcoming",
+    ]
+
+
+@pytest.mark.parametrize("country", [None, "", "JP"])
+def test_sync_listing_omitted_or_unsupported_country_returns_501(country):
+    params = {} if country is None else {"country": country}
+
+    response = client.get("/events/new_listings", params=params)
+
+    assert response.status_code == 200
+    assert response.json()["status"] == 501
+    assert "data" not in response.json()
+
+
+@pytest.mark.parametrize(
+    ("target", "endpoint", "params"),
+    [
+        (
+            "app.routers.events_div.services_events_div.get_asx_upcoming_dividends_events",
+            "/events/upcoming_dividends",
+            {"country": "AU"},
+        ),
+        (
+            "app.routers.events.services_event.get_us_upcoming_earnings_events",
+            "/events/upcoming_earnings",
+            {"country": "US"},
+        ),
+        (
+            "app.routers.events_listings.services_asx_listings.ai_get_asx_new_listings",
+            "/events/new_listings",
+            {"country": "AU"},
+        ),
+    ],
+)
+def test_synchronous_event_service_failures_return_public_500_envelopes(target, endpoint, params):
+    async def fail(*args, **kwargs):
+        raise RuntimeError("source unavailable")
+
+    with mock.patch(target, new=fail):
+        response = client.get(endpoint, params=params)
+
+    assert response.status_code == 500
+    assert response.json()["status"] == 500
+    assert "data" not in response.json()
+
+
+ASYNC_EVENT_CASES = [
+    (
+        "/events/start_upcoming_dividends_async",
+        "/events/poll_upcoming_dividends_async",
+        {"country": "AU", "index": "ASX200"},
+        {"country": "Australia", "index": "asx200"},
+        "app.routers.events_div.services_events_div.get_asx_upcoming_dividends_events",
+        _dividend_event("ASX:ROUTEAU"),
+    ),
+    (
+        "/events/start_upcoming_earnings_async",
+        "/events/poll_upcoming_earnings_async",
+        {"country": "US", "index": "SP500"},
+        {"country": "U.S.A.", "index": "sp500"},
+        "app.routers.events.services_event.get_us_upcoming_earnings_events",
+        _earnings_event("NASDAQ:ROUTEUS"),
+    ),
+    (
+        "/events/start_new_listings_async",
+        "/events/poll_new_listings_async",
+        {"country": "AU"},
+        {"country": "Australia"},
+        "app.routers.events_listings.services_asx_listings.ai_get_asx_new_listings",
+        _listing_event("ASX:IPO", "2026-12-01"),
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    ("start_endpoint", "poll_endpoint", "start_params", "duplicate_params", "target", "event"),
+    ASYNC_EVENT_CASES,
+)
+def test_async_event_lifecycle_returns_running_then_completed_business_data(
+    deferred_task_store,
+    start_endpoint,
+    poll_endpoint,
+    start_params,
+    duplicate_params,
+    target,
+    event,
+):
+    async def service(*args, **kwargs):
+        return [event]
+
+    with mock.patch(target, new=service):
+        started = client.get(start_endpoint, params=start_params)
+        task_id = started.json()["extra"]["task_id"]
+        running = client.get(poll_endpoint, params={"task_id": task_id})
+        duplicate_running = client.get(start_endpoint, params=duplicate_params)
+
+        deferred_task_store.release()
+
+        completed = client.get(poll_endpoint, params={"task_id": f"  {task_id}  "})
+        duplicate_completed = client.get(start_endpoint, params=duplicate_params)
+
+    assert started.status_code == 202
+    assert running.status_code == 202
+    assert duplicate_running.json()["extra"] == {"task_id": task_id, "state": "RUNNING"}
+    assert completed.status_code == 200
+    assert completed.json()["extra"] == {"task_id": task_id, "state": "COMPLETED"}
+    assert completed.json()["data"][0]["symbol"] == event.symbol
+    assert duplicate_completed.json() == completed.json()
+
+
+@pytest.mark.parametrize(
+    ("start_endpoint", "poll_endpoint", "start_params", "duplicate_params", "target", "event"),
+    ASYNC_EVENT_CASES,
+)
+def test_async_event_background_failures_are_pollable_and_reused(
+    deferred_task_store,
+    start_endpoint,
+    poll_endpoint,
+    start_params,
+    duplicate_params,
+    target,
+    event,
+):
+    del event
+
+    async def fail(*args, **kwargs):
+        raise RuntimeError("source unavailable")
+
+    with mock.patch(target, new=fail):
+        started = client.get(start_endpoint, params=start_params)
+        task_id = started.json()["extra"]["task_id"]
+        deferred_task_store.release()
+        failed = client.get(poll_endpoint, params={"task_id": task_id})
+        duplicate = client.get(start_endpoint, params=duplicate_params)
+
+    assert started.status_code == 202
+    assert failed.status_code == 500
+    assert failed.json()["extra"] == {"task_id": task_id, "state": "FAILED"}
+    assert "data" not in failed.json()
+    assert duplicate.json() == failed.json()
+
+
+@pytest.mark.parametrize(
+    ("start_endpoint", "poll_endpoint", "params"),
+    [
+        (
+            "/events/start_upcoming_dividends_async",
+            "/events/poll_upcoming_dividends_async",
+            {},
+        ),
+        (
+            "/events/start_upcoming_earnings_async",
+            "/events/poll_upcoming_earnings_async",
+            {"country": "JP"},
+        ),
+    ],
+)
+def test_async_unsupported_event_country_completes_with_application_501(
+    deferred_task_store,
+    start_endpoint,
+    poll_endpoint,
+    params,
+):
+    started = client.get(start_endpoint, params=params)
+    task_id = started.json()["extra"]["task_id"]
+    deferred_task_store.release()
+
+    completed = client.get(poll_endpoint, params={"task_id": task_id})
+    duplicate = client.get(start_endpoint, params=params)
+
+    assert started.status_code == 202
+    assert completed.status_code == 200
+    assert completed.json()["status"] == 501
+    assert completed.json()["extra"] == {"task_id": task_id, "state": "COMPLETED"}
+    assert "data" not in completed.json()
+    assert duplicate.json() == completed.json()
+
+
+@pytest.mark.parametrize("country", [None, "", "JP", "VN"])
+def test_async_new_listings_requires_a_supported_country(country):
+    params = {} if country is None else {"country": country}
+
+    response = client.get("/events/start_new_listings_async", params=params)
+
+    assert response.status_code == 422
+
+
+def test_async_australian_and_us_listing_tasks_remain_distinct(deferred_task_store):
+    async def au():
+        return [_listing_event("ASX:IPO", "2026-12-01")]
+
+    async def us():
+        return [_listing_event("NASDAQ:IPO", "2026-12-02")]
+
+    with (
+        mock.patch(
+            "app.routers.events_listings.services_asx_listings.ai_get_asx_new_listings",
+            new=au,
+        ),
+        mock.patch(
+            "app.routers.events_listings.services_us_listings.ai_get_us_new_listings",
+            new=us,
+        ),
+    ):
+        au_started = client.get(
+            "/events/start_new_listings_async",
+            params={"country": "AU"},
         )
-        mock_generate_task_id.assert_called_once_with("new_listings", "AU")
-        mock_run_task.assert_awaited_once_with("task-789", "AU")
-
-    @pytest.mark.parametrize("country", ["", "JP"])
-    def test_rejects_unsupported_country_before_starting_task(self, country):
-        with (
-            patch(
-                "app.routers.events_listings.router_async_task.start_task", new_callable=AsyncMock
-            ) as mock_start_task,
-            patch("app.routers.events_listings._run_new_listings_task", new_callable=AsyncMock) as mock_run_task,
-        ):
-            resp = client.get("/events/start_new_listings_async", params={"country": country})
-
-        assert resp.status_code == 422
-        assert resp.json()["message"] == "New listings supports only country 'AU'"
-        mock_start_task.assert_not_awaited()
-        mock_run_task.assert_not_awaited()
-
-    def test_duplicate_start_returns_existing_task_without_scheduling(self):
-        task_entry = {"task_type": "new_listings", "state": async_task.TASK_STATE_RUNNING}
-        with (
-            patch("app.routers.async_task._generate_task_id", return_value="task-789"),
-            patch(
-                "app.routers.async_task.cache.get",
-                new_callable=AsyncMock,
-                return_value=task_entry,
-            ) as mock_cache_get,
-            patch("app.routers.async_task.cache.set", new_callable=AsyncMock) as mock_cache_set,
-            patch("app.routers.events_listings._run_new_listings_task", new_callable=AsyncMock) as mock_run_task,
-        ):
-            resp = client.get("/events/start_new_listings_async", params={"country": "AU"})
-
-        assert resp.status_code == 202
-        assert resp.json()["message"] == "Task is running"
-        assert resp.json()["extra"] == {
-            "task_id": "task-789",
-            "state": async_task.TASK_STATE_RUNNING,
-        }
-        assert mock_cache_get.await_count == 2
-        mock_cache_set.assert_not_awaited()
-        mock_run_task.assert_not_awaited()
-
-    def test_poll_returns_running_status(self):
-        task_entry = {"task_type": "new_listings", "state": async_task.TASK_STATE_RUNNING}
-        with patch(
-            "app.routers.async_task.cache.get",
-            new_callable=AsyncMock,
-            return_value=task_entry,
-        ) as mock_cache_get:
-            resp = client.get("/events/poll_new_listings_async", params={"task_id": "task-789"})
-
-        assert resp.status_code == 202
-        assert resp.json()["message"] == "Task is running"
-        assert resp.json()["extra"] == {"task_id": "task-789", "state": async_task.TASK_STATE_RUNNING}
-        mock_cache_get.assert_awaited_once_with("task-789")
-
-    def test_poll_returns_404_for_missing_task(self):
-        with patch("app.routers.async_task.cache.get", new_callable=AsyncMock, return_value=None):
-            resp = client.get("/events/poll_new_listings_async", params={"task_id": "missing"})
-
-        assert resp.status_code == 404
-        assert resp.json() == {"status": 404, "message": "Task not found"}
-
-    def test_poll_returns_completed_result(self):
-        task_entry = {
-            "task_type": "new_listings",
-            "state": async_task.TASK_STATE_COMPLETED,
-            "result": {
-                "status": 200,
-                "message": "ok",
-                "data": [
-                    {
-                        "symbol": "ASX:XYZ",
-                        "company_name": "XYZ Corp",
-                        "timestamp_str": "2026-06-20",
-                        "issue_price": 2.5,
-                        "currency": "AUD",
-                        "capital_to_raise": 5_000_000,
-                    }
-                ],
-            },
-        }
-        with patch("app.routers.async_task.cache.get", new_callable=AsyncMock, return_value=task_entry):
-            resp = client.get("/events/poll_new_listings_async", params={"task_id": "task-789"})
-
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["status"] == 200
-        assert body["data"][0]["symbol"] == "ASX:XYZ"
-        assert body["extra"] == {"task_id": "task-789", "state": async_task.TASK_STATE_COMPLETED}
-
-    def test_background_task_caches_result(self):
-        result = schemas_events_listings.ListingsResponse(status=200, message="ok", data=[])
-        with (
-            patch(
-                "app.routers.events_listings._get_new_listings_result",
-                new_callable=AsyncMock,
-                return_value=result,
-            ),
-            patch(
-                "app.routers.async_task.cache.set",
-                new_callable=AsyncMock,
-                return_value=True,
-            ) as mock_cache_set,
-        ):
-            asyncio.run(router_events_listings._run_new_listings_task("task-789", "AU"))
-
-        mock_cache_set.assert_awaited_once_with(
-            "task-789",
-            {
-                "task_type": "new_listings",
-                "state": async_task.TASK_STATE_COMPLETED,
-                "result": {"status": 200, "message": "ok", "data": [], "extra": None},
-            },
-            ttl=3600,
+        us_started = client.get(
+            "/events/start_new_listings_async",
+            params={"country": "US"},
         )
+        deferred_task_store.release()
+        au_completed = client.get(
+            "/events/poll_new_listings_async",
+            params={"task_id": au_started.json()["extra"]["task_id"]},
+        )
+        us_completed = client.get(
+            "/events/poll_new_listings_async",
+            params={"task_id": us_started.json()["extra"]["task_id"]},
+        )
+
+    assert au_started.json()["extra"]["task_id"] != us_started.json()["extra"]["task_id"]
+    assert au_completed.json()["data"][0]["symbol"] == "ASX:IPO"
+    assert us_completed.json()["data"][0]["symbol"] == "NASDAQ:IPO"
+
+
+@pytest.mark.parametrize(
+    "poll_endpoint",
+    [
+        "/events/poll_upcoming_dividends_async",
+        "/events/poll_upcoming_earnings_async",
+        "/events/poll_new_listings_async",
+    ],
+)
+def test_async_event_poll_requires_task_id(poll_endpoint):
+    response = client.get(poll_endpoint)
+
+    assert response.status_code == 422

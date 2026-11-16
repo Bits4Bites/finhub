@@ -15,14 +15,18 @@ AnalyzePortfolioResult = Annotated[
 
 
 class AnalyzePortfolioRequest(BaseRequest):
-    """Request deterministic dispatch to portfolio construction or structured review."""
+    """Request deterministic dispatch to portfolio construction or structured review.
+
+    Submitted tickers must be unique, and positive positions use whole-share
+    quantities.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     country: str = Field(
         min_length=2,
         max_length=64,
-        description="Target market country as an ISO code or country name.",
+        description="Target market country as an ISO code or country name; surrounding whitespace is trimmed.",
     )
     current_allocation: list[models_portfolio.PortfolioHolding] = Field(
         default_factory=list,
@@ -33,7 +37,8 @@ class AnalyzePortfolioRequest(BaseRequest):
         min_length=1,
         max_length=4000,
         description=(
-            "Required investor goals, strategy, constraints, risk context, and optional total or recurring budget."
+            "Required investor goals, strategy, constraints, risk context, and optional total or recurring budget; "
+            "surrounding whitespace is trimmed."
         ),
     )
     rebalance_plan: bool = Field(

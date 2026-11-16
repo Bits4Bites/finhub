@@ -3,7 +3,6 @@ from datetime import UTC, datetime
 from app.models import ai as models_ai
 from app.models import ai_portfolio_spotlight as models_spotlight
 from app.models import portfolio as models_portfolio
-from app.services import msai_spotlight_portfolio as service
 from app.services import portfolio_verification
 
 
@@ -73,15 +72,24 @@ def reference(
 
 def risk(
     *,
+    rank: int = 1,
     level: models_spotlight.PortfolioSpotlightRiskLevel = "Critical",
-    action_timing: models_spotlight.PortfolioSpotlightActionTiming = "AsSoonAsPossibleWithinOneWeek",
+    action_timing: models_spotlight.PortfolioSpotlightActionTiming | None = None,
     requires_rebalance: bool = True,
     reference_ids: list[str] | None = None,
 ) -> models_spotlight.PortfolioSpotlightRiskAction:
+    timing = (
+        action_timing
+        or {
+            "Critical": "AsSoonAsPossibleWithinOneWeek",
+            "High": "WithinOneToTwoWeeks",
+            "Medium": "Monitor",
+        }[level]
+    )
     return models_spotlight.PortfolioSpotlightRiskAction(
-        rank=1,
+        rank=rank,
         level=level,
-        action_timing=action_timing,
+        action_timing=timing,
         risk="The portfolio is concentrated in one issuer.",
         action="Reduce the position as soon as possible and within one week.",
         affected_tickers=["NASDAQ:AAPL"],
@@ -120,44 +128,4 @@ def analysis(
         data_gaps=[],
         validation_warnings=[],
         references=[reference()],
-    )
-
-
-def research(portfolio_id: str = "portfolio-id") -> service._PortfolioResearch:
-    return service._PortfolioResearch.model_validate(
-        {
-            "portfolio_id": portfolio_id,
-            "as_of": "2026-08-21T00:00:00Z",
-            "claims": [
-                {
-                    "category": "Issuer",
-                    "text": "Issuer conditions increased portfolio risk.",
-                    "affected_tickers": ["NASDAQ:AAPL"],
-                    "reference_ids": ["src-reference"],
-                }
-            ],
-            "data_gaps": [],
-            "references": [reference().model_dump(mode="python")],
-        }
-    )
-
-
-def plan(portfolio_id: str = "portfolio-id") -> service._PortfolioAnalysisPlan:
-    return service._PortfolioAnalysisPlan(
-        portfolio_id=portfolio_id,
-        investor_context_summary="Growth-focused investor context.",
-        research_priorities=["Issuer", "Portfolio", "Valuation"],
-        assessment_focus=["Assess concentration and alignment with the available investor context."],
-        investor_constraints=["Prioritize growth."],
-        data_gaps=[],
-    )
-
-
-def assessment(portfolio_id: str = "portfolio-id") -> service._PortfolioAssessmentDraft:
-    return service._PortfolioAssessmentDraft(
-        portfolio_id=portfolio_id,
-        as_of=datetime(2026, 8, 21, tzinfo=UTC),
-        overall_data_quality="High",
-        risks=[risk()],
-        data_gaps=[],
     )

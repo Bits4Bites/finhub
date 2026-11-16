@@ -8,22 +8,22 @@ public sealed record ListingPeriodOutlook
     public required ListingOutlookAssessmentType AssessmentType { get; init; }
 
     [JsonPropertyName("period_end")]
-    public required DateOnly? PeriodEnd { get; init; }
+    public DateOnly? PeriodEnd { get; init; }
 
     [JsonPropertyName("direction")]
     public required ListingOutlookDirection Direction { get; init; }
 
     [JsonPropertyName("expected_price_min")]
-    public required double? ExpectedPriceMin { get; init; }
+    public double? ExpectedPriceMin { get; init; }
 
     [JsonPropertyName("expected_price_max")]
-    public required double? ExpectedPriceMax { get; init; }
+    public double? ExpectedPriceMax { get; init; }
 
     [JsonPropertyName("expected_return_min_pct")]
-    public required double? ExpectedReturnMinPct { get; init; }
+    public double? ExpectedReturnMinPct { get; init; }
 
     [JsonPropertyName("expected_return_max_pct")]
-    public required double? ExpectedReturnMaxPct { get; init; }
+    public double? ExpectedReturnMaxPct { get; init; }
 
     [JsonPropertyName("confidence")]
     public required int Confidence { get; init; }

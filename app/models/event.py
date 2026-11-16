@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import datetime
 import json
-from datetime import datetime
+import re
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
@@ -12,16 +13,70 @@ if TYPE_CHECKING:
     pass
 
 
+_DIVIDEND_EVENT_FIELDS = {
+    "sym": "symbol",
+    "exchange": "exchange",
+    "corp": "company_name",
+    "date": "timestamp_str",
+    "pdate": "payment_date",
+    "cat": "event_category",
+    "src": "source_name",
+    "link": "link",
+    "status": "status",
+    "amount": "amount",
+    "yield": "dividend_yield",
+    "currency": "currency",
+}
+_EARNINGS_EVENT_FIELDS = {
+    "sym": "symbol",
+    "exchange": "exchange",
+    "corp": "company_name",
+    "date": "timestamp_str",
+    "src": "source_name",
+    "link": "link",
+    "report_period": "report_period",
+    "status": "status",
+}
+
+
+def _parse_event_records(json_str: str) -> list[dict[str, Any]]:
+    events = json.loads(json_utils.normalize_json_str(json_str))
+    if not isinstance(events, list):
+        raise ValueError("event JSON must contain an array")
+    for index, event in enumerate(events):
+        if not isinstance(event, dict):
+            raise TypeError(f"event at index {index} must be a JSON object")
+    return events
+
+
+def _event_values(
+    event: dict[str, Any],
+    default_vals: dict[str, Any],
+    source_fields: dict[str, str],
+) -> dict[str, Any]:
+    return {
+        model_field: event[source_field] if source_field in event else default_vals[source_field]
+        for source_field, model_field in source_fields.items()
+        if source_field in event or source_field in default_vals
+    }
+
+
+def _event_date_timestamp(date_str: str) -> int:
+    if re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", date_str) is None:
+        raise ValueError("event date must use exact YYYY-MM-DD format")
+    return int(datetime.datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=datetime.UTC).timestamp())
+
+
 class EventBase(BaseModel):
     """Common identity, timing, and provenance fields for market events."""
 
     symbol: str = Field(description="Security symbol associated with the event.")
-    exchange: str | None = Field(
-        default=None,
+    exchange: str = Field(
+        default="",
         description="Exchange code associated with the security, when available.",
     )
-    company_name: str | None = Field(
-        default=None,
+    company_name: str = Field(
+        default="",
         description="Company or issuer name, when available.",
     )
     timestamp: int = Field(
@@ -56,7 +111,7 @@ class DividendEventAnalysis(EventBase):
     div_amount: float = Field(default=0.0, description="Dividend amount per share.")
     div_yield: float = Field(
         default=0.0,
-        description="Dividend amount divided by the current price.",
+        description="Caller-supplied dividend amount-to-price ratio; this legacy model does not recompute it.",
     )
     # ====== analysis result
     num_samples: int = Field(
@@ -143,28 +198,43 @@ class UpcomingDividendEvent(EventBase):
 
 
 def parse_upcoming_dividend_events_from_json(
-    json_str: str, default_vals: dict[str, Any] = None
+    json_str: str,
+    default_vals: dict[str, Any] | None = None,
 ) -> list[UpcomingDividendEvent]:
-    default_vals = default_vals or {}
-    json_str = json_utils.normalize_json_str(json_str)
-    events = json.loads(json_str)
+    """Build validated upcoming dividend events from source JSON.
+
+    Args:
+        json_str: A JSON array of event objects, optionally wrapped in a complete
+            Markdown ``json`` fence. Objects use ``sym``, ``exchange``, ``corp``,
+            ``date``, ``pdate``, ``cat``, ``src``, ``link``, ``status``,
+            ``amount``, ``yield``, and ``currency`` source keys. ``date`` must
+            use exactly ``YYYY-MM-DD``, including a zero-padded month and day.
+        default_vals: Optional fallback values keyed by the same source names.
+            A fallback applies only when its key is absent; an explicit JSON
+            null is retained for final model validation.
+
+    Returns:
+        Events in input order, with parser-produced timestamps at midnight UTC
+        on their source dates. An empty array returns an empty list. Missing
+        values use model defaults where available, and a missing ``cat`` without
+        a supplied fallback becomes ``"dividend"``.
+
+    Raises:
+        json.JSONDecodeError: If ``json_str`` is not valid JSON.
+        ValueError: If the top-level JSON value is not an array, or a date is
+            not a valid calendar date in exact ``YYYY-MM-DD`` form.
+        TypeError: If an array item is not a JSON object.
+        pydantic.ValidationError: If a record or explicit null does not satisfy
+            the final event model.
+    """
+    defaults = default_vals or {}
+    events = _parse_event_records(json_str)
     result = []
     for item in events:
-        event = UpcomingDividendEvent(
-            symbol=item.get("sym", default_vals.get("sym")),
-            exchange=item.get("exchange", default_vals.get("exchange")),
-            company_name=item.get("corp", default_vals.get("corp")),
-            timestamp_str=item.get("date", default_vals.get("date")),
-            payment_date=item.get("pdate", default_vals.get("pdate")),
-            event_category=item.get("cat", default_vals.get("cat", "Dividend")),
-            source_name=item.get("src", default_vals.get("src")),
-            link=item.get("link", default_vals.get("link")),
-            status=item.get("status", default_vals.get("status")),
-            amount=item.get("amount", default_vals.get("amount", 0.0)),
-            dividend_yield=item.get("yield", default_vals.get("yield", 0.0)),
-            currency=item.get("currency", default_vals.get("currency", "")),
-        )
-        event.timestamp = int(datetime.strptime(event.timestamp_str or "", "%Y-%m-%d").timestamp())
+        event_values = _event_values(item, defaults, _DIVIDEND_EVENT_FIELDS)
+        event_values.setdefault("event_category", "dividend")
+        event = UpcomingDividendEvent(**event_values)
+        event.timestamp = _event_date_timestamp(event.timestamp_str)
         result.append(event)
 
     return result
@@ -184,25 +254,42 @@ class UpcomingEarningsEvent(EventBase):
 
 
 def parse_upcoming_earnings_events_from_json(
-    json_str: str, default_vals: dict[str, Any] = None
+    json_str: str,
+    default_vals: dict[str, Any] | None = None,
 ) -> list[UpcomingEarningsEvent]:
-    default_vals = default_vals or {}
-    json_str = json_utils.normalize_json_str(json_str)
-    events = json.loads(json_str)
+    """Build validated upcoming earnings events from source JSON.
+
+    Args:
+        json_str: A JSON array of event objects, optionally wrapped in a complete
+            Markdown ``json`` fence. Objects use ``sym``, ``exchange``, ``corp``,
+            ``date``, ``src``, ``link``, ``report_period``, and ``status`` source
+            keys. ``date`` must use exactly ``YYYY-MM-DD``, including a
+            zero-padded month and day.
+        default_vals: Optional fallback values keyed by the same source names.
+            A fallback applies only when its key is absent; an explicit JSON
+            null is retained for final model validation.
+
+    Returns:
+        Events in input order, with the ``earnings`` category and parser-produced
+        timestamps at midnight UTC on their source dates. An empty array returns
+        an empty list, and missing values use model defaults where available.
+
+    Raises:
+        json.JSONDecodeError: If ``json_str`` is not valid JSON.
+        ValueError: If the top-level JSON value is not an array, or a date is
+            not a valid calendar date in exact ``YYYY-MM-DD`` form.
+        TypeError: If an array item is not a JSON object.
+        pydantic.ValidationError: If a record or explicit null does not satisfy
+            the final event model.
+    """
+    defaults = default_vals or {}
+    events = _parse_event_records(json_str)
     result = []
     for item in events:
-        event = UpcomingEarningsEvent(
-            symbol=item.get("sym", default_vals.get("sym")),
-            exchange=item.get("exchange", default_vals.get("exchange")),
-            company_name=item.get("corp", default_vals.get("corp")),
-            timestamp_str=item.get("date", default_vals.get("date")),
-            event_category="earnings",
-            source_name=item.get("src", default_vals.get("src")),
-            link=item.get("link", default_vals.get("link")),
-            report_period=item.get("report_period", default_vals.get("report_period")),
-            status=item.get("status", default_vals.get("status")),
-        )
-        event.timestamp = int(datetime.strptime(event.timestamp_str or "", "%Y-%m-%d").timestamp())
+        event_values = _event_values(item, defaults, _EARNINGS_EVENT_FIELDS)
+        event_values["event_category"] = "earnings"
+        event = UpcomingEarningsEvent(**event_values)
+        event.timestamp = _event_date_timestamp(event.timestamp_str)
         result.append(event)
 
     return result

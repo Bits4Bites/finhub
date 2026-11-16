@@ -204,6 +204,65 @@ public sealed class JsonSerializationTests
     }
 
     [Fact]
+    public void Listing_event_supports_fixed_and_ranged_decimal_issue_prices()
+    {
+        const string rangedPriceJson =
+            """
+            {
+              "symbol": "ASX:RANGE",
+              "timestamp_str": "2026-11-16",
+              "issue_price": 0.20,
+              "issue_price_upper": 0.25,
+              "currency": "AUD",
+              "capital_to_raise": 1000000
+            }
+            """;
+        const string fixedPriceJson =
+            """
+            {
+              "symbol": "ASX:FIXED",
+              "timestamp_str": "2026-11-16",
+              "issue_price": 1.50,
+              "currency": "AUD",
+              "capital_to_raise": null
+            }
+            """;
+
+        Assert.Equal(
+            typeof(decimal?),
+            typeof(ListingEvent).GetProperty(nameof(ListingEvent.IssuePrice))!.PropertyType
+        );
+        Assert.Equal(
+            typeof(decimal?),
+            typeof(ListingEvent)
+                .GetProperty(nameof(ListingEvent.IssuePriceUpper))!
+                .PropertyType
+        );
+
+        var rangedPrice = JsonSerializer.Deserialize<ListingEvent>(rangedPriceJson);
+        var fixedPrice = JsonSerializer.Deserialize<ListingEvent>(fixedPriceJson);
+
+        Assert.NotNull(rangedPrice);
+        Assert.Equal(0.20m, rangedPrice.IssuePrice);
+        Assert.Equal(0.25m, rangedPrice.IssuePriceUpper);
+        Assert.NotNull(fixedPrice);
+        Assert.Equal(1.50m, fixedPrice.IssuePrice);
+        Assert.Null(fixedPrice.IssuePriceUpper);
+
+        using var serialized = JsonDocument.Parse(
+            JsonSerializer.Serialize(rangedPrice)
+        );
+        Assert.Equal(
+            0.20m,
+            serialized.RootElement.GetProperty("issue_price").GetDecimal()
+        );
+        Assert.Equal(
+            0.25m,
+            serialized.RootElement.GetProperty("issue_price_upper").GetDecimal()
+        );
+    }
+
+    [Fact]
     public void Non_identifier_enum_values_use_their_exact_wire_literals()
     {
         var assetType = JsonSerializer.Deserialize<TickerAssetType>("\"MUTUAL FUND\"");

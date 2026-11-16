@@ -19,17 +19,17 @@ class ReferenceSourceMetadata(StrictAIModel):
         min_length=1,
         max_length=128,
         pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
-        description="Source identifier unique within the containing response.",
+        description="Source identifier unique within the containing response; surrounding whitespace is trimmed.",
     )
     title: str = Field(
         min_length=1,
         max_length=500,
-        description="Human-readable title of the cited source or document.",
+        description="Human-readable title of the cited source or document; surrounding whitespace is trimmed.",
     )
     publisher: str = Field(
         min_length=1,
         max_length=200,
-        description="Publisher or organization responsible for the source.",
+        description="Publisher or organization responsible for the source; surrounding whitespace is trimmed.",
     )
     source_type: ReferenceSourceType = Field(description="Category used to classify and evaluate the source.")
     published_at: datetime | None = Field(description="UTC publication timestamp, or null when unavailable.")

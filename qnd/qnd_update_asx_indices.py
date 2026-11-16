@@ -5,7 +5,7 @@ import asyncio
 import json
 from datetime import datetime
 
-from app.services import crawler as crawler_service
+from app.services import crawler_core as crawler_core_service
 
 
 async def update_asx_index(index: str, num_check: int):
@@ -32,7 +32,7 @@ async def update_asx_index(index: str, num_check: int):
             url = "https://fnarena.com/index/ASX200/"
             to_file = "resources/indices/asx200.json"
 
-    data = await crawler_service.scrape_data_table(url, table_attr_filter=table_attr_filter)
+    data = await crawler_core_service.scrape_data_table(url, table_attr_filter=table_attr_filter)
     if data is None or data.empty:
         raise OSError(f"No data available from {url}.")
     if len(data) < num_check:

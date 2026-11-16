@@ -5,10 +5,12 @@ from datetime import date, datetime, timedelta
 from typing import Annotated, Literal, Self
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 
 from ..utils import ai_reference as ai_reference_utils
+from ..utils import conv
 from . import ai as models_ai
+from . import portfolio as models_portfolio
 from . import types as models_types
 
 DividendEventPhase = Literal["BeforeExDate", "ExDate", "PostExDate", "Historical"]
@@ -91,7 +93,12 @@ class DividendDropEstimate(models_ai.StrictAIModel):
 
 
 class DividendRecoveryEstimate(models_ai.StrictAIModel):
-    """Probability and timing estimate for reaching a target price."""
+    """Probability and timing estimate for reaching a target price.
+
+    A positive recovery probability requires both a day range and estimated
+    date range. Zero probability carries neither, and both estimated dates are
+    present or absent together.
+    """
 
     target_price: DividendNumericRange = Field(description="Target price range that defines recovery.")
     success_probability: float = Field(
@@ -179,22 +186,34 @@ class DividendTechnicalContext(models_ai.StrictAIModel):
 
 
 class DividendEventContext(models_ai.StrictAIModel):
-    """Verified security and event inputs for dividend analysis."""
+    """Verified security and event inputs for dividend analysis.
+
+    The symbol accepts Yahoo Finance or canonical EXCHANGE:CODE format. String
+    identifiers are trimmed and uppercased where applicable. Gross dividend
+    yield must equal dividend amount divided by reference price, and phase must
+    match the exchange-local analysis date.
+    """
 
     symbol: models_types.NonEmptyString = Field(
         max_length=4000,
-        description="Canonical security symbol.",
+        description=(
+            "Security symbol in Yahoo Finance or canonical EXCHANGE:CODE format; "
+            "input is trimmed and uppercased, with exchange aliases canonicalized."
+        ),
     )
     exchange: models_types.NonEmptyString = Field(
         max_length=4000,
-        description="Normalized exchange code.",
+        description=(
+            "Normalized exchange code; input is trimmed, uppercased, and recognized aliases are canonicalized."
+        ),
     )
     company_name: str | None = Field(description="Company or issuer name, or null when unavailable.")
-    currency: models_types.NonEmptyString = Field(
-        max_length=4000,
-        description="Trading currency of prices and dividend amounts.",
+    currency: models_types.CurrencyCode = Field(
+        description="Three-letter trading currency; input is trimmed and uppercased.",
     )
-    country: str | None = Field(description="ISO market country code, or null when unavailable.")
+    country: str | None = Field(
+        description="Provider market country code or name, trimmed when supplied, or null when unavailable."
+    )
     asset_type: models_types.NonEmptyString = Field(
         max_length=4000,
         description="Detected security or fund asset type.",
@@ -221,7 +240,7 @@ class DividendEventContext(models_ai.StrictAIModel):
     gross_dividend_yield: float = Field(
         ge=0,
         allow_inf_nan=False,
-        description="Gross dividend amount divided by the reference price.",
+        description="Gross dividend amount divided by the reference price; validated by this model.",
     )
     holding_period_days: int = Field(
         ge=1,
@@ -232,10 +251,43 @@ class DividendEventContext(models_ai.StrictAIModel):
         description="Round-trip per-share costs used in strategy calculations."
     )
 
+    @field_validator("symbol", mode="before")
+    @classmethod
+    def normalize_symbol(cls, value: object) -> object:
+        if not isinstance(value, str):
+            return value
+        normalized = value.strip().upper()
+        if any(character.isspace() for character in normalized):
+            raise ValueError("symbol cannot contain whitespace")
+        return models_portfolio.normalize_canonical_ticker(normalized) if ":" in normalized else normalized
+
+    @field_validator("exchange", mode="before")
+    @classmethod
+    def normalize_exchange(cls, value: object) -> object:
+        if not isinstance(value, str):
+            return value
+        normalized = conv.normalize_exchange_code(value)
+        if not normalized or ":" in normalized or any(character.isspace() for character in normalized):
+            raise ValueError("exchange must be a nonblank code without whitespace")
+        return normalized
+
+    @field_validator("country", mode="before")
+    @classmethod
+    def normalize_country(cls, value: object) -> object:
+        if not isinstance(value, str):
+            return value
+        normalized = value.strip()
+        return normalized or None
+
     @model_validator(mode="after")
     def validate_phase(self) -> Self:
         if self.as_of.tzinfo is None or self.as_of.utcoffset() is None:
             raise ValueError("event as_of must be timezone-aware")
+        if ":" in self.symbol and self.symbol.split(":", 1)[0] != self.exchange:
+            raise ValueError("event exchange must match the canonical symbol")
+        expected_yield = self.dividend_amount / self.reference_price
+        if abs(self.gross_dividend_yield - expected_yield) > 1e-9:
+            raise ValueError("gross_dividend_yield must match dividend amount and reference price")
         try:
             local_date = self.as_of.astimezone(ZoneInfo(self.exchange_timezone)).date()
         except ZoneInfoNotFoundError as exc:
@@ -331,7 +383,12 @@ class DividendResearch(models_ai.StrictAIModel):
 
 
 class DividendStrategyAssessment(models_ai.StrictAIModel):
-    """Structured assessment of one dividend-event trading strategy."""
+    """Structured assessment of one dividend-event trading strategy.
+
+    Eligible strategies include complete price and probability estimates, with
+    recovery days only when success probability is positive. Non-eligible
+    strategies include a reason and no estimates.
+    """
 
     strategy: DividendStrategy = Field(description="Dividend-event strategy being assessed.")
     eligibility: DividendStrategyEligibility = Field(
@@ -461,7 +518,17 @@ class DividendRecommendation(models_ai.StrictAIModel):
 
 
 class DividendEventAnalysis(models_ai.StrictAIModel):
-    """Final structured analysis of a dividend event and two trading strategies."""
+    """Final structured analysis of a dividend event and two trading strategies.
+
+    Complete and CompleteWithWarnings mean the workflow completed, not that
+    every estimate was obtainable. When validated evidence is insufficient,
+    these results may retain null evidence-adjusted estimates while keeping both
+    strategy assessments and an InsufficientInsights recommendation. They
+    require research and references, with warnings absent or present
+    respectively. Failed results require a failure reason, contain no strategy
+    results or validation warnings, and may retain references only when retained
+    research uses them.
+    """
 
     as_of: datetime = Field(description="Timezone-aware timestamp when analysis was finalized.")
     analysis_status: DividendAnalysisStatus = Field(description="Completion state of the dividend-event analysis.")
@@ -475,16 +542,28 @@ class DividendEventAnalysis(models_ai.StrictAIModel):
     )
     research: DividendResearch | None = Field(description="Validated sourced research, or null when research failed.")
     evidence_adjusted_ex_date_close_drop: DividendDropEstimate | None = Field(
-        description="Research-adjusted ex-date close-drop estimate, or null on failure."
+        description=(
+            "Research-adjusted ex-date close-drop estimate, or null when validated evidence is insufficient "
+            "to produce that estimate; Failed results also use null."
+        )
     )
     evidence_adjusted_pre_ex_close_recovery: DividendRecoveryEstimate | None = Field(
-        description="Research-adjusted recovery estimate to the pre-ex close."
+        description=(
+            "Research-adjusted recovery estimate to the pre-ex close, or null when validated evidence is "
+            "insufficient to produce that estimate; Failed results also use null."
+        )
     )
     evidence_adjusted_capture_break_even_recovery: DividendRecoveryEstimate | None = Field(
-        description="Research-adjusted recovery estimate to capture break-even."
+        description=(
+            "Research-adjusted recovery estimate to capture break-even, or null when validated evidence is "
+            "insufficient to produce that estimate; Failed results also use null."
+        )
     )
     evidence_adjusted_discount_break_even_recovery: DividendRecoveryEstimate | None = Field(
-        description="Research-adjusted recovery estimate to discount-entry break-even."
+        description=(
+            "Research-adjusted recovery estimate to discount-entry break-even, or null when validated evidence "
+            "is insufficient to produce that estimate; Failed results also use null."
+        )
     )
     dividend_capture: DividendStrategyAssessment | None = Field(
         description="Dividend-capture strategy assessment, or null on failure."
@@ -501,7 +580,7 @@ class DividendEventAnalysis(models_ai.StrictAIModel):
     )
     references: list[models_ai.ReferenceSource] = Field(
         max_length=6,
-        description="Canonical sources cited by research and assessment.",
+        description="Canonical sources cited by research and assessment, in application-supplied order.",
     )
 
     @model_validator(mode="after")

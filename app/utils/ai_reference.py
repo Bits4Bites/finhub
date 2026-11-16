@@ -30,12 +30,34 @@ class FilteredReferenceIds:
 
 
 def normalize_url(url: str) -> str:
+    """Normalize a source URL for reference identity and comparison.
+
+    Args:
+        url: The source URL to normalize.
+
+    Returns:
+        The canonical URL used to identify and compare reference sources.
+
+    Notes:
+        Leading and trailing whitespace, URL fragments, scheme or host casing,
+        and trailing path slashes do not create separate source identities.
+        Query parameters remain part of the identity.
+    """
     parsed = urlsplit(url.strip())
     path = parsed.path.rstrip("/") or "/"
     return urlunsplit((parsed.scheme.lower(), parsed.netloc.lower(), path, parsed.query, ""))
 
 
 def generate_source_id(url: str) -> str:
+    """Generate a stable application-owned identifier for a reference source.
+
+    Args:
+        url: The source URL used as the reference identity.
+
+    Returns:
+        An opaque deterministic source identifier. URLs that normalize to the
+        same identity produce the same identifier.
+    """
     normalized_url = normalize_url(url)
     hasher = xxhash.xxh3_128()
     hasher.update(normalized_url.encode("utf-8"))
@@ -43,6 +65,23 @@ def generate_source_id(url: str) -> str:
 
 
 def collect_reference_ids(value: object) -> set[str]:
+    """Report every source linked by an AI-generated result.
+
+    Args:
+        value: A result represented by Pydantic models, mappings, or nested
+            list, tuple, and set containers containing ``reference_ids`` fields.
+
+    Returns:
+        The unique reference IDs linked from the payload.
+
+    Raises:
+        TypeError: If a mapping contains a ``reference_ids`` value other than a
+            list, tuple, or set of strings.
+
+    Notes:
+        Embedded ``references`` registries are ignored because registry entries
+        do not by themselves count as used references.
+    """
     if isinstance(value, BaseModel):
         result: set[str] = set()
         for field_name in type(value).model_fields:
@@ -77,7 +116,23 @@ def filter_reference_ids(
     reference_ids: Sequence[str],
     allowed_reference_ids: Collection[str],
 ) -> FilteredReferenceIds:
-    """Retain allowed IDs in input order without guessing replacements."""
+    """Remove unsupported source links from an AI-generated result.
+
+    Args:
+        reference_ids: Source IDs linked from a claim or result section.
+        allowed_reference_ids: Source IDs that the application permits at the
+            current trust boundary.
+
+    Returns:
+        The retained IDs in first-seen order and the unsupported IDs that were
+        removed. Duplicate retained IDs appear only once.
+
+    Raises:
+        TypeError: If ``reference_ids`` is not a sequence of strings.
+
+    Notes:
+        Unsupported IDs are reported rather than mapped to guessed sources.
+    """
 
     if isinstance(reference_ids, str) or not all(isinstance(reference_id, str) for reference_id in reference_ids):
         raise TypeError("reference_ids must be a sequence of strings")
@@ -94,7 +149,22 @@ def validate_reference_registry(
     references: Sequence[models_ai.ReferenceSourceMetadata],
     payload: object,
 ) -> None:
-    """Validate reference identity plus all links found in a payload."""
+    """Validate that a payload and its source registry form a complete contract.
+
+    Args:
+        references: The source registry exposed with the payload.
+        payload: The AI-generated result containing source links in any shape
+            supported by ``collect_reference_ids``.
+
+    Returns:
+        None when every source identity is unique and every registered source is
+        referenced by the payload.
+
+    Raises:
+        TypeError: If a ``reference_ids`` field is not a collection of strings.
+        ValueError: If source IDs or normalized URLs are duplicated, a link is
+            unknown, or a registered source is unused.
+    """
 
     _validate_reference_identity(references)
 
@@ -115,7 +185,27 @@ def canonicalize_reference_sources(
     *,
     accessed_at: datetime,
 ) -> CanonicalizedReferences:
-    """Generate final IDs and set verification flags from provider citations."""
+    """Convert provider reference metadata into application-owned sources.
+
+    Args:
+        references: Source metadata using temporary provider or workflow IDs.
+        citation_urls: Source URLs attributed by the AI provider.
+        accessed_at: The application retrieval time assigned to every final
+            source.
+
+    Returns:
+        Final reference sources and a mapping from each temporary ID to its
+        application-owned source ID.
+
+    Raises:
+        ValueError: If temporary source IDs or normalized source URLs are not
+            unique, or final application-owned identities collide.
+
+    Notes:
+        Structurally valid sources are retained when provider citations are
+        missing or unmatched; those sources are returned as unverified.
+        Citation URLs use the same normalization rules as source identity.
+    """
 
     _validate_reference_identity(references)
 
@@ -139,7 +229,25 @@ def canonicalize_reference_sources(
 
 
 def remap_reference_ids(value: object, id_map: Mapping[str, str]) -> object:
-    """Copy a nested payload while replacing every reference_ids value."""
+    """Replace temporary source links in an AI-generated result.
+
+    Args:
+        value: A result represented by Pydantic models, mappings, or nested list
+            and tuple containers containing ``reference_ids`` fields.
+        id_map: Mapping from temporary source IDs to application-owned IDs.
+
+    Returns:
+        A copied plain-data result with every linked reference ID replaced.
+
+    Raises:
+        TypeError: If a ``reference_ids`` field is not a list or tuple of
+            strings.
+        ValueError: If the payload links to an ID absent from ``id_map``.
+
+    Notes:
+        The input result is not modified. Every linked temporary ID must have a
+        corresponding entry in ``id_map``.
+    """
 
     if isinstance(value, BaseModel):
         return remap_reference_ids(value.model_dump(), id_map)

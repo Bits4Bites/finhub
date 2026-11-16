@@ -5,7 +5,9 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request, R
 from .. import config
 from ..schemas import async_task
 from ..schemas import events_listings as schemas_events_listings
+from ..schemas.base_req_resp import BaseResponse
 from ..services import msai_asx_listings as services_asx_listings
+from ..services import msai_us_listings as services_us_listings
 from ..utils import conv
 from . import async_task as router_async_task
 from . import proxy_handler
@@ -13,6 +15,21 @@ from . import proxy_handler
 router = APIRouter(prefix="/events", tags=["events"])
 
 _NEW_LISTINGS_TASK_TYPE = "new_listings"
+_ASYNC_RESPONSES = {
+    202: {
+        "model": schemas_events_listings.ListingsAsyncResponse,
+        "description": "The new-listings task started or is still running.",
+    },
+    404: {"model": BaseResponse, "description": "The task was not found or has expired."},
+    422: router_async_task.validation_error_response(
+        "The required country or proxy forward-timeout header is missing, invalid, or unsupported.",
+        BaseResponse,
+    ),
+    500: {
+        "model": schemas_events_listings.ListingsAsyncResponse | BaseResponse,
+        "description": "The background request or retained task state failed.",
+    },
+}
 
 
 async def _get_new_listings_result(country: str) -> schemas_events_listings.ListingsResponse:
@@ -20,6 +37,8 @@ async def _get_new_listings_result(country: str) -> schemas_events_listings.List
     match country:
         case "AU":
             events = await services_asx_listings.ai_get_asx_new_listings()
+        case "US":
+            events = await services_us_listings.ai_get_us_new_listings()
         case _:
             return schemas_events_listings.ListingsResponse(
                 status=501,
@@ -36,11 +55,31 @@ async def _get_new_listings_result(country: str) -> schemas_events_listings.List
 )
 async def get_new_listings(
     request: Request,
-    country: str = Query("", description="Country code to filter events by (only 'AU' is supported)."),
+    country: str = Query("", description="Country code to filter events by (only 'AU' and 'US' are supported)."),
 ) -> schemas_events_listings.ListingsResponse | Response:
-    """
-    Check for new listing events for a market, using AI assistance.
-    Note: currently only AU is supported.
+    """Return confirmed current or upcoming listings for Australia or the US.
+
+    Args:
+        request: Incoming request used when the endpoint is configured to proxy
+            AI-task traffic.
+        country: Optional Australia or United States identifier. ISO alpha-2/
+            alpha-3 codes, country names, and recognized aliases are trimmed and
+            matched case-insensitively; examples include ``AU``, ``AUS``,
+            ``Australia``, ``US``, ``USA``, ``U.S.``, and ``United States``.
+
+    Returns:
+        A proxy response when proxying is enabled. Otherwise, a successful
+        envelope has status 200 and listings ordered by listing date and then
+        symbol. An omitted or unsupported country returns HTTP 200 with envelope
+        status 501 and no data.
+
+    Notes:
+        Nullable listing fields are omitted. Each event reports whether AI
+        analysis was ``Completed``, ``Failed``, or ``Skipped``. At most five
+        eligible listings are attempted; failed attempts consume that limit and
+        screening skips do not. Unattempted listings remain in the ordered
+        response as ``Skipped``. Market-source or top-level analysis failures
+        are exposed as HTTP 500.
     """
     proxy_response = await proxy_handler.handle_if_proxy(
         config.settings_finhub_proxy.proxy_mode,
@@ -58,10 +97,10 @@ async def _run_new_listings_task(task_id: str, country: str) -> None:
         result = await _get_new_listings_result(country)
     except Exception:
         logging.exception("New listings task '%s' failed.", task_id)
-        await router_async_task.fail_task(task_id, _NEW_LISTINGS_TASK_TYPE)
+        await router_async_task.task_store.fail(task_id, _NEW_LISTINGS_TASK_TYPE)
         return
 
-    await router_async_task.complete_task(
+    await router_async_task.task_store.complete(
         task_id,
         _NEW_LISTINGS_TASK_TYPE,
         result,
@@ -72,7 +111,7 @@ async def _poll_task(
     task_id: str,
     response: Response,
 ) -> schemas_events_listings.ListingsAsyncResponse:
-    task_entry = await router_async_task.load_task(task_id, _NEW_LISTINGS_TASK_TYPE)
+    task_entry = await router_async_task.task_store.load(task_id, _NEW_LISTINGS_TASK_TYPE)
     task_state = task_entry.state
     task_info = async_task.AsyncTaskInfo(task_id=task_id, state=task_state)
     if task_state == async_task.TASK_STATE_RUNNING:
@@ -103,17 +142,44 @@ async def _poll_task(
     "/start_new_listings_async",
     response_model=schemas_events_listings.ListingsAsyncResponse,
     response_model_exclude_none=True,
+    responses=_ASYNC_RESPONSES,
 )
 async def start_new_listings_async(
     background_tasks: BackgroundTasks,
     request: Request,
     response: Response,
     country: str = Query(
-        "",
-        description="Country code used to start the task; only 'AU' is supported.",
+        description="Country code used to start the task; only 'AU' and 'US' are supported.",
     ),
 ) -> schemas_events_listings.ListingsAsyncResponse | Response:
-    """Start a new-listings task."""
+    """Start or reuse a background new-listings request.
+
+    Args:
+        background_tasks: FastAPI scheduler used to run a newly created request
+            after the start response is prepared.
+        request: Incoming request used when the endpoint is configured to proxy
+            AI-task traffic.
+        response: Response whose HTTP status reflects the returned task state.
+        country: Required Australia or United States identifier. ISO codes,
+            country names, aliases, whitespace, and case are normalized as for
+            the synchronous endpoint.
+
+    Returns:
+        A proxy response when proxying is enabled. A new task returns HTTP 202
+        with a ``RUNNING`` task descriptor. A duplicate normalized market reuses
+        its existing task and returns the current running, completed, or failed
+        outcome; Australian and US tasks remain distinct.
+
+    Raises:
+        HTTPException: With HTTP 422 when the normalized country is not
+            Australia or the United States. Request validation also returns HTTP
+            422 when ``country`` is omitted.
+
+    Notes:
+        Task state and results expire after one hour. A top-level market-source
+        or analysis failure produces a terminal ``FAILED`` task whose poll
+        response is HTTP 500.
+    """
     proxy_response = await proxy_handler.handle_if_proxy(
         config.settings_finhub_proxy.proxy_mode,
         config.settings_finhub_proxy.url_ai_task_node,
@@ -123,13 +189,13 @@ async def start_new_listings_async(
         return proxy_response
 
     country = conv.country_to_iso2(country)
-    if country != "AU":
+    if country not in ("AU", "US"):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="New listings supports only country 'AU'",
+            detail="New listings supports only country 'AU' and 'US'",
         )
 
-    task_id, is_new = await router_async_task.start_task(_NEW_LISTINGS_TASK_TYPE, country)
+    task_id, is_new = await router_async_task.task_store.start(_NEW_LISTINGS_TASK_TYPE, country)
     if not is_new:
         return await _poll_task(task_id, response)
 
@@ -149,13 +215,32 @@ async def start_new_listings_async(
     "/poll_new_listings_async",
     response_model=schemas_events_listings.ListingsAsyncResponse,
     response_model_exclude_none=True,
+    responses=_ASYNC_RESPONSES,
 )
 async def poll_new_listings_async(
     request: Request,
     response: Response,
     task_id: str = Query(description="Task ID returned by the corresponding start endpoint."),
 ) -> schemas_events_listings.ListingsAsyncResponse | Response:
-    """Poll a new-listings task."""
+    """Return the public state or result of a new-listings task.
+
+    Args:
+        request: Incoming request used when the endpoint is configured to proxy
+            AI-task traffic.
+        response: Response whose HTTP status is set from the task lifecycle.
+        task_id: Identifier returned by the start endpoint. Surrounding
+            whitespace is ignored.
+
+    Returns:
+        A proxy response when proxying is enabled. A running task returns HTTP
+        202; a failed task returns HTTP 500; and a completed task returns HTTP
+        200 with its ordered listing data and per-listing analysis outcomes.
+
+    Notes:
+        Unknown, expired, or wrong-type task identifiers return HTTP 404. A
+        corrupt stored task returns HTTP 500. Nullable listing and analysis
+        fields are omitted from completed responses.
+    """
     proxy_response = await proxy_handler.handle_if_proxy(
         config.settings_finhub_proxy.proxy_mode,
         config.settings_finhub_proxy.url_ai_task_node,

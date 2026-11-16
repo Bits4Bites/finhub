@@ -29,7 +29,9 @@ COPY --from=build --chown=$USERNAME $HOMEDIR $HOMEDIR
 
 WORKDIR $HOMEDIR
 ENV PLAYWRIGHT_BROWSERS_PATH=$HOMEDIR/.playwright/browsers
-RUN bash -c 'source ./.venv/bin/activate && playwright install-deps webkit'
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libatomic1 \
+    && bash -c 'source ./.venv/bin/activate && playwright install-deps webkit'
 USER $USERNAME
 RUN bash -c 'source ./.venv/bin/activate && playwright install webkit'
 

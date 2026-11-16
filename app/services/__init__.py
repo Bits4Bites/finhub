@@ -1,4 +1,5 @@
 import logging
+import os
 
 from .. import config
 
@@ -39,7 +40,20 @@ for vendor_name, api_tiers in list(config.settings_llm_vendor.vendors.items()):
 
 
 # load prompt templates
-def read_file_as_single_string(file_path) -> str:
+def read_file_as_single_string(file_path: str | os.PathLike[str]) -> str:
+    """Load a UTF-8 text file for use as an application prompt or template.
+
+    Args:
+        file_path: Path to the text file.
+
+    Returns:
+        The file content with trailing whitespace removed from each line while
+        preserving line order, or an empty string when the file is empty or
+        cannot be read.
+
+    Notes:
+        Read failures are logged and are not raised to the caller.
+    """
     try:
         with open(file_path, encoding="utf-8") as file:
             lines = [line.rstrip() for line in file]
@@ -50,7 +64,7 @@ def read_file_as_single_string(file_path) -> str:
     except PermissionError:
         logging.error("Error: Permission denied for file '%s'.", file_path)
     except Exception as e:
-        logging.exception("An unexpected error occurred while reading file '%s': '%e'", file_path, e)
+        logging.exception("An unexpected error occurred while reading file '%s': '%s'", file_path, e)
     return ""
 
 

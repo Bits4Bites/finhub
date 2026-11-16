@@ -3,6 +3,7 @@ from typing import Literal, Self
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from ..utils import conv
+from . import types as models_types
 
 MAX_COMPANY_NAME_LENGTH = 200
 MAX_EXCHANGE_LENGTH = 32
@@ -15,6 +16,23 @@ PortfolioBudgetFrequency = Literal["Weekly", "Fortnightly", "Monthly", "Quarterl
 
 
 def normalize_canonical_ticker(value: object) -> object:
+    """Normalize an exchange-qualified ticker for portfolio contracts.
+
+    Args:
+        value: A candidate ticker. String values must use ``EXCHANGE:CODE``
+            format; surrounding whitespace is trimmed, letters are uppercased,
+            and recognized exchange aliases are replaced with their canonical
+            exchange code. Non-string values are returned unchanged so a
+            Pydantic before-validator can report the target field's type error.
+
+    Returns:
+        The normalized ``EXCHANGE:CODE`` string, preserving an unknown exchange
+        after trimming and uppercasing, or the original non-string value.
+
+    Raises:
+        ValueError: If a string has an empty exchange or code, embedded
+            whitespace, or anything other than one separating colon.
+    """
     if not isinstance(value, str):
         return value
     normalized = value.strip().upper()
@@ -26,7 +44,13 @@ def normalize_canonical_ticker(value: object) -> object:
 
 
 class PortfolioBudget(BaseModel):
-    """Supplied or application-inferred new money available for portfolio actions."""
+    """Supplied or application-inferred new money available for portfolio actions.
+
+    ``NotProvided`` carries no budget details. ``Total`` requires a supplied
+    amount, currency, and source text without a frequency. ``Recurring``
+    requires those details plus a frequency when investor supplied, while an
+    inferred recurring budget must not invent a frequency.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -41,10 +65,10 @@ class PortfolioBudget(BaseModel):
         allow_inf_nan=False,
         description="Positive new-money amount for one action-plan iteration, or null when no budget is available.",
     )
-    currency: str | None = Field(
-        min_length=3,
-        max_length=3,
-        description="Three-letter budget currency, or null when no budget is available.",
+    currency: models_types.CurrencyCode | None = Field(
+        description=(
+            "Three-letter budget currency, or null when no budget is available; string input is trimmed and uppercased."
+        ),
     )
     frequency: PortfolioBudgetFrequency | None = Field(
         description="Investor-supplied contribution frequency, or null for total and inferred next-iteration budgets.",
@@ -54,16 +78,6 @@ class PortfolioBudget(BaseModel):
         max_length=500,
         description="Exact investor-theme excerpt or deterministic explanation of an inferred budget.",
     )
-
-    @field_validator("currency", mode="before")
-    @classmethod
-    def normalize_currency(cls, value: object) -> object:
-        if not isinstance(value, str):
-            return value
-        normalized = value.strip().upper()
-        if not normalized.isascii() or not normalized.isalpha():
-            raise ValueError("currency must be a three-letter ISO code")
-        return normalized
 
     @model_validator(mode="after")
     def validate_budget(self) -> Self:
@@ -96,7 +110,10 @@ class PortfolioHolding(BaseModel):
     ticker: str = Field(
         min_length=1,
         max_length=MAX_TICKER_LENGTH,
-        description="Security symbol in Yahoo Finance or EXCHANGE:CODE format.",
+        description=(
+            "Security symbol in Yahoo Finance or EXCHANGE:CODE format; surrounding "
+            "whitespace is trimmed, letters are uppercased, and exchange aliases are canonicalized."
+        ),
     )
     num_shares: float = Field(
         default=0.0,
@@ -135,6 +152,8 @@ class PortfolioHolding(BaseModel):
         if not isinstance(value, str):
             return value
         normalized = value.strip().upper()
+        if any(character.isspace() for character in normalized):
+            raise ValueError("ticker cannot contain whitespace")
         return normalize_canonical_ticker(normalized) if ":" in normalized else normalized
 
     @field_validator("tags", mode="before")
@@ -147,14 +166,22 @@ class PortfolioHolding(BaseModel):
 
 
 class PortfolioVerifiedHolding(BaseModel):
-    """A portfolio position enriched and validated against market data."""
+    """A portfolio position whose service-verified values are supplied by the caller.
+
+    The model validates field contracts but does not recompute valuation,
+    allocation, drift, or profit-and-loss fields. Its normalized exchange must
+    match the canonical ticker prefix.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     ticker: str = Field(
         min_length=1,
         max_length=MAX_TICKER_LENGTH,
-        description="Canonical security symbol used by the verified portfolio.",
+        description=(
+            "Canonical EXCHANGE:CODE security symbol used by the verified portfolio; "
+            "input is trimmed, uppercased, and exchange aliases are canonicalized."
+        ),
     )
     company_name: str | None = Field(
         max_length=MAX_COMPANY_NAME_LENGTH,
@@ -163,12 +190,13 @@ class PortfolioVerifiedHolding(BaseModel):
     exchange: str = Field(
         min_length=1,
         max_length=MAX_EXCHANGE_LENGTH,
-        description="Normalized exchange code for the security.",
+        description=(
+            "Normalized exchange code for the security; input is trimmed, "
+            "uppercased, and recognized aliases are canonicalized."
+        ),
     )
-    currency: str = Field(
-        min_length=3,
-        max_length=3,
-        description="Three-letter trading currency code.",
+    currency: models_types.CurrencyCode = Field(
+        description="Three-letter trading currency code; input is trimmed and uppercased.",
     )
     num_shares: float = Field(
         gt=0,
@@ -189,13 +217,13 @@ class PortfolioVerifiedHolding(BaseModel):
     market_value: float = Field(
         gt=0,
         allow_inf_nan=False,
-        description="Current market value of the holding.",
+        description="Service-verified current market value supplied for the holding.",
     )
     current_allocation: float = Field(
         gt=0,
         le=1,
         allow_inf_nan=False,
-        description="Current portfolio weight expressed from zero through one.",
+        description="Service-verified current portfolio weight supplied from greater than zero through one.",
     )
     target_allocation: float | None = Field(
         ge=0,
@@ -207,11 +235,11 @@ class PortfolioVerifiedHolding(BaseModel):
         ge=-1,
         le=1,
         allow_inf_nan=False,
-        description="Current allocation minus target allocation, or null without a target.",
+        description="Service-verified supplied allocation drift, or null without a target.",
     )
     unrealized_profit_loss: float | None = Field(
         allow_inf_nan=False,
-        description="Unrealized profit or loss based on average price, or null when unavailable.",
+        description="Service-verified supplied unrealized profit or loss, or null when unavailable.",
     )
     tags: str | None = Field(
         max_length=MAX_TAGS_LENGTH,
@@ -223,10 +251,10 @@ class PortfolioVerifiedHolding(BaseModel):
     def normalize_ticker(cls, value: object) -> object:
         return normalize_canonical_ticker(value)
 
-    @field_validator("exchange", "currency", mode="before")
+    @field_validator("exchange", mode="before")
     @classmethod
-    def normalize_code(cls, value: object) -> object:
-        return value.strip().upper() if isinstance(value, str) else value
+    def normalize_exchange(cls, value: object) -> object:
+        return conv.normalize_exchange_code(value) if isinstance(value, str) else value
 
     @field_validator("company_name", "tags", mode="before")
     @classmethod
@@ -235,3 +263,10 @@ class PortfolioVerifiedHolding(BaseModel):
             return value
         normalized = value.strip()
         return normalized or None
+
+    @model_validator(mode="after")
+    def validate_identity(self) -> Self:
+        ticker_exchange, _ = self.ticker.split(":", 1)
+        if self.exchange != ticker_exchange:
+            raise ValueError("holding exchange must match the canonical ticker")
+        return self

@@ -1,31 +1,56 @@
+"""Documentation-driven black-box tests for ASX listing analysis."""
+
 import asyncio
+import copy
 import json
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 from unittest.mock import AsyncMock, patch
+from zoneinfo import ZoneInfo
 
 import pytest
-from pydantic import ValidationError
 
-from app.models import events_listings as models_events_listings
-from app.services import ai_helper, msai_asx_listings
-from app.utils import ai_reference as ai_reference_utils
+from app.services import ai_helper
+from app.services import msai_asx_listings as service
+from app.utils import ai_reference
+from tests import ai_service_fixtures
 
-
-@pytest.fixture(autouse=True)
-def mock_listings_cache():
-    with (
-        patch.object(msai_asx_listings.cache, "get", new_callable=AsyncMock, return_value=None) as mock_get,
-        patch.object(msai_asx_listings.cache, "set", new_callable=AsyncMock, return_value=True) as mock_set,
-    ):
-        yield mock_get, mock_set
+_SYDNEY_TZ = ZoneInfo("Australia/Sydney")
 
 
-def _candidate_data(**overrides) -> dict[str, object]:
+def _today() -> date:
+    return datetime.now(_SYDNEY_TZ).date()
+
+
+def _calendar_html() -> str:
+    return """
+    <html>
+      <div class="multi-column-height">
+        Example issuer. Listing date and offer details are available.
+      </div>
+    </html>
+    """
+
+
+def _canonical_symbol(symbol: str) -> str:
+    symbol = symbol.strip().upper()
+    return symbol if symbol.startswith("ASX:") else f"ASX:{symbol}"
+
+
+def _source_url(symbol: str) -> str:
+    return f"https://www.asx.com.au/markets/company/{symbol.split(':', 1)[1]}"
+
+
+def _candidate(
+    symbol: str,
+    listing_date: date | None,
+    **overrides,
+) -> dict[str, object]:
     data: dict[str, object] = {
-        "symbol": "ASX:ABC",
-        "company_name": "Alpha Ltd",
-        "listing_date": "2099-09-01",
+        "symbol": symbol,
+        "company_name": f"{symbol} Limited",
+        "listing_date": listing_date.isoformat() if listing_date else None,
         "issue_price": 1.5,
+        "issue_price_upper": None,
         "issue_type": "Ordinary fully paid shares",
         "capital_to_raise": 10_000_000,
         "is_underwritten": False,
@@ -33,656 +58,415 @@ def _candidate_data(**overrides) -> dict[str, object]:
         "lead_managers": ["Example Capital"],
         "principal_activities": "Technology services",
         "sector": "TECHNOLOGY",
-        "public_offer_close_date": "2099-08-25",
+        "public_offer_close_date": None,
     }
     data.update(overrides)
     return data
 
 
-def _event(
-    symbol: str = "ASX:ABC",
-    *,
-    is_underwritten: bool | None = False,
-) -> models_events_listings.ListingEvent:
-    return models_events_listings.ListingEvent(
-        symbol=symbol,
-        exchange="ASX",
-        company_name="Alpha Ltd",
-        timestamp_str="2099-09-01",
-        issue_price=1.5,
-        issue_type="Ordinary fully paid shares",
-        currency="AUD",
-        capital_to_raise=10_000_000,
-        is_underwritten=is_underwritten,
-    )
+def _extraction_response(
+    candidates: list[dict[str, object]],
+) -> ai_helper.LLMResponse:
+    return ai_helper.LLMResponse(completion=json.dumps({"listings": candidates}))
 
 
-def _reference_data(
-    source_id: str = "asx-source",
-    url: str = "https://www.asx.com.au/announcement",
-) -> dict[str, object]:
+def _research_payload(symbol: str) -> dict[str, object]:
+    source_url = _source_url(symbol)
+    section = {
+        "facts": [
+            {
+                "text": "The issuer disclosed its offer and business activities.",
+                "reference_ids": [source_url],
+            }
+        ],
+        "data_gaps": [],
+        "reference_ids": [source_url],
+    }
     return {
-        "id": source_id,
-        "title": "ASX announcement",
-        "publisher": "ASX",
-        "source_type": "Exchange",
-        "published_at": None,
-        "accessed_at": "2020-01-01",
-        "url": url,
+        "symbol": symbol,
+        "as_of": datetime.now(UTC).isoformat(),
+        "offer": copy.deepcopy(section),
+        "business": copy.deepcopy(section),
+        "financials": copy.deepcopy(section),
+        "valuation": copy.deepcopy(section),
+        "governance": copy.deepcopy(section),
+        "market_context": copy.deepcopy(section),
+        "risks_and_catalysts": copy.deepcopy(section),
+        "references": [
+            {
+                "id": source_url,
+                "title": "ASX listing information",
+                "publisher": "ASX",
+                "source_type": "Exchange",
+                "published_at": None,
+                "accessed_at": datetime.now(UTC).isoformat(),
+                "url": source_url,
+            }
+        ],
     }
 
 
-def _research_section_data(source_id: str = "asx-source") -> dict[str, object]:
+def _research_response(
+    symbol: str,
+    *,
+    verified: bool = True,
+) -> ai_helper.LLMResponse:
+    return ai_helper.LLMResponse(
+        completion=json.dumps(_research_payload(symbol)),
+        citation_urls=[_source_url(symbol)] if verified else [],
+    )
+
+
+def _analysis_section(source_id: str) -> dict[str, object]:
     return {
-        "facts": [{"text": "Verified fact", "reference_ids": [source_id]}],
+        "summary": "Evidence-based assessment.",
+        "data_quality": "High",
+        "facts": [
+            {
+                "text": "The issuer disclosed its offer and business activities.",
+                "reference_ids": [source_id],
+            }
+        ],
+        "assumptions": [],
         "data_gaps": [],
         "reference_ids": [source_id],
     }
 
 
-def _research_data(
-    symbol: str = "ASX:ABC",
-    *,
-    source_id: str = "asx-source",
-    source_url: str = "https://www.asx.com.au/announcement",
-) -> dict[str, object]:
-    section = _research_section_data(source_id)
-    return {
-        "symbol": symbol,
-        "as_of": "2026-08-19T00:00:00Z",
-        "offer": section,
-        "business": section,
-        "financials": section,
-        "valuation": section,
-        "governance": section,
-        "market_context": section,
-        "risks_and_catalysts": section,
-        "references": [_reference_data(source_id, source_url)],
-    }
-
-
-def _analysis_section_data() -> dict[str, object]:
-    return {
-        "summary": "Evidence-based assessment.",
-        "data_quality": "High",
-        "facts": [{"text": "Verified fact", "reference_ids": ["asx-source"]}],
-        "assumptions": [],
-        "data_gaps": [],
-        "reference_ids": ["asx-source"],
-    }
-
-
-def _period_outlook_data() -> dict[str, object]:
-    return {
+def _analysis_payload(symbol: str, listing_date: date) -> dict[str, object]:
+    source_id = ai_reference.generate_source_id(_source_url(symbol))
+    section = _analysis_section(source_id)
+    period = {
         "assessment_type": "Forecast",
-        "period_end": "2099-09-01",
-        "direction": "Up",
-        "expected_price_min": 1.6,
-        "expected_price_max": 1.8,
-        "expected_return_min_pct": 6.6,
-        "expected_return_max_pct": 20,
-        "confidence": 70,
-        "rationale": "Supported by verified demand.",
-        "key_drivers": ["Demand"],
-        "risk_factors": ["Volatility"],
-        "assumptions": ["Stable market"],
+        "period_end": listing_date.isoformat(),
+        "direction": "Flat",
+        "expected_price_min": 1.4,
+        "expected_price_max": 1.7,
+        "expected_return_min_pct": None,
+        "expected_return_max_pct": None,
+        "confidence": 55,
+        "rationale": "A conditional trading scenario.",
+        "key_drivers": ["Offer execution"],
+        "risk_factors": ["Market volatility"],
+        "assumptions": ["The listing proceeds as announced."],
         "data_gaps": [],
-        "reference_ids": ["asx-source"],
+        "reference_ids": [source_id],
     }
-
-
-def _analysis_draft_data(symbol: str = "ASX:ABC") -> dict[str, object]:
-    section = _analysis_section_data()
     return {
         "symbol": symbol,
-        "as_of": "2026-08-19T00:00:00Z",
+        "as_of": datetime.now(UTC).isoformat(),
         "listing_status": "Upcoming",
         "overall_data_quality": "High",
-        "executive_summary": section,
-        "overall_stance": "Bullish",
-        "overall_confidence": 70,
+        "executive_summary": copy.deepcopy(section),
+        "overall_stance": "Neutral",
+        "overall_confidence": 55,
         "offer": {
-            **section,
-            "issue_price_assessment": "Reasonable.",
-            "capital_raise_assessment": "Adequate.",
-            "underwriting_assessment": "Not underwritten.",
-            "use_of_funds": ["Growth"],
+            **copy.deepcopy(section),
+            "issue_price_assessment": "The offer price is a scenario anchor.",
+            "capital_raise_assessment": "Gross proceeds support the stated plan.",
+            "underwriting_assessment": "Underwriting support is disclosed.",
+            "use_of_funds": ["Business expansion"],
             "dilution_and_escrow": None,
         },
         "business": {
-            **section,
-            "business_model": "Subscription software.",
-            "revenue_sources": ["Subscriptions"],
+            **copy.deepcopy(section),
+            "business_model": "Technology services.",
+            "revenue_sources": ["Service contracts"],
             "competitive_position": "Emerging participant.",
-            "sector_context": "Growing market.",
+            "sector_context": "Competitive market.",
         },
         "financials": {
-            **section,
-            "historical_performance": "Revenue growth.",
-            "profitability_and_cash_flow": "Pre-profit.",
-            "balance_sheet_and_funding": "Offer funds growth.",
-            "forecast_quality": "Forecast assumptions disclosed.",
+            **copy.deepcopy(section),
+            "historical_performance": "Limited public history.",
+            "profitability_and_cash_flow": "Offer documents provide limited detail.",
+            "balance_sheet_and_funding": "The offer is intended to fund growth.",
+            "forecast_quality": "Forecast evidence is limited.",
         },
         "valuation": {
-            **section,
-            "valuation_view": "Within peer range.",
-            "implied_market_cap": 50_000_000,
-            "peer_comparison": "Comparable to peers.",
-            "sensitivity": "Sensitive to growth.",
+            **copy.deepcopy(section),
+            "valuation_view": "Sensitive to execution.",
+            "implied_market_cap": None,
+            "peer_comparison": "No verified peer multiple was supplied.",
+            "sensitivity": "Depends on growth and market conditions.",
         },
         "governance": {
-            **section,
-            "board_and_management": "Relevant experience.",
-            "ownership_and_escrow": "Escrow disclosed.",
+            **copy.deepcopy(section),
+            "board_and_management": "Relevant experience is disclosed.",
+            "ownership_and_escrow": "Terms remain subject to offer documents.",
             "governance_concerns": [],
         },
         "risks_and_catalysts": {
-            **section,
-            "risks": [
-                {
-                    "title": "Execution",
-                    "description": "Growth may be slower than planned.",
-                    "severity": "High",
-                    "likelihood": "Medium",
-                    "horizon": "First Month",
-                    "reference_ids": ["asx-source"],
-                }
-            ],
-            "catalysts": [
-                {
-                    "title": "Demand",
-                    "description": "Strong customer demand.",
-                    "likelihood": "Medium",
-                    "horizon": "First Month",
-                    "reference_ids": ["asx-source"],
-                }
-            ],
+            **copy.deepcopy(section),
+            "risks": [],
+            "catalysts": [],
         },
         "outlook": {
-            "ipo_day": _period_outlook_data(),
-            "first_week": _period_outlook_data(),
-            "first_two_weeks": _period_outlook_data(),
-            "first_month": _period_outlook_data(),
+            "ipo_day": copy.deepcopy(period),
+            "first_week": copy.deepcopy(period),
+            "first_two_weeks": copy.deepcopy(period),
+            "first_month": copy.deepcopy(period),
         },
     }
 
 
-def _research_model(*, is_verified: bool = True) -> msai_asx_listings._ListingResearch:
-    data = _research_data()
-    data["references"] = [
-        {
-            **_reference_data(),
-            "is_verified": is_verified,
-        }
+def _analysis_response(
+    symbol: str,
+    listing_date: date,
+) -> ai_helper.LLMResponse:
+    return ai_helper.LLMResponse(completion=json.dumps(_analysis_payload(symbol, listing_date)))
+
+
+def _ai_error_response() -> ai_helper.LLMResponse:
+    return ai_helper.LLMResponse(
+        is_error=True,
+        completion="provider rejected the request",
+        error_msg="provider rejected the request",
+    )
+
+
+def _run(
+    *,
+    ai: ai_service_fixtures.OpaqueAIQueue,
+    cache=None,
+    tokenomics_mode: str = "Standard",
+):
+    cache = cache or ai_service_fixtures.ExpiringCache()
+    with (
+        patch.object(
+            service.services_crawler_core,
+            "fetch_webpage_content",
+            new_callable=AsyncMock,
+            return_value=_calendar_html(),
+        ),
+        patch.object(service.cache, "get", side_effect=cache.get),
+        patch.object(service.cache, "set", side_effect=cache.set),
+        patch.object(service.config.settings_llm_task, "tokenomics_mode", tokenomics_mode),
+        patch.object(service.ai_helper, "ai_exec_task", new=ai),
+    ):
+        return asyncio.run(service.ai_get_asx_new_listings())
+
+
+def test_filters_orders_and_applies_documented_monetary_eligibility():
+    today = _today()
+    candidates = [
+        _candidate("FUTURE", today + timedelta(days=2)),
+        _candidate("PAST", today - timedelta(days=1)),
+        _candidate(
+            "TODAY",
+            today,
+            issue_price=None,
+            issue_price_upper=None,
+            capital_to_raise=None,
+        ),
+        _candidate("NODATE", None),
+        _candidate("ZEROLOW", today + timedelta(days=1), issue_price=0),
+        _candidate("ZEROUP", today + timedelta(days=1), issue_price_upper=0),
+        _candidate("ZERORAISE", today + timedelta(days=1), capital_to_raise=0),
+        _candidate("NANLOW", today + timedelta(days=1), issue_price=float("nan")),
+        _candidate("NEGINFUP", today + timedelta(days=1), issue_price_upper=float("-inf")),
+        _candidate("NANRAISE", today + timedelta(days=1), capital_to_raise=float("nan")),
     ]
-    return msai_asx_listings._ListingResearch.model_validate(data)
+
+    events = _run(
+        ai=ai_service_fixtures.OpaqueAIQueue([_extraction_response(candidates)]),
+        tokenomics_mode="Economy",
+    )
+
+    assert [event.symbol for event in events] == ["ASX:TODAY", "ASX:FUTURE"]
+    assert events[0].issue_price is None
+    assert events[0].issue_price_upper is None
+    assert events[0].capital_to_raise is None
+    assert all(event.analysis_status == "Skipped" for event in events)
+    assert events[0].timestamp_str.startswith(today.isoformat())
+    assert events[1].timestamp_str.startswith((today + timedelta(days=2)).isoformat())
 
 
-def _analysis_model() -> models_events_listings.ListingAnalysis:
-    data = _analysis_draft_data()
-    data["references"] = [
-        {
-            **_reference_data(),
-            "is_verified": True,
-        }
+def test_economy_eligibility_uses_underwriting_and_public_offer_close_date():
+    listing_date = _today() + timedelta(days=10)
+    today = _today()
+    candidates = [
+        _candidate("MISSING", listing_date, is_underwritten=False),
+        _candidate(
+            "PASTCLOSE",
+            listing_date,
+            is_underwritten=False,
+            public_offer_close_date=(today - timedelta(days=1)).isoformat(),
+        ),
+        _candidate(
+            "TODAYCLOSE",
+            listing_date,
+            is_underwritten=False,
+            public_offer_close_date=today.isoformat(),
+        ),
+        _candidate("UNKNOWN", listing_date, is_underwritten=None),
     ]
-    return models_events_listings.ListingAnalysis.model_validate(data)
-
-
-def test_private_extraction_schema_parses_candidates_and_rejects_unknown_fields():
-    response = msai_asx_listings._ExtractedListingsResponse.model_validate({"listings": [_candidate_data()]})
-
-    assert response.listings[0].listing_date == date(2099, 9, 1)
-    assert response.listings[0].issue_price == 1.5
-
-    with pytest.raises(ValidationError):
-        msai_asx_listings._ExtractedListingsResponse.model_validate({"listings": [], "unexpected": True})
-
-
-def test_private_research_schema_rejects_unknown_reference_ids():
-    data = _research_data()
-    data["offer"] = {
-        **_research_section_data(),
-        "reference_ids": ["missing-source"],
-    }
-
-    with pytest.raises(ValidationError, match="unknown reference IDs"):
-        msai_asx_listings._ListingResearchDraft.model_validate(data)
-
-
-def test_private_research_schema_rejects_blank_or_duplicate_temporary_ids():
-    blank_id_data = _research_data(source_id=" ")
-    duplicate_id_data = _research_data()
-    duplicate_id_data["references"].append(_reference_data(url="https://example.com/second-source"))
-
-    with pytest.raises(ValidationError):
-        msai_asx_listings._ListingResearchDraft.model_validate(blank_id_data)
-    with pytest.raises(ValidationError, match="reference IDs must be unique"):
-        msai_asx_listings._ListingResearchDraft.model_validate(duplicate_id_data)
-
-
-def test_quick_research_schema_enforces_source_and_fact_limits():
-    schema = msai_asx_listings._ListingResearchDraft.model_json_schema()
-    data = _research_data()
-    data["offer"] = {
-        **_research_section_data(),
-        "facts": _research_section_data()["facts"] * 4,
-    }
-
-    assert schema["properties"]["references"]["maxItems"] == 5
-    with pytest.raises(ValidationError):
-        msai_asx_listings._ListingResearchDraft.model_validate(data)
-
-
-def test_quick_analysis_schema_limits_risks_and_catalysts():
-    data = _analysis_draft_data()
-    risk = data["risks_and_catalysts"]["risks"][0]
-    catalyst = data["risks_and_catalysts"]["catalysts"][0]
-    data["risks_and_catalysts"]["risks"] = [risk] * 4
-    data["risks_and_catalysts"]["catalysts"] = [catalyst] * 4
-
-    with pytest.raises(ValidationError):
-        msai_asx_listings._ListingAnalysisDraft.model_validate(data)
-
-
-def test_extracts_structured_listings_and_retains_unavailable_offer_values(mock_listings_cache):
-    response_data = {
-        "listings": [
-            _candidate_data(symbol="ASX:LATE", listing_date="2099-09-03"),
-            _candidate_data(symbol="ASX:EARLY", listing_date="2099-09-01"),
-            _candidate_data(symbol="ASX:NO_DATE", listing_date=None),
-            _candidate_data(
-                symbol="ASX:EF2",
-                company_name="Energy Fuels Inc.",
-                issue_price=None,
-                issue_type="CDI 1:1 Foreign Exempt",
-                capital_to_raise=None,
-                public_offer_close_date=None,
-                is_underwritten=None,
-            ),
-            _candidate_data(symbol="ASX:ZERO_PRICE", issue_price=0),
-            _candidate_data(symbol="ASX:ZERO_CAPITAL", capital_to_raise=0),
-            _candidate_data(symbol="INVALID-SYMBOL"),
+    ai = ai_service_fixtures.OpaqueAIQueue(
+        [
+            _extraction_response(candidates),
+            _research_response("ASX:TODAYCLOSE"),
+            _analysis_response("ASX:TODAYCLOSE", listing_date),
+            _research_response("ASX:UNKNOWN"),
+            _analysis_response("ASX:UNKNOWN", listing_date),
         ]
+    )
+
+    events = _run(ai=ai, tokenomics_mode="Economy")
+    statuses = {event.symbol: event.analysis_status for event in events}
+
+    assert statuses == {
+        "ASX:MISSING": "Skipped",
+        "ASX:PASTCLOSE": "Skipped",
+        "ASX:TODAYCLOSE": "Completed",
+        "ASX:UNKNOWN": "Completed",
     }
-    llm_response = ai_helper.LLMResponse(completion=json.dumps(response_data))
-    html = '<div class="multi-column-height">Listing date: details</div>'
-
-    with (
-        patch.object(
-            msai_asx_listings.services_crawler,
-            "fetch_webpage_content",
-            new_callable=AsyncMock,
-            return_value=html,
-        ),
-        patch.object(
-            msai_asx_listings.ai_helper,
-            "ai_exec_task",
-            new_callable=AsyncMock,
-            return_value=llm_response,
-        ) as mock_ai_exec,
-    ):
-        events = asyncio.run(msai_asx_listings._get_asx_new_listings())
-
-    assert [event.symbol for event in events] == ["ASX:LATE", "ASX:EARLY", "ASX:EF2"]
-    assert events[-1].issue_price is None
-    assert events[-1].capital_to_raise is None
-    assert mock_ai_exec.await_args.args[0] == "ASX_LISTTINGS_EXTRACT"
-    assert mock_ai_exec.await_args.kwargs["schema_name"] == "asx_listing_extraction"
-    assert mock_ai_exec.await_args.kwargs["response_json_schema"] == (
-        msai_asx_listings._ExtractedListingsResponse.model_json_schema()
-    )
-    _, mock_cache_set = mock_listings_cache
-    mock_cache_set.assert_awaited_once()
-    assert mock_cache_set.await_args.kwargs["ttl"] == 24 * 60 * 60
 
 
-def test_extraction_reuses_cached_structured_result(mock_listings_cache):
-    mock_cache_get, mock_cache_set = mock_listings_cache
-    mock_cache_get.return_value = {"listings": [_candidate_data()]}
-    html = '<div class="multi-column-height">Listing date: details</div>'
-
-    with (
-        patch.object(
-            msai_asx_listings.services_crawler,
-            "fetch_webpage_content",
-            new_callable=AsyncMock,
-            return_value=html,
-        ),
-        patch.object(msai_asx_listings.ai_helper, "ai_exec_task", new_callable=AsyncMock) as mock_ai_exec,
-    ):
-        events = asyncio.run(msai_asx_listings._get_asx_new_listings())
-
-    assert [event.symbol for event in events] == ["ASX:ABC"]
-    mock_ai_exec.assert_not_awaited()
-    mock_cache_set.assert_not_awaited()
-
-
-def test_research_marks_provider_verified_sources(mock_listings_cache):
-    llm_response = ai_helper.LLMResponse(
-        completion=json.dumps(_research_data()),
-        citation_urls=["https://www.asx.com.au/announcement"],
-    )
-
-    with patch.object(
-        msai_asx_listings.ai_helper,
-        "ai_exec_task",
-        new_callable=AsyncMock,
-        return_value=llm_response,
-    ) as mock_ai_exec:
-        research = asyncio.run(msai_asx_listings._research_asx_listing(_event(is_underwritten=None)))
-
-    expected_source_id = ai_reference_utils.generate_source_id("https://www.asx.com.au/announcement")
-    assert research.references[0].id == expected_source_id
-    assert ai_reference_utils.collect_reference_ids(research) == {expected_source_id}
-    assert research.references[0].is_verified is True
-    assert research.references[0].accessed_at.year > 2020
-    assert mock_ai_exec.await_args.args[0] == "ASX_LISTTINGS_RESEARCH"
-    assert "quick, bounded research pass" in mock_ai_exec.await_args.args[1]
-    assert "no more than five high-value sources" in mock_ai_exec.await_args.args[1]
-    assert "Do not perform exhaustive due diligence" in mock_ai_exec.await_args.args[1]
-    assert "exact cited HTTPS URL" in mock_ai_exec.await_args.args[1]
-    assert "explicitly underwritten" not in mock_ai_exec.await_args.args[1]
-    assert mock_ai_exec.await_args.kwargs["schema_name"] == "asx_listing_research"
-    assert mock_ai_exec.await_args.kwargs["response_json_schema"] == (
-        msai_asx_listings._ListingResearchDraft.model_json_schema()
-    )
-    _, mock_cache_set = mock_listings_cache
-    mock_cache_set.assert_awaited_once()
-    assert mock_cache_set.await_args.kwargs["ttl"] == 24 * 60 * 60
-
-
-def test_research_reuses_cached_validated_result(mock_listings_cache):
-    mock_cache_get, mock_cache_set = mock_listings_cache
-    expected = _research_model()
-    mock_cache_get.return_value = expected.model_dump(mode="json")
-
-    with patch.object(msai_asx_listings.ai_helper, "ai_exec_task", new_callable=AsyncMock) as mock_ai_exec:
-        research = asyncio.run(msai_asx_listings._research_asx_listing(_event()))
-
-    assert research == expected
-    assert research is not expected
-    mock_ai_exec.assert_not_awaited()
-    mock_cache_set.assert_not_awaited()
-
-
-def test_underwritten_listing_selects_underwritten_research_task():
-    llm_response = ai_helper.LLMResponse(
-        completion=json.dumps(_research_data()),
-        citation_urls=["https://www.asx.com.au/announcement"],
-    )
-
-    with patch.object(
-        msai_asx_listings.ai_helper,
-        "ai_exec_task",
-        new_callable=AsyncMock,
-        return_value=llm_response,
-    ) as mock_ai_exec:
-        asyncio.run(msai_asx_listings._research_asx_listing(_event(is_underwritten=True)))
-
-    assert mock_ai_exec.await_args.args[0] == "ASX_LISTTINGS_UNDERWRITTEN_RESEARCH"
-    assert "explicitly underwritten" in mock_ai_exec.await_args.args[1]
-    assert "termination rights" in mock_ai_exec.await_args.args[1]
-
-
-def test_research_accepts_empty_provider_citations_and_marks_source_unverified():
-    llm_response = ai_helper.LLMResponse(
-        completion=json.dumps(_research_data()),
-        citation_urls=[],
-    )
-
-    with patch.object(
-        msai_asx_listings.ai_helper,
-        "ai_exec_task",
-        new_callable=AsyncMock,
-        return_value=llm_response,
-    ):
-        research = asyncio.run(msai_asx_listings._research_asx_listing(_event()))
-
-    assert research.references[0].is_verified is False
-
-
-def test_research_repairs_orphan_links_and_discards_unsupported_facts():
-    response_data = _research_data()
-    response_data["offer"] = {
-        **_research_section_data(),
-        "facts": [
-            *_research_section_data()["facts"],
-            {
-                "text": "Unsupported orphan fact",
-                "reference_ids": ["source-6"],
-            },
+def test_economy_skip_does_not_consume_cap_but_failed_attempt_does():
+    listing_date = _today() + timedelta(days=10)
+    candidates = [
+        _candidate("A0", listing_date, is_underwritten=False),
+        *[
+            _candidate(
+                f"B{index}",
+                listing_date,
+                is_underwritten=True,
+                public_offer_close_date=(listing_date - timedelta(days=2)).isoformat(),
+            )
+            for index in range(1, 7)
         ],
-        "reference_ids": ["asx-source", "source-6"],
-    }
-    response_data["references"].append(
-        _reference_data(
-            "unused-source",
-            "https://example.com/unused",
-        )
-    )
-    llm_response = ai_helper.LLMResponse(
-        completion=json.dumps(response_data),
-        citation_urls=["https://www.asx.com.au/announcement"],
-    )
-
-    with patch.object(
-        msai_asx_listings.ai_helper,
-        "ai_exec_task",
-        new_callable=AsyncMock,
-        return_value=llm_response,
-    ):
-        research = asyncio.run(msai_asx_listings._research_asx_listing(_event()))
-
-    assert len(research.references) == 1
-    assert {fact.text for fact in research.offer.facts} == {"Verified fact"}
-    assert any(
-        "source-6" in data_gap and "Removed 1 unsupported fact" in data_gap for data_gap in research.offer.data_gaps
-    )
-    assert "source-6" not in ai_reference_utils.collect_reference_ids(research)
-
-
-def test_research_replaces_url_temporary_id_and_remaps_all_references():
-    source_url = "https://scx.ai/investors"
-    llm_response = ai_helper.LLMResponse(
-        completion=json.dumps(
-            _research_data(
-                symbol="ASX:SCX",
-                source_id=source_url,
-                source_url=source_url,
-            )
-        ),
-        citation_urls=[f"{source_url}/"],
-    )
-
-    with patch.object(
-        msai_asx_listings.ai_helper,
-        "ai_exec_task",
-        new_callable=AsyncMock,
-        return_value=llm_response,
-    ):
-        research = asyncio.run(msai_asx_listings._research_asx_listing(_event("ASX:SCX")))
-
-    expected_source_id = ai_reference_utils.generate_source_id(source_url)
-    assert research.references[0].id == expected_source_id
-    assert research.references[0].is_verified is True
-    assert ai_reference_utils.collect_reference_ids(research) == {expected_source_id}
-    assert expected_source_id == ai_reference_utils.generate_source_id(f"{source_url}/")
-
-
-def test_research_marks_mismatched_source_urls_unverified():
-    llm_response = ai_helper.LLMResponse(
-        completion=json.dumps(_research_data()),
-        citation_urls=["https://example.com/different-source"],
-    )
-
-    with patch.object(
-        msai_asx_listings.ai_helper,
-        "ai_exec_task",
-        new_callable=AsyncMock,
-        return_value=llm_response,
-    ):
-        research = asyncio.run(msai_asx_listings._research_asx_listing(_event()))
-
-    assert research.references[0].is_verified is False
-
-
-@pytest.mark.parametrize("is_verified", [True, False])
-def test_assessment_uses_structured_response_and_preserves_source_verification(
-    is_verified,
-    mock_listings_cache,
-):
-    llm_response = ai_helper.LLMResponse(completion=json.dumps(_analysis_draft_data()))
-
-    with patch.object(
-        msai_asx_listings.ai_helper,
-        "ai_exec_task",
-        new_callable=AsyncMock,
-        return_value=llm_response,
-    ) as mock_ai_exec:
-        analysis = asyncio.run(
-            msai_asx_listings._assess_asx_listing(
-                _event(),
-                _research_model(is_verified=is_verified),
-            )
-        )
-
-    assert analysis.symbol == "ASX:ABC"
-    assert str(analysis.references[0].url) == "https://www.asx.com.au/announcement"
-    assert analysis.references[0].is_verified is is_verified
-    assert set(type(analysis.outlook).model_fields) == {
-        "ipo_day",
-        "first_week",
-        "first_two_weeks",
-        "first_month",
-    }
-    assert mock_ai_exec.await_args.args[0] == "ASX_LISTTINGS_ANALYZE"
-    assert "quick, first-pass assessment" in mock_ai_exec.await_args.args[1]
-    assert "not deep investment research" in mock_ai_exec.await_args.args[1]
-    assert "at most three risks and three catalysts" in mock_ai_exec.await_args.args[1]
-    assert "explicitly underwritten" not in mock_ai_exec.await_args.args[1]
-    assert mock_ai_exec.await_args.kwargs["schema_name"] == "asx_listing_analysis"
-    assert mock_ai_exec.await_args.kwargs["response_json_schema"] == (
-        msai_asx_listings._ListingAnalysisDraft.model_json_schema()
-    )
-    _, mock_cache_set = mock_listings_cache
-    mock_cache_set.assert_awaited_once()
-    assert mock_cache_set.await_args.kwargs["ttl"] == 24 * 60 * 60
-
-
-def test_assessment_repairs_mixed_orphan_links_and_drops_unsupported_driver(
-    mock_listings_cache,
-):
-    response_data = _analysis_draft_data()
-    response_data["offer"]["reference_ids"] = ["asx-source", "src-orphan"]
-    response_data["offer"]["facts"] = [
-        {
-            **response_data["offer"]["facts"][0],
-            "reference_ids": ["asx-source", "src-orphan"],
-        }
     ]
-    response_data["risks_and_catalysts"]["risks"][0]["reference_ids"] = ["src-orphan"]
-    response_data["outlook"]["ipo_day"]["reference_ids"] = ["asx-source", "src-orphan"]
+    ai = ai_service_fixtures.OpaqueAIQueue(
+        [
+            _extraction_response(candidates),
+            _research_response("ASX:B1"),
+            _analysis_response("ASX:B1", listing_date),
+            _ai_error_response(),
+            _research_response("ASX:B3"),
+            _analysis_response("ASX:B3", listing_date),
+            _research_response("ASX:B4"),
+            _analysis_response("ASX:B4", listing_date),
+            _research_response("ASX:B5"),
+            _analysis_response("ASX:B5", listing_date),
+        ]
+    )
 
-    with patch.object(
-        msai_asx_listings.ai_helper,
-        "ai_exec_task",
-        new_callable=AsyncMock,
-        return_value=ai_helper.LLMResponse(completion=json.dumps(response_data)),
-    ):
-        analysis = asyncio.run(
-            msai_asx_listings._assess_asx_listing(
-                _event(),
-                _research_model(),
-            )
+    events = _run(ai=ai, tokenomics_mode="Economy")
+    statuses = {event.symbol: event.analysis_status for event in events}
+
+    assert statuses == {
+        "ASX:A0": "Skipped",
+        "ASX:B1": "Completed",
+        "ASX:B2": "Failed",
+        "ASX:B3": "Completed",
+        "ASX:B4": "Completed",
+        "ASX:B5": "Completed",
+        "ASX:B6": "Skipped",
+    }
+    assert next(event for event in events if event.symbol == "ASX:B1").analysis is not None
+    failed = next(event for event in events if event.symbol == "ASX:B2")
+    assert failed.analysis is None
+    assert failed.analysis_error
+    assert next(event for event in events if event.symbol == "ASX:B6").analysis is None
+
+
+def test_unmatched_provider_citations_are_retained_as_unverified_warnings():
+    listing_date = _today() + timedelta(days=3)
+    candidates = [_candidate("UNVERIFIED", listing_date, is_underwritten=True)]
+    ai = ai_service_fixtures.OpaqueAIQueue(
+        [
+            _extraction_response(candidates),
+            _research_response("ASX:UNVERIFIED", verified=False),
+            _analysis_response("ASX:UNVERIFIED", listing_date),
+        ]
+    )
+
+    event = _run(ai=ai)[0]
+
+    assert event.analysis_status == "Completed"
+    assert event.analysis is not None
+    assert event.analysis.references
+    assert all(reference.is_verified is False for reference in event.analysis.references)
+    assert event.analysis.executive_summary.data_gaps
+
+
+def test_repeated_public_call_reuses_completed_analysis_when_ai_is_unavailable():
+    listing_date = _today() + timedelta(days=3)
+    candidates = [_candidate("CACHE", listing_date, is_underwritten=True)]
+    cache = ai_service_fixtures.ExpiringCache()
+    ai = ai_service_fixtures.OpaqueAIQueue(
+        [
+            _extraction_response(candidates),
+            _research_response("ASX:CACHE"),
+            _analysis_response("ASX:CACHE", listing_date),
+        ]
+    )
+
+    first = _run(ai=ai, cache=cache)
+    second = _run(ai=ai, cache=cache)
+
+    assert second == first
+    assert second[0].analysis_status == "Completed"
+    assert second[0].analysis is not None
+
+
+def test_documented_six_hour_cache_expiry_reenters_analysis():
+    listing_date = _today() + timedelta(days=3)
+    candidates = [_candidate("EXPIRY", listing_date, is_underwritten=True)]
+    clock = ai_service_fixtures.ManualClock()
+    cache = ai_service_fixtures.ExpiringCache(clock)
+    ai = ai_service_fixtures.OpaqueAIQueue(
+        [
+            _extraction_response(candidates),
+            _research_response("ASX:EXPIRY"),
+            _analysis_response("ASX:EXPIRY", listing_date),
+        ]
+    )
+
+    first = _run(ai=ai, cache=cache)
+    clock.advance(6 * 60 * 60 - 1)
+    assert _run(ai=ai, cache=cache) == first
+    clock.advance(1)
+    expired = _run(ai=ai, cache=cache)
+
+    assert expired[0].analysis_status == "Failed"
+    assert expired[0].analysis is None
+
+
+def test_opaque_invalid_cache_raises_documented_runtime_error():
+    with pytest.raises(RuntimeError):
+        _run(
+            ai=ai_service_fixtures.OpaqueAIQueue(),
+            cache=ai_service_fixtures.InvalidCache(object()),
         )
 
-    assert "src-orphan" not in ai_reference_utils.collect_reference_ids(analysis)
-    assert analysis.offer.reference_ids == ["asx-source"]
-    assert "src-orphan" in analysis.offer.data_gaps[-1]
-    assert analysis.risks_and_catalysts.risks == []
-    assert "Removed 1 unsupported item" in analysis.risks_and_catalysts.data_gaps[-1]
-    assert "unsupported source IDs" in analysis.outlook.ipo_day.data_gaps[-1]
 
-
-def test_assessment_reuses_cached_validated_result(mock_listings_cache):
-    mock_cache_get, mock_cache_set = mock_listings_cache
-    expected = _analysis_model()
-    mock_cache_get.return_value = expected.model_dump(mode="json")
-
-    with patch.object(msai_asx_listings.ai_helper, "ai_exec_task", new_callable=AsyncMock) as mock_ai_exec:
-        analysis = asyncio.run(
-            msai_asx_listings._assess_asx_listing(
-                _event(),
-                _research_model(),
-            )
-        )
-
-    assert analysis == expected
-    assert analysis is not expected
-    mock_ai_exec.assert_not_awaited()
-    mock_cache_set.assert_not_awaited()
-
-
-@pytest.mark.parametrize(
-    ("listing_date", "expected_ttl"),
-    [
-        ("2026-06-15", 60 * 60),
-        ("2026-06-16", 60 * 60),
-        ("2026-06-22", 6 * 60 * 60),
-        ("2026-06-23", 24 * 60 * 60),
-    ],
-)
-def test_listing_cache_ttl_shortens_near_listing_date(listing_date, expected_ttl):
-    event = _event()
-    event.timestamp_str = listing_date
-
-    assert msai_asx_listings._listing_cache_ttl(event, today=date(2026, 6, 15)) == expected_ttl
-
-
-def test_underwritten_listing_selects_underwritten_analysis_task():
-    llm_response = ai_helper.LLMResponse(completion=json.dumps(_analysis_draft_data()))
-
-    with patch.object(
-        msai_asx_listings.ai_helper,
-        "ai_exec_task",
-        new_callable=AsyncMock,
-        return_value=llm_response,
-    ) as mock_ai_exec:
-        asyncio.run(
-            msai_asx_listings._assess_asx_listing(
-                _event(is_underwritten=True),
-                _research_model(),
-            )
-        )
-
-    assert mock_ai_exec.await_args.args[0] == "ASX_LISTTINGS_UNDERWRITTEN_ANALYZE"
-    assert "explicitly underwritten" in mock_ai_exec.await_args.args[1]
-    assert "proof of investor demand" in mock_ai_exec.await_args.args[1]
-
-
-def test_per_stock_pipeline_reports_partial_failures_explicitly():
-    events = [_event("ASX:ABC"), _event("ASX:XYZ")]
-    research = _research_model()
-    analysis = _analysis_model()
-
+def test_fetch_failure_raises_documented_runtime_error():
     with (
         patch.object(
-            msai_asx_listings,
-            "_research_asx_listing",
+            service.services_crawler_core,
+            "fetch_webpage_content",
             new_callable=AsyncMock,
-            side_effect=[research, RuntimeError("research failed")],
-        ) as mock_research,
-        patch.object(
-            msai_asx_listings,
-            "_assess_asx_listing",
-            new_callable=AsyncMock,
-            return_value=analysis,
-        ) as mock_assess,
+            return_value=None,
+        ),
+        pytest.raises(RuntimeError),
     ):
-        result = asyncio.run(msai_asx_listings._analyze_asx_listings(events))
+        asyncio.run(service.ai_get_asx_new_listings())
 
-    assert [event.analysis_status for event in result] == ["Completed", "Failed"]
-    assert result[1].analysis_error == "AI listing analysis failed"
-    assert mock_research.await_count == 2
-    assert mock_assess.await_count == 1
+
+def test_extraction_error_response_raises_documented_runtime_error():
+    with pytest.raises(RuntimeError):
+        _run(ai=ai_service_fixtures.OpaqueAIQueue([_ai_error_response()]))
+
+
+def test_invalid_extraction_payload_raises_value_error():
+    with pytest.raises(ValueError):
+        _run(ai=ai_service_fixtures.OpaqueAIQueue([ai_helper.LLMResponse(completion='{"listings": "invalid"}')]))
+
+
+def test_extraction_rate_limit_is_propagated():
+    failure = ai_helper.LLMRateLimitError("retry budget exhausted")
+
+    with pytest.raises(ai_helper.LLMRateLimitError) as error_info:
+        _run(ai=ai_service_fixtures.OpaqueAIQueue([failure]))
+
+    assert error_info.value is failure

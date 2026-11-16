@@ -1,3 +1,12 @@
+"""Canonical Yahoo benchmark symbol mappings used by public utility lookups.
+
+``asx_index_yf_static_tickers`` and ``us_index_yf_static_tickers`` define every
+exact output of ``yfutils.lookup_index_yf_static_symbol``.
+``asx_sector_yf_static_tickers``, ``us_sector_yf_static_tickers``, and
+``us_industry_yf_static_tickers`` define every exact output of
+``yfutils.lookup_peer_yf_static_symbol``.
+"""
+
 asx_index_yf_static_tickers = {
     "ASX20": "^ATLI",
     "ASX50": "^AFLI",
