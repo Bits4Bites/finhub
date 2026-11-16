@@ -13,21 +13,30 @@ _api_key_header = APIKeyHeader(name=API_KEY_HEADER_NAME, auto_error=False)
 
 
 async def verify_api_key(api_key: str | None = Security(_api_key_header)) -> None:
-    """
-    FastAPI dependency that authenticates a request via the X-API-Key header.
+    """Authorize an API request using the configured application key.
 
-    Behaviour:
-        - If no API key is configured on the server (config.settings_app.api_key is empty),
-          authentication is disabled and all requests are allowed (fail-open).
-        - Otherwise, the request must carry an X-API-Key header whose value matches the
-          configured key, compared in constant time. A mismatch or missing header raises 401.
+    Args:
+        api_key: The value supplied in the ``X-API-Key`` request header, or
+            ``None`` when the header is absent.
+
+    Returns:
+        None when authentication is disabled or the supplied key is valid.
+
+    Raises:
+        HTTPException: With status 401 when authentication is enabled and the
+            supplied key is missing or invalid. The application exposes this as
+            ``{"status": 401, "message": "Invalid or missing API key"}``.
+
+    Notes:
+        An empty server-side API key disables authentication. HTTP header names
+        are case-insensitive.
     """
     configured_key = config.settings_app.api_key
     if not configured_key:
         # No key configured: authentication disabled (fail-open).
         return
 
-    if not api_key or not secrets.compare_digest(api_key, configured_key):
+    if not api_key or not secrets.compare_digest(api_key.encode("utf-8"), configured_key.encode("utf-8")):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or missing API key",

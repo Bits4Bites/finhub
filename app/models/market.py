@@ -10,3 +10,18 @@ class CompanyBriefInfo(BaseModel):
     name: str = Field(default="", description="Company or issuer name.")
     sector: str = Field(default="", description="Economic sector of the company.")
     market_cap: int = Field(default=0, description="Current market capitalization.")
+    country: str = Field(
+        default="",
+        description="Application-supplied country identifier, or an empty string when unavailable.",
+    )
+
+    def extract_exchange_code(self) -> tuple[str, str]:
+        """Extract the exchange and code from the symbol.
+
+        Returns:
+            A tuple of (exchange, code) if the symbol is in the format 'EXCHANGE:CODE', otherwise ("", code).
+        """
+        if ":" in self.symbol:
+            exchange, code = self.symbol.split(":", 1)
+            return exchange, code
+        return "", self.symbol

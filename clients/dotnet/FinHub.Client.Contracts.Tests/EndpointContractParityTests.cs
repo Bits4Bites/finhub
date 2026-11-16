@@ -9,12 +9,14 @@ namespace FinHub.Client.Contracts.Tests;
 public sealed class EndpointContractParityTests
 {
     [Fact]
-    public void Every_public_router_operation_has_an_explicit_contract_mapping()
+    public void Every_client_facing_operation_has_an_explicit_contract_mapping()
     {
-        var actual = OpenApiContract
+        var openApiOperations = OpenApiContract
             .GetOperations()
-            .Where(operation => operation.Path is not "/" and not "/health")
             .Select(FormatOperation)
+            .ToHashSet(StringComparer.Ordinal);
+        var actual = openApiOperations
+            .Except(ContractMappings.ExcludedOpenApiOperations)
             .ToHashSet(StringComparer.Ordinal);
         var expected = ContractMappings
             .Endpoints.Select(endpoint => FormatOperation((endpoint.Method, endpoint.Path)))
@@ -22,12 +24,17 @@ public sealed class EndpointContractParityTests
 
         var missing = actual.Except(expected).Order(StringComparer.Ordinal).ToArray();
         var stale = expected.Except(actual).Order(StringComparer.Ordinal).ToArray();
+        var staleExclusions = ContractMappings
+            .ExcludedOpenApiOperations.Except(openApiOperations)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
 
         Assert.True(
-            missing.Length == 0 && stale.Length == 0,
-            $"Public operation coverage drifted.{Environment.NewLine}"
+            missing.Length == 0 && stale.Length == 0 && staleExclusions.Length == 0,
+            $"Client operation coverage drifted.{Environment.NewLine}"
                 + $"Missing mappings: {FormatValues(missing)}{Environment.NewLine}"
-                + $"Stale mappings: {FormatValues(stale)}"
+                + $"Stale mappings: {FormatValues(stale)}{Environment.NewLine}"
+                + $"Stale exclusions: {FormatValues(staleExclusions)}"
         );
     }
 

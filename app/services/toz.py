@@ -4,17 +4,21 @@ from ..models import market_data as models_market_data
 
 
 def get_gold_quote(currency: str = "USD") -> models_market_data.StockQuote | None:
-    """
-    Get the current gold price in the specified currency.
+    """Fetch the current gold-futures quote in a requested currency.
 
     Args:
-        currency (str): The currency code (e.g., "USD", "EUR") to get the price in.
+        currency: Target currency code. Matching is case-insensitive; an empty
+            value uses USD.
 
     Returns:
-        models_market_data.StockQuote | None: The current price, or None when unavailable.
+        The USD quote or its converted value, or ``None`` when Yahoo does not
+        support the requested conversion currency.
+
+    Notes:
+        Provider, conversion, and model-validation failures propagate.
     """
     x_rate = 1.0
-    currency = currency.upper()
+    currency = currency.strip().upper() or "USD"
     if currency != "" and currency != "USD":
         # first, check if the currency is supported by yfinance
         ticker = yf.Ticker(f"USD{currency}=X")
@@ -34,18 +38,23 @@ def get_gold_quote(currency: str = "USD") -> models_market_data.StockQuote | Non
 
 
 def get_gold_history(currency: str = "USD", num_days: int = 30) -> list[models_market_data.HistoryPoint] | None:
-    """
-    Get the historical gold prices for the specified period and currency.
+    """Fetch ordered daily gold-futures history in a requested currency.
 
     Args:
-        currency (str): The currency code (e.g., "USD", "EUR") to get the prices in.
-        num_days (int): The number of days of historical data to retrieve (default is 30).
+        currency: Target currency code. Matching is case-insensitive; an empty
+            value uses USD.
+        num_days: Requested history length. Non-positive values use 30 days.
 
     Returns:
-        list[models_market_data.HistoryPoint] | None: Historical prices, or None when unavailable.
+        History points in provider order, an empty list when no observations are
+        available, or ``None`` when Yahoo does not support the requested
+        conversion currency.
+
+    Notes:
+        Provider, conversion, and model-validation failures propagate.
     """
     x_rate = 1.0
-    currency = currency.upper()
+    currency = currency.strip().upper() or "USD"
     if currency != "" and currency != "USD":
         # first, check if the currency is supported by yfinance
         ticker = yf.Ticker(f"USD{currency}=X")
@@ -83,18 +92,22 @@ def get_gold_history(currency: str = "USD", num_days: int = 30) -> list[models_m
 
 
 def get_silver_quote(currency: str = "USD") -> models_market_data.StockQuote | None:
-    """
-    Get the current silver price in the specified currency.
+    """Fetch the current silver-futures quote in a requested currency.
 
     Args:
-        currency (str): The currency code (e.g., "USD", "EUR") to get the price in.
+        currency: Target currency code. Matching is case-insensitive; an empty
+            value uses USD.
 
     Returns:
-        models_market_data.StockQuote | None: The current price, or None when unavailable.
+        The USD quote or its converted value, or ``None`` when Yahoo does not
+        support the requested conversion currency.
+
+    Notes:
+        Provider, conversion, and model-validation failures propagate.
     """
     x_rate = 1.0
-    currency = currency.upper()
-    if currency != "USD":
+    currency = currency.strip().upper() or "USD"
+    if currency != "" and currency != "USD":
         # first, check if the currency is supported by yfinance
         ticker = yf.Ticker(f"USD{currency}=X")
         if "currency" not in ticker.info:
@@ -113,18 +126,23 @@ def get_silver_quote(currency: str = "USD") -> models_market_data.StockQuote | N
 
 
 def get_silver_history(currency: str = "USD", num_days: int = 30) -> list[models_market_data.HistoryPoint] | None:
-    """
-    Get the historical silver prices for the specified period and currency.
+    """Fetch ordered daily silver-futures history in a requested currency.
 
     Args:
-        currency (str): The currency code (e.g., "USD", "EUR") to get the prices in.
-        num_days (int): The number of days of historical data to retrieve (default is 30).
+        currency: Target currency code. Matching is case-insensitive; an empty
+            value uses USD.
+        num_days: Requested history length. Non-positive values use 30 days.
 
     Returns:
-        list[models_market_data.HistoryPoint] | None: Historical prices, or None when unavailable.
+        History points in provider order, an empty list when no observations are
+        available, or ``None`` when Yahoo does not support the requested
+        conversion currency.
+
+    Notes:
+        Provider, conversion, and model-validation failures propagate.
     """
     x_rate = 1.0
-    currency = currency.upper()
+    currency = currency.strip().upper() or "USD"
     if currency != "" and currency != "USD":
         # first, check if the currency is supported by yfinance
         ticker = yf.Ticker(f"USD{currency}=X")

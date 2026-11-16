@@ -13,8 +13,19 @@ router = APIRouter(prefix="/ai", tags=["ai"])
     response_model_exclude_none=True,
 )
 async def get_vendors() -> schemas_ai_vendors.AIVendorsResponse:
-    """
-    Get the list of available AI vendors and supported API tiers and models.
+    """List the AI vendors, service tiers, and models enabled for API tasks.
+
+    Returns:
+        A successful response whose data is keyed by upper-case vendor name.
+        Each vendor contains upper-case tier names and the configured model
+        identifiers for that tier. An empty configuration returns empty data.
+
+    Notes:
+        The endpoint accepts no path, query, or body inputs. It exposes model
+        availability only, never provider credentials or endpoints. Model order
+        is not guaranteed. When API-key authentication is enabled, the
+        application can reject the request with HTTP 401 before this function
+        is called.
     """
     result: dict[str, models_ai_vendors.AIVendorInfo] = {}
     for v in config.settings_llm_vendor.vendors.keys():

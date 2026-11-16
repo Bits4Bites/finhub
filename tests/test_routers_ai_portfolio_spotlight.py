@@ -1,22 +1,28 @@
-import asyncio
-from unittest.mock import AsyncMock, patch
+from unittest import mock
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app import config
 from app.main import app
-from app.schemas import async_task
+from app.models import ai_portfolio_spotlight as models_spotlight
+from app.services import msai_spotlight_portfolio as services_spotlight
 from app.services import portfolio_verification
 from tests import portfolio_spotlight_fixtures
 
 client = TestClient(app)
 
 
+@pytest.fixture(autouse=True)
+def disable_ai_proxy(monkeypatch):
+    monkeypatch.setattr(config.settings_finhub_proxy, "proxy_mode", "None")
+    monkeypatch.setattr(config.settings_finhub_proxy, "url_ai_task_node", "")
+
+
 def _request_body() -> dict[str, object]:
     return {
         "country": "US",
-        "investor_theme": "Growth focused",
+        "investor_theme": "Growth with moderate risk.",
         "current_allocation": [
             {
                 "ticker": "NASDAQ:AAPL",
@@ -30,276 +36,212 @@ def _request_body() -> dict[str, object]:
     }
 
 
-def test_sync_redirects_through_ai_proxy_handler():
-    with (
-        patch.object(config.settings_finhub_proxy, "proxy_mode", "Redirect"),
-        patch.object(config.settings_finhub_proxy, "url_ai_task_node", "https://proxy.example/finhub/"),
-    ):
-        response = client.post(
-            "/ai/spotlight_portfolio",
-            json=_request_body(),
-            follow_redirects=False,
-        )
-
-    assert response.status_code == 307
-    assert response.headers["location"] == "https://proxy.example/finhub/ai/spotlight_portfolio"
+async def _spotlight(**kwargs):
+    return portfolio_spotlight_fixtures.analysis()
 
 
-def test_async_poll_redirects_through_ai_proxy_handler():
-    with (
-        patch.object(config.settings_finhub_proxy, "proxy_mode", "Redirect"),
-        patch.object(config.settings_finhub_proxy, "url_ai_task_node", "https://proxy.example/finhub/"),
-    ):
-        response = client.post(
-            "/ai/poll_spotlight_portfolio_async",
-            params={"task_id": "task-spotlight"},
-            follow_redirects=False,
-        )
-
-    assert response.status_code == 307
-    assert (
-        response.headers["location"]
-        == "https://proxy.example/finhub/ai/poll_spotlight_portfolio_async?task_id=task-spotlight"
-    )
-
-
-def test_post_returns_structured_spotlight_analysis():
-    with patch(
+def test_spotlight_returns_contract_consistent_verified_snapshot_and_risk_actions():
+    with mock.patch(
         "app.routers.ai_portfolio_spotlight.services_spotlight.ai_spotlight_portfolio",
-        new_callable=AsyncMock,
-        return_value=portfolio_spotlight_fixtures.analysis(),
+        new=_spotlight,
     ):
         response = client.post("/ai/spotlight_portfolio", json=_request_body())
 
     assert response.status_code == 200
     data = response.json()["data"]
     assert data["portfolio_empty"] is False
-    assert data["risks"][0]["level"] == "Critical"
-    assert data["risks"][0]["action_timing"] == "AsSoonAsPossibleWithinOneWeek"
     assert data["rebalance_recommended"] == "YES"
-    assert "analysis" not in data
+    assert data["snapshot"]["country"] == "US"
+    assert data["snapshot"]["currency"] == "USD"
+    assert data["snapshot"]["total_market_value"] == 2000.0
+    assert data["snapshot"]["holdings"] == [
+        {
+            "ticker": "NASDAQ:AAPL",
+            "company_name": "Apple Inc.",
+            "exchange": "NASDAQ",
+            "currency": "USD",
+            "num_shares": 10.0,
+            "avg_price": 150.0,
+            "market_price": 200.0,
+            "price_source": "MarketData",
+            "market_value": 2000.0,
+            "current_allocation": 1.0,
+            "target_allocation": 0.6,
+            "allocation_drift": 0.4,
+            "unrealized_profit_loss": 500.0,
+            "tags": "growth",
+        }
+    ]
+    assert data["risks"][0]["affected_tickers"] == ["NASDAQ:AAPL"]
 
 
-@pytest.mark.parametrize("portfolio_case", ["missing", "empty", "zero-share"])
-def test_post_rejects_portfolio_without_positive_share_positions(portfolio_case):
-    request = _request_body()
-    if portfolio_case == "missing":
-        request.pop("current_allocation")
-    elif portfolio_case == "empty":
-        request["current_allocation"] = []
-    else:
-        request["current_allocation"][0]["num_shares"] = 0
+def test_spotlight_returns_no_rebalance_when_no_material_risk_action_requires_it():
+    async def no_material_risks(**kwargs):
+        analysis_data = portfolio_spotlight_fixtures.analysis().model_dump(mode="python")
+        analysis_data.update(
+            {
+                "risks": [],
+                "rebalance_recommended": "NO",
+                "references": [],
+            }
+        )
+        return models_spotlight.PortfolioSpotlightAnalysis.model_validate(analysis_data)
 
-    with patch(
+    with mock.patch(
         "app.routers.ai_portfolio_spotlight.services_spotlight.ai_spotlight_portfolio",
-        new_callable=AsyncMock,
-    ) as mock_spotlight:
-        response = client.post("/ai/spotlight_portfolio", json=request)
+        new=no_material_risks,
+    ):
+        response = client.post("/ai/spotlight_portfolio", json=_request_body())
 
-    assert response.status_code == 422
-    mock_spotlight.assert_not_awaited()
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["portfolio_empty"] is False
+    assert data["risks"] == []
+    assert data["rebalance_recommended"] == "NO"
+    assert data["references"] == []
 
 
 @pytest.mark.parametrize(
-    ("include_theme", "investor_theme"),
+    "body",
     [
-        (False, None),
-        (True, None),
-        (True, ""),
-        (True, "   "),
+        {
+            "country": "US",
+            "investor_theme": "Growth.",
+            "current_allocation": [],
+        },
+        {
+            "country": "US",
+            "investor_theme": "Growth.",
+            "current_allocation": [{"ticker": "NASDAQ:AAPL", "num_shares": 0}],
+        },
+        {
+            "country": "US",
+            "investor_theme": "   ",
+            "current_allocation": [{"ticker": "NASDAQ:AAPL", "num_shares": 1}],
+        },
+        {
+            "country": "US",
+            "investor_theme": "Growth.",
+            "current_allocation": [
+                {"ticker": "NASDAQ:AAPL", "num_shares": 1},
+                {"ticker": "nasdaq:aapl", "num_shares": 2},
+            ],
+        },
+        {**_request_body(), "rebalance_plan": True},
+        {**_request_body(), "country": "U" * 65},
     ],
 )
-def test_post_rejects_missing_null_or_blank_investor_theme(include_theme, investor_theme):
-    request = _request_body()
-    if not include_theme:
-        request.pop("investor_theme")
-    else:
-        request["investor_theme"] = investor_theme
-
-    with patch(
-        "app.routers.ai_portfolio_spotlight.services_spotlight.ai_spotlight_portfolio",
-        new_callable=AsyncMock,
-    ) as mock_spotlight:
-        response = client.post("/ai/spotlight_portfolio", json=request)
+def test_spotlight_request_rejects_invalid_or_removed_inputs(body):
+    response = client.post("/ai/spotlight_portfolio", json=body)
 
     assert response.status_code == 422
-    mock_spotlight.assert_not_awaited()
+    assert isinstance(response.json()["detail"], list)
 
 
-def test_post_rejects_overlong_country_and_ticker():
-    country_request = _request_body()
-    country_request["country"] = "A" * 65
-    ticker_request = _request_body()
-    ticker_request["current_allocation"][0]["ticker"] = "A" * 33
+@pytest.mark.parametrize(
+    ("error", "expected_status"),
+    [
+        (portfolio_verification.PortfolioInputError("invalid portfolio"), 422),
+        (portfolio_verification.PortfolioVerificationError("verification unavailable"), 502),
+        (services_spotlight.PortfolioSpotlightAIError("spotlight unavailable"), 502),
+    ],
+)
+def test_spotlight_maps_documented_service_failures(error, expected_status):
+    async def fail(**kwargs):
+        raise error
 
-    assert client.post("/ai/spotlight_portfolio", json=country_request).status_code == 422
-    assert client.post("/ai/spotlight_portfolio", json=ticker_request).status_code == 422
-
-
-def test_post_rejects_removed_rebalance_plan_input():
-    request = _request_body()
-    request["rebalance_plan"] = True
-
-    response = client.post("/ai/spotlight_portfolio", json=request)
-
-    assert response.status_code == 422
-
-
-def test_post_maps_portfolio_validation_failure_to_422():
-    with patch(
+    with mock.patch(
         "app.routers.ai_portfolio_spotlight.services_spotlight.ai_spotlight_portfolio",
-        new_callable=AsyncMock,
-        side_effect=portfolio_verification.PortfolioInputError("Unknown ticker"),
+        new=fail,
     ):
         response = client.post("/ai/spotlight_portfolio", json=_request_body())
 
-    assert response.status_code == 422
-    assert response.json()["message"] == "Unknown ticker"
+    assert response.status_code == expected_status
+    assert response.json()["status"] == expected_status
+    assert "data" not in response.json()
 
 
-def test_post_maps_ai_failure_to_502():
-    from app.services import msai_spotlight_portfolio as service
-
-    with patch(
+def test_async_spotlight_lifecycle_returns_running_then_completed_snapshot(deferred_task_store):
+    with mock.patch(
         "app.routers.ai_portfolio_spotlight.services_spotlight.ai_spotlight_portfolio",
-        new_callable=AsyncMock,
-        side_effect=service.PortfolioSpotlightAIError("Assessment failed"),
+        new=_spotlight,
     ):
-        response = client.post("/ai/spotlight_portfolio", json=_request_body())
-
-    assert response.status_code == 502
-    assert response.json()["message"] == "Assessment failed"
-
-
-def test_async_start_passes_validated_request_to_task():
-    with (
-        patch("app.routers.async_task._generate_task_id", return_value="task-spotlight"),
-        patch(
-            "app.routers.async_task.cache.set",
-            new_callable=AsyncMock,
-            return_value=True,
-        ) as mock_cache_set,
-        patch(
-            "app.routers.ai_portfolio_spotlight._run_task",
-            new_callable=AsyncMock,
-        ) as mock_run_task,
-    ):
-        response = client.post("/ai/start_spotlight_portfolio_async", json=_request_body())
-
-    assert response.status_code == 202
-    assert response.json() == {
-        "status": 202,
-        "message": "Task started",
-        "extra": {
-            "task_id": "task-spotlight",
-            "state": async_task.TASK_STATE_RUNNING,
-        },
-    }
-    mock_cache_set.assert_awaited_once_with(
-        "task-spotlight",
-        {
-            "task_type": "spotlight_portfolio",
-            "state": async_task.TASK_STATE_RUNNING,
-        },
-        ttl=3600,
-    )
-    task_id, request = mock_run_task.await_args.args
-    assert task_id == "task-spotlight"
-    assert request.current_allocation[0].ticker == "NASDAQ:AAPL"
-
-
-def test_async_poll_returns_running_state():
-    task_entry = {
-        "task_type": "spotlight_portfolio",
-        "state": async_task.TASK_STATE_RUNNING,
-    }
-    with patch(
-        "app.routers.async_task.cache.get",
-        new_callable=AsyncMock,
-        return_value=task_entry,
-    ):
-        response = client.post(
+        started = client.post(
+            "/ai/start_spotlight_portfolio_async",
+            json=_request_body(),
+        )
+        task_id = started.json()["extra"]["task_id"]
+        running = client.post(
             "/ai/poll_spotlight_portfolio_async",
-            params={"task_id": "task-spotlight"},
+            params={"task_id": task_id},
         )
 
-    assert response.status_code == 202
-    assert response.json()["extra"]["state"] == async_task.TASK_STATE_RUNNING
+        deferred_task_store.release()
 
-
-def test_async_poll_returns_completed_structured_result():
-    from app.schemas import ai_portfolio_spotlight as schemas_spotlight
-
-    result = schemas_spotlight.PortfolioSpotlightResponse(
-        status=200,
-        message="ok",
-        data=portfolio_spotlight_fixtures.analysis(),
-    )
-    task_entry = {
-        "task_type": "spotlight_portfolio",
-        "state": async_task.TASK_STATE_COMPLETED,
-        "result": result.model_dump(mode="json"),
-    }
-    with patch(
-        "app.routers.async_task.cache.get",
-        new_callable=AsyncMock,
-        return_value=task_entry,
-    ):
-        response = client.post(
+        completed = client.post(
             "/ai/poll_spotlight_portfolio_async",
-            params={"task_id": "task-spotlight"},
+            params={"task_id": task_id},
+        )
+        duplicate = client.post(
+            "/ai/start_spotlight_portfolio_async",
+            json=_request_body(),
         )
 
-    assert response.status_code == 200
-    assert response.json()["data"]["rebalance_recommended"] == "YES"
-    assert response.json()["extra"]["state"] == async_task.TASK_STATE_COMPLETED
+    assert started.status_code == 202
+    assert running.status_code == 202
+    assert completed.status_code == 200
+    assert completed.json()["extra"] == {"task_id": task_id, "state": "COMPLETED"}
+    assert completed.json()["data"]["snapshot"]["holdings"][0]["ticker"] == "NASDAQ:AAPL"
+    assert duplicate.json() == completed.json()
 
 
-def test_async_poll_preserves_failure_status():
-    task_entry = {
-        "task_type": "spotlight_portfolio",
-        "state": async_task.TASK_STATE_FAILED,
-        "status": 502,
-        "message": "Assessment failed",
-    }
-    with patch(
-        "app.routers.async_task.cache.get",
-        new_callable=AsyncMock,
-        return_value=task_entry,
+def test_async_spotlight_start_distinguishes_missing_and_invalid_bodies():
+    missing = client.post("/ai/start_spotlight_portfolio_async")
+    invalid = client.post("/ai/start_spotlight_portfolio_async", json={})
+
+    assert missing.status_code == 400
+    assert missing.json()["status"] == 400
+    assert invalid.status_code == 422
+    assert isinstance(invalid.json()["detail"], list)
+
+
+@pytest.mark.parametrize(
+    ("error", "expected_status"),
+    [
+        (portfolio_verification.PortfolioInputError("invalid portfolio"), 422),
+        (portfolio_verification.PortfolioVerificationError("verification unavailable"), 502),
+        (services_spotlight.PortfolioSpotlightAIError("spotlight unavailable"), 502),
+        (RuntimeError("unexpected failure"), 500),
+    ],
+)
+def test_async_spotlight_failures_are_pollable_and_reused(
+    deferred_task_store,
+    error,
+    expected_status,
+):
+    async def fail(**kwargs):
+        raise error
+
+    with mock.patch(
+        "app.routers.ai_portfolio_spotlight.services_spotlight.ai_spotlight_portfolio",
+        new=fail,
     ):
-        response = client.post(
+        started = client.post(
+            "/ai/start_spotlight_portfolio_async",
+            json=_request_body(),
+        )
+        task_id = started.json()["extra"]["task_id"]
+        deferred_task_store.release()
+        failed = client.post(
             "/ai/poll_spotlight_portfolio_async",
-            params={"task_id": "task-spotlight"},
+            params={"task_id": task_id},
+        )
+        duplicate = client.post(
+            "/ai/start_spotlight_portfolio_async",
+            json=_request_body(),
         )
 
-    assert response.status_code == 502
-    assert response.json()["message"] == "Assessment failed"
-    assert response.json()["extra"]["state"] == async_task.TASK_STATE_FAILED
-
-
-def test_background_task_caches_input_failure():
-    from app.routers import ai_portfolio_spotlight as router
-    from app.schemas import ai_portfolio_spotlight as schemas_spotlight
-
-    request = schemas_spotlight.PortfolioSpotlightRequest.model_validate(_request_body())
-    with (
-        patch.object(
-            router,
-            "_analyze",
-            new_callable=AsyncMock,
-            side_effect=router.HTTPException(status_code=422, detail="Unknown ticker"),
-        ),
-        patch("app.routers.async_task.cache.set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
-    ):
-        asyncio.run(router._run_task("task-spotlight", request))
-
-    mock_cache_set.assert_awaited_once_with(
-        "task-spotlight",
-        {
-            "task_type": "spotlight_portfolio",
-            "state": async_task.TASK_STATE_FAILED,
-            "status": 422,
-            "message": "Unknown ticker",
-        },
-        ttl=3600,
-    )
+    assert failed.status_code == expected_status
+    assert failed.json()["extra"] == {"task_id": task_id, "state": "FAILED"}
+    assert duplicate.status_code == expected_status
+    assert duplicate.json()["extra"] == {"task_id": task_id, "state": "FAILED"}

@@ -3,7 +3,6 @@ from datetime import UTC, datetime
 from app.models import ai as models_ai
 from app.models import ai_portfolio_construction as models_construction
 from app.models import portfolio as models_portfolio
-from app.services import msai_build_portfolio as service
 from app.services import portfolio_verification
 from app.utils import ai_reference
 
@@ -54,35 +53,35 @@ def verified_portfolio() -> portfolio_verification.VerifiedPortfolio:
     )
 
 
-def plan(
+def plan_data(
     mode: models_construction.PortfolioConstructionMode = "Scratch",
     *,
     budget: models_portfolio.PortfolioBudget | None = None,
-) -> service._PortfolioConstructionPlan:
-    return service._PortfolioConstructionPlan(
-        construction_mode=mode,
-        budget=budget or no_budget(),
-        objective="Construct a diversified growth portfolio.",
-        theme_interpretation="Favor durable growth with moderate concentration risk.",
-        constraints=["US-listed securities only."],
-        selection_criteria=[
+) -> dict[str, object]:
+    return {
+        "construction_mode": mode,
+        "budget": (budget or no_budget()).model_dump(mode="json"),
+        "objective": "Construct a diversified growth portfolio.",
+        "theme_interpretation": "Favor durable growth with moderate concentration risk.",
+        "constraints": ["US-listed securities only."],
+        "selection_criteria": [
             "Durable competitive position.",
             "Evidence of profitable growth.",
             "Complementary portfolio role.",
         ],
-        diversification_requirements=[
+        "diversification_requirements": [
             "Avoid single-name concentration.",
             "Use complementary business exposures.",
         ],
-        seed_strategy="Use verified holdings as context without requiring retention.",
-        research_queries=[
+        "seed_strategy": "Use verified holdings as context without requiring retention.",
+        "research_queries": [
             "Current issuer fundamentals.",
             "Material issuer risks.",
             "Portfolio diversification fit.",
         ],
-        target_holding_count=3,
-        data_gaps=[],
-    )
+        "target_holding_count": 3,
+        "data_gaps": [],
+    }
 
 
 def no_budget() -> models_portfolio.PortfolioBudget:
@@ -165,21 +164,6 @@ def research_response_data() -> dict[str, object]:
     }
 
 
-def research() -> service._PortfolioResearch:
-    data = research_response_data()
-    data["as_of"] = "2026-08-21T00:00:00Z"
-    data["references"] = [
-        {
-            **data["references"][0],
-            "id": SOURCE_ID,
-            "is_verified": True,
-        }
-    ]
-    for candidate in data["candidates"]:
-        candidate["reference_ids"] = [SOURCE_ID]
-    return service._PortfolioResearch.model_validate(data)
-
-
 def draft_data(
     *,
     tickers: list[str] | None = None,
@@ -239,20 +223,6 @@ def target_positions() -> list[models_construction.PortfolioTargetPosition]:
             strict=True,
         )
     ]
-
-
-def action_plan_draft(action_ids: list[str]) -> service._PortfolioActionPlanDraft:
-    return service._PortfolioActionPlanDraft(
-        summary="Implement the target in priority order.",
-        steps=[
-            service._PortfolioActionReasoning(
-                action_id=action_id,
-                priority=priority,
-                reasoning=f"{action_id} advances the researched target portfolio.",
-            )
-            for priority, action_id in enumerate(action_ids, start=1)
-        ],
-    )
 
 
 def action_plan(
@@ -344,7 +314,11 @@ def construction(
         construction_status="Complete",
         construction_mode=mode,
         country="US",
-        investor_theme="Durable growth with moderate risk.",
+        investor_theme=(
+            "Durable growth with moderate risk and a total budget of USD 1,000."
+            if mode == "Scratch" and action_plan_available
+            else "Durable growth with moderate risk."
+        ),
         summary="A diversified target portfolio aligned with the growth theme.",
         verified_seed_holdings=(verified_portfolio().holdings if mode == "Seeded" else []),
         target_portfolio=target_positions(),

@@ -8,7 +8,11 @@ Return the supplied JSON schema and obey these rules:
 - Use ASX:CODE symbol format.
 - listing_date and public_offer_close_date use YYYY-MM-DD.
 - Convert TBC, TBD, TBA, n/a, missing, and blank values to null.
-- issue_price and capital_to_raise are raw JSON numbers without currency symbols, currency codes, or separators.
+- issue_price, issue_price_upper, and capital_to_raise are raw JSON numbers without currency symbols, currency codes,
+  or separators.
+- For a fixed issue price, put that number in issue_price and set issue_price_upper to null.
+- For an issue-price range, put the lower bound in issue_price and the upper bound in issue_price_upper.
+  Preserve both bounds; do not average the range or invent a fixed price.
 - issue_type preserves the ASX wording.
 - is_underwritten is true or false only when explicitly stated; otherwise null.
 - underwriters and lead_managers contain names only and are empty lists when unavailable.

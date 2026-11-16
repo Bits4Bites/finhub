@@ -22,17 +22,18 @@ _ASYNC_RESPONSES = {
         "description": "The portfolio-analysis task started or is still running.",
     },
     404: {"model": BaseResponse, "description": "The task was not found."},
-    422: {
-        "model": schemas_review.AnalyzePortfolioAsyncResponse | BaseResponse,
-        "description": "The request, strategy, budget, or verified holdings are invalid.",
-    },
+    422: router_async_task.validation_error_response(
+        "The request, strategy, budget, verified holdings, or proxy forward-timeout header is invalid.",
+        schemas_review.AnalyzePortfolioAsyncResponse,
+        BaseResponse,
+    ),
     500: {
         "model": schemas_review.AnalyzePortfolioAsyncResponse | BaseResponse,
         "description": "The background task failed unexpectedly.",
     },
     502: {
-        "model": schemas_review.AnalyzePortfolioAsyncResponse,
-        "description": "Market verification, AI execution, or structured output failed.",
+        "model": schemas_review.AnalyzePortfolioAsyncResponse | BaseResponse,
+        "description": "Market verification, AI execution, structured output, or proxy forwarding failed.",
     },
 }
 
@@ -88,13 +89,13 @@ async def _analyze(
     response_model=schemas_review.AnalyzePortfolioResponse,
     response_model_exclude_none=True,
     responses={
-        422: {
-            "model": BaseResponse,
-            "description": "The request, strategy, budget, or verified holdings are invalid.",
-        },
+        422: router_async_task.validation_error_response(
+            "The request, strategy, budget, verified holdings, or proxy forward-timeout header is invalid.",
+            BaseResponse,
+        ),
         502: {
             "model": BaseResponse,
-            "description": "Market verification, AI execution, or structured output failed.",
+            "description": "Market verification, AI execution, structured output, or proxy forwarding failed.",
         },
     },
 )
@@ -102,7 +103,38 @@ async def analyze_portfolio(
     http_request: Request,
     request: schemas_review.AnalyzePortfolioRequest = Body(description="The portfolio construction-or-review request."),
 ) -> schemas_review.AnalyzePortfolioResponse | Response:
-    """Construct a sparse portfolio or return a structured review of an established portfolio."""
+    """Construct a sparse portfolio or review an established portfolio.
+
+    Args:
+        http_request: Incoming HTTP request used when an AI-task proxy node is
+            configured.
+        request: Validated country, investor theme, submitted allocation, and
+            review action-plan preference.
+
+    Returns:
+        HTTP 200 with either a discriminated ``PortfolioConstruction`` or
+        ``PortfolioReview`` result. Redirect proxy mode instead returns HTTP
+        307, while forward mode relays the upstream response and status.
+
+    Raises:
+        HTTPException: With HTTP 422 when the selected branch rejects portfolio,
+            strategy, or budget input; or HTTP 502 when market verification, AI
+            processing, structured output, price verification, or final result
+            validation fails.
+
+    Notes:
+        Dispatch uses every submitted entry, including zero-share entries, in
+        the denominator. An empty allocation, or an allocation where at most
+        35% of submitted entries have ``num_shares > 0`` (exactly 35% included),
+        uses construction. More than 35% uses review. Construction ignores
+        zero-share positions and market-verifies positive seed holdings; an
+        all-zero allocation is scratch construction. Review ignores zero-share
+        positions and verifies every positive holding. ``rebalance_plan`` only
+        affects the review branch. Request-schema errors return HTTP 422,
+        unexpected local errors return HTTP 500, and authentication can return
+        HTTP 401. A configured proxy short-circuits local analysis after request
+        validation.
+    """
 
     proxy_response = await proxy_handler.handle_if_proxy(
         config.settings_finhub_proxy.proxy_mode,
@@ -122,7 +154,7 @@ async def _run_task(
     try:
         result = await _analyze(request)
     except HTTPException as exc:
-        await router_async_task.fail_task(
+        await router_async_task.task_store.fail(
             task_id,
             _TASK_TYPE,
             status_code=exc.status_code,
@@ -131,14 +163,14 @@ async def _run_task(
         return
     except Exception:
         logging.exception("Analyze portfolio task '%s' failed.", task_id)
-        await router_async_task.fail_task(
+        await router_async_task.task_store.fail(
             task_id,
             _TASK_TYPE,
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
         return
 
-    await router_async_task.complete_task(
+    await router_async_task.task_store.complete(
         task_id,
         _TASK_TYPE,
         result,
@@ -151,7 +183,7 @@ async def _poll_task(
     task_id: str,
     response: Response,
 ) -> schemas_review.AnalyzePortfolioAsyncResponse:
-    task_entry = await router_async_task.load_task(task_id, _TASK_TYPE)
+    task_entry = await router_async_task.task_store.load(task_id, _TASK_TYPE)
     task_state = task_entry.state
     task_info = async_task.AsyncTaskInfo(task_id=task_id, state=task_state)
     if task_state == async_task.TASK_STATE_RUNNING:
@@ -162,7 +194,7 @@ async def _poll_task(
             extra=task_info,
         )
     if task_state == async_task.TASK_STATE_FAILED:
-        failure_status = router_async_task.failure_status(task_entry)
+        failure_status = task_entry.failure_http_status
         response.status_code = failure_status
         return schemas_review.AnalyzePortfolioAsyncResponse(
             status=failure_status,
@@ -183,7 +215,14 @@ async def _poll_task(
     "/start_analyze_portfolio_async",
     response_model=schemas_review.AnalyzePortfolioAsyncResponse,
     response_model_exclude_none=True,
-    responses=_ASYNC_RESPONSES,
+    responses={
+        400: {
+            "model": BaseResponse,
+            "description": "A request body is required to start a task.",
+        },
+        **_ASYNC_RESPONSES,
+    },
+    openapi_extra={"requestBody": {"required": True}},
 )
 async def start_analyze_portfolio_async(
     background_tasks: BackgroundTasks,
@@ -194,7 +233,43 @@ async def start_analyze_portfolio_async(
         description="The analyze portfolio request.",
     ),
 ) -> schemas_review.AnalyzePortfolioAsyncResponse | Response:
-    """Start an analyze-portfolio task."""
+    """Start or reuse an asynchronous construction-or-review task.
+
+    Args:
+        background_tasks: FastAPI task collector that runs a newly accepted
+            analysis after the start response is prepared.
+        response: Outgoing response whose HTTP status reflects the returned task
+            state.
+        http_request: Incoming HTTP request used when an AI-task proxy node is
+            configured.
+        request: Validated dispatch request. ``None`` represents an omitted or
+            JSON-null body so the endpoint can preserve its HTTP 400 contract.
+
+    Returns:
+        HTTP 202 with a task ID for a new or already-running task. Repeating an
+        equivalent request while its state is retained returns the current
+        outcome: HTTP 200 with either completed construction or review data, or
+        the stored HTTP 422, 502, or 500 failure. Redirect proxy mode returns
+        HTTP 307; forward mode relays the upstream response and status.
+
+    Raises:
+        HTTPException: With HTTP 400 when the local request body is missing or
+            null, HTTP 404 if a reused task expires before it can be read, or
+            HTTP 500 for invalid retained task state.
+
+    Notes:
+        OpenAPI marks the body as required even though the nullable handler
+        parameter distinguishes a missing body (HTTP 400) from an invalid body
+        (HTTP 422). Dispatch is identical to the synchronous endpoint: zero
+        submitted entries or at most 35% positive-share entries selects
+        construction; more than 35% selects review. Equivalent validated
+        requests are deduplicated across running, completed, and failed states.
+        Each state expires one hour after its latest lifecycle update; after
+        expiry the request can run again and polling returns HTTP 404. Branch
+        input failures become HTTP 422, verification or AI/final validation
+        failures become HTTP 502, and unexpected failures become HTTP 500.
+        Authentication can return HTTP 401 before invocation.
+    """
 
     proxy_response = await proxy_handler.handle_if_proxy(
         config.settings_finhub_proxy.proxy_mode,
@@ -210,7 +285,7 @@ async def start_analyze_portfolio_async(
             detail="Request body is required when starting a task",
         )
 
-    new_task_id, is_new = await router_async_task.start_task(_TASK_TYPE, request)
+    new_task_id, is_new = await router_async_task.task_store.start(_TASK_TYPE, request)
     if not is_new:
         return await _poll_task(new_task_id, response)
 
@@ -237,7 +312,33 @@ async def poll_analyze_portfolio_async(
     http_request: Request,
     task_id: str = Query(description="Task ID returned by the corresponding start endpoint."),
 ) -> schemas_review.AnalyzePortfolioAsyncResponse | Response:
-    """Poll an analyze-portfolio task."""
+    """Read the state and result of a construction-or-review task.
+
+    Args:
+        response: Outgoing response whose HTTP status is updated to match the
+            task state.
+        http_request: Incoming HTTP request used when an AI-task proxy node is
+            configured.
+        task_id: Identifier returned by ``start_analyze_portfolio_async``;
+            surrounding whitespace is ignored.
+
+    Returns:
+        HTTP 202 with ``RUNNING``, HTTP 200 with a completed
+        ``PortfolioConstruction`` or ``PortfolioReview`` result, or ``FAILED``
+        with the stored HTTP 422, 502, or 500 status. Redirect proxy mode returns
+        HTTP 307; forward mode relays the upstream response and status.
+
+    Raises:
+        HTTPException: With HTTP 404 when the task is unknown, belongs to
+            another task type, or has expired; or HTTP 500 when retained state
+            is invalid. Omitting the required query parameter returns HTTP 422
+            before this function is called.
+
+    Notes:
+        Task states expire one hour after their latest lifecycle update. Polling
+        never redispatches or restarts analysis. Authentication can return HTTP
+        401 before invocation.
+    """
 
     proxy_response = await proxy_handler.handle_if_proxy(
         config.settings_finhub_proxy.proxy_mode,

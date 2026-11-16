@@ -13,10 +13,11 @@ dotnet test clients/dotnet/FinHub.Client.Contracts.Tests/FinHub.Client.Contracts
 ```
 
 Building the test project builds its reference to `FinHub.Client.Contracts.csproj`, so the contracts are not built
-twice. The tests use the repository-root `openapi.json` as their authority. They map all 37 public router operations
-to request and response contracts, compare every client component's JSON names, requiredness, nullability, types,
-integer widths, string formats, and enum wire values, and exercise non-obvious converters and raw market-index
-payloads. The root and health operations remain intentionally outside the client contract surface.
+twice. The tests use the repository-root `openapi.json` as their authority. Of the 40 OpenAPI operations, they map
+all 37 client-facing operations to request and response contracts. The server-only `GET /`, `GET /health`, and
+`GET /info` operations remain intentionally outside the client contract surface. The tests compare every client
+component's JSON names, requiredness, nullability, types, integer widths, string formats, and enum wire values, and
+exercise non-obvious converters and raw market-index payloads.
 
 Envelope responses derive from `MyPo.Shared.Api.ApiResp<TData>`. Synchronous `Extra` values use the shared
 `object` contract; `System.Text.Json` materializes JSON objects as `JsonElement`, and callers can use `ExtraAs<T>()`
@@ -172,7 +173,8 @@ var response = JsonSerializer.Deserialize<GetNewListingsResponse>(json);
 var asyncResponse = JsonSerializer.Deserialize<GetNewListingsAsyncResponse>(asyncJson);
 ```
 
-Call `GET /events/start_new_listings_async?country=AU` to start a task and
+The synchronous and start endpoints support `country=AU` and `country=US`.
+Call `GET /events/start_new_listings_async?country=AU` (or `country=US`) to start a task and
 `GET /events/poll_new_listings_async?task_id=<TASK_ID>` to poll it. Both operations deserialize as
 `GetNewListingsAsyncResponse`; its required `Extra` property uses the shared `AsyncTaskInfo` and `TaskState`
 contracts. Completed polls can include the standard listing collection in `Data`.
@@ -182,6 +184,9 @@ required, non-null `EventBase.TimestampStr` (`timestamp_str`) contract, while `L
 `ListingEvent.CapitalToRaise` are required but nullable. The inherited `ListingEvent.DateUTC` is the ignored computed
 UTC value described above; `ListingEvent.PublicOfferCloseDate` remains a string to match the current OpenAPI contract,
 while formatted analysis dates use `DateOnly` or `DateTimeOffset`.
+
+For an offer-price range, `IssuePrice` contains the lower bound and optional `IssuePriceUpper` contains the upper
+bound. Fixed-price offers continue to use only `IssuePrice`.
 
 ## Dividend-event analysis
 

@@ -34,11 +34,11 @@ _RESEARCH_SCHEMA_NAME = "portfolio_construction_research"
 _CONSTRUCT_SCHEMA_NAME = "portfolio_construction_target"
 _ACTION_PLAN_SCHEMA_NAME = "portfolio_construction_action_plan"
 
-_PLAN_CACHE_NAMESPACE = "portfolio-construction-plan-v2"
-_RESEARCH_CACHE_NAMESPACE = "portfolio-construction-research-v1"
-_CONSTRUCT_CACHE_NAMESPACE = "portfolio-construction-draft-v1"
-_ACTION_PLAN_CACHE_NAMESPACE = "portfolio-construction-action-plan-v1"
-_FINAL_CACHE_NAMESPACE = "portfolio-construction-final-v3"
+_PLAN_CACHE_NAMESPACE = "portfolio-construction-plan"
+_RESEARCH_CACHE_NAMESPACE = "portfolio-construction-research"
+_CONSTRUCT_CACHE_NAMESPACE = "portfolio-construction-draft"
+_ACTION_PLAN_CACHE_NAMESPACE = "portfolio-construction-action-plan"
+_FINAL_CACHE_NAMESPACE = "portfolio-construction-final"
 _AI_STAGE_CACHE_TTL = 60 * 60
 _ALLOCATION_TOLERANCE = 0.01
 
@@ -235,6 +235,47 @@ async def ai_build_portfolio(
     country: str,
     investor_theme: str,
 ) -> models_construction.PortfolioConstruction:
+    """Construct a research-backed target portfolio and implementation plan.
+
+    Args:
+        portfolio: Optional starting holdings. Zero-share entries are ignored;
+            any positive position makes the construction ``Seeded`` and must use
+            a whole-share quantity. With no positive positions, construction is
+            performed from scratch.
+        country: Country name or code used to select and verify securities and
+            normalize the result to an ISO two-letter country.
+        investor_theme: Non-blank goals, risk preferences, constraints, and
+            optional single total or recurring investment budget.
+
+    Returns:
+        A ``PortfolioConstruction`` containing verified seed holdings when
+        applicable, at least three unique researched target positions whose
+        weights sum to one, canonical references, validation warnings and data
+        gaps, and an optional prioritized whole-share action plan.
+
+    Raises:
+        PortfolioInputError: If country, theme, holdings, or budget details are
+            invalid, holdings are fractional, or the budget currency does not
+            match the verified portfolio or selected country.
+        PortfolioVerificationError: If starting holdings cannot be resolved
+            against market data.
+        PortfolioConstructionAIError: If an AI stage fails, remains rate
+            limited, returns invalid structured output, cannot retain enough
+            verified candidates, target prices cannot be verified, or the final
+            result fails validation.
+        RuntimeError: If a cached stage or final result is invalid.
+
+    Notes:
+        A scratch request without a budget returns a target but no action plan.
+        A seeded request without a stated budget infers a next-iteration
+        contribution at 10% of current value and may increase it to 15% only
+        when that enables a whole-share purchase. Supplied total and recurring
+        budgets fund new purchases without forcing trims; utilized and
+        unallocated amounts reconcile to the budget. Structurally valid sources
+        remain in the result when provider citations cannot verify them, with
+        ``is_verified=False`` and ``CompleteWithWarnings`` construction status.
+        Validated stages and final results are cached for one hour.
+    """
     normalized_country = conv.country_to_iso2(country.strip())
     if not normalized_country:
         raise portfolio_verification.PortfolioInputError("Unsupported or unknown country")
@@ -669,7 +710,7 @@ async def _execute_stage(
             response_json_schema=response_model.model_json_schema(),
             schema_name=schema_name,
         )
-    except (OSError, ValueError, openai.APIError) as exc:
+    except (OSError, ValueError, openai.APIError, ai_helper.LLMRateLimitError) as exc:
         logging.exception("[Portfolio Construction] %s provider call failed.", stage_name.capitalize())
         raise PortfolioConstructionAIError(f"Portfolio construction {stage_name} provider failed") from exc
     if response.is_error:

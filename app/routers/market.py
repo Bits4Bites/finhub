@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Path, Response
 
+from ..schemas.base_req_resp import BaseResponse
 from ..services import market as services_market
 
 router = APIRouter(prefix="/market", tags=["market"])
@@ -22,7 +23,16 @@ SUPPORTED_INDEX_IDS = frozenset(
 )
 
 
-@router.get("/index/{index_id}", response_class=Response)
+@router.get(
+    "/index/{index_id}",
+    response_class=Response,
+    responses={
+        404: {
+            "model": BaseResponse,
+            "description": "The index identifier is unsupported or its bundled document is unavailable.",
+        }
+    },
+)
 def get_market_index(
     index_id: str = Path(
         description=(
@@ -31,11 +41,24 @@ def get_market_index(
         )
     ),
 ) -> Response:
-    """
-    Return the preloaded static JSON file for a supported market index.
+    """Return bundled constituent data for a supported market index.
 
-    The index ID is case-insensitive and restricted to ``SUPPORTED_INDEX_IDS``.
-    Raises HTTP 404 when the ID is unsupported or its content is not cached.
+    Args:
+        index_id: Case-insensitive market index identifier from
+            ``SUPPORTED_INDEX_IDS``.
+
+    Returns:
+        An HTTP 200 response containing the index JSON document verbatim with
+        an ``application/json`` content type. The response is raw JSON rather
+        than a FinHub response envelope.
+
+    Raises:
+        HTTPException: HTTP 404 when the normalized identifier is unsupported
+            or no document is available for it.
+
+    Notes:
+        The identifier is normalized to uppercase. Unavailable data is treated
+        as not found rather than as an empty index.
     """
     normalized_index_id = index_id.upper()
     if normalized_index_id not in SUPPORTED_INDEX_IDS:

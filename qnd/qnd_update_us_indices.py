@@ -5,7 +5,7 @@ import asyncio
 import json
 from datetime import datetime
 
-from app.services import crawler as crawler_service
+from app.services import crawler_core as crawler_core_service
 
 
 async def update_us_index(index: str, num_check: int):
@@ -58,7 +58,7 @@ async def update_us_index(index: str, num_check: int):
             table_attr_filter = {"id": "constituents"}
             raw_cell_content = True
 
-    data = await crawler_service.scrape_data_table(
+    data = await crawler_core_service.scrape_data_table(
         url, raw_cell_content=raw_cell_content, table_attr_filter=table_attr_filter
     )
     if data is None or data.empty:

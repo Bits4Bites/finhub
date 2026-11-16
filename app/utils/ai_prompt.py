@@ -16,7 +16,25 @@ class PromptLoadError(RuntimeError):
 
 
 def load_prompt(file_name: str) -> str:
-    """Load and cache a non-empty prompt from the shared prompt directory."""
+    """Load an application-managed prompt template for an AI workflow.
+
+    Args:
+        file_name: The file name or relative path under the project's
+            ``resources/prompts`` directory.
+
+    Returns:
+        The non-empty prompt text with surrounding whitespace removed.
+
+    Raises:
+        PromptLoadError: If the file name is invalid, the file is unavailable,
+            its bytes are not valid UTF-8, or its content is empty.
+
+    Notes:
+        Prompt files must remain within the ``resources/prompts`` directory and
+        are read as UTF-8 text. After a path is loaded successfully, its prompt
+        content is reused for the lifetime of the process; file changes require
+        a process restart to become visible.
+    """
     normalized_name = file_name.strip()
     if not normalized_name:
         raise PromptLoadError("Prompt file name is required")
@@ -33,7 +51,26 @@ def render_prompt(
     file_name: str,
     replacements: Mapping[str, str],
 ) -> str:
-    """Load a cached prompt template and replace its declared placeholders once."""
+    """Render an AI prompt template with task-specific values.
+
+    Args:
+        file_name: The file name or relative path under the project's
+            ``resources/prompts`` directory.
+        replacements: Text values keyed by placeholder name. The keys must
+            exactly match all ``{{NAME}}`` placeholders declared by the template.
+
+    Returns:
+        The rendered prompt text.
+
+    Raises:
+        PromptLoadError: If the template cannot be loaded or the replacement
+            names do not exactly match its placeholders.
+
+    Notes:
+        Replacement text is inserted literally and is not interpreted as
+        another placeholder. Rendering uses the same process-lifetime cached
+        prompt content as ``load_prompt``.
+    """
     prompt = load_prompt(file_name)
     placeholders = set(_PROMPT_PLACEHOLDER_PATTERN.findall(prompt))
     replacement_names = set(replacements)
@@ -54,7 +91,7 @@ def render_prompt(
 def _load_prompt_content(prompt_path: Path) -> str:
     try:
         prompt = prompt_path.read_text(encoding="utf-8").strip()
-    except OSError as exc:
+    except (OSError, UnicodeError) as exc:
         raise PromptLoadError(f"Unable to load prompt '{prompt_path.name}'") from exc
     if not prompt:
         raise PromptLoadError(f"Prompt '{prompt_path.name}' is empty")

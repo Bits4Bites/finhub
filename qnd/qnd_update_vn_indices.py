@@ -5,7 +5,7 @@ import asyncio
 import json
 from datetime import datetime
 
-from app.services import crawler as crawler_service
+from app.services import crawler_core as crawler_core_service
 
 
 def convert_market_cap(market_cap_str):
@@ -24,7 +24,7 @@ def convert_market_cap(market_cap_str):
 
 async def update_vn_index_hose():
     url = "https://stockanalysis.com/list/ho-chi-minh-stock-exchange/"
-    data = await crawler_service.scrape_data_table(url, table_attr_filter={"id": "main-table"})
+    data = await crawler_core_service.scrape_data_table(url, table_attr_filter={"id": "main-table"})
 
     # data["Market Cap"] is in the format of "1.5B", "300M", etc. We need to convert it to a number for sorting and filtering.
     data["Market Cap"] = data["Market Cap"].apply(convert_market_cap)
@@ -74,7 +74,7 @@ async def update_vn_index_hose():
 
 async def update_vn_index_hnx():
     url = "https://stockanalysis.com/list/hanoi-stock-exchange/"
-    data = await crawler_service.scrape_data_table(url, table_attr_filter={"id": "main-table"})
+    data = await crawler_core_service.scrape_data_table(url, table_attr_filter={"id": "main-table"})
 
     # data["Market Cap"] is in the format of "1.5B", "300M", etc. We need to convert it to a number for sorting and filtering.
     data["Market Cap"] = data["Market Cap"].apply(convert_market_cap)

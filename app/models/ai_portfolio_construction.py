@@ -28,7 +28,10 @@ class PortfolioTargetPosition(models_ai.StrictAIModel):
     ticker: str = Field(
         min_length=1,
         max_length=models_portfolio.MAX_TICKER_LENGTH,
-        description="Canonical EXCHANGE:CODE symbol for the target security.",
+        description=(
+            "Canonical EXCHANGE:CODE symbol for the target security; input is "
+            "trimmed, uppercased, and exchange aliases are canonicalized."
+        ),
     )
     company_name: str | None = Field(
         default=None,
@@ -68,7 +71,12 @@ class PortfolioTargetPosition(models_ai.StrictAIModel):
 
 
 class PortfolioActionStep(models_ai.StrictAIModel):
-    """One prioritized whole-share implementation action for the target portfolio."""
+    """One prioritized whole-share implementation action for the target portfolio.
+
+    BUY and TRIM require quantity, market price, and estimated amount. Other
+    actions carry no quantity; ACCUMULATE requires a target allocation, and
+    EXIT instructions begin with ``SELL ALL``.
+    """
 
     priority: int = Field(
         ge=1,
@@ -79,7 +87,10 @@ class PortfolioActionStep(models_ai.StrictAIModel):
     ticker: str = Field(
         min_length=1,
         max_length=models_portfolio.MAX_TICKER_LENGTH,
-        description="Canonical EXCHANGE:CODE symbol affected by the action.",
+        description=(
+            "Canonical EXCHANGE:CODE symbol affected by the action; input is "
+            "trimmed, uppercased, and exchange aliases are canonicalized."
+        ),
     )
     company_name: str | None = Field(
         default=None,
@@ -147,7 +158,12 @@ class PortfolioActionStep(models_ai.StrictAIModel):
 
 
 class PortfolioActionPlan(models_ai.StrictAIModel):
-    """Prioritized implementation steps derived from the constructed target and budget."""
+    """Prioritized implementation steps derived from the constructed target and budget.
+
+    Priorities are consecutive from one, each ticker appears once, and utilized
+    plus unallocated money equals the supplied or inferred budget. New-money
+    construction plans cannot contain TRIM actions.
+    """
 
     budget: models_portfolio.PortfolioBudget = Field(
         description="Normalized investment budget used to size the action plan."
@@ -201,7 +217,19 @@ class PortfolioActionPlan(models_ai.StrictAIModel):
 
 
 class PortfolioConstruction(models_ai.StrictAIModel):
-    """A research-backed target portfolio with prioritized implementation actions."""
+    """A research-backed target portfolio with prioritized implementation actions.
+
+    At the model boundary, Scratch is the only mode that may have a null action
+    plan; Seeded always requires one. The service produces a null plan only
+    when neither a supplied budget nor positive current holdings are available.
+    Scratch requests with a supplied budget receive a plan, while Seeded
+    requests without a supplied budget receive an inferred budget and a plan.
+    Any action plan covers every target and seed ticker, and cited source IDs
+    must match the returned source registry. Complete results have no validation
+    warnings; CompleteWithWarnings results have at least one. When the action
+    plan is unavailable, full endpoint serialization retains an explicit
+    ``"action_plan": null`` while omitting other null fields.
+    """
 
     result_type: Literal["PortfolioConstruction"] = Field(
         default="PortfolioConstruction",
@@ -214,10 +242,8 @@ class PortfolioConstruction(models_ai.StrictAIModel):
     construction_mode: PortfolioConstructionMode = Field(
         description="Scratch without positive seed holdings, or Seeded when verified holdings informed construction."
     )
-    country: str = Field(
-        min_length=2,
-        max_length=2,
-        description="ISO 3166-1 alpha-2 market country code used for construction.",
+    country: models_types.CountryCode = Field(
+        description=("ISO 3166-1 alpha-2 market country code used for construction; input is trimmed and uppercased."),
     )
     investor_theme: models_types.NonEmptyString = Field(
         max_length=4000,
@@ -238,7 +264,11 @@ class PortfolioConstruction(models_ai.StrictAIModel):
     )
     action_plan: PortfolioActionPlan | None = Field(
         description=(
-            "Prioritized whole-share implementation plan, or null when neither a budget nor current holdings exist."
+            "Prioritized whole-share implementation plan. Model-valid null is restricted "
+            "to Scratch; the service returns null only when neither a supplied budget nor "
+            "positive current holdings are available. Seeded requests without a supplied "
+            "budget receive an inferred budget and plan. Null is retained when endpoint "
+            "serialization excludes other null fields."
         )
     )
     overall_data_quality: models_types.DataQuality = Field(
@@ -255,7 +285,7 @@ class PortfolioConstruction(models_ai.StrictAIModel):
     references: list[models_ai.ReferenceSource] = Field(
         min_length=1,
         max_length=20,
-        description="Canonical sources cited by target portfolio positions.",
+        description="Canonical sources cited by target portfolio positions, in application-supplied order.",
     )
 
     @model_serializer(mode="wrap")

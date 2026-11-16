@@ -1,6 +1,8 @@
 import json
 import logging
+import math
 import re
+import typing
 from datetime import UTC, date, datetime, time
 from typing import Self
 from zoneinfo import ZoneInfo
@@ -12,17 +14,17 @@ from .. import config
 from ..models import ai as models_ai
 from ..models import events_listings as models_events_listings
 from ..models import types as models_types
-from ..services import crawler as services_crawler
+from ..services import crawler_core as services_crawler_core
 from ..utils import ai_prompt as ai_prompt_utils
 from ..utils import ai_reference as ai_reference_utils
 from ..utils import cache, conv
 from ..utils import data as data_utils
 from . import ai_helper
 
-_ASX_LISTINGS_CACHE_NAMESPACE = "asx-new-listings-analysis-v3"
-_ASX_LISTINGS_EXTRACTION_CACHE_NAMESPACE = "asx-new-listings-extraction-v1"
-_ASX_LISTINGS_RESEARCH_CACHE_NAMESPACE = "asx-new-listings-research-v1"
-_ASX_LISTINGS_ASSESSMENT_CACHE_NAMESPACE = "asx-new-listings-assessment-v1"
+_ASX_LISTINGS_CACHE_NAMESPACE = "asx-new-listings-analysis"
+_ASX_LISTINGS_EXTRACTION_CACHE_NAMESPACE = "asx-new-listings-extraction"
+_ASX_LISTINGS_RESEARCH_CACHE_NAMESPACE = "asx-new-listings-research"
+_ASX_LISTINGS_ASSESSMENT_CACHE_NAMESPACE = "asx-new-listings-assessment"
 _ASX_LISTINGS_EXTRACTION_CACHE_TTL = 24 * 60 * 60
 _ASX_LISTINGS_EXTRACTION_PROMPT = "asx_new_listings_extraction.txt"
 _ASX_LISTINGS_RESEARCH_PROMPT = "asx_new_listings_research.txt"
@@ -67,6 +69,7 @@ class _ExtractedListingCandidate(models_ai.StrictAIModel):
     company_name: models_types.NonEmptyString
     listing_date: date | None
     issue_price: float | None
+    issue_price_upper: float | None
     issue_type: str | None
     capital_to_raise: float | None
     is_underwritten: bool | None
@@ -124,21 +127,108 @@ class _ListingAnalysisDraft(models_events_listings.ListingAnalysisBase):
     risks_and_catalysts: _QuickListingRiskCatalystAnalysis
 
 
-async def ai_get_asx_new_listings() -> list[models_events_listings.ListingEvent]:
-    """
-    Fetch, extract, and analyze up to five current or upcoming ASX listings.
+class _SubjectiveListingPeriodOutlook(models_events_listings.ListingPeriodOutlook):
+    assessment_type: typing.Literal["Forecast"]
+    direction: typing.Literal["Up", "Flat", "Down"]
+    assumptions: list[models_types.NonEmptyString] = Field(
+        min_length=1,
+        description="Explicit conditional assumptions, separate from sourced issuer facts.",
+    )
 
-    Listings before the current Sydney date are excluded. Today's listings are
-    included, and results are ordered by the soonest confirmed listing date. Entries
-    without a confirmed date or with supplied non-positive monetary values are
-    excluded. Unavailable issue prices and capital amounts are retained as null.
+
+class _PricedListingPeriodOutlook(_SubjectiveListingPeriodOutlook):
+    expected_price_min: float = Field(
+        gt=0,
+        allow_inf_nan=False,
+        description="Subjective lower trading-price bound anchored to the supplied issue price.",
+    )
+    expected_price_max: float = Field(
+        gt=0,
+        allow_inf_nan=False,
+        description="Subjective upper trading-price bound anchored to the supplied issue price.",
+    )
+    expected_return_min_pct: float | None = Field(
+        allow_inf_nan=False,
+        description="Optional estimate; the application derives this from the price bound and issue price.",
+    )
+    expected_return_max_pct: float | None = Field(
+        allow_inf_nan=False,
+        description="Optional estimate; the application derives this from the price bound and issue price.",
+    )
+
+
+class _SubjectiveListingOutlook(models_events_listings.ListingOutlook):
+    ipo_day: _SubjectiveListingPeriodOutlook
+    first_week: _SubjectiveListingPeriodOutlook
+    first_two_weeks: _SubjectiveListingPeriodOutlook
+    first_month: _SubjectiveListingPeriodOutlook
+
+
+class _PricedListingOutlook(_SubjectiveListingOutlook):
+    ipo_day: _PricedListingPeriodOutlook
+    first_week: _PricedListingPeriodOutlook
+    first_two_weeks: _PricedListingPeriodOutlook
+    first_month: _PricedListingPeriodOutlook
+
+
+class _SubjectiveListingAnalysisDraft(_ListingAnalysisDraft):
+    listing_status: typing.Literal["Upcoming"]
+    overall_stance: typing.Literal["Bullish", "Neutral", "Bearish"]
+    executive_summary: models_events_listings.ListingAnalysisSection = Field(
+        description=(
+            "Useful provisional issuer/offer overview and subjective base-case opinion. "
+            "Explain the investment case, main concern, and what would change the view; "
+            "evidence limitations must not be the entire summary."
+        )
+    )
+    outlook: _SubjectiveListingOutlook
+
+
+class _PricedListingAnalysisDraft(_SubjectiveListingAnalysisDraft):
+    outlook: _PricedListingOutlook
+
+
+async def ai_get_asx_new_listings() -> list[models_events_listings.ListingEvent]:
+    """Return confirmed current and future ASX listings with bounded AI analysis.
+
+    Returns:
+        Listing events whose confirmed listing date is today or later in Sydney,
+        ordered by date and then symbol. Missing issue price, price-range upper bound,
+        or capital-to-raise values remain ``None``; supplied non-positive monetary
+        values and unconfirmed dates are excluded. Up to five attempted analyses are
+        marked ``Completed`` or ``Failed`` and retained. Events excluded by Economy
+        screening or beyond the attempt cap are retained as ``Skipped``.
+
+    Raises:
+        RuntimeError: If the ASX page cannot be fetched, an extraction or analysis
+            cache contains invalid data, or AI extraction reports failure.
+        ValueError: If AI extraction returns invalid structured listing data.
+        ai_helper.LLMRateLimitError: If extraction remains provider-rate-limited
+            beyond the retry budget.
+        Exception: Crawler, cache-backend, provider configuration, and unexpected
+            extraction-provider failures are propagated.
+
+    Notes:
+        Failed analysis attempts consume the five-attempt cap; Economy skips do not.
+        In Economy mode, an event is screened out only when it is explicitly not
+        underwritten and its public-offer close date is absent or earlier than the
+        current Sydney date. Unknown underwriting status and offers closing today
+        or later remain eligible.
+        Per-listing research or assessment failures are represented as ``Failed``
+        events rather than aborting the list. Upcoming price outlooks are explicitly
+        subjective and use the issue price only when one is available. Structurally
+        valid sources without matching provider citations are retained with
+        ``is_verified=False`` and explicit analysis warnings. Extraction is cached
+        for 24 hours. Listing research, assessment, and an all-completed result list
+        expire after one hour for listings within one day, six hours for listings
+        two through seven days away, and 24 hours for later listings; a result list
+        uses the shortest included lifetime.
     """
     today = _current_asx_date()
     events = _select_current_and_future_listings(
         await _get_asx_new_listings(),
         today=today,
     )
-    events = events[:_MAX_LISTINGS_TO_ANALYZE]
     cache_key = _generate_analysis_cache_key(events, today=today)
     cached_events = await cache.get(cache_key)
     if cached_events is not None:
@@ -181,6 +271,7 @@ def _generate_analysis_cache_key(
     return cache.generate_hourly_key(
         _ASX_LISTINGS_CACHE_NAMESPACE,
         today.isoformat(),
+        config.settings_llm_task.tokenomics_mode,
         *(
             _task_cache_identity(task_id)
             for task_id in (
@@ -256,7 +347,7 @@ def _validate_cached_events(cached_events: object) -> list[models_events_listing
 
 
 async def _get_asx_new_listings() -> list[models_events_listings.ListingEvent]:
-    html_content = await services_crawler.fetch_webpage_content(_ASX_LISTINGS_URL)
+    html_content = await services_crawler_core.fetch_webpage_content(_ASX_LISTINGS_URL)
     if not html_content:
         raise RuntimeError("[ASX Listings] Failed to fetch the ASX upcoming-listings page.")
 
@@ -359,6 +450,7 @@ def _validated_listing_event(
             source_name=_ASX_EXCHANGE,
             link=_ASX_LISTINGS_URL,
             issue_price=candidate.issue_price,
+            issue_price_upper=candidate.issue_price_upper,
             issue_type=issue_type,
             sector=sector,
             principal_activities=candidate.principal_activities,
@@ -383,8 +475,31 @@ def _clean_names(values: list[str]) -> list[str]:
 async def _analyze_asx_listings(
     events: list[models_events_listings.ListingEvent],
 ) -> list[models_events_listings.ListingEvent]:
+    today = _current_asx_date()
+    economy_mode = config.settings_llm_task.tokenomics_mode == "Economy"
+    analysis_attempts = 0
     for event in events:
         try:
+            limit_reached = analysis_attempts >= _MAX_LISTINGS_TO_ANALYZE
+            if limit_reached or (
+                event.is_underwritten is False
+                and economy_mode
+                and (event.public_offer_close_date is None or date.fromisoformat(event.public_offer_close_date) < today)
+            ):
+                logging.info(
+                    "[ASX Listings] Skipping analysis for '%s': %s.",
+                    event.symbol,
+                    "analysis limit reached" if limit_reached else "Economy mode",
+                )
+                event.analysis = None
+                event.analysis_status = "Skipped"
+                event.analysis_error = None
+                continue
+
+            analysis_attempts += 1
+            logging.info(
+                "[ASX Listings] Analyzing listing '%s' (underwritten=%s).", event.symbol, event.is_underwritten
+            )
             research = await _research_asx_listing(event)
             event.analysis = await _assess_asx_listing(event, research)
             event.analysis_status = "Completed"
@@ -550,6 +665,110 @@ def _finalize_research_sources(
     return _ListingResearch.model_validate(research_data)
 
 
+def _build_listing_assessment_context(
+    event: models_events_listings.ListingEvent,
+    research: _ListingResearch,
+    *,
+    today: date,
+    listing_date: date,
+    price_anchor: float | None,
+) -> dict[str, object]:
+    fact_counts = {name: len(getattr(research, name).facts) for name in _RESEARCH_SECTION_NAMES}
+    focus = []
+    if not fact_counts["financials"]:
+        focus.append("Discuss funding and financial uncertainty without inventing revenue, profitability, or runway.")
+    if not fact_counts["valuation"]:
+        focus.append("Use a trading scenario, not an invented fair value or unsupported peer multiples.")
+    if event.is_underwritten is None:
+        focus.append("Underwriting is undisclosed, not confirmed absent.")
+    if price_anchor is None:
+        focus.append("Give a qualitative directional view; do not invent absolute prices or return ranges.")
+
+    return {
+        "assessment_date": today.isoformat(),
+        "listing_date": listing_date.isoformat(),
+        "days_until_listing": (listing_date - today).days,
+        "forecast_mode": (
+            "ObservedOrForecast"
+            if listing_date < today
+            else "SubjectiveBaseCase"
+            if price_anchor is not None
+            else "Qualitative"
+        ),
+        "currency": event.currency,
+        "issue_price_anchor": price_anchor,
+        "issue_price_upper": event.issue_price_upper,
+        "sector": event.sector,
+        "fact_counts": fact_counts,
+        "sections_without_facts": [name for name, count in fact_counts.items() if not count],
+        "source_count": len(research.references),
+        "unverified_source_count": sum(not reference.is_verified for reference in research.references),
+        "analysis_focus": focus,
+    }
+
+
+def _finalize_subjective_assessment(
+    draft: _ListingAnalysisDraft,
+    *,
+    price_anchor: float | None,
+    currency: str,
+    context: dict[str, object],
+) -> _ListingAnalysisDraft:
+    if draft.listing_status != "Upcoming":
+        return draft
+
+    data = draft.model_dump(mode="python")
+    warnings = [
+        "Subjective screening opinion, not an independently verified prediction or personalized investment recommendation."
+    ]
+    if context["unverified_source_count"]:
+        warnings.append(
+            f"{context['unverified_source_count']} source(s) lack provider citation verification; "
+            "this is not proof that their contents are false."
+        )
+    if context["sections_without_facts"] or draft.overall_data_quality in {"Low", "Insufficient"}:
+        warnings.append("Evidence is incomplete; the conditional scenarios may differ materially from actual trading.")
+    if price_anchor is None:
+        warnings.append("No confirmed issue-price anchor; absolute prices and return ranges are unavailable.")
+        anchor_assumption = "The directional view assumes the listing proceeds; no absolute-price estimate is provided."
+    else:
+        warnings.append("Subjective price ranges are trading scenarios, not guaranteed trading bounds.")
+        issue_price_upper = context.get("issue_price_upper")
+        if issue_price_upper is None:
+            anchor_assumption = f"Uses the disclosed issue price of {currency} {price_anchor:g} as a scenario anchor, not proof of fair value."
+        else:
+            warnings.append(
+                "Return percentages use the lower bound of the disclosed issue-price range; "
+                "the final issue price may differ."
+            )
+            anchor_assumption = (
+                f"Uses the lower bound of the disclosed issue-price range "
+                f"{currency} {price_anchor:g}-{issue_price_upper:g} as a scenario anchor, not proof of fair value."
+            )
+
+    summary = data["executive_summary"]
+    if not summary["summary"].casefold().startswith("subjective"):
+        summary["summary"] = f"Subjective base-case view: {summary['summary']}"
+    summary["assumptions"] = list(dict.fromkeys([*summary["assumptions"], anchor_assumption]))
+    summary["data_gaps"] = list(dict.fromkeys([*warnings, *summary["data_gaps"]]))
+
+    for period_name in _OUTLOOK_PERIOD_NAMES:
+        period = data["outlook"][period_name]
+        if not period["rationale"].casefold().startswith("subjective"):
+            period["rationale"] = f"Subjective base-case view: {period['rationale']}"
+        period["assumptions"] = list(dict.fromkeys([*period["assumptions"], anchor_assumption]))
+        period["data_gaps"] = list(dict.fromkeys([*warnings, *period["data_gaps"]]))
+        if price_anchor is None:
+            period["expected_price_min"] = None
+            period["expected_price_max"] = None
+            period["expected_return_min_pct"] = None
+            period["expected_return_max_pct"] = None
+        else:
+            period["expected_return_min_pct"] = round((period["expected_price_min"] / price_anchor - 1) * 100, 2)
+            period["expected_return_max_pct"] = round((period["expected_price_max"] / price_anchor - 1) * 100, 2)
+    return type(draft).model_validate(data)
+
+
 async def _assess_asx_listing(
     event: models_events_listings.ListingEvent,
     research: _ListingResearch,
@@ -565,6 +784,24 @@ async def _assess_asx_listing(
     today = _current_asx_date()
     listing_date = datetime.fromisoformat(event.timestamp_str).date()
     expected_status = "Listed" if listing_date < today else "Upcoming"
+    price_anchor = (
+        event.issue_price
+        if event.issue_price is not None and math.isfinite(event.issue_price) and event.issue_price > 0
+        else None
+    )
+    assessment_context = _build_listing_assessment_context(
+        event,
+        research,
+        today=today,
+        listing_date=listing_date,
+        price_anchor=price_anchor,
+    )
+    draft_model: type[_ListingAnalysisDraft] = _ListingAnalysisDraft
+    if assessment_context["forecast_mode"] == "SubjectiveBaseCase":
+        draft_model = _PricedListingAnalysisDraft
+    elif assessment_context["forecast_mode"] == "Qualitative":
+        draft_model = _SubjectiveListingAnalysisDraft
+    response_schema = draft_model.model_json_schema()
     event_json = event.model_dump_json(
         exclude={"analysis", "analysis_error", "analysis_status"},
         exclude_none=False,
@@ -576,6 +813,7 @@ async def _assess_asx_listing(
             "SYMBOL": event.symbol,
             "EXPECTED_STATUS": expected_status,
             "UNDERWRITING_INSTRUCTION": underwriting_instruction,
+            "ASSESSMENT_CONTEXT_JSON": json.dumps(assessment_context),
             "EVENT_JSON": event_json,
             "RESEARCH_JSON": research_json,
         },
@@ -585,7 +823,7 @@ async def _assess_asx_listing(
         _ASX_LISTINGS_ASSESSMENT_CACHE_NAMESPACE,
         today.isoformat(),
         analysis_prompt,
-        json.dumps(_ListingAnalysisDraft.model_json_schema(), sort_keys=True),
+        json.dumps(response_schema, sort_keys=True),
         _task_cache_identity(task_id),
     )
     cached_analysis = await cache.get(cache_key)
@@ -603,14 +841,14 @@ async def _assess_asx_listing(
         task_id,
         analysis_prompt,
         country=_ASX_COUNTRY,
-        response_json_schema=_ListingAnalysisDraft.model_json_schema(),
+        response_json_schema=response_schema,
         schema_name="asx_listing_analysis",
     )
     if analysis_result.is_error:
         raise RuntimeError(f"AI assessment failed: {analysis_result.error_msg}")
 
     try:
-        draft = _ListingAnalysisDraft.model_validate_json(analysis_result.completion)
+        draft = draft_model.model_validate_json(analysis_result.completion)
     except ValidationError as exc:
         raise ValueError("AI assessment returned an invalid structured response.") from exc
     if draft.symbol != event.symbol:
@@ -619,6 +857,12 @@ async def _assess_asx_listing(
         raise ValueError("AI assessment returned an invalid listing status.")
 
     draft = _repair_analysis_references(draft, research)
+    draft = _finalize_subjective_assessment(
+        draft,
+        price_anchor=price_anchor,
+        currency=event.currency,
+        context=assessment_context,
+    )
     used_reference_ids = draft.referenced_source_ids()
     references = [reference for reference in research.references if reference.id in used_reference_ids]
     analysis_data = draft.model_dump()
@@ -715,4 +959,4 @@ def _repair_analysis_references(
             "[ASX Listings] Ignored unsupported assessment source IDs: %s.",
             ", ".join(sorted(removed_ids)),
         )
-    return _ListingAnalysisDraft.model_validate(draft_data)
+    return type(draft).model_validate(draft_data)

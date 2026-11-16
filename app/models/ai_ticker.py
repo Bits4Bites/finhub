@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, field_validator, model_validator
 
 from ..utils import ai_reference as ai_reference_utils
+from ..utils import conv
 from . import ai as models_ai
 from . import portfolio as models_portfolio
 from . import types as models_types
@@ -31,21 +32,31 @@ _FORECAST_HORIZON_ORDER: tuple[TickerForecastHorizon, ...] = (
 )
 
 
+def _forecast_direction(
+    minimum: float,
+    maximum: float,
+    *,
+    market_price: float,
+) -> TickerPriceDirection:
+    up_threshold = market_price * 1.01
+    down_threshold = market_price * 0.99
+    if minimum > up_threshold:
+        return "Up"
+    if maximum < down_threshold:
+        return "Down"
+    if minimum <= market_price <= maximum and (maximum - minimum) / market_price > 0.04:
+        return "Mixed"
+    return "Flat"
+
+
 class TickerPriceRange(models_ai.StrictAIModel):
     """A positive price interval in the security's trading currency."""
 
     minimum: float = Field(gt=0, allow_inf_nan=False, description="Lower bound of the price range.")
     maximum: float = Field(gt=0, allow_inf_nan=False, description="Upper bound of the price range.")
-    currency: str = Field(
-        min_length=3,
-        max_length=3,
-        description="Three-letter trading currency code.",
+    currency: models_types.CurrencyCode = Field(
+        description="Three-letter trading currency code; input is trimmed and uppercased.",
     )
-
-    @field_validator("currency", mode="before")
-    @classmethod
-    def normalize_currency(cls, value: object) -> object:
-        return value.strip().upper() if isinstance(value, str) else value
 
     @model_validator(mode="after")
     def validate_range(self) -> Self:
@@ -55,13 +66,21 @@ class TickerPriceRange(models_ai.StrictAIModel):
 
 
 class TickerMarketSnapshot(models_ai.StrictAIModel):
-    """Verified quote, historical, technical, and consensus inputs for ticker analysis."""
+    """Verified quote, historical, technical, and consensus inputs for ticker analysis.
+
+    Supplied session, 52-week, and analyst low values do not exceed their
+    corresponding highs, and bid does not exceed ask. The canonical symbol
+    exchange matches the normalized exchange field, and a supplied bid-ask
+    spread matches the quoted midpoint calculation.
+    """
 
     as_of: datetime = Field(description="Timezone-aware timestamp of the verified market snapshot.")
     symbol: str = Field(
         min_length=1,
         max_length=models_portfolio.MAX_TICKER_LENGTH,
-        description="Canonical EXCHANGE:CODE symbol.",
+        description=(
+            "Canonical EXCHANGE:CODE symbol; input is trimmed, uppercased, and exchange aliases are canonicalized."
+        ),
     )
     company_name: str | None = Field(
         default=None,
@@ -72,17 +91,16 @@ class TickerMarketSnapshot(models_ai.StrictAIModel):
     exchange: str = Field(
         min_length=1,
         max_length=models_portfolio.MAX_EXCHANGE_LENGTH,
-        description="Normalized exchange code.",
+        description=(
+            "Normalized exchange code matching the symbol prefix; input is "
+            "trimmed, uppercased, and recognized aliases are canonicalized."
+        ),
     )
-    country: str = Field(
-        min_length=2,
-        max_length=2,
-        description="ISO 3166-1 alpha-2 market country code.",
+    country: models_types.CountryCode = Field(
+        description="ISO 3166-1 alpha-2 market country code; input is trimmed and uppercased.",
     )
-    currency: str = Field(
-        min_length=3,
-        max_length=3,
-        description="Three-letter trading currency code.",
+    currency: models_types.CurrencyCode = Field(
+        description="Three-letter trading currency code; input is trimmed and uppercased.",
     )
     sector: str | None = Field(default=None, max_length=200, description="Provider-reported sector.")
     industry: str | None = Field(default=None, max_length=200, description="Provider-reported industry.")
@@ -245,15 +263,23 @@ class TickerMarketSnapshot(models_ai.StrictAIModel):
         description="Unavailable or insufficient verified market data.",
     )
 
-    @field_validator("symbol", "exchange", "country", "currency", mode="before")
+    @field_validator("symbol", mode="before")
     @classmethod
-    def normalize_identifiers(cls, value: object) -> object:
-        return value.strip().upper() if isinstance(value, str) else value
+    def normalize_symbol(cls, value: object) -> object:
+        return models_portfolio.normalize_canonical_ticker(value)
+
+    @field_validator("exchange", mode="before")
+    @classmethod
+    def normalize_exchange(cls, value: object) -> object:
+        return conv.normalize_exchange_code(value) if isinstance(value, str) else value
 
     @model_validator(mode="after")
     def validate_snapshot(self) -> Self:
         if self.as_of.tzinfo is None or self.as_of.utcoffset() is None:
             raise ValueError("market snapshot as_of must be timezone-aware")
+        symbol_exchange, _ = self.symbol.split(":", 1)
+        if self.exchange != symbol_exchange:
+            raise ValueError("market snapshot exchange must match the canonical symbol")
         for low_name, high_name in (
             ("market_day_low", "market_day_high"),
             ("fifty_two_week_low", "fifty_two_week_high"),
@@ -265,11 +291,23 @@ class TickerMarketSnapshot(models_ai.StrictAIModel):
                 raise ValueError(f"{low_name} must not exceed {high_name}")
         if self.bid is not None and self.ask is not None and self.bid > self.ask:
             raise ValueError("bid must not exceed ask")
+        if self.bid is None or self.ask is None:
+            if self.bid_ask_spread_pct is not None:
+                raise ValueError("bid-ask spread requires both bid and ask")
+        else:
+            midpoint = (self.bid + self.ask) / 2
+            expected_spread = (self.ask - self.bid) / midpoint * 100
+            if self.bid_ask_spread_pct is None or abs(self.bid_ask_spread_pct - expected_spread) > 1e-6:
+                raise ValueError("bid-ask spread must match bid and ask")
         return self
 
 
 class TickerHoldingSnapshot(models_ai.StrictAIModel):
-    """Deterministic valuation of an optional current holding."""
+    """Deterministic valuation of an optional current holding.
+
+    Cost basis, market value, unrealized profit or loss, return percentage, and
+    break-even price must match the supplied share count and prices.
+    """
 
     num_shares: float = Field(
         gt=0,
@@ -281,10 +319,8 @@ class TickerHoldingSnapshot(models_ai.StrictAIModel):
         allow_inf_nan=False,
         description="Average acquisition price per share or unit.",
     )
-    currency: str = Field(
-        min_length=3,
-        max_length=3,
-        description="Three-letter trading currency code.",
+    currency: models_types.CurrencyCode = Field(
+        description="Three-letter trading currency code; input is trimmed and uppercased.",
     )
     market_price: float = Field(
         gt=0,
@@ -314,11 +350,6 @@ class TickerHoldingSnapshot(models_ai.StrictAIModel):
         allow_inf_nan=False,
         description="Per-unit price equal to the supplied average acquisition price.",
     )
-
-    @field_validator("currency", mode="before")
-    @classmethod
-    def normalize_currency(cls, value: object) -> object:
-        return value.strip().upper() if isinstance(value, str) else value
 
     @model_validator(mode="after")
     def validate_calculations(self) -> Self:
@@ -380,7 +411,7 @@ class TickerResearchSection(models_ai.StrictAIModel):
     )
     reference_ids: list[Annotated[models_types.NonEmptyString, Field(max_length=4000)]] = Field(
         max_length=12,
-        description="Unique canonical source IDs used by this section's claims.",
+        description=("Unique canonical source IDs used by this section's claims, preserved in caller-supplied order."),
     )
 
     @model_validator(mode="after")
@@ -436,7 +467,14 @@ class TickerResearch(models_ai.StrictAIModel):
 
 
 class TickerPriceForecast(models_ai.StrictAIModel):
-    """Validated price-range forecast for one fixed horizon."""
+    """Validated price-range forecast for one fixed horizon.
+
+    Horizon baselines are 7, 14, 30, and 90 calendar days for OneWeek,
+    TwoWeeks, OneMonth, and ThreeMonths. Forecast assessments contain ordered
+    price and return ranges; insufficient-data assessments contain no ranges
+    and identify their data gaps. The containing TickerAnalysis validates each
+    period end, return range, and direction against its market snapshot.
+    """
 
     horizon: TickerForecastHorizon = Field(
         description="Fixed forecast horizon identifier.",
@@ -447,13 +485,13 @@ class TickerPriceForecast(models_ai.StrictAIModel):
         description="Calendar-day baseline for the forecast horizon.",
     )
     period_end: date = Field(
-        description="Application-calculated end date for the forecast horizon.",
+        description="Application-calculated end date validated against the analysis market snapshot.",
     )
     assessment_status: TickerForecastAssessmentStatus = Field(
         description="Whether a range was forecast or evidence was insufficient.",
     )
     direction: TickerPriceDirection = Field(
-        description="Application-calculated direction implied by the price range.",
+        description="Application-calculated direction validated against the price range and market snapshot.",
     )
     expected_price_min: float | None = Field(
         default=None,
@@ -540,7 +578,11 @@ class TickerPriceForecast(models_ai.StrictAIModel):
 
 
 class TickerRecommendation(models_ai.StrictAIModel):
-    """Generic holding-aware BUY, HOLD, or SELL recommendation."""
+    """Generic holding-aware BUY, HOLD, or SELL recommendation.
+
+    BUY contains only a buy range, SELL contains only a sell range, and HOLD
+    contains neither.
+    """
 
     action: TickerRecommendationAction = Field(
         description="Generic BUY, HOLD, or SELL action.",
@@ -601,7 +643,15 @@ class TickerRecommendation(models_ai.StrictAIModel):
 
 
 class TickerAnalysis(models_ai.StrictAIModel):
-    """Final structured deep research, forecast, and recommendation for one ticker."""
+    """Final structured deep research, forecast, and recommendation for one ticker.
+
+    The analysis and market snapshot share symbol, exchange, country, and
+    currency; an optional holding snapshot uses that currency. Forecasts use
+    the four documented horizons in order and validate their dates, returns,
+    and directions against the snapshot. Recommendation scope reflects whether
+    a holding snapshot is present, and every cited source ID belongs to the
+    returned source registry.
+    """
 
     as_of: datetime = Field(description="Timezone-aware timestamp when analysis was finalized.")
     analysis_status: TickerAnalysisStatus = Field(
@@ -610,7 +660,10 @@ class TickerAnalysis(models_ai.StrictAIModel):
     symbol: str = Field(
         min_length=1,
         max_length=models_portfolio.MAX_TICKER_LENGTH,
-        description="Canonical EXCHANGE:CODE security symbol.",
+        description=(
+            "Canonical EXCHANGE:CODE security symbol; input is trimmed, "
+            "uppercased, and exchange aliases are canonicalized."
+        ),
     )
     company_name: str | None = Field(
         default=None,
@@ -623,17 +676,16 @@ class TickerAnalysis(models_ai.StrictAIModel):
     exchange: str = Field(
         min_length=1,
         max_length=models_portfolio.MAX_EXCHANGE_LENGTH,
-        description="Normalized exchange code.",
+        description=(
+            "Normalized exchange code matching the symbol and market snapshot; "
+            "input is trimmed, uppercased, and recognized aliases are canonicalized."
+        ),
     )
-    country: str = Field(
-        min_length=2,
-        max_length=2,
-        description="ISO 3166-1 alpha-2 market country code.",
+    country: models_types.CountryCode = Field(
+        description="ISO 3166-1 alpha-2 market country code; input is trimmed and uppercased.",
     )
-    currency: str = Field(
-        min_length=3,
-        max_length=3,
-        description="Three-letter trading currency code.",
+    currency: models_types.CurrencyCode = Field(
+        description="Three-letter trading currency code; input is trimmed and uppercased.",
     )
     market_snapshot: TickerMarketSnapshot = Field(
         description="Verified deterministic market and historical baseline.",
@@ -666,13 +718,18 @@ class TickerAnalysis(models_ai.StrictAIModel):
     references: list[models_ai.ReferenceSource] = Field(
         min_length=1,
         max_length=12,
-        description="Canonical registry of sources cited by the analysis.",
+        description="Canonical registry of sources cited by the analysis, in application-supplied order.",
     )
 
-    @field_validator("symbol", "exchange", "country", "currency", mode="before")
+    @field_validator("symbol", mode="before")
     @classmethod
-    def normalize_identifiers(cls, value: object) -> object:
-        return value.strip().upper() if isinstance(value, str) else value
+    def normalize_symbol(cls, value: object) -> object:
+        return models_portfolio.normalize_canonical_ticker(value)
+
+    @field_validator("exchange", mode="before")
+    @classmethod
+    def normalize_exchange(cls, value: object) -> object:
+        return conv.normalize_exchange_code(value) if isinstance(value, str) else value
 
     @model_validator(mode="after")
     def validate_analysis(self) -> Self:
@@ -684,10 +741,36 @@ class TickerAnalysis(models_ai.StrictAIModel):
             raise ValueError("CompleteWithWarnings requires validation warnings")
         if self.symbol != self.market_snapshot.symbol:
             raise ValueError("analysis symbol must match market snapshot")
+        if self.exchange != self.market_snapshot.exchange:
+            raise ValueError("analysis exchange must match market snapshot")
+        if self.country != self.market_snapshot.country:
+            raise ValueError("analysis country must match market snapshot")
         if self.currency != self.market_snapshot.currency:
             raise ValueError("analysis currency must match market snapshot")
+        if self.holding_snapshot is not None and self.holding_snapshot.currency != self.currency:
+            raise ValueError("holding snapshot currency must match analysis currency")
         if [forecast.horizon for forecast in self.forecasts] != list(_FORECAST_HORIZON_ORDER):
             raise ValueError("forecasts must contain the four required horizons in order")
+        for forecast in self.forecasts:
+            expected_period_end = self.market_snapshot.as_of.date() + timedelta(days=forecast.horizon_days)
+            if forecast.period_end != expected_period_end:
+                raise ValueError("forecast period_end must match the market snapshot and horizon")
+            if forecast.assessment_status != "Forecast":
+                continue
+            expected_return_min = (forecast.expected_price_min / self.market_snapshot.market_price - 1) * 100
+            expected_return_max = (forecast.expected_price_max / self.market_snapshot.market_price - 1) * 100
+            if (
+                abs(forecast.expected_return_min_pct - expected_return_min) > 1e-6
+                or abs(forecast.expected_return_max_pct - expected_return_max) > 1e-6
+            ):
+                raise ValueError("forecast returns must match forecast prices and market snapshot")
+            expected_direction = _forecast_direction(
+                forecast.expected_price_min,
+                forecast.expected_price_max,
+                market_price=self.market_snapshot.market_price,
+            )
+            if forecast.direction != expected_direction:
+                raise ValueError("forecast direction must match forecast prices and market snapshot")
         expected_scope: TickerRecommendationScope = (
             "ExistingHolding" if self.holding_snapshot is not None else "NewPosition"
         )

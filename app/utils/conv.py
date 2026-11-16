@@ -23,14 +23,20 @@ _COUNTRY_ALIASES: dict[str, str] = {
 
 
 def country_to_iso2(country: str | None) -> str:
-    """
-    Converts a country (name/code) to an ISO 3166-1 alpha-2 country code.
+    """Normalize a country identifier for market and financial-data workflows.
 
     Args:
-        country (str): The country (name, code) to convert.
+        country: A country name, ISO country code, or supported market alias.
 
     Returns:
-        str: The ISO 3166-1 alpha-2 country code.
+        The uppercase ISO 3166-1 alpha-2 code, or an empty string when the
+        country is missing or unrecognized.
+
+    Notes:
+        Matching is case-insensitive and accepts official country names and
+        codes plus common market aliases including UK, U.K., Great Britain,
+        England, U.S., U.S.A., UAE, U.A.E., Republic of Korea, Hong Kong SAR,
+        and Turkey. Unknown names are not fuzzy-matched.
     """
     country = (country or "").strip()
     if not country:
@@ -42,14 +48,14 @@ def country_to_iso2(country: str | None) -> str:
 
 
 def country_to_currency_symbol(country: str | None) -> str:
-    """
-    Converts a country name/code to the symbol of its primary active currency.
+    """Return the local display symbol for a country's active currency.
 
     Args:
-        country (str): The country name or code to convert.
+        country: A country name, ISO country code, or supported market alias.
 
     Returns:
-        str: The local currency symbol, or an empty string if the country or currency is unknown.
+        The locale-appropriate currency symbol, or an empty string when the
+        country or active currency cannot be determined.
     """
     country_code = country_to_iso2(country)
     currency_code = country_to_currency_code(country)
@@ -70,14 +76,14 @@ def country_to_currency_symbol(country: str | None) -> str:
 
 
 def country_to_currency_code(country: str | None) -> str:
-    """
-    Converts a country name/code to its primary active ISO 4217 currency code.
+    """Return the primary active currency code for a country.
 
     Args:
-        country (str): The country name or code to convert.
+        country: A country name, ISO country code, or supported market alias.
 
     Returns:
-        str: The ISO 4217 currency code, or an empty string if the country is unknown.
+        The ISO 4217 currency code, or an empty string when the country is
+        unknown or has no active tender currency.
     """
     country_code = country_to_iso2(country)
     if not country_code:
@@ -96,8 +102,10 @@ _EXCHANGE_ALIASES: dict[str, str] = {
     "NYQ": "NYSE",
     "NYSE": "NYSE",
     "NYS": "NYSE",
+    "NYARCA": "NYSE",
     "NYSEARCA": "NYSE",
     "NYSE ARCA": "NYSE",
+    "NEW YORK STOCK EXCHANGE": "NYSE",
     "BATS": "NYSE",
     "BTS": "NYSE",
     "CBOE BZX": "NYSE",
@@ -113,70 +121,91 @@ _YF_SUFFIX_BY_EXCHANGE: dict[str, str] = {
 
 
 def normalize_exchange_code(exchange: str) -> str:
-    """
-    Normalize an exchange name to a unified code (e.g. NYSE, NASDAQ, ASX...).
-    Uses a lookup table for known aliases, falls back to uppercase input.
+    """Map provider exchange labels to the application's market codes.
+
+    Args:
+        exchange: The exchange name or provider-specific exchange code.
+
+    Returns:
+        ``NASDAQ`` or ``NYSE`` for their recognized provider aliases; otherwise
+        the trimmed uppercase exchange label.
+
+    Notes:
+        NASDAQ aliases include NMS, NGM, and NCM plus labels containing
+        ``NASDAQ``. NYSE aliases include NYQ, NYS, NYARCA, NYSEARCA, BATS, BTS,
+        Cboe U.S. labels, and labels containing ``NYSE``. Similar-looking
+        exchanges such as NYMEX remain unchanged.
     """
     e = exchange.strip().upper()
     if e in _EXCHANGE_ALIASES:
         return _EXCHANGE_ALIASES[e]
     if "NASDAQ" in e:
         return "NASDAQ"
-    if "NY" in e:
+    if "NYSE" in e:
         return "NYSE"
     return e
 
 
-def to_exch_symb_format(*, ticker: yf.Ticker = None, symbol: str = None) -> str:
-    """
-    Converts a stock symbol to EXCHANGE:CODE format.
-    - If symbol is already in format EXCHANGE:CODE, it is returned as is.
-    - If symbol is in YF format (e.g., "AAPL", "CBA.AX" or "BID.VN"), try best to convert to EXCHANGE:CODE.
-    - Otherwise, return symbol as is.
+def to_exch_symb_format(*, ticker: yf.Ticker | None = None, symbol: str | None = None) -> str:
+    """Convert a stock identifier into the application's exchange-qualified form.
 
     Args:
-        ticker (yf.Ticker): The ticker to convert to EXCHANGE:CODE format.
-        symbol (str): The stock symbol to convert to EXCHANGE:CODE format.
+        ticker: A Yahoo Finance ticker whose metadata identifies the exchange and
+            provider symbol.
+        symbol: A Yahoo Finance symbol or an existing ``EXCHANGE:CODE`` symbol.
 
     Returns:
-        str: The stock symbol as EXCHANGE:CODE.
+        The uppercase ``EXCHANGE:CODE`` symbol. If the exchange cannot be
+        determined, the normalized provider symbol is returned. An empty string
+        is returned when no usable input is supplied.
 
-    Remarks:
-        Supply either ticker or symbol. If both are supplied, ticker takes precedence.
+    Notes:
+        Supply either ``ticker`` or ``symbol``. When both are supplied, ticker
+        metadata takes precedence. Resolving an unqualified ``symbol`` may load
+        Yahoo Finance metadata, and provider errors are allowed to propagate.
+        A final Yahoo market suffix is removed for non-U.S. listings; dots in
+        NASDAQ and NYSE symbols are retained for share classes.
     """
-    if not ticker and not symbol:
+    normalized_symbol = (symbol or "").strip().upper()
+    ticker_supplied = ticker is not None
+
+    if ticker is None and not normalized_symbol:
         return ""
 
-    symbol = symbol or ""
-    if not ticker and ":" in symbol:
-        return symbol.upper()
+    if ticker is None and ":" in normalized_symbol:
+        return normalized_symbol
 
-    ticker = yf.Ticker(symbol) if not ticker else ticker
-    exchange = normalize_exchange_code(ticker.info.get("fullExchangeName", ticker.info.get("exchange", "")))
-    symbol = ticker.info.get("symbol", "")
+    ticker = yf.Ticker(normalized_symbol) if ticker is None else ticker
+    info = ticker.info or {}
+    exchange = normalize_exchange_code(str(info.get("fullExchangeName") or info.get("exchange") or ""))
+    provider_symbol = str(info.get("symbol") or "").strip().upper()
+    if not provider_symbol and not ticker_supplied:
+        provider_symbol = normalized_symbol
+    if not provider_symbol:
+        return ""
+
     # Non-US provider symbols use a market suffix; US dots can identify share classes such as BRK.B.
-    if "." in symbol and exchange not in {"NASDAQ", "NYSE"}:
-        symbol = symbol.rsplit(".", 1)[0]
-    return f"{exchange}:{symbol}"
+    if exchange and "." in provider_symbol and exchange not in {"NASDAQ", "NYSE"}:
+        provider_symbol = provider_symbol.rsplit(".", 1)[0]
+    return f"{exchange}:{provider_symbol}" if exchange else provider_symbol
 
 
 def to_yf_symbol_format(symbol: str) -> str:
-    """
-    Converts a stock symbol to a Yahoo Finance ticker format.
-    - If symbol is already in YF format (e.g., "AAPL", "CBA.AX" or "BID.VN"), return as is.
-    - If symbol is in format EXCHANGE:CODE (e.g., "ASX:CBA", "HOSE:BID"), convert to YF format (e.g., "CBA.AX", "BID.VN").
-    - Otherwise, return symbol as is.
+    """Convert an application stock symbol into Yahoo Finance format.
 
     Args:
-        symbol (str): The stock symbol to convert to YF ticker format.
+        symbol: A Yahoo Finance symbol or an ``EXCHANGE:CODE`` symbol.
 
     Returns:
-        str: The stock symbol as a Yahoo Finance ticker.
+        The uppercase Yahoo Finance symbol. Unsupported exchanges are returned
+        in normalized ``EXCHANGE:CODE`` form.
 
-    Remarks:
-        Currently support only AU/US/VN markets.
+    Notes:
+        ASX maps to ``.AX``; HNX, HOSE, and UPCOM map to ``.VN``; and LSE maps
+        to ``.L``. NASDAQ and NYSE lose the exchange prefix. Other
+        exchange-qualified symbols remain exchange-qualified.
     """
-    symbol = symbol.upper()
+    symbol = symbol.strip().upper()
     if ":" in symbol:
         exchange, ticker = symbol.split(":", 1)
         exchange = normalize_exchange_code(exchange)
@@ -188,17 +217,22 @@ def to_yf_symbol_format(symbol: str) -> str:
     return symbol
 
 
-def number_to_human_format(num: int | float, precision: int = 2):
-    """
-    Convert a number into a human-readable format with K, M, B, T suffixes.
+def number_to_human_format(num: int | float, precision: int = 2) -> str:
+    """Format a financial value for compact human-readable display.
 
     Args:
-        num (int|float): The number to format.
-        precision (int): Decimal places to keep.
+        num: The numeric value to format.
+        precision: The maximum number of decimal places to retain.
 
     Returns:
-        str: Formatted string.
+        The compact value using ``K``, ``M``, ``B``, or ``T`` where applicable.
+
+    Raises:
+        ValueError: If ``precision`` is negative.
     """
+    if precision < 0:
+        raise ValueError("precision must be non-negative")
+
     sign = "-" if num < 0 else ""
     num = abs(num)
 
@@ -209,27 +243,35 @@ def number_to_human_format(num: int | float, precision: int = 2):
         num /= 1000.0
         idx += 1
 
-    formatted = f"{num:.{precision}f}".rstrip("0").rstrip(".")
+    formatted = f"{num:.{precision}f}"
+    if "." in formatted:
+        formatted = formatted.rstrip("0").rstrip(".")
     return f"{sign}{formatted}{suffixes[idx]}"
 
 
-def yyyymmdd_to_iso(yyyy_mm_dd: str, tz: ZoneInfo = None, tz_name: str = None) -> str | None:
-    """
-    Converts a date string in the format 'YYYY-MM-DD' to ISO format 'YYYY-MM-DD 00:00:00+hh:mm'.
+def yyyymmdd_to_iso(yyyy_mm_dd: str, tz: ZoneInfo | None = None, tz_name: str | None = None) -> str | None:
+    """Convert a calendar date into a timezone-aware midnight timestamp.
 
     Args:
-        yyyy_mm_dd (str): The date in the format YYYY-MM-DD
-        tz (ZoneInfo, optional): The timezone to use. Defaults to None.
-        tz_name (str, optional): The timezone name to use. Defaults to None.
+        yyyy_mm_dd: The date in ``YYYY-MM-DD`` format.
+        tz: The timezone to apply.
+        tz_name: An IANA timezone name used when ``tz`` is not supplied.
 
     Returns:
-        str: The date in ISO format, or None if the input date string is invalid.
+        The ISO timestamp at midnight, or ``None`` when the date is invalid.
 
-    Remarks:
-        If both tz and tz_name are provided, tz will be used.
+    Raises:
+        ZoneInfoNotFoundError: If ``tz_name`` is not recognized.
+
+    Notes:
+        ``tz`` takes precedence over ``tz_name``. UTC is used when neither is
+        supplied. The date must use the fixed-width ``YYYY-MM-DD`` form.
     """
     tz = tz or (ZoneInfo(tz_name) if tz_name else ZoneInfo("UTC"))
     try:
-        return datetime.strptime(yyyy_mm_dd, "%Y-%m-%d").replace(tzinfo=tz).isoformat(sep=" ", timespec="seconds")
+        parsed_date = datetime.strptime(yyyy_mm_dd, "%Y-%m-%d")
     except ValueError:
         return None
+    if parsed_date.strftime("%Y-%m-%d") != yyyy_mm_dd:
+        return None
+    return parsed_date.replace(tzinfo=tz).isoformat(sep=" ", timespec="seconds")

@@ -10,6 +10,9 @@ public sealed record CompanyBriefInfo
     [JsonPropertyName("name")]
     public string Name { get; init; } = string.Empty;
 
+    [JsonPropertyName("country")]
+    public string Country { get; init; } = string.Empty;
+
     [JsonPropertyName("sector")]
     public string Sector { get; init; } = string.Empty;
 

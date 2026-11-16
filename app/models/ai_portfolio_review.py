@@ -57,38 +57,34 @@ def _normalize_ticker_list(tickers: list[str]) -> list[str]:
 
 
 class PortfolioReviewSnapshot(models_ai.StrictAIModel):
-    """Verified current portfolio state used by the review."""
+    """Verified current portfolio state used by the review.
+
+    Total market value and holding valuations are service-supplied rather than
+    recomputed by this model. Supplied holding allocations must be unique by
+    ticker, share one currency, and sum to one.
+    """
 
     as_of: datetime = Field(description="Timezone-aware timestamp of the verified portfolio snapshot.")
-    country: str = Field(
-        min_length=2,
-        max_length=2,
-        description="ISO 3166-1 alpha-2 market country code.",
+    country: models_types.CountryCode = Field(
+        description="ISO 3166-1 alpha-2 market country code; input is trimmed and uppercased.",
     )
-    currency: str = Field(
-        min_length=3,
-        max_length=3,
-        description="Three-letter currency shared by every verified holding.",
+    currency: models_types.CurrencyCode = Field(
+        description=("Three-letter currency shared by every verified holding; input is trimmed and uppercased."),
     )
     total_market_value: float = Field(
         gt=0,
         allow_inf_nan=False,
-        description="Total current market value of all verified holdings.",
+        description="Service-verified total current market value supplied for the snapshot.",
     )
     holdings: list[models_portfolio.PortfolioVerifiedHolding] = Field(
         min_length=1,
         max_length=50,
-        description="Positive verified positions and their calculated current allocations.",
+        description="Positive verified positions and their service-supplied current allocations.",
     )
     data_gaps: list[Annotated[models_types.NonEmptyString, Field(max_length=4000)]] = Field(
         max_length=20,
         description="Known limitations in portfolio verification or valuation data.",
     )
-
-    @field_validator("country", "currency", mode="before")
-    @classmethod
-    def normalize_code(cls, value: object) -> object:
-        return value.strip().upper() if isinstance(value, str) else value
 
     @model_validator(mode="after")
     def validate_snapshot(self) -> Self:
@@ -119,7 +115,10 @@ class PortfolioReviewStrength(models_ai.StrictAIModel):
     affected_tickers: list[str] = Field(
         min_length=1,
         max_length=50,
-        description="Current portfolio tickers contributing to the strength.",
+        description=(
+            "Canonical EXCHANGE:CODE current-portfolio tickers contributing to "
+            "the strength; inputs are trimmed, uppercased, and alias-normalized."
+        ),
     )
     confidence: int = Field(
         ge=0,
@@ -166,7 +165,10 @@ class PortfolioReviewRisk(models_ai.StrictAIModel):
     affected_tickers: list[str] = Field(
         min_length=1,
         max_length=50,
-        description="Current portfolio tickers exposed to the risk.",
+        description=(
+            "Canonical EXCHANGE:CODE current-portfolio tickers exposed to the "
+            "risk; inputs are trimmed, uppercased, and alias-normalized."
+        ),
     )
     confidence: int = Field(
         ge=0,
@@ -195,12 +197,19 @@ class PortfolioReviewRisk(models_ai.StrictAIModel):
 
 
 class PortfolioHoldingReview(models_ai.StrictAIModel):
-    """In-depth assessment of one current holding."""
+    """In-depth assessment of one current holding.
+
+    EXIT uses a zero target allocation and a strategy-compatible exit reason;
+    retained holdings do not carry an exit reason.
+    """
 
     ticker: str = Field(
         min_length=1,
         max_length=models_portfolio.MAX_TICKER_LENGTH,
-        description="Canonical EXCHANGE:CODE symbol of the current holding.",
+        description=(
+            "Canonical EXCHANGE:CODE symbol of the current holding; input is "
+            "trimmed, uppercased, and exchange aliases are canonicalized."
+        ),
     )
     company_name: str | None = Field(
         default=None,
@@ -209,7 +218,9 @@ class PortfolioHoldingReview(models_ai.StrictAIModel):
     )
     role: models_types.NonEmptyString = Field(
         max_length=1000,
-        description="Application-rendered assessed role in the current portfolio, with a standard role emoji.",
+        description=(
+            "Application-rendered assessed role beginning with one of the supported prefixes: 🚀, 🛡️, 🧭, 🧱, ⚡, or 💵."
+        ),
     )
     current_allocation: float = Field(
         gt=0,
@@ -242,7 +253,7 @@ class PortfolioHoldingReview(models_ai.StrictAIModel):
     )
     exit_reason: PortfolioReviewExitReason | None = Field(
         default=None,
-        description="Validated LongTerm EXIT basis, or null when the holding is retained.",
+        description="Validated strategy-compatible EXIT basis, or null when the holding is retained.",
     )
     confidence: int = Field(
         ge=0,
@@ -285,7 +296,10 @@ class PortfolioReviewTargetPosition(models_ai.StrictAIModel):
     ticker: str = Field(
         min_length=1,
         max_length=models_portfolio.MAX_TICKER_LENGTH,
-        description="Canonical EXCHANGE:CODE symbol for the target security.",
+        description=(
+            "Canonical EXCHANGE:CODE symbol for the target security; input is "
+            "trimmed, uppercased, and exchange aliases are canonicalized."
+        ),
     )
     company_name: str | None = Field(
         default=None,
@@ -306,7 +320,9 @@ class PortfolioReviewTargetPosition(models_ai.StrictAIModel):
     )
     role: models_types.NonEmptyString = Field(
         max_length=1000,
-        description="Application-rendered intended role in the target portfolio, with a standard role emoji.",
+        description=(
+            "Application-rendered intended role beginning with one of the supported prefixes: 🚀, 🛡️, 🧭, 🧱, ⚡, or 💵."
+        ),
     )
     rationale: models_types.NonEmptyString = Field(
         max_length=4000,
@@ -332,7 +348,14 @@ class PortfolioReviewTargetPosition(models_ai.StrictAIModel):
 
 
 class PortfolioReviewAction(models_ai.StrictAIModel):
-    """One application-calculated portfolio action with AI-authored reasoning."""
+    """One application-calculated portfolio action with AI-authored reasoning.
+
+    TRIM, EXIT, BUY_MORE, and INTRODUCE require a whole-share quantity, market
+    price, and estimated amount. HOLD and ACCUMULATE carry neither quantity nor
+    estimated amount; ACCUMULATE still requires the verified unaffordable
+    market price. EXIT has zero target allocation and a ``SELL ALL``
+    instruction, while every other action has a positive target allocation.
+    """
 
     priority: int = Field(
         ge=1,
@@ -343,7 +366,10 @@ class PortfolioReviewAction(models_ai.StrictAIModel):
     ticker: str = Field(
         min_length=1,
         max_length=models_portfolio.MAX_TICKER_LENGTH,
-        description="Canonical EXCHANGE:CODE symbol affected by the action.",
+        description=(
+            "Canonical EXCHANGE:CODE symbol affected by the action; input is "
+            "trimmed, uppercased, and exchange aliases are canonicalized."
+        ),
     )
     company_name: str | None = Field(
         default=None,
@@ -501,7 +527,19 @@ class PortfolioReviewActionPlan(models_ai.StrictAIModel):
 
 
 class PortfolioReview(models_ai.StrictAIModel):
-    """Structured, research-backed review of a verified existing portfolio."""
+    """Structured, research-backed review of a verified existing portfolio.
+
+    Every verified holding is reviewed exactly once, target weights sum to one,
+    and cited source IDs match the returned registry. EXIT, introduction, or at
+    least 20 percent one-way turnover recommends rebalancing. An unrequested
+    recommended rebalance has no action plan; otherwise a Growth or Rebalance
+    plan matching that recommendation is required. LongTerm holding reviews
+    and action plans do not use TRIM. Complete results have no validation
+    warnings; CompleteWithWarnings results have at least one. When an
+    unrequested recommended rebalance has no plan, full endpoint serialization
+    retains an explicit ``"action_plan": null`` while omitting other null
+    fields.
+    """
 
     result_type: Literal["PortfolioReview"] = Field(
         default="PortfolioReview",
@@ -512,10 +550,8 @@ class PortfolioReview(models_ai.StrictAIModel):
         description="Completion status, including whether validation warnings were produced."
     )
     strategy: PortfolioReviewStrategy = Field(description="Deterministically extracted portfolio strategy.")
-    country: str = Field(
-        min_length=2,
-        max_length=2,
-        description="ISO 3166-1 alpha-2 market country code used for the review.",
+    country: models_types.CountryCode = Field(
+        description=("ISO 3166-1 alpha-2 market country code used for the review; input is trimmed and uppercased."),
     )
     investor_theme: models_types.NonEmptyString = Field(
         max_length=4000,
@@ -566,7 +602,11 @@ class PortfolioReview(models_ai.StrictAIModel):
         description="Application-derived reasons for recommending a major rebalance.",
     )
     action_plan: PortfolioReviewActionPlan | None = Field(
-        description="Structured action plan, or null when an unrequested major rebalance is recommended."
+        description=(
+            "Structured action plan, or explicit null when an unrequested major "
+            "rebalance is recommended; null is retained when endpoint "
+            "serialization excludes other null fields."
+        )
     )
     overall_data_quality: models_types.DataQuality = Field(
         description="Overall quality of the evidence supporting the review."
@@ -582,7 +622,7 @@ class PortfolioReview(models_ai.StrictAIModel):
     references: list[models_ai.ReferenceSource] = Field(
         min_length=1,
         max_length=100,
-        description="Canonical sources cited by the structured review.",
+        description="Canonical sources cited by the structured review, in application-supplied order.",
     )
 
     @model_serializer(mode="wrap")
@@ -601,11 +641,6 @@ class PortfolioReview(models_ai.StrictAIModel):
         if self.action_plan is None and info.exclude_none and action_plan_included and not action_plan_excluded:
             data["action_plan"] = None
         return data
-
-    @field_validator("country", mode="before")
-    @classmethod
-    def normalize_country(cls, value: object) -> object:
-        return value.strip().upper() if isinstance(value, str) else value
 
     @model_validator(mode="after")
     def validate_review(self) -> Self:

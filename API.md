@@ -15,18 +15,18 @@ Most responses follow a standard envelope format:
 `GET /market/index/{index_id}` returns the cached static JSON file directly. Redirect-mode proxy responses are
 HTTP `307` responses rather than standard envelopes.
 
-When executing locally, all `start_*_async` endpoints derive a process-local keyed task ID from the application
-version, task type, and normalized start input. Retrying an identical start while its record exists returns the same
-running or terminal task without scheduling duplicate work. Poll the matching `poll_*_async` endpoint with the
-returned task ID. Task records expire after one hour. Restarting the node that executes a task loses its process-local
-task records and changes the generated IDs.
+When executing locally, each `start_*_async` endpoint returns an opaque process-local task ID. Callers must not infer
+meaning or stability from its format. Retrying an equivalent start while its record exists may reuse the same running
+or terminal task without scheduling duplicate work. Poll the matching `poll_*_async` endpoint with the returned ID.
+Task records expire after one hour, and restarting the node that executes a task loses its process-local records.
 
 ---
 
 ## Authentication
 
 All endpoints under `/stocks`, `/events`, `/ai`, and `/toz` are protected by an API key. The
-root (`/`), health (`/health`), and market (`/market`) endpoints are open.
+root (`/`), health (`/health`), application-info (`/info`), and market (`/market`) endpoints are
+open.
 
 The server-side key is configured via the `FINHUB_API_KEY` environment variable (or the
 `app_config.env` file). When it is left empty, authentication is disabled and all requests are
@@ -68,6 +68,10 @@ Supported event and AI task APIs can execute locally or use another FinHub node.
 - `Forward` sends the method, path, query, body, and safe end-to-end headers from this server, then relays the
   upstream status, body, and safe end-to-end response headers. The client receives the remote node's task state
   and result as though it had called that node directly.
+
+If a configured node URL contains a base path, FinHub keeps that path as a prefix and appends the incoming request
+path with exactly one separating slash. Configured-node query parameters are retained before incoming request query
+parameters, and a configured URL fragment is preserved in the resulting redirect or forwarded target URL.
 
 Forward mode uses a 600-second read timeout by default. Clients may override it with
 `X-FinHub-Forward-Timeout-Seconds`, which must be finite, greater than zero, and no more than 86400 seconds.
@@ -187,7 +191,9 @@ Get stock quote at a specific date.
 | `symbol`   | path | Yes      | Stock symbol in YF format or `EXCHANGE:CODE`. |
 | `date_str` | path | Yes      | Date in `YYYY-MM-DD` format.                  |
 
-> If the date falls on a non-trading day, the API may return the quote for the most recent trading day before the given date.
+> If the date falls on a non-trading day, the API may return the most recent quote on or before that date within the
+> preceding 14 calendar days. If no eligible quote exists in that inclusive window, the HTTP response remains `200`
+> with application status `404` and no `data`.
 
 **Example:**
 
@@ -270,7 +276,7 @@ Starting a task returns HTTP `202`:
   "status": 202,
   "message": "Task started",
   "extra": {
-    "task_id": "4bd51f5da3146b1296ef9842d3bc6b3004df2b9c7a77cb608d63adfaa7caee94",
+    "task_id": "opaque-task-id",
     "state": "RUNNING"
   }
 }
@@ -331,7 +337,7 @@ Starting a task returns HTTP `202`:
   "status": 202,
   "message": "Task started",
   "extra": {
-    "task_id": "4bd51f5da3146b1296ef9842d3bc6b3004df2b9c7a77cb608d63adfaa7caee94",
+    "task_id": "opaque-task-id",
     "state": "RUNNING"
   }
 }
@@ -353,12 +359,12 @@ data; polling returns HTTP `200` with envelope `status=501` and an unsupported-c
 
 ### `GET /events/new_listings`
 
-Get up to five confirmed current or upcoming listing events for a market, ordered by listing date and enriched with
-structured AI analysis.
+Get all confirmed current or upcoming listing events for a market, ordered by listing date. AI analysis is attempted
+for up to five eligible listings.
 
 | Parameter | Type  | Required | Description                                                                  |
 |-----------|-------|----------|------------------------------------------------------------------------------|
-| `country` | query | No       | Country code; defaults to an empty string. Currently only `AU` is supported. |
+| `country` | query | No       | Country code; defaults to an empty string. Supports `AU` and `US`.           |
 
 **Example:**
 
@@ -371,31 +377,61 @@ unsupported-country message, and no `data`.
 
 For a successful request, `data` is an array of `ListingEvent` objects:
 
-| Field                     | Description                                                            |
-|---------------------------|------------------------------------------------------------------------|
-| `symbol`                  | Canonical exchange-qualified listing symbol.                           |
-| `exchange`                | Exchange code, when available.                                         |
-| `company_name`            | Issuer name, when available.                                           |
-| `timestamp`               | Unix timestamp corresponding to the listing date.                      |
-| `timestamp_str`           | String representation of the listing timestamp.                        |
-| `event_category`          | Event category supplied by the source, when available.                 |
-| `source_name`             | Source name, when available.                                           |
-| `link`                    | Source URL containing listing details, when available.                 |
-| `issue_price`             | Positive offer price per security, when available.                     |
-| `currency`                | Currency used for the offer price and capital raise.                   |
-| `capital_to_raise`        | Positive whole-unit target capital raise, when available.              |
-| `issue_type`              | Security or offer type, when available.                                |
-| `sector` / `industry`     | Issuer sector and industry, when available.                            |
-| `principal_activities`    | Summary of the issuer's principal business activities, when available. |
-| `public_offer_close_date` | Public-offer closing date, when applicable.                            |
-| `is_underwritten`         | Whether underwriting was disclosed.                                    |
-| `underwriters`            | Disclosed underwriting organizations.                                  |
-| `lead_managers`           | Disclosed lead managers.                                               |
-| `analysis_status`         | `NotStarted`, `Completed`, or `Failed`.                                |
-| `analysis_error`          | Analysis failure detail when `analysis_status=Failed`.                 |
-| `analysis`                | Structured `ListingAnalysis` when analysis completes.                  |
+| Field                     | Description                                                             |
+|---------------------------|-------------------------------------------------------------------------|
+| `symbol`                  | Canonical exchange-qualified listing symbol.                            |
+| `exchange`                | Exchange code, when available.                                          |
+| `company_name`            | Issuer name, when available.                                            |
+| `timestamp`               | Unix timestamp corresponding to the listing date.                       |
+| `timestamp_str`           | String representation of the listing timestamp.                         |
+| `event_category`          | Event category supplied by the source, when available.                  |
+| `source_name`             | Source name, when available.                                            |
+| `link`                    | Source URL containing listing details, when available.                  |
+| `issue_price`             | Positive fixed offer price or lower bound of an offer-price range.      |
+| `issue_price_upper`       | Optional upper bound of an offer-price range; omitted for fixed prices. |
+| `currency`                | Currency used for the offer price and capital raise.                    |
+| `capital_to_raise`        | Positive whole-unit target capital raise, when available.               |
+| `issue_type`              | Security or offer type, when available.                                 |
+| `sector` / `industry`     | Issuer sector and industry, when available.                             |
+| `principal_activities`    | Summary of the issuer's principal business activities, when available.  |
+| `public_offer_close_date` | Public-offer closing date, when applicable.                             |
+| `is_underwritten`         | Whether underwriting was disclosed.                                     |
+| `underwriters`            | Disclosed underwriting organizations.                                   |
+| `lead_managers`           | Disclosed lead managers.                                                |
+| `analysis_status`         | `NotStarted`, `Completed`, `Failed`, or `Skipped`.                      |
+| `analysis_error`          | Analysis failure detail when `analysis_status=Failed`.                  |
+| `analysis`                | Structured `ListingAnalysis` when analysis completes.                   |
 
 Nullable fields are omitted when unavailable because this endpoint excludes `null` response properties.
+
+An offer-price range of `AUD 0.20-0.25` is returned as `issue_price=0.20` and `issue_price_upper=0.25`.
+A fixed price continues to use `issue_price` only.
+
+For AU, with `FINHUB_LLM_TOKENOMICS_MODE=Economy`, explicitly non-underwritten listings whose public-offer close date
+is missing or before the current Sydney date return `analysis_status=Skipped` without analysis. Underwritten
+listings, listings with unknown underwriting, and offers closing today or later remain eligible for analysis.
+`Standard` mode does not apply this skip rule.
+
+Economy-skipped listings do not count toward the five analysis attempts; failed research or assessment attempts do.
+Once the limit is reached, every remaining listing is returned with `analysis_status=Skipped`, including underwritten
+listings.
+
+For US, the IPO calendar is fetched once, then company overviews and targeted company-profile, financial-summary
+and linked SEC filing pages are crawled without AI. There is no maximum lead time: important distant IPOs may
+be selected before nearer ones. Explicit SPAC/shell, fund and unsupported security types, inactive offerings,
+unresolved issuer/offer conflicts and insufficient evidence are excluded from deep analysis, not from the response.
+Missing revenue, losses, unavailable offer prices and inaccessible SEC documents are not automatic exclusions;
+issuer-matched filing links and sufficient consistent business/financial evidence are still required.
+
+Eligible US IPOs are ranked deterministically using research-readiness proxies: expected output quality 50%,
+structured-output reliability 20%, task depth 15% and cost efficiency 15%. Close scores are ordered by quality,
+then reliability; gross deal size (with a soft USD 50 million preference) and market cap precede date proximity.
+Up to five candidates are selected. Cached unchanged analyses avoid AI calls; selected research/assessment failures
+are not replaced with additional candidates. All other events remain `Skipped`, and results stay date-ordered.
+Only the selected research and assessment stages invoke AI. References and structured output are validated in code.
+US analysis caches include the crawled evidence, offer terms, prompts, schemas and task configuration so changed
+inputs invalidate old results. Crawl/analysis refresh intervals are 1 hour for listings today/tomorrow, 6 hours for
+2-7 days away and 24 hours for later listings; the calendar refreshes hourly.
 
 `ListingAnalysis` contains:
 
@@ -422,17 +458,34 @@ outlook period identifies whether it is observed, forecast, or unavailable; its 
 price and return ranges, confidence, rationale, drivers, risks, assumptions, gaps, and source IDs. Each reference
 includes source metadata, publication and access timestamps, its canonical HTTPS URL, and `is_verified`.
 
+Upcoming AU/US assessments include a provisional subjective overview, stance, and directional forecasts even when
+factual evidence is sparse. When the issue price is available, all four horizons include subjective base-case trading
+ranges anchored to that price; percentage returns are calculated from the price bounds and issue price. These are
+conditional scenarios, not established fair values, guaranteed trading bounds, or personalized recommendations.
+For ranged offers, the lower issue-price bound remains the anchor; analysis discloses that the final issue price
+and realized returns may differ.
+Without an issue-price anchor, the overview and directional views remain available, but absolute price and return
+ranges are null.
+US assessments distinguish hypothetical offer-price allocation returns from aftermarket-entry returns; IPO
+allocations and the offer price may not be accessible to a caller.
+
+Subjectivity labels and cautions use the existing summary/rationale, `assumptions`, and `data_gaps` fields.
+Evidence quality and source-verification flags remain unchanged by the need to provide an opinion; low evidence
+quality is not itself a reason to suppress a future view. Prompts adapt to the listing's offer, evidence coverage,
+and gaps without an additional prompt-building AI call.
+
 ### `GET /events/start_new_listings_async` and `GET /events/poll_new_listings_async`
 
 Run the new-listings request in the background. Task state and results expire after one hour.
+AU and US tasks are deduplicated separately; equivalent country names/codes reuse the same market's task.
 
-| Endpoint | Parameter | Type  | Required | Description                                                        |
-|----------|-----------|-------|----------|--------------------------------------------------------------------|
-| Start    | `country` | query | Yes      | Country code used when starting; currently limited to `AU`.        |
-| Poll     | `task_id` | query | Yes      | Task ID returned by the start endpoint.                            |
+| Endpoint | Parameter | Type  | Required | Description                                         |
+|----------|-----------|-------|----------|-----------------------------------------------------|
+| Start    | `country` | query | Yes      | Country used when starting; supports `AU` and `US`. |
+| Poll     | `task_id` | query | Yes      | Task ID returned by the start endpoint.             |
 
 ```bash
-# Start a task
+# Start an AU task (use country=US for the US market)
 curl 'http://localhost:8000/events/start_new_listings_async?country=AU'
 
 # Poll a task
@@ -446,7 +499,7 @@ Starting a task returns HTTP `202`:
   "status": 202,
   "message": "Task started",
   "extra": {
-    "task_id": "4bd51f5da3146b1296ef9842d3bc6b3004df2b9c7a77cb608d63adfaa7caee94",
+    "task_id": "opaque-task-id",
     "state": "RUNNING"
   }
 }
@@ -454,13 +507,13 @@ Starting a task returns HTTP `202`:
 
 Polling returns:
 
-| HTTP status | Task state  | Result                                                                                |
-|-------------|-------------|---------------------------------------------------------------------------------------|
-| `202`       | `RUNNING`   | The task is still running.                                                            |
-| `200`       | `COMPLETED` | The standard new-listings payload in `data`.                                          |
-| `500`       | `FAILED`    | The background task failed.                                                           |
-| `404`       | —           | The task ID is unknown or its cache entry expired.                                    |
-| `422`       | —           | A start omitted `country` or supplied a country other than `AU`; no task was created. |
+| HTTP status | Task state  | Result                                                                                        |
+|-------------|-------------|-----------------------------------------------------------------------------------------------|
+| `202`       | `RUNNING`   | The task is still running.                                                                    |
+| `200`       | `COMPLETED` | The standard new-listings payload in `data`.                                                  |
+| `500`       | `FAILED`    | The background task failed.                                                                   |
+| `404`       | —           | The task ID is unknown or its cache entry expired.                                            |
+| `422`       | —           | A start omitted `country` or supplied a country other than `AU` or `US`; no task was created. |
 
 Missing or unsupported countries are rejected before task creation.
 
@@ -514,8 +567,10 @@ curl -X POST 'http://localhost:8000/ai/analyze_dividend_event' \
 The response keeps deterministic ex-date open/close/intraday-low drops and later drawdown separate. It also returns
 recovery estimates for the pre-ex close and both strategy break-even targets, source-linked research, independent
 strategy assessments, and one of `DividendCapture`, `PostDividendDiscount`, `NoClearWinner`, or
-`InsufficientInsights`. If an AI stage fails, HTTP `502` still includes the deterministic baseline with
-`analysis_status=Failed`.
+`InsufficientInsights`. `Complete` means the workflow completed, not that every evidence-adjusted estimate was
+obtainable. When validated evidence is insufficient, those estimates may be `null` while strategy assessments remain
+and the recommendation is `InsufficientInsights`; this does not make the overall analysis `Failed`. If an AI stage
+fails, HTTP `502` still includes the deterministic baseline with `analysis_status=Failed`.
 
 Invalid market or event inputs return HTTP `400`; insufficient historical data returns HTTP `422`; and AI execution
 or structured-output failures return HTTP `502`.
@@ -837,7 +892,7 @@ The `data` object contains:
 |-------------------------|----------------------------------------------------------------------------------------------------|
 | `as_of`                 | Timezone-aware analysis timestamp.                                                                 |
 | `analysis_status`       | `Complete` or `CompleteWithWarnings`.                                                              |
-| `portfolio_empty`       | `false` for successful analyses; requests without positive-share positions are rejected.          |
+| `portfolio_empty`       | `false` for successful analyses; requests without positive-share positions are rejected.           |
 | `overall_data_quality`  | `High`, `Medium`, `Low`, or `Insufficient`.                                                        |
 | `snapshot`              | Verified holdings, allocations, valuation, price source, P/L, target drift, and verification gaps. |
 | `risks`                 | Up to four ranked `PortfolioSpotlightRiskAction` objects.                                          |
@@ -1096,8 +1151,45 @@ curl 'http://localhost:8000/toz/silver/history?currency=EUR&days=7'
 
 ### `GET /`
 
-Returns a welcome message.
+Returns HTTP `200` with the complete body:
+
+```json
+{
+  "status": 200,
+  "message": "Welcome to the FinHub API!"
+}
+```
 
 ### `GET /health`
 
-Health check endpoint. Returns `{"status": 200, "message": "ok"}`.
+Reports process liveness without checking downstream market, crawler, or AI providers. It returns
+HTTP `200` with the complete body:
+
+```json
+{
+  "status": 200,
+  "message": "ok"
+}
+```
+
+### `GET /info`
+
+Returns HTTP `200` with application identity, version, and the server-local wall-clock time at
+response creation:
+
+```json
+{
+  "status": 200,
+  "message": "ok",
+  "data": {
+    "app_name": "FinHub API",
+    "app_description": "A developer-first financial API hub for stock market data.",
+    "version": "0.16.5",
+    "server_time": "2026-11-16 15:57:05"
+  }
+}
+```
+
+`server_time` is generated independently for every request in fixed-width
+`YYYY-MM-DD HH:MM:SS` form, using the server's local timezone and second precision. It deliberately
+does not include a timezone suffix.

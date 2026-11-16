@@ -24,7 +24,7 @@ from ..utils import finhub as finhub_utils
 from . import ai_helper
 
 _ALLOWED_QUOTE_TYPES = frozenset({"EQUITY", "ETF", "MUTUALFUND"})
-_ANALYSIS_CACHE_NAMESPACE = "dividend-event-analysis-v2"
+_ANALYSIS_CACHE_NAMESPACE = "dividend-event-analysis"
 _ANALYSIS_PROMPT_VERSION = "6"
 _FAILED_ANALYSIS_CACHE_TTL = 5 * 60
 _DEFAULT_HOLDING_PERIOD_DAYS = 28
@@ -140,6 +140,50 @@ async def ai_analyze_div_event(
     transaction_costs: models_events_dividends.DividendTransactionCosts | None = None,
     holding_period_days: int = _DEFAULT_HOLDING_PERIOD_DAYS,
 ) -> models_events_dividends.DividendEventAnalysis:
+    """Analyze a dividend event from verified market history and sourced AI evidence.
+
+    Args:
+        symbol: Security in Yahoo Finance or ``EXCHANGE:CODE`` format. Surrounding
+            whitespace is ignored; the value must contain 1 through 128 characters.
+        ex_date: Calendar ex-dividend date. Datetime values are not accepted.
+        dividend_amount: Positive finite gross cash dividend per share.
+        transaction_costs: Optional non-negative finite round-trip per-share costs
+            for dividend capture and post-dividend-discount strategies. Zero costs
+            are assumed when omitted.
+        holding_period_days: Calendar-day recovery and strategy window, from 1
+            through 365 days.
+
+    Returns:
+        A deterministic event context and historical baseline plus AI research and
+        strategy analysis. Successful AI validation produces ``Complete`` or
+        ``CompleteWithWarnings``. Recoverable research or assessment failures
+        produce ``Failed`` while preserving the deterministic event and baseline.
+        Assessment failures also preserve validated research. Structurally valid
+        sources without a matching provider citation are retained with
+        ``is_verified=False`` rather than failing the analysis.
+
+    Raises:
+        DividendEventInputError: If a direct input is invalid, the symbol resolves
+            to an unsupported security type, or provider metadata lacks a symbol.
+        DividendEventInsufficientDataError: If exchange identity, timezone, price,
+            fewer than 90 complete market sessions, or usable historical dividend
+            events are unavailable for a baseline.
+        ai_helper.LLMRateLimitError: If an AI provider remains rate limited beyond
+            its retry budget; this failure is not cached as an analysis result.
+        RuntimeError: If a cached analysis has an invalid value.
+        Exception: Market-data, cache-backend, and unexpected provider failures
+            that cannot be represented as a validated failed analysis are propagated.
+
+    Notes:
+        Market data is always verified and the baseline is built before consulting
+        the final-result cache. Failed AI results expire after five minutes.
+        Successful results expire after one hour on the ex-date or within one day
+        before it, six hours from two through seven days before it and during the
+        post-ex-date window, 24 hours more than seven days before it, and 72 hours
+        once historical. With no provider-verified sources, validated analysis is
+        retained but data quality is capped at ``Low`` unless already
+        ``Insufficient``; partial verification caps ``High`` at ``Medium``.
+    """
     costs = transaction_costs or models_events_dividends.DividendTransactionCosts()
     _validate_request_values(
         symbol,
@@ -228,9 +272,10 @@ def _validate_request_values(
     costs: models_events_dividends.DividendTransactionCosts,
     holding_period_days: int,
 ) -> None:
-    if not symbol.strip():
+    normalized_symbol = symbol.strip()
+    if not normalized_symbol:
         raise DividendEventInputError("Symbol is required")
-    if len(symbol) > 128:
+    if len(normalized_symbol) > 128:
         raise DividendEventInputError("Symbol must not exceed 128 characters")
     if not isinstance(ex_date, date) or isinstance(ex_date, datetime):
         raise DividendEventInputError("Ex-dividend date must be a date")

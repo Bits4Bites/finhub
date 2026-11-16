@@ -16,14 +16,14 @@ class BuildPortfolioRequest(BaseRequest):
     country: str = Field(
         min_length=2,
         max_length=64,
-        description="Target market country as an ISO code or country name.",
+        description="Target market country as an ISO code or country name; surrounding whitespace is trimmed.",
     )
     investor_theme: str = Field(
         min_length=1,
         max_length=4000,
         description=(
             "Required investor goals, constraints, preferences, horizon, risk context, "
-            "and optional total or recurring investment budget."
+            "and optional total or recurring investment budget; surrounding whitespace is trimmed."
         ),
     )
     current_allocation: list[models_portfolio.PortfolioHolding] = Field(

@@ -1,487 +1,381 @@
+"""Documentation-driven black-box tests for dividend-event analysis."""
+
 import asyncio
-from collections.abc import Mapping
-from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+import copy
+import json
+from contextlib import contextmanager
+from datetime import UTC, date, datetime, timedelta
+from unittest.mock import MagicMock, patch
 from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
 import pytest
+from pydantic import ValidationError
 
 from app.models import events_dividends as models_dividends
 from app.services import ai_helper
 from app.services import msai_analyze_div_event as service
-from tests import dividend_fixtures
+from app.utils import ai_reference
+from tests import ai_service_fixtures
+
+_SOURCE_URL = "https://example.com/dividend-announcement"
+_SOURCE_ID = ai_reference.generate_source_id(_SOURCE_URL)
+_LONDON_TZ = ZoneInfo("Europe/London")
 
 
-def _assert_all_object_properties_are_required(value: object) -> None:
-    if isinstance(value, Mapping):
-        properties = value.get("properties")
-        if isinstance(properties, Mapping):
-            assert set(value.get("required", [])) == set(properties)
-        for nested_value in value.values():
-            _assert_all_object_properties_are_required(nested_value)
-    elif isinstance(value, list):
-        for nested_value in value:
-            _assert_all_object_properties_are_required(nested_value)
+def _future_ex_date() -> date:
+    return datetime.now(_LONDON_TZ).date() + timedelta(days=30)
 
 
-def _history() -> pd.DataFrame:
-    dates = pd.date_range("2025-01-01", periods=12, freq="D", tz="Australia/Sydney")
+def _market_history(*, sessions: int = 250) -> pd.DataFrame:
+    end = datetime.now(_LONDON_TZ).date() - timedelta(days=2)
+    dates = pd.date_range(end=end, periods=sessions, freq="D", tz=_LONDON_TZ)
     history = pd.DataFrame(
         {
-            "Open": np.full(12, 100.0),
-            "High": np.full(12, 101.0),
-            "Low": np.full(12, 99.0),
-            "Close": np.full(12, 100.0),
-            "Volume": np.full(12, 1_000.0),
-            "Dividends": np.zeros(12),
+            "Open": np.full(sessions, 100.0),
+            "High": np.full(sessions, 101.0),
+            "Low": np.full(sessions, 99.0),
+            "Close": np.full(sessions, 100.0),
+            "Volume": np.full(sessions, 100_000.0),
+            "Dividends": np.zeros(sessions),
         },
         index=dates,
     )
-    history.iloc[2, history.columns.get_loc("Open")] = 98.0
-    history.iloc[2, history.columns.get_loc("Close")] = 97.0
-    history.iloc[2, history.columns.get_loc("Low")] = 96.0
-    history.iloc[2, history.columns.get_loc("Dividends")] = 2.0
-    history.iloc[3, history.columns.get_loc("Close")] = 98.0
-    history.iloc[3, history.columns.get_loc("Low")] = 95.0
-    history.iloc[4, history.columns.get_loc("Close")] = 100.0
-    history.iloc[4, history.columns.get_loc("Low")] = 97.0
-    history.iloc[5, history.columns.get_loc("Close")] = 90.0
-    history.iloc[5, history.columns.get_loc("Low")] = 89.0
+    for position in (30, 80, 130, 180):
+        if position >= sessions - 1:
+            continue
+        history.iloc[position, history.columns.get_loc("Open")] = 99.0
+        history.iloc[position, history.columns.get_loc("Close")] = 98.5
+        history.iloc[position, history.columns.get_loc("Low")] = 98.0
+        history.iloc[position, history.columns.get_loc("Dividends")] = 2.0
+        history.iloc[position + 1, history.columns.get_loc("Close")] = 100.0
     return history
 
 
-def _private_research() -> service._DividendResearch:
-    section = service._DividendResearchSection.model_validate(dividend_fixtures.evidence_section().model_dump())
-    return service._DividendResearch(
-        symbol="CBA.AX",
-        as_of=datetime(2026, 5, 28, tzinfo=UTC),
-        dividend_terms=section,
-        issuer_outlook=section,
-        event_risks=section,
-        market_context=section,
-        references=[dividend_fixtures.reference()],
-    )
+def _ticker(*, quote_type: str = "EQUITY", sessions: int = 250) -> MagicMock:
+    ticker = MagicMock()
+    ticker.info = {
+        "quoteType": quote_type,
+        "symbol": "ABC.L",
+        "fullExchangeName": "LSE",
+        "exchangeTimezoneName": "Europe/London",
+        "country": "United Kingdom",
+        "currency": "GBP",
+        "longName": "Example Holdings plc",
+        "regularMarketPrice": 100.0,
+        "marketState": "CLOSED",
+        "beta": 1.1,
+        "sector": "Technology",
+        "industry": "Software",
+    }
+    ticker.history.return_value = _market_history(sessions=sessions)
+    return ticker
 
 
-def _assessment() -> service._DividendAssessmentDraft:
-    return service._DividendAssessmentDraft(
-        symbol="CBA.AX",
-        as_of=datetime(2026, 5, 28, tzinfo=UTC),
-        overall_data_quality="High",
-        evidence_adjusted_ex_date_close_drop=dividend_fixtures.drop_estimate(),
-        evidence_adjusted_pre_ex_close_recovery=dividend_fixtures.recovery_estimate(
-            dividend_fixtures.numeric_range(100.0)
-        ),
-        evidence_adjusted_capture_break_even_recovery=dividend_fixtures.recovery_estimate(
-            dividend_fixtures.numeric_range(98.0)
-        ),
-        evidence_adjusted_discount_break_even_recovery=dividend_fixtures.recovery_estimate(
-            dividend_fixtures.numeric_range(98.0),
-            probability=0.55,
-        ),
-        dividend_capture=dividend_fixtures.strategy("DividendCapture").model_dump(),
-        post_dividend_discount=dividend_fixtures.strategy(
-            "PostDividendDiscount",
-            probability=0.55,
-        ).model_dump(),
-        comparison_rationale="Dividend capture has a material probability advantage.",
-        comparison_reference_ids=[dividend_fixtures.SOURCE_ID],
-    )
-
-
-def _assessment_result() -> service._DividendAssessmentResult:
-    return service._DividendAssessmentResult(
-        assessment=_assessment(),
-        validation_warnings=(),
-    )
-
-
-def test_assessment_reference_repair_preserves_supported_links():
-    assessment_data = _assessment().model_dump(mode="python")
-    assessment_data["dividend_capture"]["reference_ids"].append("src-orphan")
-    assessment_data["post_dividend_discount"]["reference_ids"].append("src-orphan")
-    assessment_data["comparison_reference_ids"].append("src-orphan")
-    assessment = service._DividendAssessmentDraft.model_validate(assessment_data)
-
-    repaired, warnings = service._repair_assessment_references(
-        assessment,
-        _private_research(),
-    )
-
-    assert repaired.dividend_capture.reference_ids == [dividend_fixtures.SOURCE_ID]
-    assert repaired.post_dividend_discount.reference_ids == [dividend_fixtures.SOURCE_ID]
-    assert repaired.comparison_reference_ids == [dividend_fixtures.SOURCE_ID]
-    assert len(warnings) == 3
-    assert all("src-orphan" in warning for warning in warnings)
-
-
-def test_assessment_reference_repair_rejects_fully_unsupported_strategy():
-    assessment_data = _assessment().model_dump(mode="python")
-    assessment_data["dividend_capture"]["reference_ids"] = ["src-orphan"]
-    assessment = service._DividendAssessmentDraft.model_validate(assessment_data)
-
-    with pytest.raises(service.DividendEventAIError, match="has no supported references"):
-        service._repair_assessment_references(
-            assessment,
-            _private_research(),
-        )
-
-
-def test_extracts_distinct_drop_and_recovery_metrics():
-    samples = service._extract_dividend_samples(
-        _history(),
-        sample_cutoff=datetime(2025, 1, 12).date(),
-        holding_period_days=7,
-        costs=models_dividends.DividendTransactionCosts(),
-    )
-
-    assert len(samples) == 1
-    sample = samples[0]
-    assert sample.open_drop_ratio == 1.0
-    assert sample.close_drop_ratio == 1.5
-    assert sample.intraday_low_drop_ratio == 2.0
-    assert sample.drawdown_ratio == 2.5
-    assert sample.pre_ex_close_recovery_days == 2
-    assert sample.capture_break_even_recovery_days == 1
-    assert sample.discount_break_even_recovery_days == 0
-
-
-def test_recovery_uses_candidate_day_volume():
-    history = _history()
-    history.iloc[4, history.columns.get_loc("Volume")] = 0.0
-    history.iloc[5, history.columns.get_loc("Close")] = 100.0
-
-    recovery_days = service._first_recovery_days(
-        history.iloc[2:7],
-        history.index[2],
-        100.0,
-    )
-
-    assert recovery_days == 3
-
-
-def test_drop_estimate_caps_loss_at_reference_price():
-    sample = service._DividendSample(
-        open_drop_ratio=10.0,
-        close_drop_ratio=10.0,
-        intraday_low_drop_ratio=10.0,
-        drawdown_ratio=10.0,
-        pre_ex_close_recovery_days=None,
-        capture_break_even_recovery_days=None,
-        discount_break_even_recovery_days=None,
-    )
-    context = dividend_fixtures.event_context().model_copy(update={"reference_price": 10.0, "dividend_amount": 2.0})
-
-    estimate = service._drop_estimate([sample], "close_drop_ratio", context)
-
-    assert estimate.drop_amount.maximum == 10.0
-    assert estimate.drop_percent.maximum == 1.0
-    assert estimate.drop_to_dividend_ratio.maximum == 5.0
-    assert estimate.estimated_price.minimum == 0.0
-
-
-def test_normalize_history_removes_proven_incomplete_session():
-    timezone = ZoneInfo("Australia/Sydney")
-    today = datetime.now(timezone).date()
-    dates = pd.date_range(end=today, periods=91, freq="D", tz=timezone)
-    history = pd.DataFrame(
-        {
-            "Open": np.full(91, 100.0),
-            "High": np.full(91, 101.0),
-            "Low": np.full(91, 99.0),
-            "Close": np.full(91, 100.0),
-            "Volume": np.full(91, 1_000.0),
-            "Dividends": np.zeros(91),
-        },
-        index=dates,
-    )
-
-    normalized = service._normalize_history(history, timezone, market_state="REGULAR")
-
-    assert len(normalized) == 90
-    assert normalized.index[-1].date() < today
-
-
-def test_resolves_timezone_from_market_history_without_geographic_default():
-    assert service._resolve_exchange_timezone({}, _history()) == ZoneInfo("Australia/Sydney")
-
-
-def test_rejects_missing_exchange_timezone():
-    with pytest.raises(service.DividendEventInsufficientDataError, match="exchange timezone"):
-        service._resolve_exchange_timezone({}, pd.DataFrame())
-
-
-def test_repair_and_finalize_research_prunes_orphans_and_marks_unverified():
-    source_url = "https://example.com/dividend"
+def _research_payload() -> dict[str, object]:
     section = {
         "facts": [
-            {"text": "Supported fact.", "reference_ids": [source_url]},
-            {"text": "Unsupported fact.", "reference_ids": ["https://missing.example/fact"]},
+            {
+                "text": "The issuer announced the dividend terms.",
+                "reference_ids": [_SOURCE_URL],
+            }
         ],
         "data_gaps": [],
-        "reference_ids": [source_url, "https://missing.example/section"],
+        "reference_ids": [_SOURCE_URL],
     }
-    raw = service._DividendResearchResponse.model_validate(
-        {
-            "symbol": "CBA.AX",
-            "as_of": datetime(2026, 5, 28, tzinfo=UTC),
-            "dividend_terms": section,
-            "issuer_outlook": {
-                "facts": [{"text": "Outlook fact.", "reference_ids": [source_url]}],
-                "data_gaps": [],
-                "reference_ids": [source_url],
-            },
-            "event_risks": {
-                "facts": [{"text": "Risk fact.", "reference_ids": [source_url]}],
-                "data_gaps": [],
-                "reference_ids": [source_url],
-            },
-            "market_context": {
-                "facts": [{"text": "Market fact.", "reference_ids": [source_url]}],
-                "data_gaps": [],
-                "reference_ids": [source_url],
-            },
-            "references": [
-                {
-                    "id": source_url,
-                    "title": "Dividend announcement",
-                    "publisher": "ASX",
-                    "source_type": "Exchange",
-                    "published_at": None,
-                    "accessed_at": None,
-                    "url": source_url,
-                }
-            ],
-        }
-    )
-
-    repaired = service._repair_research_references(raw)
-    finalized = service._finalize_research_references(
-        repaired,
-        [],
-        accessed_at=datetime(2026, 5, 28, tzinfo=UTC),
-    )
-
-    assert len(finalized.dividend_terms.facts) == 1
-    assert "Removed 1 unsupported fact(s)." in finalized.dividend_terms.data_gaps[-1]
-    assert finalized.references[0].id.startswith("src-")
-    assert finalized.references[0].is_verified is False
-
-
-def test_research_source_id_must_equal_source_url():
-    with pytest.raises(ValueError, match="temporary source ID"):
-        service._DividendResearchSourceMetadata(
-            id="https://other.example/dividend",
-            title="Dividend announcement",
-            publisher="ASX",
-            source_type="Exchange",
-            published_at=None,
-            accessed_at=None,
-            url="https://example.com/dividend",
-        )
-
-
-@pytest.mark.parametrize(
-    "response_model",
-    [
-        service._DividendResearchDraft,
-        service._DividendAssessmentDraft,
-    ],
-)
-def test_provider_schema_requires_every_declared_property(response_model):
-    schema = ai_helper._openai_compatible_json_schema(response_model.model_json_schema())
-
-    _assert_all_object_properties_are_required(schema)
-
-
-def test_probability_margin_prevents_weak_winner():
-    outcome, rationale = service._resolve_eligible_strategy_recommendation(
-        dividend_fixtures.event_context(),
-        dividend_fixtures.strategy("DividendCapture", probability=0.65),
-        dividend_fixtures.strategy("PostDividendDiscount", probability=0.60),
-        "The estimates are close.",
-    )
-
-    assert outcome == "NoClearWinner"
-    assert "clear probability advantage" in rationale
-
-
-def test_inconsistent_profit_loss_is_corrected_and_flagged_to_client():
-    context = dividend_fixtures.event_context()
-    assessment_data = _assessment().model_dump()
-    assessment_data["dividend_capture"]["expected_profit_loss_per_share"] = dividend_fixtures.numeric_range(
-        0.0,
-        1.0,
-    ).model_dump()
-    assessment = service._DividendAssessmentDraft.model_validate(assessment_data)
-
-    normalized, warnings = service._normalize_strategy_profit_loss(context, assessment)
-    analysis = service._build_final_analysis(
-        context,
-        dividend_fixtures.historical_baseline(),
-        _private_research(),
-        normalized,
-        validation_warnings=tuple(warnings),
-    )
-
-    assert normalized.dividend_capture.expected_profit_loss_per_share == dividend_fixtures.numeric_range(2.0, 3.0)
-    assert len(warnings) == 1
-    assert warnings[0] in normalized.dividend_capture.data_gaps
-    assert analysis.analysis_status == "CompleteWithWarnings"
-    assert analysis.validation_warnings == warnings
-    assert analysis.failure_reason is None
-
-
-def test_ai_failure_preserves_deterministic_baseline():
-    context = dividend_fixtures.event_context()
-    baseline = dividend_fixtures.historical_baseline()
-    ticker = MagicMock()
-    ticker.info = {"quoteType": "EQUITY"}
-    ticker.history.return_value = MagicMock()
-
-    with (
-        patch.object(service.yf, "Ticker", return_value=ticker),
-        patch.object(service, "_resolve_exchange_timezone", return_value=ZoneInfo("Australia/Sydney")),
-        patch.object(service, "_normalize_history", return_value=pd.DataFrame()),
-        patch.object(service, "_build_event_context", return_value=context),
-        patch.object(service, "_calculate_historical_baseline", return_value=baseline),
-        patch.object(service, "_research_dividend_event", new_callable=AsyncMock) as mock_research,
-        patch.object(service.cache, "generate_key", return_value="cache-key"),
-        patch.object(service.cache, "get", new_callable=AsyncMock, return_value=None),
-        patch.object(service.cache, "set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
-    ):
-        mock_research.side_effect = service.DividendEventAIError("Dividend research failed")
-        result = asyncio.run(
-            service.ai_analyze_div_event(
-                symbol="ASX:CBA",
-                ex_date=dividend_fixtures.EX_DATE,
-                dividend_amount=2.0,
-            )
-        )
-
-    assert result.analysis_status == "Failed"
-    assert result.historical_baseline is baseline
-    assert result.dividend_capture is None
-    mock_cache_set.assert_awaited_once()
-    assert mock_cache_set.await_args.kwargs["ttl"] == 5 * 60
-
-
-def test_rate_limit_exhaustion_is_not_cached_as_failed_analysis():
-    context = dividend_fixtures.event_context()
-    baseline = dividend_fixtures.historical_baseline()
-    ticker = MagicMock()
-    ticker.info = {"quoteType": "EQUITY"}
-    ticker.history.return_value = MagicMock()
-
-    with (
-        patch.object(service.yf, "Ticker", return_value=ticker),
-        patch.object(service, "_resolve_exchange_timezone", return_value=ZoneInfo("Australia/Sydney")),
-        patch.object(service, "_normalize_history", return_value=pd.DataFrame()),
-        patch.object(service, "_build_event_context", return_value=context),
-        patch.object(service, "_calculate_historical_baseline", return_value=baseline),
-        patch.object(service, "_research_dividend_event", new_callable=AsyncMock) as mock_research,
-        patch.object(service.cache, "generate_key", return_value="cache-key"),
-        patch.object(service.cache, "get", new_callable=AsyncMock, return_value=None),
-        patch.object(service.cache, "set", new_callable=AsyncMock, return_value=True) as mock_cache_set,
-    ):
-        mock_research.side_effect = ai_helper.LLMRateLimitError("Provider remained rate limited")
-        with pytest.raises(ai_helper.LLMRateLimitError):
-            asyncio.run(
-                service.ai_analyze_div_event(
-                    symbol="ASX:CBA",
-                    ex_date=dividend_fixtures.EX_DATE,
-                    dividend_amount=2.0,
-                )
-            )
-
-    mock_cache_set.assert_not_awaited()
-
-
-def test_success_adds_required_assumptions_and_recommendation():
-    context = dividend_fixtures.event_context()
-    baseline = dividend_fixtures.historical_baseline()
-    ticker = MagicMock()
-    ticker.info = {"quoteType": "EQUITY"}
-    ticker.history.return_value = MagicMock()
-
-    with (
-        patch.object(service.yf, "Ticker", return_value=ticker),
-        patch.object(service, "_resolve_exchange_timezone", return_value=ZoneInfo("Australia/Sydney")),
-        patch.object(service, "_normalize_history", return_value=pd.DataFrame()),
-        patch.object(service, "_build_event_context", return_value=context),
-        patch.object(service, "_calculate_historical_baseline", return_value=baseline),
-        patch.object(service, "_research_dividend_event", new_callable=AsyncMock, return_value=_private_research()),
-        patch.object(service, "_assess_dividend_event", new_callable=AsyncMock, return_value=_assessment_result()),
-        patch.object(service.cache, "generate_key", return_value="cache-key"),
-        patch.object(service.cache, "get", new_callable=AsyncMock, return_value=None),
-        patch.object(service.cache, "set", new_callable=AsyncMock, return_value=True),
-    ):
-        result = asyncio.run(
-            service.ai_analyze_div_event(
-                symbol="ASX:CBA",
-                ex_date=dividend_fixtures.EX_DATE,
-                dividend_amount=2.0,
-            )
-        )
-
-    assert result.analysis_status == "Complete"
-    assert result.recommendation is not None
-    assert result.recommendation.outcome == "DividendCapture"
-    assert result.dividend_capture is not None
-    assert "Estimates are gross and pre-tax." in result.dividend_capture.assumptions
-    assert "Assumed zero round-trip transaction cost for dividend capture." in result.dividend_capture.assumptions
-
-
-def test_research_uses_structured_task_and_provider_citations():
-    context = dividend_fixtures.event_context()
-    baseline = dividend_fixtures.historical_baseline()
-    source_url = "https://example.com/dividend"
-    section = {
-        "facts": [{"text": "Supported fact.", "reference_ids": [source_url]}],
-        "data_gaps": [],
-        "reference_ids": [source_url],
-    }
-    completion = service._DividendResearchResponse(
-        symbol="CBA.AX",
-        as_of=datetime(2026, 5, 28, tzinfo=UTC),
-        dividend_terms=section,
-        issuer_outlook=section,
-        event_risks=section,
-        market_context=section,
-        references=[
+    return {
+        "symbol": "ABC.L",
+        "as_of": datetime.now(UTC).isoformat(),
+        "dividend_terms": copy.deepcopy(section),
+        "issuer_outlook": copy.deepcopy(section),
+        "event_risks": copy.deepcopy(section),
+        "market_context": copy.deepcopy(section),
+        "references": [
             {
-                "id": source_url,
+                "id": _SOURCE_URL,
                 "title": "Dividend announcement",
-                "publisher": "ASX",
+                "publisher": "Example Exchange",
                 "source_type": "Exchange",
                 "published_at": None,
                 "accessed_at": None,
-                "url": source_url,
+                "url": _SOURCE_URL,
             }
         ],
-    ).model_dump_json()
+    }
 
-    with patch.object(
-        service.ai_helper,
-        "ai_exec_task",
-        new_callable=AsyncMock,
-        return_value=ai_helper.LLMResponse(
-            completion=completion,
-            citation_urls=[source_url],
-        ),
-    ) as mock_exec:
-        result = asyncio.run(
-            service._research_dividend_event(
-                context,
-                baseline,
-                country="AU",
-            )
-        )
 
-    assert result.references[0].is_verified is True
-    task_id, prompt = mock_exec.await_args.args
-    assert task_id == "ANALYZE_DIV_EVENT_RESEARCH"
-    assert "INVESTOR_INTENT" not in prompt
-    assert mock_exec.await_args.kwargs["response_json_schema"]
+def _ineligible_strategy(name: str, *, warnings: bool) -> dict[str, object]:
+    reference_ids = [_SOURCE_ID]
+    if warnings:
+        reference_ids.append("unsupported-source")
+    return {
+        "strategy": name,
+        "eligibility": "InsufficientData",
+        "ineligibility_reason": "The available evidence does not support a reliable estimate.",
+        "success_probability": None,
+        "expected_entry_price": None,
+        "expected_exit_price": None,
+        "expected_profit_loss_per_share": None,
+        "break_even_price": None,
+        "recovery_days": None,
+        "confidence": 25,
+        "risk": 70,
+        "rationale": "More evidence is required.",
+        "risk_factors": ["Market prices may move unexpectedly."],
+        "assumptions": [],
+        "data_gaps": ["Strategy estimates are unavailable."],
+        "reference_ids": reference_ids,
+    }
+
+
+def _assessment_payload(*, warnings: bool = False) -> dict[str, object]:
+    comparison_reference_ids = [_SOURCE_ID]
+    if warnings:
+        comparison_reference_ids.append("unsupported-source")
+    return {
+        "symbol": "ABC.L",
+        "as_of": datetime.now(UTC).isoformat(),
+        "overall_data_quality": "High",
+        "evidence_adjusted_ex_date_close_drop": None,
+        "evidence_adjusted_pre_ex_close_recovery": None,
+        "evidence_adjusted_capture_break_even_recovery": None,
+        "evidence_adjusted_discount_break_even_recovery": None,
+        "dividend_capture": _ineligible_strategy("DividendCapture", warnings=warnings),
+        "post_dividend_discount": _ineligible_strategy("PostDividendDiscount", warnings=warnings),
+        "comparison_rationale": "The strategies cannot be compared reliably.",
+        "comparison_reference_ids": comparison_reference_ids,
+    }
+
+
+def _research_response(*, verified: bool = True) -> ai_helper.LLMResponse:
+    return ai_helper.LLMResponse(
+        completion=json.dumps(_research_payload()),
+        citation_urls=[_SOURCE_URL] if verified else [],
+    )
+
+
+def _assessment_response(*, warnings: bool = False) -> ai_helper.LLMResponse:
+    return ai_helper.LLMResponse(completion=json.dumps(_assessment_payload(warnings=warnings)))
+
+
+def _ai_error_response() -> ai_helper.LLMResponse:
+    return ai_helper.LLMResponse(
+        is_error=True,
+        completion="provider rejected the request",
+        error_msg="provider rejected the request",
+    )
+
+
+def _analyze(**overrides):
+    arguments = {
+        "symbol": "LSE:ABC",
+        "ex_date": _future_ex_date(),
+        "dividend_amount": 2.0,
+    }
+    arguments.update(overrides)
+    return asyncio.run(service.ai_analyze_div_event(**arguments))
+
+
+@contextmanager
+def _dependencies(
+    *,
+    ticker: MagicMock,
+    ai: ai_service_fixtures.OpaqueAIQueue,
+    cache,
+):
+    with (
+        patch.object(service.yf, "Ticker", return_value=ticker),
+        patch.object(service.yfutils, "lookup_index_yf_static_symbol", return_value=None),
+        patch.object(service.yfutils, "lookup_peer_yf_static_symbol", return_value=None),
+        patch.object(service.cache, "get", side_effect=cache.get),
+        patch.object(service.cache, "set", side_effect=cache.set),
+        patch.object(service.ai_helper, "ai_exec_task", new=ai),
+    ):
+        yield
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"symbol": "   "},
+        {"symbol": "A" * 129},
+        {"ex_date": datetime.now(UTC)},
+        {"dividend_amount": 0.0},
+        {"dividend_amount": -1.0},
+        {"dividend_amount": float("inf")},
+        {"dividend_amount": float("nan")},
+        {"dividend_amount": float("-inf")},
+        {"holding_period_days": 0},
+        {"holding_period_days": 366},
+    ],
+)
+def test_invalid_direct_inputs_raise_documented_input_error(overrides):
+    with pytest.raises(service.DividendEventInputError):
+        _analyze(**overrides)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("dividend_capture_per_share", -0.01),
+        ("dividend_capture_per_share", float("nan")),
+        ("post_dividend_discount_per_share", float("-inf")),
+        ("post_dividend_discount_per_share", float("inf")),
+    ],
+)
+def test_invalid_transaction_costs_are_rejected_by_public_model(field, value):
+    values = {
+        "dividend_capture_per_share": 0.0,
+        "post_dividend_discount_per_share": 0.0,
+    }
+    values[field] = value
+
+    with pytest.raises(ValidationError):
+        models_dividends.DividendTransactionCosts.model_validate(values)
+
+
+def test_unsupported_security_type_raises_documented_input_error():
+    with (
+        patch.object(service.yf, "Ticker", return_value=_ticker(quote_type="CRYPTOCURRENCY")),
+        pytest.raises(service.DividendEventInputError),
+    ):
+        _analyze()
+
+
+def test_89_sessions_are_insufficient_but_90_sessions_are_accepted():
+    with (
+        patch.object(service.yf, "Ticker", return_value=_ticker(sessions=89)),
+        pytest.raises(service.DividendEventInsufficientDataError),
+    ):
+        _analyze()
+
+    cache = ai_service_fixtures.ExpiringCache()
+    ai = ai_service_fixtures.OpaqueAIQueue([_research_response(), _assessment_response()])
+    with _dependencies(ticker=_ticker(sessions=90), ai=ai, cache=cache):
+        result = _analyze()
+
+    assert result.analysis_status == "Complete"
+    assert result.historical_baseline.sample_count >= 1
+
+
+def test_complete_analysis_preserves_baseline_and_is_reused_when_ai_is_unavailable():
+    cache = ai_service_fixtures.ExpiringCache()
+    ai = ai_service_fixtures.OpaqueAIQueue([_research_response(), _assessment_response()])
+    with _dependencies(ticker=_ticker(), ai=ai, cache=cache):
+        first = _analyze(holding_period_days=35)
+        second = _analyze(holding_period_days=35)
+
+    assert second == first
+    assert first.analysis_status == "Complete"
+    assert first.event.symbol == "ABC.L"
+    assert first.event.holding_period_days == 35
+    assert first.historical_baseline.sample_count == 4
+    assert first.recommendation is not None
+    assert first.recommendation.outcome == "InsufficientInsights"
+    assert first.evidence_adjusted_ex_date_close_drop is None
+    assert first.evidence_adjusted_pre_ex_close_recovery is None
+    assert first.evidence_adjusted_capture_break_even_recovery is None
+    assert first.evidence_adjusted_discount_break_even_recovery is None
+    assert first.references[0].is_verified is True
+
+
+def test_unmatched_provider_citations_are_retained_and_lower_data_quality():
+    cache = ai_service_fixtures.ExpiringCache()
+    ai = ai_service_fixtures.OpaqueAIQueue([_research_response(verified=False), _assessment_response()])
+    with _dependencies(ticker=_ticker(), ai=ai, cache=cache):
+        result = _analyze()
+
+    assert result.analysis_status == "Complete"
+    assert result.overall_data_quality == "Low"
+    assert result.references
+    assert all(reference.is_verified is False for reference in result.references)
+
+
+def test_supported_results_with_repaired_references_return_warnings():
+    cache = ai_service_fixtures.ExpiringCache()
+    ai = ai_service_fixtures.OpaqueAIQueue([_research_response(), _assessment_response(warnings=True)])
+    with _dependencies(ticker=_ticker(), ai=ai, cache=cache):
+        result = _analyze()
+
+    assert result.analysis_status == "CompleteWithWarnings"
+    assert result.historical_baseline.sample_count == 4
+    assert result.validation_warnings
+    assert result.dividend_capture is not None
+    assert result.dividend_capture.reference_ids == [_SOURCE_ID]
+    assert result.post_dividend_discount is not None
+    assert result.post_dividend_discount.reference_ids == [_SOURCE_ID]
+
+
+def test_research_failure_returns_and_caches_failed_analysis_with_baseline():
+    cache = ai_service_fixtures.ExpiringCache()
+    ai = ai_service_fixtures.OpaqueAIQueue([_ai_error_response()])
+    with _dependencies(ticker=_ticker(), ai=ai, cache=cache):
+        first = _analyze()
+        second = _analyze()
+
+    assert second == first
+    assert first.analysis_status == "Failed"
+    assert first.failure_reason
+    assert first.historical_baseline.sample_count == 4
+    assert first.research is None
+    assert first.dividend_capture is None
+    assert first.recommendation is None
+
+
+def test_assessment_failure_preserves_research_and_deterministic_baseline():
+    cache = ai_service_fixtures.ExpiringCache()
+    ai = ai_service_fixtures.OpaqueAIQueue([_research_response(), _ai_error_response()])
+    with _dependencies(ticker=_ticker(), ai=ai, cache=cache):
+        result = _analyze()
+
+    assert result.analysis_status == "Failed"
+    assert result.failure_reason
+    assert result.historical_baseline.sample_count == 4
+    assert result.research is not None
+    assert result.references
+    assert result.dividend_capture is None
+    assert result.recommendation is None
+
+
+def test_failed_analysis_cache_expires_after_documented_five_minutes():
+    clock = ai_service_fixtures.ManualClock()
+    cache = ai_service_fixtures.ExpiringCache(clock)
+    rate_limit = ai_helper.LLMRateLimitError("AI boundary unavailable")
+    ai = ai_service_fixtures.OpaqueAIQueue(
+        [_ai_error_response()],
+        empty_exception=rate_limit,
+    )
+    with _dependencies(ticker=_ticker(), ai=ai, cache=cache):
+        first = _analyze()
+        clock.advance(5 * 60 - 1)
+        assert _analyze() == first
+        clock.advance(1)
+        with pytest.raises(ai_helper.LLMRateLimitError) as error_info:
+            _analyze()
+
+    assert error_info.value is rate_limit
+
+
+def test_opaque_invalid_cached_analysis_raises_runtime_error():
+    cache = ai_service_fixtures.InvalidCache(object())
+    ai = ai_service_fixtures.OpaqueAIQueue()
+    with (
+        _dependencies(ticker=_ticker(), ai=ai, cache=cache),
+        pytest.raises(RuntimeError),
+    ):
+        _analyze()
+
+
+def test_rate_limit_failure_is_not_cached_and_a_later_public_call_can_recover():
+    cache = ai_service_fixtures.ExpiringCache()
+    failure = ai_helper.LLMRateLimitError("retry budget exhausted")
+    ai = ai_service_fixtures.OpaqueAIQueue([failure, _research_response(), _assessment_response()])
+    with _dependencies(ticker=_ticker(), ai=ai, cache=cache):
+        with pytest.raises(ai_helper.LLMRateLimitError) as error_info:
+            _analyze()
+        recovered = _analyze()
+
+    assert error_info.value is failure
+    assert recovered.analysis_status == "Complete"
+    assert recovered.historical_baseline.sample_count == 4

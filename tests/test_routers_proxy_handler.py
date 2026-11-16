@@ -1,224 +1,199 @@
-import asyncio
-import gzip
-from unittest.mock import AsyncMock, MagicMock, patch
+import json
 
 import httpx2
 import pytest
-from fastapi import HTTPException, Request
+from fastapi.testclient import TestClient
 
+from app import config
+from app.main import app
 from app.routers import proxy_handler
 
-
-def _request(
-    path: str,
-    query: str = "",
-    *,
-    method: str = "GET",
-    body: bytes = b"",
-    headers: list[tuple[str, str]] | None = None,
-) -> Request:
-    async def receive():
-        return {"type": "http.request", "body": body, "more_body": False}
-
-    return Request(
-        {
-            "type": "http",
-            "http_version": "1.1",
-            "method": method,
-            "scheme": "https",
-            "path": path,
-            "root_path": "",
-            "query_string": query.encode(),
-            "headers": [(name.encode(), value.encode()) for name, value in headers or []],
-            "client": ("testclient", 50000),
-            "server": ("origin.example", 443),
-        },
-        receive,
-    )
+client = TestClient(app)
 
 
-def test_handle_if_proxy_preserves_existing_query_and_fragment():
-    response = asyncio.run(
-        proxy_handler.handle_if_proxy(
-            "Redirect",
-            "https://proxy.example?source=primary#results",
-            _request("/events/listings", "country=AU+%26+NZ"),
-        )
-    )
-
-    assert response is not None
-    assert response.status_code == 307
-    assert (
-        response.headers["location"] == "https://proxy.example/events/listings?source=primary&country=AU+%26+NZ#results"
-    )
+@pytest.fixture(autouse=True)
+def reset_proxy_settings(monkeypatch):
+    monkeypatch.setattr(config.settings_finhub_proxy, "proxy_mode", "None")
+    monkeypatch.setattr(config.settings_finhub_proxy, "url_web_crawl_node", "")
+    monkeypatch.setattr(config.settings_finhub_proxy, "url_ai_task_node", "")
 
 
-def test_handle_if_proxy_omits_question_mark_without_query_parameters():
-    response = asyncio.run(
-        proxy_handler.handle_if_proxy(
-            "Redirect",
-            "https://proxy.example",
-            _request("/events/listings"),
-        )
-    )
-
-    assert response is not None
-    assert response.headers["location"] == "https://proxy.example/events/listings"
-
-
-def test_handle_if_proxy_preserves_node_base_path():
-    response = asyncio.run(
-        proxy_handler.handle_if_proxy(
-            "Redirect",
+@pytest.mark.parametrize(
+    ("method", "path", "request_kwargs", "node_attribute", "node_url", "expected_location"),
+    [
+        (
+            "get",
+            "/events/upcoming_earnings",
+            {"params": {"country": "US", "index": "SP500"}},
+            "url_web_crawl_node",
+            "https://proxy.example/finhub?source=primary#results",
+            "https://proxy.example/finhub/events/upcoming_earnings?source=primary&country=US&index=SP500#results",
+        ),
+        (
+            "post",
+            "/ai/analyze_ticker",
+            {"json": {"symbol": "NASDAQ:AAPL"}},
+            "url_ai_task_node",
             "https://proxy.example/finhub/",
-            _request("/events/listings", "country=AU"),
-        )
+            "https://proxy.example/finhub/ai/analyze_ticker",
+        ),
+    ],
+)
+def test_redirect_mode_preserves_public_method_path_query_base_path_and_fragment(
+    monkeypatch,
+    method,
+    path,
+    request_kwargs,
+    node_attribute,
+    node_url,
+    expected_location,
+):
+    monkeypatch.setattr(config.settings_finhub_proxy, "proxy_mode", "redirect")
+    monkeypatch.setattr(config.settings_finhub_proxy, node_attribute, node_url)
+
+    response = client.request(method, path, follow_redirects=False, **request_kwargs)
+
+    assert response.status_code == 307
+    assert response.headers["location"] == expected_location
+
+
+@pytest.mark.parametrize("proxy_mode", ["None", "none", "unsupported"])
+def test_disabled_or_unknown_proxy_mode_executes_the_local_endpoint(monkeypatch, proxy_mode):
+    monkeypatch.setattr(config.settings_finhub_proxy, "proxy_mode", proxy_mode)
+    monkeypatch.setattr(config.settings_finhub_proxy, "url_ai_task_node", "https://proxy.example")
+
+    response = client.get("/events/new_listings", params={"country": "unsupported"})
+
+    assert response.status_code == 200
+    assert response.json()["status"] == 501
+
+
+def test_empty_node_url_disables_forwarding_before_timeout_validation(monkeypatch):
+    monkeypatch.setattr(config.settings_finhub_proxy, "proxy_mode", "Forward")
+    monkeypatch.setattr(config.settings_finhub_proxy, "url_ai_task_node", "")
+
+    response = client.get(
+        "/events/new_listings",
+        params={"country": "unsupported"},
+        headers={"X-FinHub-Forward-Timeout-Seconds": "invalid"},
     )
 
-    assert response is not None
-    assert response.headers["location"] == "https://proxy.example/finhub/events/listings?country=AU"
+    assert response.status_code == 200
+    assert response.json()["status"] == 501
 
 
-def test_handle_if_proxy_returns_none_when_disabled():
-    response = asyncio.run(
-        proxy_handler.handle_if_proxy(
-            "None",
-            "https://proxy.example",
-            _request("/events/listings"),
+class _ReflectingAsyncClient:
+    def __init__(self, *, follow_redirects, timeout):
+        self.follow_redirects = follow_redirects
+        self.timeout = timeout
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, traceback):
+        return None
+
+    async def request(self, method, url, *, content, headers):
+        forwarded_headers = {name.decode("latin-1"): value.decode("latin-1") for name, value in headers}
+        reflected = {
+            "method": method,
+            "url": url,
+            "body": content.decode(),
+            "headers": forwarded_headers,
+            "follow_redirects": self.follow_redirects,
+            "read_timeout": self.timeout.read,
+        }
+        return httpx2.Response(
+            status_code=201,
+            headers=[
+                ("content-type", "application/json"),
+                ("content-length", "999"),
+                ("set-cookie", "first=1"),
+                ("set-cookie", "second=2"),
+                ("connection", "x-upstream"),
+                ("x-upstream", "remove"),
+                ("x-result", "preserve"),
+            ],
+            content=json.dumps(reflected).encode(),
         )
+
+
+@pytest.mark.parametrize(("timeout_header", "expected_timeout"), [(None, 600.0), ("0.1", 0.1), ("86400", 86400.0)])
+def test_forward_mode_relays_public_request_and_response_semantics(
+    monkeypatch,
+    timeout_header,
+    expected_timeout,
+):
+    monkeypatch.setattr(config.settings_finhub_proxy, "proxy_mode", "fOrWaRd")
+    monkeypatch.setattr(
+        config.settings_finhub_proxy,
+        "url_ai_task_node",
+        "https://proxy.example/finhub?source=primary",
+    )
+    monkeypatch.setattr(proxy_handler.httpx2, "AsyncClient", _ReflectingAsyncClient)
+    headers = {
+        "connection": "keep-alive, x-remove",
+        "x-remove": "remove",
+        "x-client": "preserve",
+        "accept-encoding": "gzip",
+    }
+    if timeout_header is not None:
+        headers["X-FinHub-Forward-Timeout-Seconds"] = timeout_header
+
+    response = client.post(
+        "/ai/analyze_ticker",
+        json={"symbol": "NASDAQ:AAPL"},
+        headers=headers,
     )
 
-    assert response is None
-
-
-def test_forward_timeout_uses_600_second_default():
-    timeout = proxy_handler._forward_timeout(_request("/events/listings"))
-
-    assert timeout.connect == proxy_handler._FORWARD_CONNECT_TIMEOUT_SECONDS
-    assert timeout.read == 600
-    assert timeout.write == proxy_handler._FORWARD_WRITE_TIMEOUT_SECONDS
-    assert timeout.pool == proxy_handler._FORWARD_POOL_TIMEOUT_SECONDS
-
-
-def test_forward_timeout_uses_client_header():
-    timeout = proxy_handler._forward_timeout(
-        _request(
-            "/events/listings",
-            headers=[("x-finhub-forward-timeout-seconds", "14400")],
-        )
-    )
-
-    assert timeout.read == 14400
+    assert response.status_code == 201
+    reflected = response.json()
+    assert reflected["method"] == "POST"
+    assert reflected["url"] == "https://proxy.example/finhub/ai/analyze_ticker?source=primary"
+    assert json.loads(reflected["body"]) == {"symbol": "NASDAQ:AAPL"}
+    assert reflected["follow_redirects"] is False
+    assert reflected["read_timeout"] == expected_timeout
+    assert reflected["headers"]["content-type"] == "application/json"
+    assert reflected["headers"]["x-client"] == "preserve"
+    assert reflected["headers"]["accept-encoding"] == "identity"
+    assert "host" not in reflected["headers"]
+    assert "content-length" not in reflected["headers"]
+    assert "connection" not in reflected["headers"]
+    assert "x-remove" not in reflected["headers"]
+    assert response.headers["x-result"] == "preserve"
+    assert response.headers.get_list("set-cookie") == ["first=1", "second=2"]
+    assert "connection" not in response.headers
+    assert "x-upstream" not in response.headers
+    assert response.headers["content-length"] == str(len(response.content))
 
 
 @pytest.mark.parametrize("header_value", ["", "invalid", "0", "-1", "nan", "inf", "86401"])
-def test_forward_timeout_rejects_invalid_client_header(header_value):
-    with pytest.raises(HTTPException) as exc_info:
-        proxy_handler._forward_timeout(
-            _request(
-                "/events/listings",
-                headers=[("x-finhub-forward-timeout-seconds", header_value)],
-            )
-        )
+def test_forward_mode_rejects_invalid_public_timeout_values(monkeypatch, header_value):
+    monkeypatch.setattr(config.settings_finhub_proxy, "proxy_mode", "Forward")
+    monkeypatch.setattr(config.settings_finhub_proxy, "url_ai_task_node", "https://proxy.example")
 
-    assert exc_info.value.status_code == 422
-
-
-def test_handle_if_proxy_forwards_request_and_upstream_response():
-    upstream_response = httpx2.Response(
-        status_code=201,
-        headers=[
-            ("content-type", "application/json"),
-            ("content-encoding", "gzip"),
-            ("content-length", "999"),
-            ("set-cookie", "first=1"),
-            ("set-cookie", "second=2"),
-            ("connection", "x-upstream"),
-            ("x-upstream", "remove"),
-            ("x-result", "preserve"),
-        ],
-        content=gzip.compress(b'{"created":true}'),
-    )
-    client = AsyncMock()
-    client.request.return_value = upstream_response
-    client_context = MagicMock()
-    client_context.__aenter__ = AsyncMock(return_value=client)
-    client_context.__aexit__ = AsyncMock(return_value=None)
-    request = _request(
-        "/events/listings",
-        "country=AU",
-        method="POST",
-        body=b'{"name":"Example"}',
-        headers=[
-            ("host", "origin.example"),
-            ("content-type", "application/json"),
-            ("content-length", "18"),
-            ("accept-encoding", "gzip"),
-            ("connection", "keep-alive, x-remove"),
-            ("x-remove", "remove"),
-            ("x-api-key", "secret"),
-        ],
+    response = client.post(
+        "/ai/analyze_ticker",
+        json={"symbol": "NASDAQ:AAPL"},
+        headers={"X-FinHub-Forward-Timeout-Seconds": header_value},
     )
 
-    with patch.object(proxy_handler.httpx2, "AsyncClient", return_value=client_context) as client_factory:
-        response = asyncio.run(
-            proxy_handler.handle_if_proxy(
-                "Forward",
-                "https://proxy.example/finhub?source=primary",
-                request,
-            )
-        )
-
-    client_factory.assert_called_once()
-    client_options = client_factory.call_args.kwargs
-    assert client_options["follow_redirects"] is False
-    assert client_options["timeout"].read == proxy_handler._FORWARD_DEFAULT_READ_TIMEOUT_SECONDS
-    client.request.assert_awaited_once()
-    request_args = client.request.await_args
-    assert request_args.args == (
-        "POST",
-        "https://proxy.example/finhub/events/listings?source=primary&country=AU",
-    )
-    assert request_args.kwargs["content"] == b'{"name":"Example"}'
-    forwarded_headers = dict(request_args.kwargs["headers"])
-    assert forwarded_headers[b"content-type"] == b"application/json"
-    assert forwarded_headers[b"x-api-key"] == b"secret"
-    assert forwarded_headers[b"accept-encoding"] == b"identity"
-    assert b"host" not in forwarded_headers
-    assert b"content-length" not in forwarded_headers
-    assert b"connection" not in forwarded_headers
-    assert b"x-remove" not in forwarded_headers
-
-    assert response is not None
-    assert response.status_code == 201
-    assert response.body == b'{"created":true}'
-    assert response.headers["content-type"] == "application/json"
-    assert response.headers["content-length"] == str(len(response.body))
-    assert response.headers["x-result"] == "preserve"
-    assert response.headers.getlist("set-cookie") == ["first=1", "second=2"]
-    assert "content-encoding" not in response.headers
-    assert "connection" not in response.headers
-    assert "x-upstream" not in response.headers
+    assert response.status_code == 422
+    assert response.json()["status"] == 422
 
 
-def test_handle_if_proxy_maps_forwarding_failure_to_bad_gateway():
-    client = AsyncMock()
-    client.request.side_effect = httpx2.ConnectError("connection failed")
-    client_context = MagicMock()
-    client_context.__aenter__ = AsyncMock(return_value=client)
-    client_context.__aexit__ = AsyncMock(return_value=None)
+class _FailingAsyncClient(_ReflectingAsyncClient):
+    async def request(self, method, url, *, content, headers):
+        raise httpx2.ConnectError("connection failed")
 
-    with (
-        patch.object(proxy_handler.httpx2, "AsyncClient", return_value=client_context),
-        pytest.raises(HTTPException) as exc_info,
-    ):
-        asyncio.run(
-            proxy_handler.handle_if_proxy(
-                "Forward",
-                "https://proxy.example",
-                _request("/events/listings"),
-            )
-        )
 
-    assert exc_info.value.status_code == 502
-    assert exc_info.value.detail == "Proxy forwarding failed"
+def test_forwarding_failures_return_public_bad_gateway_response(monkeypatch):
+    monkeypatch.setattr(config.settings_finhub_proxy, "proxy_mode", "Forward")
+    monkeypatch.setattr(config.settings_finhub_proxy, "url_ai_task_node", "https://proxy.example")
+    monkeypatch.setattr(proxy_handler.httpx2, "AsyncClient", _FailingAsyncClient)
+
+    response = client.post("/ai/analyze_ticker", json={"symbol": "NASDAQ:AAPL"})
+
+    assert response.status_code == 502
+    assert response.json()["status"] == 502
+    assert "data" not in response.json()

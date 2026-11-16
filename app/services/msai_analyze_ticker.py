@@ -25,11 +25,11 @@ from ..utils import cache, conv, yfutils
 from ..utils import finhub as finhub_utils
 from . import ai_helper
 
-_MARKET_CACHE_NAMESPACE = "ticker-analysis-market-v2"
-_RESEARCH_CACHE_NAMESPACE = "ticker-analysis-research-v1"
-_FORECAST_CACHE_NAMESPACE = "ticker-analysis-forecast-v1"
-_RECOMMENDATION_CACHE_NAMESPACE = "ticker-analysis-recommendation-v1"
-_FINAL_CACHE_NAMESPACE = "ticker-analysis-final-v1"
+_MARKET_CACHE_NAMESPACE = "ticker-analysis-market"
+_RESEARCH_CACHE_NAMESPACE = "ticker-analysis-research"
+_FORECAST_CACHE_NAMESPACE = "ticker-analysis-forecast"
+_RECOMMENDATION_CACHE_NAMESPACE = "ticker-analysis-recommendation"
+_FINAL_CACHE_NAMESPACE = "ticker-analysis-final"
 _CACHE_TTL = 60 * 60
 
 _RESEARCH_TASK = "ANALYZE_TICKER_RESEARCH"
@@ -281,7 +281,43 @@ async def ai_analyze_ticker(
     symbol: str,
     current_holding: schemas_ticker.TickerHoldingInput | None = None,
 ) -> models_ticker.TickerAnalysis:
-    """Return structured research, forecasts, and a generic recommendation for one security."""
+    """Analyze a security and return verified research, forecasts, and a recommendation.
+
+    Args:
+        symbol: Security in Yahoo Finance or ``EXCHANGE:CODE`` format. Surrounding
+            whitespace is ignored and matching is case-insensitive; a blank value
+            is rejected.
+        current_holding: Optional positive share count and average acquisition price.
+            It adds a mark-to-market holding snapshot and changes the recommendation
+            scope to ``ExistingHolding``. It does not change security-level research
+            or forecasts.
+
+    Returns:
+        A :class:`TickerAnalysis` containing the verified market snapshot, optional
+        holding valuation, sourced research, four ordered forecast horizons, and a
+        recommendation scoped to a new position or the supplied holding. Valid
+        research sources without matched provider citations remain in the result
+        with ``is_verified=False`` and produce ``CompleteWithWarnings``.
+
+    Raises:
+        TickerInputError: If the symbol is blank, invalid, or resolves to an
+            unsupported security type.
+        TickerVerificationError: If market-data retrieval, identity verification,
+            required history, or the market-baseline cache is invalid.
+        TickerAnalysisAIError: If an AI stage fails, returns invalid structured
+            output, or an AI-stage/final-result cache value is invalid.
+        ai_helper.LLMRateLimitError: If an AI provider remains rate limited beyond
+            its retry budget.
+        Exception: Cache-backend failures and unexpected provider SDK failures are
+            propagated when they are not mapped to the errors above.
+
+    Notes:
+        Market and AI-stage results are cached for one hour. Final cached results
+        distinguish different holdings, while reusable security-level evidence is
+        independent of the holding. Cache entries are expired at the one-hour
+        boundary; invalid market caches raise ``TickerVerificationError`` and
+        invalid AI-stage or final caches raise ``TickerAnalysisAIError``.
+    """
 
     normalized_symbol = symbol.strip().upper()
     if not normalized_symbol:

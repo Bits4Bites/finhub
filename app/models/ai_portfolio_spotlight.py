@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Annotated, Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 
 from ..utils import ai_reference as ai_reference_utils
 from . import ai as models_ai
@@ -32,28 +32,29 @@ _RISK_LEVEL_ORDER: dict[PortfolioSpotlightRiskLevel, int] = {
 
 
 class PortfolioSpotlightSnapshot(models_ai.StrictAIModel):
-    """Verified portfolio state used as the basis for spotlight analysis."""
+    """Verified portfolio state used as the basis for spotlight analysis.
+
+    Total market value and holding valuations are service-supplied rather than
+    recomputed by this model. Supplied holding allocations must be unique by
+    ticker, share one currency, and sum to one.
+    """
 
     as_of: datetime = Field(description="Timezone-aware timestamp of the verified portfolio snapshot.")
-    country: str = Field(
-        min_length=2,
-        max_length=2,
-        description="ISO 3166-1 alpha-2 market country code.",
+    country: models_types.CountryCode = Field(
+        description="ISO 3166-1 alpha-2 market country code; input is trimmed and uppercased.",
     )
-    currency: str = Field(
-        min_length=3,
-        max_length=3,
-        description="Three-letter currency shared by every verified holding.",
+    currency: models_types.CurrencyCode = Field(
+        description=("Three-letter currency shared by every verified holding; input is trimmed and uppercased."),
     )
     total_market_value: float = Field(
         gt=0,
         allow_inf_nan=False,
-        description="Total current market value of all verified holdings.",
+        description="Service-verified total current market value supplied for the snapshot.",
     )
     holdings: list[models_portfolio.PortfolioVerifiedHolding] = Field(
         min_length=1,
         max_length=50,
-        description="Verified positions and their calculated portfolio weights.",
+        description="Verified positions and their service-supplied current allocations.",
     )
     data_gaps: list[Annotated[models_types.NonEmptyString, Field(max_length=4000)]] = Field(
         max_length=20,
@@ -70,16 +71,25 @@ class PortfolioSpotlightSnapshot(models_ai.StrictAIModel):
         allocation_total = sum(holding.current_allocation for holding in self.holdings)
         if abs(allocation_total - 1.0) > 1e-6:
             raise ValueError("snapshot current allocations must sum to one")
+        if {holding.currency for holding in self.holdings} != {self.currency}:
+            raise ValueError("snapshot holdings must use the snapshot currency")
         return self
 
 
 class PortfolioSpotlightRiskAction(models_ai.StrictAIModel):
-    """A ranked portfolio risk with a bounded response action."""
+    """A ranked portfolio risk with a bounded response action.
+
+    Critical risks use AsSoonAsPossibleWithinOneWeek, High risks use
+    WithinOneToTwoWeeks, and Medium risks use Monitor.
+    """
 
     rank: int = Field(ge=1, le=4, description="One-based priority rank among returned risks.")
     level: PortfolioSpotlightRiskLevel = Field(description="Urgency assigned to the portfolio risk.")
     action_timing: PortfolioSpotlightActionTiming = Field(
-        description="Required response window determined by the risk level."
+        description=(
+            "Required response window: AsSoonAsPossibleWithinOneWeek for "
+            "Critical, WithinOneToTwoWeeks for High, and Monitor for Medium."
+        )
     )
     risk: models_types.NonEmptyString = Field(
         max_length=4000,
@@ -97,7 +107,10 @@ class PortfolioSpotlightRiskAction(models_ai.StrictAIModel):
     ] = Field(
         min_length=1,
         max_length=50,
-        description="Verified portfolio tickers affected by the risk.",
+        description=(
+            "Canonical EXCHANGE:CODE verified-portfolio tickers affected by the "
+            "risk; inputs are trimmed, uppercased, and alias-normalized."
+        ),
     )
     requires_rebalance: bool = Field(description="Whether the action changes portfolio composition or allocation.")
     confidence: int = Field(
@@ -114,6 +127,11 @@ class PortfolioSpotlightRiskAction(models_ai.StrictAIModel):
         description="Identifiers of response references supporting this risk.",
     )
 
+    @field_validator("affected_tickers", mode="after")
+    @classmethod
+    def normalize_tickers(cls, value: list[str]) -> list[str]:
+        return [models_portfolio.normalize_canonical_ticker(ticker) for ticker in value]
+
     @model_validator(mode="after")
     def validate_action(self) -> Self:
         if self.action_timing != _ACTION_TIMING_BY_RISK_LEVEL[self.level]:
@@ -126,7 +144,13 @@ class PortfolioSpotlightRiskAction(models_ai.StrictAIModel):
 
 
 class PortfolioSpotlightAnalysis(models_ai.StrictAIModel):
-    """Final structured portfolio spotlight review."""
+    """Final structured portfolio spotlight review.
+
+    Complete results have no validation warnings; CompleteWithWarnings results
+    have at least one. Empty portfolios contain no snapshot, risks, or
+    references, cannot recommend rebalancing, and report Insufficient quality.
+    Non-empty risks are ranked consecutively from highest to lowest urgency.
+    """
 
     as_of: datetime = Field(description="Timezone-aware timestamp when the analysis was finalized.")
     analysis_status: PortfolioSpotlightAnalysisStatus = Field(
@@ -156,7 +180,7 @@ class PortfolioSpotlightAnalysis(models_ai.StrictAIModel):
     )
     references: list[models_ai.ReferenceSource] = Field(
         max_length=6,
-        description="Canonical sources cited by the returned risks.",
+        description="Canonical sources cited by the returned risks, in application-supplied order.",
     )
 
     @model_validator(mode="after")

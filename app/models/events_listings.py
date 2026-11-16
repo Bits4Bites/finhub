@@ -3,16 +3,17 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Literal, Self
 
-from pydantic import ConfigDict, Field, model_validator
+from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from ..utils import ai_reference as ai_reference_utils
 from . import ai as models_ai
 from . import event
+from . import portfolio as models_portfolio
 from . import types as models_types
 
 ListingStatus = Literal["Upcoming", "Listed"]
 ListingStance = Literal["Bullish", "Neutral", "Bearish", "InsufficientData"]
-ListingAnalysisStatus = Literal["NotStarted", "Completed", "Failed"]
+ListingAnalysisStatus = Literal["NotStarted", "Completed", "Failed", "Skipped"]
 ListingOutlookAssessmentType = Literal["Forecast", "Observed", "InsufficientData"]
 ListingOutlookDirection = Literal["Up", "Flat", "Down", "InsufficientData"]
 ListingRiskSeverity = Literal["Critical", "High", "Medium", "Low"]
@@ -155,7 +156,11 @@ class ListingRiskCatalystAnalysis(ListingAnalysisSection):
 
 
 class ListingPeriodOutlook(models_ai.StrictAIModel):
-    """Observed or forecast listing performance for a defined period."""
+    """Observed or forecast listing performance for a defined period.
+
+    Each supplied lower price or return bound must not exceed its upper bound.
+    Insufficient-data assessments use the matching direction.
+    """
 
     assessment_type: ListingOutlookAssessmentType = Field(
         description="Whether the outlook is observed, forecast, or unavailable."
@@ -212,7 +217,12 @@ class ListingOutlook(models_ai.StrictAIModel):
 class ListingAnalysisBase(models_ai.StrictAIModel):
     """Core structured assessment of a new or recently completed listing."""
 
-    symbol: models_types.NonEmptyString = Field(description="Canonical exchange-qualified listing symbol.")
+    symbol: models_types.NonEmptyString = Field(
+        description=(
+            "Canonical exchange-qualified listing symbol; input is trimmed, "
+            "uppercased, and exchange aliases are canonicalized."
+        )
+    )
     as_of: datetime = Field(description="Timestamp when the analysis was finalized.")
     listing_status: ListingStatus = Field(description="Whether the security is upcoming or already listed.")
     overall_data_quality: models_types.DataQuality = Field(
@@ -233,7 +243,18 @@ class ListingAnalysisBase(models_ai.StrictAIModel):
     risks_and_catalysts: ListingRiskCatalystAnalysis = Field(description="Material risks and catalysts.")
     outlook: ListingOutlook = Field(description="Outlook across initial trading periods.")
 
+    @field_validator("symbol", mode="before")
+    @classmethod
+    def normalize_symbol(cls, value: object) -> object:
+        return models_portfolio.normalize_canonical_ticker(value)
+
     def referenced_source_ids(self) -> set[str]:
+        """Return every source identifier cited by this analysis.
+
+        Returns:
+            The unique IDs found in nested ``reference_ids`` fields. The source
+            registry itself is not counted as a citation.
+        """
         return ai_reference_utils.collect_reference_ids(self)
 
 
@@ -242,7 +263,7 @@ class ListingAnalysis(ListingAnalysisBase):
 
     references: list[models_ai.ReferenceSource] = Field(
         min_length=1,
-        description="Canonical sources cited throughout the listing analysis.",
+        description="Canonical sources cited throughout the listing analysis, in application-supplied order.",
     )
 
     @model_validator(mode="after")
@@ -252,16 +273,29 @@ class ListingAnalysis(ListingAnalysisBase):
 
 
 class ListingEvent(event.EventBase):
-    """A new or recently completed exchange-listing event."""
+    """A new or recently completed exchange-listing event.
+
+    Completed events contain matching structured analysis and no error. Failed
+    events contain a nonblank error and no analysis. NotStarted and Skipped
+    events contain neither analysis nor an error.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     symbol: models_types.NonEmptyString = Field(
-        description="Canonical exchange-qualified symbol assigned to the listing."
+        description=(
+            "Canonical exchange-qualified symbol assigned to the listing; input "
+            "is trimmed, uppercased, and exchange aliases are canonicalized."
+        )
     )
     issue_price: float | None = Field(
         gt=0,
-        description="Offer price per security, or null when unavailable.",
+        description="Fixed offer price per security or the lower bound of a price range, or null when unavailable.",
+    )
+    issue_price_upper: float | None = Field(
+        default=None,
+        gt=0,
+        description="Upper bound of an issue-price range, or null for a fixed or unavailable price.",
     )
     issue_type: str | None = Field(
         default=None,
@@ -273,7 +307,9 @@ class ListingEvent(event.EventBase):
         default=None,
         description="Summary of the issuer's principal business activities.",
     )
-    currency: models_types.NonEmptyString = Field(description="Currency of issue price and capital raised.")
+    currency: models_types.CurrencyCode = Field(
+        description=("Three-letter currency of issue price and capital raised; input is trimmed and uppercased.")
+    )
     capital_to_raise: int | None = Field(
         gt=0,
         description="Target capital raise, or null when unavailable.",
@@ -296,13 +332,53 @@ class ListingEvent(event.EventBase):
     )
     analysis_status: ListingAnalysisStatus = Field(
         default="NotStarted",
-        description="Lifecycle state of AI analysis for the listing.",
+        description=(
+            "Lifecycle state of AI analysis: Completed includes analysis, Failed "
+            "includes a nonblank error, and NotStarted or Skipped includes neither."
+        ),
     )
     analysis_error: str | None = Field(
         default=None,
-        description="Analysis failure detail, or null when no failure occurred.",
+        description="Nonblank failure detail for Failed analysis, otherwise null.",
     )
     analysis: ListingAnalysis | None = Field(
         default=None,
-        description="Structured listing analysis, or null when not completed.",
+        description="Structured listing analysis for Completed status, otherwise null.",
     )
+
+    @field_validator("symbol", mode="before")
+    @classmethod
+    def normalize_symbol(cls, value: object) -> object:
+        return models_portfolio.normalize_canonical_ticker(value)
+
+    @field_validator("analysis_error", mode="before")
+    @classmethod
+    def normalize_analysis_error(cls, value: object) -> object:
+        if not isinstance(value, str):
+            return value
+        normalized = value.strip()
+        return normalized or None
+
+    @model_validator(mode="after")
+    def validate_listing_event(self) -> Self:
+        if (
+            self.issue_price is not None
+            and self.issue_price_upper is not None
+            and self.issue_price > self.issue_price_upper
+        ):
+            raise ValueError("issue_price must not exceed issue_price_upper")
+        if self.analysis_status == "Completed":
+            if self.analysis is None:
+                raise ValueError("Completed listing analysis requires analysis")
+            if self.analysis_error is not None:
+                raise ValueError("Completed listing analysis cannot contain an error")
+            if self.analysis.symbol != self.symbol:
+                raise ValueError("listing analysis symbol must match the event symbol")
+        elif self.analysis_status == "Failed":
+            if self.analysis_error is None:
+                raise ValueError("Failed listing analysis requires a nonblank error")
+            if self.analysis is not None:
+                raise ValueError("Failed listing analysis cannot contain analysis")
+        elif self.analysis is not None or self.analysis_error is not None:
+            raise ValueError("NotStarted and Skipped listing analysis cannot contain analysis or an error")
+        return self

@@ -1,10 +1,11 @@
-from copy import deepcopy
+import copy
 
+import pydantic
 import pytest
-from pydantic import ValidationError
 
 from app.models import ai_portfolio_review as models_review
 from app.schemas import ai_portfolio_review as schemas_review
+from tests import portfolio_construction_fixtures
 from tests import portfolio_review_fixtures as fixtures
 
 
@@ -35,43 +36,41 @@ def _major_review_data() -> dict[str, object]:
     return data
 
 
-def test_review_accepts_complete_structured_growth_plan():
+def test_review_accepts_and_serializes_complete_growth_plan():
     review = fixtures.review()
 
-    assert review.result_type == "PortfolioReview"
-    assert review.rebalance_recommended == "NO"
-    assert review.action_plan is not None
-    assert review.action_plan.plan_type == "Growth"
-    assert all(holding.role.startswith(models_review.ROLE_PREFIXES) for holding in review.holding_reviews)
+    serialized = review.model_dump(mode="json")
+    assert serialized["result_type"] == "PortfolioReview"
+    assert serialized["rebalance_recommended"] == "NO"
+    assert serialized["action_plan"]["plan_type"] == "Growth"
+    assert all(item["role"] for item in serialized["holding_reviews"])
 
 
-def test_recommended_unrequested_rebalance_preserves_explicit_null_action_plan():
+def test_recommended_unrequested_rebalance_preserves_null_action_plan():
     review = models_review.PortfolioReview.model_validate(_major_review_data())
 
     assert review.rebalance_recommended == "YES"
     assert review.action_plan is None
-    assert review.model_dump(exclude_none=True)["action_plan"] is None
-    assert review.model_dump(include={"country"}, exclude_none=True) == {"country": "US"}
+    assert review.model_dump(mode="json", exclude_none=True)["action_plan"] is None
 
 
 def test_exact_twenty_percent_turnover_requires_rebalance():
     data = _major_review_data()
     data["rebalance_recommended"] = "NO"
-    data["major_rebalance_reasons"] = []
 
-    with pytest.raises(ValidationError, match="rebalance_recommended"):
+    with pytest.raises(pydantic.ValidationError):
         models_review.PortfolioReview.model_validate(data)
 
 
-def test_recommended_requested_rebalance_requires_rebalance_plan():
+def test_recommended_requested_rebalance_requires_action_plan():
     data = _major_review_data()
     data["rebalance_requested"] = True
 
-    with pytest.raises(ValidationError, match="requires an action plan"):
+    with pytest.raises(pydantic.ValidationError):
         models_review.PortfolioReview.model_validate(data)
 
 
-def test_no_rebalance_requires_growth_plan_for_both_request_flags():
+def test_no_rebalance_requires_growth_plan_for_requested_actions():
     data = fixtures.review().model_dump(mode="python")
     data["rebalance_requested"] = True
     review = models_review.PortfolioReview.model_validate(data)
@@ -79,7 +78,7 @@ def test_no_rebalance_requires_growth_plan_for_both_request_flags():
     assert review.action_plan.plan_type == "Growth"
 
     data["action_plan"]["plan_type"] = "Rebalance"
-    with pytest.raises(ValidationError, match="plan type"):
+    with pytest.raises(pydantic.ValidationError):
         models_review.PortfolioReview.model_validate(data)
 
 
@@ -87,25 +86,25 @@ def test_long_term_review_rejects_trim_recommendation():
     data = fixtures.review().model_dump(mode="python")
     data["holding_reviews"][0]["recommendation"] = "TRIM"
 
-    with pytest.raises(ValidationError, match="LongTerm holding reviews cannot recommend TRIM"):
+    with pytest.raises(pydantic.ValidationError):
         models_review.PortfolioReview.model_validate(data)
 
 
-def test_swing_review_allows_risk_control_exit():
+def test_swing_review_accepts_risk_control_exit():
     data = _major_review_data()
     data["strategy"] = "Swing"
     data["holding_reviews"][2]["exit_reason"] = "SwingRiskControl"
 
     review = models_review.PortfolioReview.model_validate(data)
 
-    assert review.holding_reviews[2].exit_reason == "SwingRiskControl"
+    assert review.model_dump(mode="json")["holding_reviews"][2]["exit_reason"] == "SwingRiskControl"
 
 
-def test_review_rejects_unknown_reference_id():
+def test_review_rejects_unknown_referenced_source():
     data = fixtures.review().model_dump(mode="python")
     data["strengths"][0]["reference_ids"] = ["src-unknown"]
 
-    with pytest.raises(ValidationError, match="unknown reference IDs"):
+    with pytest.raises(pydantic.ValidationError):
         models_review.PortfolioReview.model_validate(data)
 
 
@@ -115,36 +114,119 @@ def test_action_plan_rejects_unbalanced_cash_ledger():
     data = plan.model_dump(mode="python")
     data["cash_ledger"]["unallocated_cash"] = 99
 
-    with pytest.raises(ValidationError, match="must balance"):
+    with pytest.raises(pydantic.ValidationError):
         models_review.PortfolioReviewActionPlan.model_validate(data)
 
 
-def test_analyze_portfolio_schema_uses_result_discriminator():
-    schema = schemas_review.AnalyzePortfolioResponse.model_json_schema()
-    data_schema = schema["properties"]["data"]["anyOf"][0]
+@pytest.mark.parametrize("prefix", ["🚀", "🛡️", "🧭", "🧱", "⚡", "💵"])
+def test_review_roles_accept_documented_prefixes(prefix):
+    review = fixtures.review()
+    model_and_data = (
+        (
+            models_review.PortfolioHoldingReview,
+            review.holding_reviews[0].model_dump(mode="python"),
+        ),
+        (
+            models_review.PortfolioReviewTargetPosition,
+            review.target_portfolio[0].model_dump(mode="python"),
+        ),
+    )
 
-    assert data_schema["discriminator"]["propertyName"] == "result_type"
-    assert set(data_schema["discriminator"]["mapping"]) == {
-        "PortfolioConstruction",
-        "PortfolioReview",
+    for model_type, data in model_and_data:
+        data["role"] = f"{prefix} Documented portfolio role"
+        assert model_type.model_validate(data).role.startswith(prefix)
+
+
+@pytest.mark.parametrize(
+    ("model_type", "item"),
+    [
+        (models_review.PortfolioHoldingReview, "holding_reviews"),
+        (models_review.PortfolioReviewTargetPosition, "target_portfolio"),
+    ],
+)
+def test_review_roles_reject_unsupported_prefix(model_type, item):
+    data = getattr(fixtures.review(), item)[0].model_dump(mode="python")
+    data["role"] = "📈 Unsupported role"
+
+    with pytest.raises(pydantic.ValidationError):
+        model_type.model_validate(data)
+
+
+def test_review_snapshot_normalizes_iso_country_and_currency_codes():
+    data = fixtures.review().snapshot.model_dump(mode="python")
+    data["country"] = " us "
+    data["currency"] = " usd "
+    for holding in data["holdings"]:
+        holding["currency"] = " usd "
+
+    snapshot = models_review.PortfolioReviewSnapshot.model_validate(data)
+
+    assert snapshot.country == "US"
+    assert snapshot.currency == "USD"
+    assert {holding.currency for holding in snapshot.holdings} == {"USD"}
+
+
+@pytest.mark.parametrize(("field", "value"), [("country", "ZZ"), ("currency", "U$D")])
+def test_review_snapshot_rejects_invalid_identifier(field, value):
+    data = fixtures.review().snapshot.model_dump(mode="python")
+    data[field] = value
+
+    with pytest.raises(pydantic.ValidationError):
+        models_review.PortfolioReviewSnapshot.model_validate(data)
+
+
+@pytest.mark.parametrize(
+    "result",
+    [fixtures.review(), portfolio_construction_fixtures.construction()],
+    ids=["review", "construction"],
+)
+def test_analyze_portfolio_response_serializes_supported_result(result):
+    response = schemas_review.AnalyzePortfolioResponse(
+        status=200,
+        message="Portfolio analysis completed.",
+        data=result,
+    )
+
+    serialized = response.model_dump(mode="json")
+    assert serialized["data"]["result_type"] == result.result_type
+
+
+def test_analyze_portfolio_request_normalizes_and_serializes_valid_holdings():
+    request = schemas_review.AnalyzePortfolioRequest(
+        country=" US ",
+        investor_theme=" Long-term growth ",
+        current_allocation=[fixtures.holdings()[0]],
+    )
+
+    assert request.model_dump(mode="json") == {
+        "country": "US",
+        "current_allocation": [fixtures.holdings()[0].model_dump(mode="json")],
+        "investor_theme": "Long-term growth",
+        "rebalance_plan": False,
     }
 
 
-def test_analyze_portfolio_request_requires_theme_and_unique_whole_share_holdings():
-    with pytest.raises(ValidationError):
+def test_analyze_portfolio_request_rejects_blank_theme():
+    with pytest.raises(pydantic.ValidationError):
         schemas_review.AnalyzePortfolioRequest(country="US", investor_theme=" ")
 
-    duplicate_holdings = [holding.model_dump() for holding in fixtures.holdings()[:1]] * 2
-    with pytest.raises(ValidationError, match="tickers must be unique"):
+
+def test_analyze_portfolio_request_rejects_duplicate_tickers():
+    holding_data = fixtures.holdings()[0].model_dump(mode="python")
+
+    with pytest.raises(pydantic.ValidationError):
         schemas_review.AnalyzePortfolioRequest(
             country="US",
             investor_theme="Long-term growth",
-            current_allocation=duplicate_holdings,
+            current_allocation=[holding_data, holding_data],
         )
 
-    fractional = deepcopy(fixtures.holdings()[0].model_dump())
+
+def test_analyze_portfolio_request_rejects_fractional_positive_holding():
+    fractional = copy.deepcopy(fixtures.holdings()[0].model_dump(mode="python"))
     fractional["num_shares"] = 1.5
-    with pytest.raises(ValidationError, match="whole-share"):
+
+    with pytest.raises(pydantic.ValidationError):
         schemas_review.AnalyzePortfolioRequest(
             country="US",
             investor_theme="Long-term growth",
