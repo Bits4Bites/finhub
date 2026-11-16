@@ -1,5 +1,17 @@
 # FinHub release notes
 
+## 2026-11-16 - v0.17.0
+
+### Added/Refactoring/Deprecation
+
+- Feat(ai): add tokenomics mode configuration (env FINHUB_LLM_TOKENOMICS_MODE)
+- Feat(ai/new_listings): provide subjective ASX forecasts despite sparse evidence
+- Feat(ai/new_listings): reduce token usage under Economy tokenomics mode
+- Feat(ai/new_listings): return all valid ASX listings and cap analysis attempts
+- Feat(events/new_listings): support IPO issue-price ranges
+- Feat(events/new_listings): support fetching US listing events
+- Refactor(crawler): fall back to Playwright on HTTP failures and skip 4xx retries
+
 ## 2026-11-09 - v0.16.5
 
 ### Fixed/Improvements
