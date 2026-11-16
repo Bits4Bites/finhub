@@ -43,7 +43,11 @@ internal static class ContractMappings
     public static IReadOnlySet<string> IgnoredOpenApiComponents { get; } =
         new HashSet<string>(StringComparer.Ordinal)
         {
+            "AppInfo",
+            "AppInfoResponse",
+            "HealthResponse",
             "HTTPValidationError",
+            "RootResponse",
             "ValidationError",
         };
 
