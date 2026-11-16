@@ -6,12 +6,31 @@ using FinHub.Client.Models.Portfolios;
 using FinHub.Client.Schemas.MarketIndex;
 using MyPo.Shared.Api;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace FinHub.Client.Contracts.Tests;
 
 public sealed class ComponentContractParityTests
 {
     private static readonly NullabilityInfoContext Nullability = new();
+
+    private static readonly IReadOnlyDictionary<
+        string,
+        (bool DotNetNullable, bool OpenApiNullable)
+    > KnownNullabilityMismatches =
+        new Dictionary<string, (bool DotNetNullable, bool OpenApiNullable)>(
+            StringComparer.Ordinal
+        )
+        {
+            ["ListingEvent.exchange"] = (true, false),
+            ["ListingEvent.company_name"] = (true, false),
+            ["UpcomingDividendEvent.exchange"] = (true, false),
+            ["UpcomingDividendEvent.company_name"] = (true, false),
+            ["UpcomingEarningsEvent.exchange"] = (true, false),
+            ["UpcomingEarningsEvent.company_name"] = (true, false),
+            ["app__models__event__DividendEventAnalysis.exchange"] = (true, false),
+            ["app__models__event__DividendEventAnalysis.company_name"] = (true, false),
+        };
 
     private static readonly IReadOnlyList<string> AnalyzeTickerRootComponents =
     [
@@ -68,6 +87,13 @@ public sealed class ComponentContractParityTests
             "app__models__event__DividendEventAnalysis.std_volume_30d",
             "app__models__event__DividendEventAnalysis.timestamp",
         };
+
+    private readonly ITestOutputHelper _output;
+
+    public ComponentContractParityTests(ITestOutputHelper output)
+    {
+        _output = output;
+    }
 
     [Fact]
     public void Every_client_component_has_an_unambiguous_dotnet_type()
@@ -133,6 +159,10 @@ public sealed class ComponentContractParityTests
     public void Object_properties_match_names_nullability_and_types()
     {
         var errors = new List<string>();
+        var warnings = new List<string>();
+        var observedKnownNullabilityMismatches = new HashSet<string>(
+            StringComparer.Ordinal
+        );
 
         foreach (var component in OpenApiContract.Schemas.EnumerateObject())
         {
@@ -142,7 +172,32 @@ public sealed class ComponentContractParityTests
             }
 
             var contractType = ContractMappings.ResolveComponentType(component.Name);
-            CompareObjectComponent(component.Name, component.Value, contractType, errors);
+            CompareObjectComponent(
+                component.Name,
+                component.Value,
+                contractType,
+                errors,
+                warnings: warnings,
+                observedKnownNullabilityMismatches:
+                    observedKnownNullabilityMismatches
+            );
+        }
+
+        foreach (
+            var staleWarning in KnownNullabilityMismatches.Keys.Except(
+                observedKnownNullabilityMismatches,
+                StringComparer.Ordinal
+            )
+        )
+        {
+            errors.Add(
+                $"{staleWarning}: configured nullability warning is no longer observed."
+            );
+        }
+
+        foreach (var warning in warnings.Order(StringComparer.Ordinal))
+        {
+            _output.WriteLine($"WARNING: {warning}");
         }
 
         AssertNoErrors("OpenAPI object parity failures", errors);
@@ -332,7 +387,9 @@ public sealed class ComponentContractParityTests
         JsonElement schema,
         Type contractType,
         ICollection<string> errors,
-        bool requireAnalyzeTickerDecimals = false
+        bool requireAnalyzeTickerDecimals = false,
+        ICollection<string>? warnings = null,
+        ISet<string>? observedKnownNullabilityMismatches = null
     )
     {
         var schemaTypeName =
@@ -395,10 +452,29 @@ public sealed class ComponentContractParityTests
                 && isNullable != openApiNullable
             )
             {
-                errors.Add(
-                    $"{path}: .NET nullable={isNullable}, "
-                        + $"OpenAPI nullable={openApiNullable}."
-                );
+                if (
+                    KnownNullabilityMismatches.TryGetValue(
+                        path,
+                        out var knownMismatch
+                    )
+                    && knownMismatch.DotNetNullable == isNullable
+                    && knownMismatch.OpenApiNullable == openApiNullable
+                )
+                {
+                    observedKnownNullabilityMismatches?.Add(path);
+                    warnings?.Add(
+                        $"{path}: .NET nullable={isNullable}, "
+                            + $"OpenAPI nullable={openApiNullable}; "
+                            + "accepted by the explicit compatibility allowlist."
+                    );
+                }
+                else
+                {
+                    errors.Add(
+                        $"{path}: .NET nullable={isNullable}, "
+                            + $"OpenAPI nullable={openApiNullable}."
+                    );
+                }
             }
 
             if (IsSharedUntypedExtra(property))

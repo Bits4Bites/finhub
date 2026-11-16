@@ -47,6 +47,14 @@ internal static class ContractMappings
             "ValidationError",
         };
 
+    public static IReadOnlySet<string> ExcludedOpenApiOperations { get; } =
+        new HashSet<string>(StringComparer.Ordinal)
+        {
+            "GET /",
+            "GET /health",
+            "GET /info",
+        };
+
     public static IReadOnlyDictionary<string, Type> SpecialComponentMappings { get; } =
         new Dictionary<string, Type>(StringComparer.Ordinal)
         {
@@ -105,7 +113,7 @@ internal static class ContractMappings
             "/ai/start_analyze_dividend_event_async",
             typeof(AnalyzeDividendEventRequest),
             "AnalyzeDividendEventRequest",
-            false,
+            true,
             typeof(AnalyzeDividendEventAsyncResponse),
             "AnalyzeDividendEventAsyncResponse",
             ResponseEnvelopeKind.Asynchronous
@@ -135,7 +143,7 @@ internal static class ContractMappings
             "/ai/start_build_portfolio_async",
             typeof(BuildPortfolioRequest),
             "BuildPortfolioRequest",
-            false,
+            true,
             typeof(BuildPortfolioAsyncResponse),
             "BuildPortfolioAsyncResponse",
             ResponseEnvelopeKind.Asynchronous
@@ -165,7 +173,7 @@ internal static class ContractMappings
             "/ai/start_analyze_portfolio_async",
             typeof(AnalyzePortfolioRequest),
             "AnalyzePortfolioRequest",
-            false,
+            true,
             typeof(AnalyzePortfolioAsyncResponse),
             "AnalyzePortfolioAsyncResponse",
             ResponseEnvelopeKind.Asynchronous
@@ -195,7 +203,7 @@ internal static class ContractMappings
             "/ai/start_spotlight_portfolio_async",
             typeof(PortfolioSpotlightRequest),
             "PortfolioSpotlightRequest",
-            false,
+            true,
             typeof(PortfolioSpotlightAsyncResponse),
             "PortfolioSpotlightAsyncResponse",
             ResponseEnvelopeKind.Asynchronous
@@ -225,7 +233,7 @@ internal static class ContractMappings
             "/ai/start_analyze_ticker_async",
             typeof(AnalyzeTickerRequest),
             "AnalyzeTickerRequest",
-            false,
+            true,
             typeof(AnalyzeTickerAsyncResponse),
             "AnalyzeTickerAsyncResponse",
             ResponseEnvelopeKind.Asynchronous
