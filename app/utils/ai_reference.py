@@ -39,8 +39,9 @@ def normalize_url(url: str) -> str:
         The canonical URL used to identify and compare reference sources.
 
     Notes:
-        URL fragments, host casing, and trailing path slashes do not create
-        separate source identities. Query parameters remain part of the identity.
+        Leading and trailing whitespace, URL fragments, scheme or host casing,
+        and trailing path slashes do not create separate source identities.
+        Query parameters remain part of the identity.
     """
     parsed = urlsplit(url.strip())
     path = parsed.path.rstrip("/") or "/"
@@ -54,8 +55,8 @@ def generate_source_id(url: str) -> str:
         url: The source URL used as the reference identity.
 
     Returns:
-        A deterministic source identifier prefixed with ``src-``. URLs that
-        normalize to the same identity produce the same identifier.
+        An opaque deterministic source identifier. URLs that normalize to the
+        same identity produce the same identifier.
     """
     normalized_url = normalize_url(url)
     hasher = xxhash.xxh3_128()
@@ -64,18 +65,18 @@ def generate_source_id(url: str) -> str:
 
 
 def collect_reference_ids(value: object) -> set[str]:
-    """Collect the reference IDs used throughout an AI-generated payload.
+    """Report every source linked by an AI-generated result.
 
     Args:
-        value: A Pydantic model or nested mapping and collection containing
-            ``reference_ids`` fields.
+        value: A result represented by Pydantic models, mappings, or nested
+            list, tuple, and set containers containing ``reference_ids`` fields.
 
     Returns:
         The unique reference IDs linked from the payload.
 
     Raises:
-        TypeError: If a mapping contains a ``reference_ids`` value that is not
-            a collection of strings.
+        TypeError: If a mapping contains a ``reference_ids`` value other than a
+            list, tuple, or set of strings.
 
     Notes:
         Embedded ``references`` registries are ignored because registry entries
@@ -152,8 +153,8 @@ def validate_reference_registry(
 
     Args:
         references: The source registry exposed with the payload.
-        payload: The nested AI-generated result containing ``reference_ids``
-            links.
+        payload: The AI-generated result containing source links in any shape
+            supported by ``collect_reference_ids``.
 
     Returns:
         None when every source identity is unique and every registered source is
@@ -197,11 +198,13 @@ def canonicalize_reference_sources(
         application-owned source ID.
 
     Raises:
-        ValueError: If source IDs or normalized source URLs are not unique.
+        ValueError: If temporary source IDs or normalized source URLs are not
+            unique, or final application-owned identities collide.
 
     Notes:
         Structurally valid sources are retained when provider citations are
         missing or unmatched; those sources are returned as unverified.
+        Citation URLs use the same normalization rules as source identity.
     """
 
     _validate_reference_identity(references)
@@ -226,15 +229,15 @@ def canonicalize_reference_sources(
 
 
 def remap_reference_ids(value: object, id_map: Mapping[str, str]) -> object:
-    """Replace temporary source links throughout an AI-generated payload.
+    """Replace temporary source links in an AI-generated result.
 
     Args:
-        value: A Pydantic model or nested mapping and collection containing
-            ``reference_ids`` fields.
+        value: A result represented by Pydantic models, mappings, or nested list
+            and tuple containers containing ``reference_ids`` fields.
         id_map: Mapping from temporary source IDs to application-owned IDs.
 
     Returns:
-        A copied plain-data payload with every linked reference ID replaced.
+        A copied plain-data result with every linked reference ID replaced.
 
     Raises:
         TypeError: If a ``reference_ids`` field is not a list or tuple of
@@ -242,8 +245,8 @@ def remap_reference_ids(value: object, id_map: Mapping[str, str]) -> object:
         ValueError: If the payload links to an ID absent from ``id_map``.
 
     Notes:
-        The input payload is not modified. Pydantic models are returned as
-        dictionaries and tuples are returned as lists.
+        The input result is not modified. Every linked temporary ID must have a
+        corresponding entry in ``id_map``.
     """
 
     if isinstance(value, BaseModel):

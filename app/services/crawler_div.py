@@ -114,7 +114,7 @@ async def _scrape_dividends_from_tipranks(
         current_date += datetime.timedelta(days=1)
     page_content_list = await crawler_core.fetch_multi_webpages_content_playwright(
         urls,
-        delay_between_requests=1.0,
+        delay_between_requests=1.5,
     )
     frames = []
     for index, page_content in enumerate(page_content_list):

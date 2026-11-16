@@ -26,11 +26,14 @@ def load_prompt(file_name: str) -> str:
         The non-empty prompt text with surrounding whitespace removed.
 
     Raises:
-        PromptLoadError: If the file name is invalid, the file cannot be
-            loaded, or its content is empty.
+        PromptLoadError: If the file name is invalid, the file is unavailable,
+            its bytes are not valid UTF-8, or its content is empty.
 
     Notes:
-        Prompt files must remain within the ``resources/prompts`` directory.
+        Prompt files must remain within the ``resources/prompts`` directory and
+        are read as UTF-8 text. After a path is loaded successfully, its prompt
+        content is reused for the lifetime of the process; file changes require
+        a process restart to become visible.
     """
     normalized_name = file_name.strip()
     if not normalized_name:
@@ -65,7 +68,8 @@ def render_prompt(
 
     Notes:
         Replacement text is inserted literally and is not interpreted as
-        another placeholder.
+        another placeholder. Rendering uses the same process-lifetime cached
+        prompt content as ``load_prompt``.
     """
     prompt = load_prompt(file_name)
     placeholders = set(_PROMPT_PLACEHOLDER_PATTERN.findall(prompt))
@@ -87,7 +91,7 @@ def render_prompt(
 def _load_prompt_content(prompt_path: Path) -> str:
     try:
         prompt = prompt_path.read_text(encoding="utf-8").strip()
-    except OSError as exc:
+    except (OSError, UnicodeError) as exc:
         raise PromptLoadError(f"Unable to load prompt '{prompt_path.name}'") from exc
     if not prompt:
         raise PromptLoadError(f"Prompt '{prompt_path.name}' is empty")

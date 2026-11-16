@@ -38,6 +38,15 @@ class VerifiedPortfolio(BaseModel):
 
     @model_validator(mode="after")
     def validate_portfolio(self) -> VerifiedPortfolio:
+        """Validate aggregate invariants for a verified portfolio snapshot.
+
+        Returns:
+            This snapshot after confirming a timezone-aware timestamp, unique
+            canonical holding tickers, and allocations that sum to one.
+
+        Raises:
+            ValueError: If any aggregate snapshot invariant is violated.
+        """
         if self.as_of.tzinfo is None or self.as_of.utcoffset() is None:
             raise ValueError("verified portfolio as_of must be timezone-aware")
         tickers = [holding.ticker for holding in self.holdings]
@@ -81,6 +90,15 @@ class VerifiedSecurityQuotes(BaseModel):
 
     @model_validator(mode="after")
     def validate_quotes(self) -> VerifiedSecurityQuotes:
+        """Validate aggregate invariants for a verified quote collection.
+
+        Returns:
+            This collection after confirming a timezone-aware timestamp, unique
+            canonical tickers, and one declared currency across all securities.
+
+        Raises:
+            ValueError: If any aggregate quote invariant is violated.
+        """
         if self.as_of.tzinfo is None or self.as_of.utcoffset() is None:
             raise ValueError("verified security quotes as_of must be timezone-aware")
         tickers = [security.ticker for security in self.securities]
@@ -176,7 +194,9 @@ async def verify_security_quotes(
     Returns:
         A five-minute-cacheable, timezone-stamped collection of canonical
         identities and positive current prices. Every returned security uses the
-        single declared currency; no synthetic holdings are created.
+        single declared currency; no synthetic holdings are created. Securities
+        are ordered lexicographically by normalized requested ticker, independent
+        of request order.
 
     Raises:
         PortfolioInputError: If the ticker count is outside one to 20, inputs

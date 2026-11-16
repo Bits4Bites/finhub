@@ -33,8 +33,10 @@ def country_to_iso2(country: str | None) -> str:
         country is missing or unrecognized.
 
     Notes:
-        Matching is case-insensitive and accepts common market aliases. Unknown
-        names are not fuzzy-matched.
+        Matching is case-insensitive and accepts official country names and
+        codes plus common market aliases including UK, U.K., Great Britain,
+        England, U.S., U.S.A., UAE, U.A.E., Republic of Korea, Hong Kong SAR,
+        and Turkey. Unknown names are not fuzzy-matched.
     """
     country = (country or "").strip()
     if not country:
@@ -119,14 +121,20 @@ _YF_SUFFIX_BY_EXCHANGE: dict[str, str] = {
 
 
 def normalize_exchange_code(exchange: str) -> str:
-    """Normalize a provider exchange name or code for application use.
+    """Map provider exchange labels to the application's market codes.
 
     Args:
         exchange: The exchange name or provider-specific exchange code.
 
     Returns:
-        The canonical code for a recognized exchange. Unrecognized exchanges are
-        returned trimmed and uppercased.
+        ``NASDAQ`` or ``NYSE`` for their recognized provider aliases; otherwise
+        the trimmed uppercase exchange label.
+
+    Notes:
+        NASDAQ aliases include NMS, NGM, and NCM plus labels containing
+        ``NASDAQ``. NYSE aliases include NYQ, NYS, NYARCA, NYSEARCA, BATS, BTS,
+        Cboe U.S. labels, and labels containing ``NYSE``. Similar-looking
+        exchanges such as NYMEX remain unchanged.
     """
     e = exchange.strip().upper()
     if e in _EXCHANGE_ALIASES:
@@ -153,7 +161,10 @@ def to_exch_symb_format(*, ticker: yf.Ticker | None = None, symbol: str | None =
 
     Notes:
         Supply either ``ticker`` or ``symbol``. When both are supplied, ticker
-        metadata takes precedence.
+        metadata takes precedence. Resolving an unqualified ``symbol`` may load
+        Yahoo Finance metadata, and provider errors are allowed to propagate.
+        A final Yahoo market suffix is removed for non-U.S. listings; dots in
+        NASDAQ and NYSE symbols are retained for share classes.
     """
     normalized_symbol = (symbol or "").strip().upper()
     ticker_supplied = ticker is not None
@@ -190,8 +201,9 @@ def to_yf_symbol_format(symbol: str) -> str:
         in normalized ``EXCHANGE:CODE`` form.
 
     Notes:
-        Supported exchange mappings include ASX, HNX, HOSE, UPCOM, LSE, NASDAQ,
-        and NYSE.
+        ASX maps to ``.AX``; HNX, HOSE, and UPCOM map to ``.VN``; and LSE maps
+        to ``.L``. NASDAQ and NYSE lose the exchange prefix. Other
+        exchange-qualified symbols remain exchange-qualified.
     """
     symbol = symbol.strip().upper()
     if ":" in symbol:
@@ -253,10 +265,13 @@ def yyyymmdd_to_iso(yyyy_mm_dd: str, tz: ZoneInfo | None = None, tz_name: str | 
 
     Notes:
         ``tz`` takes precedence over ``tz_name``. UTC is used when neither is
-        supplied.
+        supplied. The date must use the fixed-width ``YYYY-MM-DD`` form.
     """
     tz = tz or (ZoneInfo(tz_name) if tz_name else ZoneInfo("UTC"))
     try:
-        return datetime.strptime(yyyy_mm_dd, "%Y-%m-%d").replace(tzinfo=tz).isoformat(sep=" ", timespec="seconds")
+        parsed_date = datetime.strptime(yyyy_mm_dd, "%Y-%m-%d")
     except ValueError:
         return None
+    if parsed_date.strftime("%Y-%m-%d") != yyyy_mm_dd:
+        return None
+    return parsed_date.replace(tzinfo=tz).isoformat(sep=" ", timespec="seconds")

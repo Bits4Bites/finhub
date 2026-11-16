@@ -1,11 +1,23 @@
-"""Unit tests for the asynchronous cache utility."""
+"""Black-box tests for the asynchronous cache utility."""
 
 import asyncio
+import types
 
 import pytest
 
 from app import version
 from app.utils import cache
+
+
+class _Clock:
+    def __init__(self):
+        self.current = 1_000.0
+
+    def __call__(self) -> float:
+        return self.current
+
+    def advance(self, seconds: float) -> None:
+        self.current += seconds
 
 
 @pytest.fixture(autouse=True)
@@ -15,50 +27,129 @@ def reset_cache():
     asyncio.run(cache.clear())
 
 
-def test_generate_key_is_deterministic_and_preserves_component_identity():
-    assert cache.generate_key("alpha", "beta") == cache.generate_key("alpha", "beta")
-    assert cache.generate_key("alpha", "beta") != cache.generate_key("beta", "alpha")
-    assert cache.generate_key("ab", "c") != cache.generate_key("a", "bc")
+@pytest.fixture
+def clock(monkeypatch):
+    controlled_clock = _Clock()
+    monkeypatch.setattr(
+        cache,
+        "time",
+        types.SimpleNamespace(monotonic=controlled_clock),
+    )
+    return controlled_clock
 
 
-def test_generate_key_changes_with_the_application_version(monkeypatch):
-    original_key = cache.generate_key("alpha")
+def test_generated_key_reopens_the_same_business_cache_entry(clock):
+    async def scenario():
+        await cache.set(cache.generate_key("quote", "NASDAQ:AAPL"), {"price": 210})
 
-    monkeypatch.setattr(version, "VERSION", "next-version")
+        assert await cache.get(cache.generate_key("quote", "NASDAQ:AAPL")) == {
+            "price": 210,
+        }
 
-    assert cache.generate_key("alpha") != original_key
-
-
-def test_generate_hourly_key_groups_datetimes_within_the_same_utc_hour():
-    first = '{"as_of":"2026-08-23T16:10:18Z","references":[{"accessed_at":"2026-08-23T18:45:00+00:00"}]}'
-    second = '{"as_of":"2026-08-23T16:59:59+00:00","references":[{"accessed_at":"2026-08-23T18:01:00Z"}]}'
-
-    assert cache.generate_hourly_key(first) == cache.generate_hourly_key(second)
+    asyncio.run(scenario())
 
 
-def test_generate_hourly_key_uses_utc_hour_boundaries():
-    utc_value = '{"as_of":"2026-08-23T16:10:00Z"}'
-    offset_value = '{"as_of":"2026-08-23T18:50:00+02:00"}'
+@pytest.mark.parametrize(
+    ("stored_identity", "other_identity"),
+    [
+        (("quote", "NASDAQ:AAPL"), ("quote", "NASDAQ:MSFT")),
+        (("portfolio", "growth", "balanced"), ("portfolio", "balanced", "growth")),
+        (("portfolio", "ab", "c"), ("portfolio", "a", "bc")),
+    ],
+)
+def test_generated_keys_keep_distinct_business_inputs_separate(
+    stored_identity,
+    other_identity,
+    clock,
+):
+    async def scenario():
+        await cache.set(cache.generate_key(*stored_identity), "stored")
+
+        assert await cache.get(cache.generate_key(*other_identity), default="missing") == "missing"
+
+    asyncio.run(scenario())
+
+
+def test_generated_keys_use_the_application_version_as_a_namespace(
+    monkeypatch,
+    clock,
+):
+    async def scenario():
+        await cache.set(cache.generate_key("quote", "NASDAQ:AAPL"), "current")
+
+        monkeypatch.setattr(version, "VERSION", "next-version")
+
+        assert (
+            await cache.get(
+                cache.generate_key("quote", "NASDAQ:AAPL"),
+                default="missing",
+            )
+            == "missing"
+        )
+
+    asyncio.run(scenario())
+
+
+def test_hourly_keys_share_entries_within_the_same_utc_hour(clock):
+    first = '{"as_of":"2026-08-23T16:10:18Z","accessed_at":"2026-08-23T18:45:00+00:00"}'
+    equivalent = '{"as_of":"2026-08-23T18:59:59+02:00","accessed_at":"2026-08-23T18:01:00Z"}'
+
+    async def scenario():
+        await cache.set(cache.generate_hourly_key(first), "hourly result")
+
+        assert await cache.get(cache.generate_hourly_key(equivalent)) == "hourly result"
+
+    asyncio.run(scenario())
+
+
+def test_hourly_keys_separate_utc_hour_boundaries(clock):
+    current_hour = '{"as_of":"2026-08-23T16:59:59Z"}'
     next_hour = '{"as_of":"2026-08-23T17:00:00Z"}'
 
-    assert cache.generate_hourly_key(utc_value) == cache.generate_hourly_key(offset_value)
-    assert cache.generate_hourly_key(utc_value) != cache.generate_hourly_key(next_hour)
+    async def scenario():
+        await cache.set(cache.generate_hourly_key(current_hour), "current")
+
+        assert (
+            await cache.get(
+                cache.generate_hourly_key(next_hour),
+                default="missing",
+            )
+            == "missing"
+        )
+
+    asyncio.run(scenario())
 
 
-def test_generate_hourly_key_requires_seconds_and_a_timezone():
+def test_hourly_keys_leave_incomplete_timestamps_distinct(clock):
     first = '{"as_of":"2026-08-23T16:10Z"}'
     second = '{"as_of":"2026-08-23T16:20Z"}'
 
-    assert cache.generate_hourly_key(first) != cache.generate_hourly_key(second)
+    async def scenario():
+        await cache.set(cache.generate_hourly_key(first), "first")
+
+        assert (
+            await cache.get(
+                cache.generate_hourly_key(second),
+                default="missing",
+            )
+            == "missing"
+        )
+
+    asyncio.run(scenario())
 
 
-def test_generate_hourly_key_preserves_non_temporal_key_behavior():
+def test_hourly_keys_preserve_non_temporal_cache_identity(clock):
     items = ("portfolio", '{"positions":[{"ticker":"NASDAQ:AAPL","weight":0.6}]}')
 
-    assert cache.generate_hourly_key(*items) == cache.generate_key(*items)
+    async def scenario():
+        await cache.set(cache.generate_key(*items), "portfolio")
+
+        assert await cache.get(cache.generate_hourly_key(*items)) == "portfolio"
+
+    asyncio.run(scenario())
 
 
-def test_cache_stores_and_retrieves_values():
+def test_cache_stores_values_and_reports_missing_entries(clock):
     async def scenario():
         value = {"price": 210}
 
@@ -66,34 +157,36 @@ def test_cache_stores_and_retrieves_values():
         assert await cache.get("quote:AAPL") == value
         assert await cache.exists("quote:AAPL")
         assert await cache.get("quote:MSFT", default="missing") == "missing"
+        assert not await cache.exists("quote:MSFT")
 
     asyncio.run(scenario())
 
 
-def test_cache_preserves_none_as_a_stored_value():
+def test_cache_preserves_none_as_a_stored_value(clock):
     async def scenario():
         assert await cache.set("nullable", None, ttl=60)
         assert await cache.exists("nullable")
         assert await cache.get("nullable", default="missing") is None
-        assert await cache.delete("nullable")
-        assert not await cache.exists("nullable")
 
     asyncio.run(scenario())
 
 
-def test_cache_entry_expires():
+def test_cache_expiry_uses_the_supplied_lifetime(clock):
     async def scenario():
-        assert await cache.set("quote:AAPL", {"price": 210}, ttl=0.05)
+        assert await cache.set("quote:AAPL", {"price": 210}, ttl=60)
 
-        await asyncio.sleep(0.1)
+        clock.advance(59.999)
+        assert await cache.exists("quote:AAPL")
+        assert await cache.get("quote:AAPL") == {"price": 210}
 
+        clock.advance(0.001)
         assert await cache.get("quote:AAPL", default="missing") == "missing"
         assert not await cache.exists("quote:AAPL")
 
     asyncio.run(scenario())
 
 
-def test_cache_delete_reports_whether_the_entry_existed():
+def test_cache_delete_reports_public_entry_state(clock):
     async def scenario():
         assert await cache.set("key", "value", ttl=60)
 
@@ -104,7 +197,7 @@ def test_cache_delete_reports_whether_the_entry_existed():
     asyncio.run(scenario())
 
 
-def test_cache_clear_removes_all_values():
+def test_cache_clear_removes_all_values(clock):
     async def scenario():
         assert await cache.set("first", 1, ttl=60)
         assert await cache.set("second", 2, ttl=60)
@@ -112,41 +205,47 @@ def test_cache_clear_removes_all_values():
         assert await cache.clear()
         assert await cache.get("first", default="missing") == "missing"
         assert await cache.get("second", default="missing") == "missing"
+        assert not await cache.exists("first")
+        assert not await cache.exists("second")
 
     asyncio.run(scenario())
 
 
-@pytest.mark.parametrize("ttl", [0, -1])
-def test_cache_uses_default_lifetime_for_non_positive_ttl(ttl):
+@pytest.mark.parametrize("ttl", [None, 0, -1])
+def test_cache_uses_a_one_hour_default_lifetime(ttl, clock):
     async def scenario():
-        assert await cache.set("key", "value", ttl=ttl)
+        if ttl is None:
+            assert await cache.set("key", "value")
+        else:
+            assert await cache.set("key", "value", ttl=ttl)
 
-        await asyncio.sleep(0.02)
-
+        clock.advance(3_599.999)
         assert await cache.get("key") == "value"
+        assert await cache.exists("key")
+
+        clock.advance(0.001)
+        assert await cache.get("key", default="missing") == "missing"
+        assert not await cache.exists("key")
 
     asyncio.run(scenario())
 
 
-def test_cache_uses_default_lifetime_when_ttl_is_omitted():
+def test_clearing_cache_keeps_a_reused_key_independent(
+    clock,
+    monkeypatch,
+):
     async def scenario():
-        assert await cache.set("key", "value")
+        loop = asyncio.get_running_loop()
+        monkeypatch.setattr(loop, "time", clock)
 
-        await asyncio.sleep(0.02)
-
-        assert await cache.get("key") == "value"
-
-    asyncio.run(scenario())
-
-
-def test_clearing_cache_prevents_old_expiry_from_deleting_a_reused_key():
-    async def scenario():
-        assert await cache.set("key", "old", ttl=0.1)
+        assert await cache.set("key", "old", ttl=10)
         assert await cache.clear()
-        assert await cache.set("key", "new", ttl=1)
+        assert await cache.set("key", "new", ttl=100)
 
-        await asyncio.sleep(0.15)
+        clock.advance(10)
+        await asyncio.sleep(0)
 
         assert await cache.get("key") == "new"
+        assert await cache.exists("key")
 
     asyncio.run(scenario())

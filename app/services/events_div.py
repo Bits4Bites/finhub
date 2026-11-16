@@ -3,7 +3,6 @@ import math
 import typing
 import zoneinfo
 
-import pandas as pd
 import yfinance as yf
 
 from ..models import event as models_event
@@ -23,7 +22,7 @@ async def _get_upcoming_dividends_events(
 ) -> list[models_event.UpcomingDividendEvent]:
     country = conv.country_to_iso2(country)
     end_date = datetime.datetime.now(tz).date() + (
-        datetime.timedelta(days=60) if country == "AU" else datetime.timedelta(days=30)
+        datetime.timedelta(days=20) if country == "AU" else datetime.timedelta(days=10)
     )
     raw_data = (
         await services_crawler_div.scrape_dividends_asx(end_date)
@@ -113,6 +112,12 @@ async def get_asx_upcoming_dividends_events(index: str = "") -> list[models_even
         ValueError: If non-empty crawler data does not satisfy the canonical
             dividend DataFrame contract or contains an invalid event date.
         KeyError: If a requested supported index is not loaded.
+
+    Notes:
+        Issuer names containing ``FUND``, ``TRUST``, ``REIT``, ``ETF``, or
+        ``PROPERTY`` are classified as ``distribution`` (case-insensitive);
+        all other issuers are classified as ``dividend``. Source order is
+        preserved after filtering.
     """
     asx_indices = ["ASX20", "ASX50", "ASX100", "ASX200", "ASX300"]
     normalized_index = index.upper() if index else ""
@@ -152,6 +157,12 @@ async def get_us_upcoming_dividends_events(index: str = "") -> list[models_event
         ValueError: If non-empty crawler data does not satisfy the canonical
             dividend DataFrame contract or contains an invalid event date.
         KeyError: If a requested supported index is not loaded.
+
+    Notes:
+        Issuer names containing ``FUND``, ``TRUST``, ``REIT``, ``ETF``, or
+        ``PROPERTY`` are classified as ``distribution`` (case-insensitive);
+        all other issuers are classified as ``dividend``. Source order is
+        preserved after filtering.
     """
     us_indices = ["NASDAQ100", "SP500", "SP400", "SP600"]
     normalized_index = index.upper() if index else ""
@@ -194,6 +205,8 @@ async def get_vn_upcoming_dividends_events(index: str = "") -> list[models_event
     Notes:
         The underlying VietStock crawler supports cash dividends only; stock
         dividends and bonus-share events are outside this service contract.
+        Every returned event is classified as ``dividend``, and source order
+        is preserved after filtering.
     """
     vn_indices = ["VN30", "VN100", "HNX30"]
     normalized_index = index.upper() if index else ""
@@ -228,8 +241,8 @@ async def analyse_dividend_event(
     """Estimate price-drop and recovery behavior for a dividend event.
 
     Args:
-        ticker: Optional preloaded Yahoo Finance ticker. Supplying it avoids
-            creating another ticker for the subject security.
+        ticker: Optional preloaded Yahoo Finance ticker for the subject
+            security.
         symbol: Subject security in Yahoo format or ``EXCHANGE:CODE`` format.
         ex_date: Upcoming ex-dividend date in ``YYYY-MM-DD`` format.
         div_amount: Announced dividend amount per share.
@@ -249,7 +262,12 @@ async def analyse_dividend_event(
         Quote types ``EQUITY``, ``ETF``, and ``MUTUALFUND`` are supported.
         Historical recovery is evaluated over 28 calendar days. A supplied
         ticker is still expected to provide Yahoo-compatible ``info`` and
-        ``history`` data. Provider and timezone failures are not suppressed.
+        ``history`` data. ``div_yield`` is the announced event amount divided
+        by the current price. ``drop_price_min`` and ``drop_price_max`` are
+        non-negative drop amounts calculated by applying the historical mean
+        drop-to-dividend ratio, plus or minus one standard deviation, to the
+        announced amount; they are not post-drop price levels. Provider and
+        timezone failures are not suppressed.
     """
     yf_ticker = conv.to_yf_symbol_format(symbol)
     ticker = yf.Ticker(yf_ticker) if ticker is None else ticker
@@ -284,10 +302,6 @@ async def analyse_dividend_event(
         return None
     history5y = history5y.tz_convert(tz)
 
-    idx = history5y.index[-1] - pd.Timedelta(days=365)
-    sum_div = float(history5y[idx:]["Dividends"].sum())
-    result.div_yield = sum_div / current_price
-
     recovery_days_threshold = 28
     past_dividends_analysis = finhub_utils.analyze_past_dividends(history5y, recovery_days_threshold)
     if past_dividends_analysis.empty:
@@ -300,8 +314,8 @@ async def analyse_dividend_event(
         std_drop_ratio = 0.0
     min_drop = div_amount * (avg_drop_ratio - std_drop_ratio)
     max_drop = div_amount * (avg_drop_ratio + std_drop_ratio)
-    result.drop_price_min = max(0.0, float(current_price - max_drop))
-    result.drop_price_max = max(0.0, float(current_price - min_drop))
+    result.drop_price_min = max(0.0, float(min(min_drop, max_drop)))
+    result.drop_price_max = max(0.0, float(max(min_drop, max_drop)))
 
     median_recovery_days = past_dividends_analysis["RecoveryDays"].median()
     std_recovery_days = past_dividends_analysis["RecoveryDays"].std()

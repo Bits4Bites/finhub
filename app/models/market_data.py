@@ -9,7 +9,10 @@ class HistoryPoint(BaseModel):
 
     timestamp: int = Field(description="Unix timestamp of the market observation.")
     timestamp_str: str = Field(description="Timezone-aware display timestamp.")
-    currency: str = Field(default="", description="Currency of the price values.")
+    currency: str = Field(
+        default="",
+        description="Provider or caller-supplied currency identifier for the price values.",
+    )
     open: float = Field(default=0.0, description="Opening price.")
     high: float = Field(default=0.0, description="Highest price.")
     low: float = Field(default=0.0, description="Lowest price.")
@@ -29,6 +32,19 @@ class HistoryPoint(BaseModel):
     )
 
     def to_currency(self, currency: str, x_rate: float) -> HistoryPoint:
+        """Return a converted copy of this market observation.
+
+        Args:
+            currency: Currency identifier to assign verbatim to the converted
+                monetary values.
+            x_rate: Exchange rate multiplied by prices, dividends, and daily
+                value traded.
+
+        Returns:
+            A new history point with monetary values converted. ``None`` and
+            zero monetary values are preserved, while volume and RSI remain
+            unchanged.
+        """
         return self.model_copy(
             update={
                 "currency": currency,
@@ -36,9 +52,8 @@ class HistoryPoint(BaseModel):
                 "high": self.high * x_rate,
                 "low": self.low * x_rate,
                 "close": self.close * x_rate,
-                "dividends": self.dividends * x_rate if self.dividends else None,
-                "rsi14": self.rsi14 * x_rate if self.rsi14 else None,
-                "dvt": self.dvt * x_rate if self.dvt else None,
+                "dividends": self.dividends * x_rate if self.dividends is not None else None,
+                "dvt": self.dvt * x_rate if self.dvt is not None else None,
             }
         )
 
@@ -46,7 +61,10 @@ class HistoryPoint(BaseModel):
 class StockQuote(BaseModel):
     """Current quote, valuation, and analyst-target data for a security."""
 
-    currency: str | None = Field(default="", description="Currency of quote and target prices.")
+    currency: str | None = Field(
+        default="",
+        description="Provider or caller-supplied currency identifier for quote and target prices.",
+    )
     market_price: float | None = Field(
         default=0.0,
         description="Latest regular-market price.",
@@ -127,58 +145,90 @@ class StockQuote(BaseModel):
     )
 
     def __init__(self, ticker: yf.Ticker):
+        """Build a quote from Yahoo Finance ticker metadata.
+
+        Args:
+            ticker: Ticker whose ``info`` mapping supplies quote, valuation,
+                and analyst-target values. Trailing EPS uses ``trailingEps``
+                when present and falls back to ``epsTrailingTwelveMonths``.
+        """
+        info = ticker.info
+        trailing_eps = info.get("trailingEps")
+        if trailing_eps is None:
+            trailing_eps = info.get("epsTrailingTwelveMonths")
+        beta = info.get("beta")
+        if beta is None:
+            beta = info.get("beta3Year")
         super().__init__(
-            currency=ticker.info.get("currency"),
-            market_price=ticker.info.get("regularMarketPrice"),
-            market_price_change=ticker.info.get("regularMarketChange"),
-            market_price_change_percent=ticker.info.get("regularMarketChangePercent"),
-            market_open=ticker.info.get("regularMarketOpen"),
-            market_day_high=ticker.info.get("regularMarketDayHigh"),
-            market_day_low=ticker.info.get("regularMarketDayLow"),
-            fifty_two_week_high=ticker.info.get("fiftyTwoWeekHigh"),
-            fifty_two_week_low=ticker.info.get("fiftyTwoWeekLow"),
-            market_volume=ticker.info.get("regularMarketVolume"),
-            bid=ticker.info.get("bid"),
-            bid_size=ticker.info.get("bidSize"),
-            ask=ticker.info.get("ask"),
-            ask_size=ticker.info.get("askSize"),
-            market_cap=ticker.info.get("marketCap"),
-            trailing_eps=(
-                ticker.info.get("trailingEps")
-                if ticker.info.get("trailingEPS")
-                else ticker.info.get("epsTrailingTwelveMonths")
-                if ticker.info.get("epsTrailingTwelveMonths")
-                else None
-            ),
-            forward_eps=ticker.info.get("forwardEps"),
-            trailing_p_e=ticker.info.get("trailingPE"),
-            forward_p_e=ticker.info.get("forwardPE"),
-            beta=ticker.info.get("beta") if ticker.info.get("beta") else ticker.info.get("beta3Year"),
-            recommendation_key=ticker.info.get("recommendationKey"),
-            target_high_price=ticker.info.get("targetHighPrice"),
-            target_low_price=ticker.info.get("targetLowPrice"),
-            target_mean_price=ticker.info.get("targetMeanPrice"),
-            target_median_price=ticker.info.get("targetMedianPrice"),
+            currency=info.get("currency"),
+            market_price=info.get("regularMarketPrice"),
+            market_price_change=info.get("regularMarketChange"),
+            market_price_change_percent=info.get("regularMarketChangePercent"),
+            market_open=info.get("regularMarketOpen"),
+            market_day_high=info.get("regularMarketDayHigh"),
+            market_day_low=info.get("regularMarketDayLow"),
+            fifty_two_week_high=info.get("fiftyTwoWeekHigh"),
+            fifty_two_week_low=info.get("fiftyTwoWeekLow"),
+            market_volume=info.get("regularMarketVolume"),
+            bid=info.get("bid"),
+            bid_size=info.get("bidSize"),
+            ask=info.get("ask"),
+            ask_size=info.get("askSize"),
+            market_cap=info.get("marketCap"),
+            trailing_eps=trailing_eps,
+            forward_eps=info.get("forwardEps"),
+            trailing_p_e=info.get("trailingPE"),
+            forward_p_e=info.get("forwardPE"),
+            beta=beta,
+            recommendation_key=info.get("recommendationKey"),
+            target_high_price=info.get("targetHighPrice"),
+            target_low_price=info.get("targetLowPrice"),
+            target_mean_price=info.get("targetMeanPrice"),
+            target_median_price=info.get("targetMedianPrice"),
         )
 
     def to_currency(self, currency: str, x_rate: float) -> StockQuote:
+        """Return a converted copy of this quote.
+
+        Args:
+            currency: Currency identifier to assign verbatim to the converted
+                quote.
+            x_rate: Exchange rate multiplied by monetary quote values.
+
+        Returns:
+            A new quote with prices, absolute price change, market
+            capitalization, earnings per share, and analyst targets converted;
+            market capitalization is rounded to the nearest whole currency
+            unit. ``None`` and zero monetary values are preserved.
+            Percentages, valuation ratios, beta, volumes, sizes, and
+            recommendation labels remain unchanged.
+        """
         return self.model_copy(
             update={
                 "currency": currency,
-                "market_price": self.market_price * x_rate if self.market_price else None,
-                "market_price_change": self.market_price_change * x_rate if self.market_price_change else None,
-                "market_open": self.market_open * x_rate if self.market_open else None,
-                "market_day_high": self.market_day_high * x_rate if self.market_day_high else None,
-                "market_day_low": self.market_day_low * x_rate if self.market_day_low else None,
-                "fifty_two_week_high": self.fifty_two_week_high * x_rate if self.fifty_two_week_high else None,
-                "fifty_two_week_low": self.fifty_two_week_low * x_rate if self.fifty_two_week_low else None,
-                "bid": self.bid * x_rate if self.bid else None,
-                "ask": self.ask * x_rate if self.ask else None,
-                "trailing_eps": self.trailing_eps * x_rate if self.trailing_eps else None,
-                "forward_eps": self.forward_eps * x_rate if self.forward_eps else None,
-                "target_high_price": self.target_high_price * x_rate if self.target_high_price else None,
-                "target_low_price": self.target_low_price * x_rate if self.target_low_price else None,
-                "target_mean_price": self.target_mean_price * x_rate if self.target_mean_price else None,
-                "target_median_price": self.target_median_price * x_rate if self.target_median_price else None,
+                "market_price": self.market_price * x_rate if self.market_price is not None else None,
+                "market_price_change": (
+                    self.market_price_change * x_rate if self.market_price_change is not None else None
+                ),
+                "market_open": self.market_open * x_rate if self.market_open is not None else None,
+                "market_day_high": self.market_day_high * x_rate if self.market_day_high is not None else None,
+                "market_day_low": self.market_day_low * x_rate if self.market_day_low is not None else None,
+                "fifty_two_week_high": (
+                    self.fifty_two_week_high * x_rate if self.fifty_two_week_high is not None else None
+                ),
+                "fifty_two_week_low": (
+                    self.fifty_two_week_low * x_rate if self.fifty_two_week_low is not None else None
+                ),
+                "bid": self.bid * x_rate if self.bid is not None else None,
+                "ask": self.ask * x_rate if self.ask is not None else None,
+                "market_cap": round(self.market_cap * x_rate) if self.market_cap is not None else None,
+                "trailing_eps": self.trailing_eps * x_rate if self.trailing_eps is not None else None,
+                "forward_eps": self.forward_eps * x_rate if self.forward_eps is not None else None,
+                "target_high_price": (self.target_high_price * x_rate if self.target_high_price is not None else None),
+                "target_low_price": self.target_low_price * x_rate if self.target_low_price is not None else None,
+                "target_mean_price": (self.target_mean_price * x_rate if self.target_mean_price is not None else None),
+                "target_median_price": (
+                    self.target_median_price * x_rate if self.target_median_price is not None else None
+                ),
             }
         )

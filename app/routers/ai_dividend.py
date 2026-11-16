@@ -16,14 +16,14 @@ router = APIRouter(prefix="/ai", tags=["ai"])
 _TASK_TYPE = "analyze_dividend_event"
 _SYNC_RESPONSES = {
     400: {"model": BaseResponse, "description": "The dividend request or resolved security is invalid."},
-    422: {
-        "model": BaseResponse,
-        "description": "The request body is invalid or market history is insufficient for analysis.",
-    },
+    422: router_async_task.validation_error_response(
+        "The request body or proxy forward-timeout header is invalid, or market history is insufficient.",
+        BaseResponse,
+    ),
     500: {"model": BaseResponse, "description": "An unexpected dependency or server failure occurred."},
     502: {
         "model": schemas_ai_dividend.AnalyzeDividendEventResponse | BaseResponse,
-        "description": "The AI provider, rate-limit budget, or structured analysis failed.",
+        "description": "The AI provider, rate-limit budget, structured analysis, or proxy forwarding failed.",
     },
 }
 _ASYNC_STATE_RESPONSES = {
@@ -36,17 +36,18 @@ _ASYNC_STATE_RESPONSES = {
         "description": "The task request or resolved security is invalid.",
     },
     404: {"model": BaseResponse, "description": "The task was not found."},
-    422: {
-        "model": schemas_ai_dividend.AnalyzeDividendEventAsyncResponse | BaseResponse,
-        "description": "The request is invalid or market history is insufficient for analysis.",
-    },
+    422: router_async_task.validation_error_response(
+        "The request or proxy forward-timeout header is invalid, or market history is insufficient.",
+        schemas_ai_dividend.AnalyzeDividendEventAsyncResponse,
+        BaseResponse,
+    ),
     500: {
         "model": schemas_ai_dividend.AnalyzeDividendEventAsyncResponse | BaseResponse,
         "description": "The task state is invalid or the background task failed unexpectedly.",
     },
     502: {
-        "model": schemas_ai_dividend.AnalyzeDividendEventAsyncResponse,
-        "description": "The AI provider, rate-limit budget, or structured analysis failed.",
+        "model": schemas_ai_dividend.AnalyzeDividendEventAsyncResponse | BaseResponse,
+        "description": "The AI provider, rate-limit budget, structured analysis, or proxy forwarding failed.",
     },
 }
 _ASYNC_START_RESPONSES = {
@@ -136,7 +137,7 @@ async def _run_task(
     try:
         result = await _analyze(request)
     except HTTPException as exc:
-        await router_async_task.fail_task(
+        await router_async_task.task_store.fail(
             task_id,
             _TASK_TYPE,
             status_code=exc.status_code,
@@ -145,7 +146,7 @@ async def _run_task(
         return
     except Exception:
         logging.exception("Analyze dividend event task '%s' failed.", task_id)
-        await router_async_task.fail_task(
+        await router_async_task.task_store.fail(
             task_id,
             _TASK_TYPE,
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -153,7 +154,7 @@ async def _run_task(
         return
 
     if result.status == status.HTTP_200_OK:
-        await router_async_task.complete_task(
+        await router_async_task.task_store.complete(
             task_id,
             _TASK_TYPE,
             result,
@@ -161,7 +162,7 @@ async def _run_task(
             message=result.message,
         )
     else:
-        await router_async_task.fail_task(
+        await router_async_task.task_store.fail(
             task_id,
             _TASK_TYPE,
             status_code=result.status,
@@ -174,7 +175,7 @@ async def _poll_task(
     task_id: str,
     response: Response,
 ) -> schemas_ai_dividend.AnalyzeDividendEventAsyncResponse:
-    task_entry = await router_async_task.load_task(task_id, _TASK_TYPE)
+    task_entry = await router_async_task.task_store.load(task_id, _TASK_TYPE)
     task_state = task_entry.state
     task_info = async_task.AsyncTaskInfo(task_id=task_id, state=task_state)
     if task_state == async_task.TASK_STATE_RUNNING:
@@ -185,7 +186,7 @@ async def _poll_task(
             extra=task_info,
         )
     if task_state == async_task.TASK_STATE_FAILED:
-        failure_status = router_async_task.failure_status(task_entry)
+        failure_status = task_entry.failure_http_status
         response.status_code = failure_status
         if task_entry.result is not None:
             result = schemas_ai_dividend.AnalyzeDividendEventResponse.model_validate(task_entry.result)
@@ -263,7 +264,7 @@ async def start_analyze_dividend_event_async(
             detail="Request body is required when starting a task",
         )
 
-    new_task_id, is_new = await router_async_task.start_task(_TASK_TYPE, request)
+    new_task_id, is_new = await router_async_task.task_store.start(_TASK_TYPE, request)
     if not is_new:
         return await _poll_task(new_task_id, response)
 

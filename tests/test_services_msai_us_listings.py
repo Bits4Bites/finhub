@@ -1,8 +1,11 @@
+"""Documentation-driven black-box tests for US listing analysis."""
+
 import asyncio
 import copy
 import datetime
 import html
 import json
+import re
 import zoneinfo
 from unittest import mock
 
@@ -12,10 +15,59 @@ import pytest
 from app.services import ai_helper
 from app.services import msai_us_listings as service
 from app.utils import ai_reference
+from tests import ai_service_fixtures
 
 _NY_TZ = zoneinfo.ZoneInfo("America/New_York")
 _CALENDAR_URL = "https://stockanalysis.com/ipos/calendar/"
-_FILING_URL = "https://www.sec.gov/Archives/edgar/data/10001/00001000126000001/example_s1.htm"
+
+
+class CrawlerBoundary:
+    def __init__(
+        self,
+        rows: list[dict[str, object]],
+        *,
+        low_readiness_symbols: set[str] | None = None,
+        unsupported_symbols: set[str] | None = None,
+        failing_symbols: set[str] | None = None,
+    ) -> None:
+        self.rows = rows
+        self.low_readiness_symbols = low_readiness_symbols or set()
+        self.unsupported_symbols = unsupported_symbols or set()
+        self.failing_symbols = failing_symbols or set()
+        self.listing_dates = {
+            str(row["Symbol"]).upper(): datetime.datetime.strptime(
+                str(row["IPO Date"]),
+                "%b %d, %Y",
+            ).date()
+            for row in rows
+        }
+
+    async def __call__(self, url: str, **_kwargs) -> str | None:
+        if url == _CALENDAR_URL:
+            return _calendar_html(self.rows)
+
+        filing_match = re.search(r"/([a-z0-9.-]+)_s1\.htm$", url, re.IGNORECASE)
+        if filing_match:
+            symbol = filing_match.group(1).upper()
+            if symbol in self.low_readiness_symbols:
+                return None
+            return "<main>Registration statement and audited financials.</main>"
+
+        symbol_match = re.search(r"/stocks/([a-z0-9.-]+)/", url, re.IGNORECASE)
+        if symbol_match is None:
+            return None
+        symbol = symbol_match.group(1).upper()
+        if symbol in self.failing_symbols:
+            raise OSError("company page unavailable")
+        if url.endswith("/financials/"):
+            if symbol in self.low_readiness_symbols:
+                return None
+            return _financials_html(symbol)
+        return _overview_html(
+            symbol=symbol,
+            listing_date=self.listing_dates[symbol],
+            unsupported=symbol in self.unsupported_symbols,
+        )
 
 
 def _today() -> datetime.date:
@@ -69,23 +121,27 @@ def _listing_row(
     return row
 
 
-def _overview_url(symbol: str = "EXAMPLE") -> str:
+def _overview_url(symbol: str) -> str:
     return f"https://stockanalysis.com/stocks/{symbol.lower()}/"
+
+
+def _filing_url(symbol: str) -> str:
+    return f"https://www.sec.gov/Archives/edgar/data/10001/00001000126000001/{symbol.lower()}_s1.htm"
 
 
 def _overview_html(
     *,
-    symbol: str = "EXAMPLE",
-    listing_date: datetime.date | None = None,
+    symbol: str,
+    listing_date: datetime.date,
+    unsupported: bool = False,
 ) -> str:
-    listing_date = listing_date or _today()
     company = f"{symbol.title()} Inc."
     fields = {
         "Ticker Symbol": symbol,
         "Stock Exchange": "Nasdaq",
         "IPO Date": listing_date.strftime("%b %d, %Y"),
         "IPO Price Range": "$11 - $13",
-        "Industry": "Biotechnology",
+        "Industry": "Shell Companies" if unsupported else "Biotechnology",
         "Sector": "Healthcare",
         "Revenue (ttm)": "n/a",
         "Net Income": "-50M",
@@ -98,20 +154,25 @@ def _overview_html(
         f"<div><span>{html.escape(name)}</span><span>{html.escape(value)}</span></div>"
         for name, value in fields.items()
     )
+    description = (
+        "A blank-check company seeking an acquisition."
+        if unsupported
+        else "The issuer develops clinical-stage treatments."
+    )
     return (
         f"<main><h1>{company} ({symbol})</h1>"
         f"<p>{company} will go public soon. The estimated IPO date is "
         f"{listing_date.strftime('%B %d, %Y')}.</p>"
         f"{field_html}"
         f"<h2>About {symbol}</h2>"
-        "<p>The issuer develops clinical-stage treatments.</p>"
-        f'<a href="{_FILING_URL}">Registration Document (S-1)</a>'
+        f"<p>{description}</p>"
+        f'<a href="{_filing_url(symbol)}">Registration Document (S-1)</a>'
         '<a href="https://www.sec.gov/cgi-bin/browse-edgar?CIK=0000010001">'
         "SEC filings</a></main>"
     )
 
 
-def _financials_html(symbol: str = "EXAMPLE") -> str:
+def _financials_html(symbol: str) -> str:
     return f"""
     <main>
       <div>{symbol.title()} Inc. ({symbol})</div>
@@ -135,7 +196,7 @@ def _financials_html(symbol: str = "EXAMPLE") -> str:
     """
 
 
-def _research_response(symbol: str = "NASDAQ:EXAMPLE") -> ai_helper.LLMResponse:
+def _research_payload(symbol: str) -> dict[str, object]:
     source_url = _overview_url(symbol.split(":", 1)[1])
     section = {
         "facts": [
@@ -147,7 +208,7 @@ def _research_response(symbol: str = "NASDAQ:EXAMPLE") -> ai_helper.LLMResponse:
         "reference_ids": [source_url],
         "data_gaps": [],
     }
-    payload = {
+    return {
         "symbol": symbol,
         "as_of": datetime.datetime.now(datetime.UTC).isoformat(),
         "offer": copy.deepcopy(section),
@@ -169,9 +230,17 @@ def _research_response(symbol: str = "NASDAQ:EXAMPLE") -> ai_helper.LLMResponse:
             }
         ],
     }
+
+
+def _research_response(
+    symbol: str,
+    *,
+    verified: bool = True,
+) -> ai_helper.LLMResponse:
+    source_url = _overview_url(symbol.split(":", 1)[1])
     return ai_helper.LLMResponse(
-        completion=json.dumps(payload),
-        citation_urls=[source_url],
+        completion=json.dumps(_research_payload(symbol)),
+        citation_urls=[source_url] if verified else [],
     )
 
 
@@ -191,7 +260,7 @@ def _analysis_section(source_id: str) -> dict[str, object]:
     }
 
 
-def _analysis_response(symbol: str = "NASDAQ:EXAMPLE") -> ai_helper.LLMResponse:
+def _analysis_payload(symbol: str) -> dict[str, object]:
     source_id = ai_reference.generate_source_id(_overview_url(symbol.split(":", 1)[1]))
     section = _analysis_section(source_id)
     period = {
@@ -210,7 +279,7 @@ def _analysis_response(symbol: str = "NASDAQ:EXAMPLE") -> ai_helper.LLMResponse:
         "data_gaps": [],
         "reference_ids": [source_id],
     }
-    payload = {
+    return {
         "symbol": symbol,
         "as_of": datetime.datetime.now(datetime.UTC).isoformat(),
         "listing_status": "Upcoming",
@@ -265,49 +334,46 @@ def _analysis_response(symbol: str = "NASDAQ:EXAMPLE") -> ai_helper.LLMResponse:
             "first_month": copy.deepcopy(period),
         },
     }
-    return ai_helper.LLMResponse(completion=json.dumps(payload))
 
 
-@pytest.fixture(autouse=True)
-def isolated_cache():
-    entries: dict[str, object] = {}
-
-    async def get(key):
-        return copy.deepcopy(entries.get(key))
-
-    async def set_value(key, value, *, ttl):
-        assert ttl >= 60 * 60
-        entries[key] = copy.deepcopy(value)
-        return True
-
-    with (
-        mock.patch.object(service.cache, "get", side_effect=get),
-        mock.patch.object(service.cache, "set", side_effect=set_value),
-    ):
-        yield entries
+def _analysis_response(symbol: str) -> ai_helper.LLMResponse:
+    return ai_helper.LLMResponse(completion=json.dumps(_analysis_payload(symbol)))
 
 
-def test_public_workflow_returns_empty_list_for_empty_calendar():
+def _ai_error_response() -> ai_helper.LLMResponse:
+    return ai_helper.LLMResponse(
+        is_error=True,
+        completion="provider rejected the request",
+        error_msg="provider rejected the request",
+    )
+
+
+def _run(
+    *,
+    crawler: CrawlerBoundary,
+    ai: ai_service_fixtures.OpaqueAIQueue | None = None,
+    cache=None,
+):
+    ai = ai or ai_service_fixtures.OpaqueAIQueue()
+    cache = cache or ai_service_fixtures.ExpiringCache()
     with (
         mock.patch.object(
             service.services_crawler_core,
             "fetch_webpage_content_fallback_to_playwright",
-            new_callable=mock.AsyncMock,
-            return_value=_calendar_html([]),
+            new=crawler,
         ),
-        mock.patch.object(
-            service.ai_helper,
-            "ai_exec_task",
-            new_callable=mock.AsyncMock,
-        ) as ai_exec,
+        mock.patch.object(service.cache, "get", side_effect=cache.get),
+        mock.patch.object(service.cache, "set", side_effect=cache.set),
+        mock.patch.object(service.ai_helper, "ai_exec_task", new=ai),
     ):
-        result = asyncio.run(service.ai_get_us_new_listings())
-
-    assert result == []
-    ai_exec.assert_not_awaited()
+        return asyncio.run(service.ai_get_us_new_listings())
 
 
-def test_public_workflow_reports_calendar_fetch_failure():
+def test_empty_calendar_returns_empty_list():
+    assert _run(crawler=CrawlerBoundary([])) == []
+
+
+def test_calendar_fetch_failure_raises_documented_runtime_error():
     with (
         mock.patch.object(
             service.services_crawler_core,
@@ -315,12 +381,12 @@ def test_public_workflow_reports_calendar_fetch_failure():
             new_callable=mock.AsyncMock,
             return_value=None,
         ),
-        pytest.raises(RuntimeError, match="Failed to fetch the IPO calendar"),
+        pytest.raises(RuntimeError),
     ):
         asyncio.run(service.ai_get_us_new_listings())
 
 
-def test_public_workflow_filters_orders_and_retains_unavailable_offer_values():
+def test_filters_orders_and_retains_unavailable_offer_values():
     today = _today()
     rows = [
         _listing_row("FUTURE", listing_date=today + datetime.timedelta(days=3)),
@@ -330,175 +396,186 @@ def test_public_workflow_filters_orders_and_retains_unavailable_offer_values():
             listing_date=today,
             **{"Price Range": None, "Deal Size": None},
         ),
+        _listing_row("NANPRICE", listing_date=today, **{"Price Range": "$NaN - $13"}),
+        _listing_row("NEGINFRAISE", listing_date=today, **{"Deal Size": "-Infinity"}),
     ]
+    crawler = CrawlerBoundary(rows, failing_symbols={"FUTURE", "TODAY"})
 
-    async def fetch(url, **_kwargs):
-        return _calendar_html(rows) if url == _CALENDAR_URL else None
+    result = _run(crawler=crawler)
 
-    with (
-        mock.patch.object(
-            service.services_crawler_core,
-            "fetch_webpage_content_fallback_to_playwright",
-            side_effect=fetch,
-        ),
-        mock.patch.object(
-            service.ai_helper,
-            "ai_exec_task",
-            new_callable=mock.AsyncMock,
-        ) as ai_exec,
-    ):
-        result = asyncio.run(service.ai_get_us_new_listings())
-
-    assert [event.symbol for event in result] == [
-        "NASDAQ:TODAY",
-        "NASDAQ:FUTURE",
-    ]
+    assert [event.symbol for event in result] == ["NASDAQ:TODAY", "NASDAQ:FUTURE"]
     assert result[0].issue_price is None
     assert result[0].issue_price_upper is None
     assert result[0].capital_to_raise is None
     assert all(event.analysis_status == "Skipped" for event in result)
     assert result[0].timestamp_str.startswith(today.isoformat())
-    ai_exec.assert_not_awaited()
 
 
-def test_company_crawl_failure_is_returned_as_skipped_event():
-    rows = [_listing_row()]
-
-    async def fetch(url, **_kwargs):
-        if url == _CALENDAR_URL:
-            return _calendar_html(rows)
-        raise OSError("company page unavailable")
-
-    with (
-        mock.patch.object(
-            service.services_crawler_core,
-            "fetch_webpage_content_fallback_to_playwright",
-            side_effect=fetch,
+def test_readiness_ranking_and_symbol_tie_break_select_five_of_seven_eligible_events():
+    today = _today()
+    rows = [
+        *[
+            _listing_row(
+                f"TIE{index}",
+                listing_date=today,
+                **{"Deal Size": "100.00M"},
+            )
+            for index in range(1, 7)
+        ],
+        _listing_row(
+            "LOW",
+            listing_date=today,
+            **{"Deal Size": "999.00M"},
         ),
-        mock.patch.object(
-            service.ai_helper,
-            "ai_exec_task",
-            new_callable=mock.AsyncMock,
-        ) as ai_exec,
-    ):
-        result = asyncio.run(service.ai_get_us_new_listings())
+        _listing_row("SPAC", listing_date=today),
+    ]
+    crawler = CrawlerBoundary(
+        rows,
+        low_readiness_symbols={"LOW"},
+        unsupported_symbols={"SPAC"},
+    )
+    ai = ai_service_fixtures.OpaqueAIQueue(
+        [
+            item
+            for index in range(1, 6)
+            for item in (
+                _research_response(f"NASDAQ:TIE{index}"),
+                _analysis_response(f"NASDAQ:TIE{index}"),
+            )
+        ]
+    )
 
-    assert len(result) == 1
-    assert result[0].analysis_status == "Skipped"
-    assert result[0].analysis is None
-    assert result[0].analysis_error is None
-    ai_exec.assert_not_awaited()
+    events = _run(crawler=crawler, ai=ai)
+    statuses = {event.symbol: event.analysis_status for event in events}
+
+    assert len(events) == 8
+    assert {statuses[f"NASDAQ:TIE{index}"] for index in range(1, 6)} == {"Completed"}
+    assert statuses["NASDAQ:TIE6"] == "Skipped"
+    assert statuses["NASDAQ:LOW"] == "Skipped"
+    assert statuses["NASDAQ:SPAC"] == "Skipped"
+    assert next(event for event in events if event.symbol == "NASDAQ:LOW").analysis is None
+    assert next(event for event in events if event.symbol == "NASDAQ:SPAC").analysis is None
 
 
-def test_completed_analysis_is_reused_from_cache(isolated_cache):
-    rows = [_listing_row()]
-
-    async def fetch(url, **_kwargs):
-        if url == _CALENDAR_URL:
-            return _calendar_html(rows)
-        if url.endswith("/financials/"):
-            return _financials_html()
-        if url == _FILING_URL:
-            return "<main>Registration statement and audited financials.</main>"
-        return _overview_html()
-
-    with (
-        mock.patch.object(
-            service.services_crawler_core,
-            "fetch_webpage_content_fallback_to_playwright",
-            side_effect=fetch,
+def test_offer_price_return_semantics_and_missing_anchor_behavior():
+    priced_rows = [_listing_row("PRICED")]
+    priced = _run(
+        crawler=CrawlerBoundary(priced_rows),
+        ai=ai_service_fixtures.OpaqueAIQueue(
+            [
+                _research_response("NASDAQ:PRICED"),
+                _analysis_response("NASDAQ:PRICED"),
+            ]
         ),
-        mock.patch.object(
-            service.ai_helper,
-            "ai_exec_task",
-            new_callable=mock.AsyncMock,
-            side_effect=[_research_response(), _analysis_response()],
-        ) as ai_exec,
-    ):
-        first = asyncio.run(service.ai_get_us_new_listings())
-        second = asyncio.run(service.ai_get_us_new_listings())
+    )[0]
+    assert priced.analysis is not None
+    priced_period = priced.analysis.outlook.ipo_day
+    assert priced_period.expected_return_min_pct == pytest.approx(
+        round((priced_period.expected_price_min / priced.issue_price - 1) * 100, 2)
+    )
+    assert priced_period.expected_return_max_pct == pytest.approx(
+        round((priced_period.expected_price_max / priced.issue_price - 1) * 100, 2)
+    )
 
-    assert first == second
-    assert len(first) == 1
-    assert first[0].analysis_status == "Completed"
-    assert first[0].analysis is not None
-    assert first[0].analysis.references[0].is_verified is True
-    assert first[0].analysis.outlook.ipo_day.expected_return_min_pct == -9.09
-    assert first[0].analysis.outlook.ipo_day.expected_return_max_pct == 36.36
-    assert ai_exec.await_count == 2
-    assert isolated_cache
-
-
-def test_selected_analysis_cache_failure_is_returned_as_failed_event():
-    rows = [_listing_row()]
-
-    async def fetch(url, **_kwargs):
-        if url == _CALENDAR_URL:
-            return _calendar_html(rows)
-        if url.endswith("/financials/"):
-            return _financials_html()
-        if url == _FILING_URL:
-            return "<main>Registration statement and audited financials.</main>"
-        return _overview_html()
-
-    with (
-        mock.patch.object(
-            service.services_crawler_core,
-            "fetch_webpage_content_fallback_to_playwright",
-            side_effect=fetch,
+    unpriced_rows = [_listing_row("UNPRICED", **{"Price Range": None})]
+    unpriced = _run(
+        crawler=CrawlerBoundary(unpriced_rows),
+        ai=ai_service_fixtures.OpaqueAIQueue(
+            [
+                _research_response("NASDAQ:UNPRICED"),
+                _analysis_response("NASDAQ:UNPRICED"),
+            ]
         ),
-        mock.patch.object(
-            service.cache,
-            "get",
-            new_callable=mock.AsyncMock,
-            side_effect=ConnectionError("cache unavailable"),
+    )[0]
+    assert unpriced.analysis is not None
+    unpriced_period = unpriced.analysis.outlook.ipo_day
+    assert unpriced_period.expected_price_min is None
+    assert unpriced_period.expected_price_max is None
+    assert unpriced_period.expected_return_min_pct is None
+    assert unpriced_period.expected_return_max_pct is None
+
+
+def test_unmatched_provider_citations_are_retained_as_unverified_warnings():
+    rows = [_listing_row("UNVERIFIED")]
+    event = _run(
+        crawler=CrawlerBoundary(rows),
+        ai=ai_service_fixtures.OpaqueAIQueue(
+            [
+                _research_response("NASDAQ:UNVERIFIED", verified=False),
+                _analysis_response("NASDAQ:UNVERIFIED"),
+            ]
         ),
-        mock.patch.object(
-            service.ai_helper,
-            "ai_exec_task",
-            new_callable=mock.AsyncMock,
-        ) as ai_exec,
-    ):
-        result = asyncio.run(service.ai_get_us_new_listings())
+    )[0]
+
+    assert event.analysis_status == "Completed"
+    assert event.analysis is not None
+    assert event.analysis.references
+    assert all(reference.is_verified is False for reference in event.analysis.references)
+    assert event.analysis.executive_summary.data_gaps
+
+
+def test_repeated_public_call_reuses_completed_analysis_when_ai_is_unavailable():
+    rows = [_listing_row("CACHE")]
+    crawler = CrawlerBoundary(rows)
+    cache = ai_service_fixtures.ExpiringCache()
+    ai = ai_service_fixtures.OpaqueAIQueue(
+        [
+            _research_response("NASDAQ:CACHE"),
+            _analysis_response("NASDAQ:CACHE"),
+        ]
+    )
+
+    first = _run(crawler=crawler, ai=ai, cache=cache)
+    second = _run(crawler=crawler, ai=ai, cache=cache)
+
+    assert second == first
+    assert second[0].analysis_status == "Completed"
+    assert second[0].analysis is not None
+
+
+def test_documented_one_hour_cache_expiry_reenters_analysis():
+    rows = [_listing_row("EXPIRY")]
+    crawler = CrawlerBoundary(rows)
+    clock = ai_service_fixtures.ManualClock()
+    cache = ai_service_fixtures.ExpiringCache(clock)
+    ai = ai_service_fixtures.OpaqueAIQueue(
+        [
+            _research_response("NASDAQ:EXPIRY"),
+            _analysis_response("NASDAQ:EXPIRY"),
+        ]
+    )
+
+    first = _run(crawler=crawler, ai=ai, cache=cache)
+    clock.advance(60 * 60 - 1)
+    assert _run(crawler=crawler, ai=ai, cache=cache) == first
+    clock.advance(1)
+    expired = _run(crawler=crawler, ai=ai, cache=cache)
+
+    assert expired[0].analysis_status == "Failed"
+    assert expired[0].analysis is None
+
+
+def test_opaque_invalid_selected_analysis_cache_returns_failed_event():
+    rows = [_listing_row("INVALID")]
+    result = _run(
+        crawler=CrawlerBoundary(rows),
+        cache=ai_service_fixtures.InvalidCache(object()),
+    )
 
     assert len(result) == 1
     assert result[0].analysis_status == "Failed"
     assert result[0].analysis is None
-    assert result[0].analysis_error == "AI listing analysis failed"
-    ai_exec.assert_not_awaited()
+    assert result[0].analysis_error
 
 
-def test_selected_ai_failure_is_returned_as_failed_event():
-    rows = [_listing_row()]
-
-    async def fetch(url, **_kwargs):
-        if url == _CALENDAR_URL:
-            return _calendar_html(rows)
-        if url.endswith("/financials/"):
-            return _financials_html()
-        if url == _FILING_URL:
-            return "<main>Registration statement and audited financials.</main>"
-        return _overview_html()
-
-    with (
-        mock.patch.object(
-            service.services_crawler_core,
-            "fetch_webpage_content_fallback_to_playwright",
-            side_effect=fetch,
-        ),
-        mock.patch.object(
-            service.ai_helper,
-            "ai_exec_task",
-            new_callable=mock.AsyncMock,
-            return_value=ai_helper.LLMResponse(
-                is_error=True,
-                error_msg="provider rejected the request",
-            ),
-        ),
-    ):
-        result = asyncio.run(service.ai_get_us_new_listings())
+def test_selected_ai_failure_is_retained_as_failed_event():
+    rows = [_listing_row("FAILED")]
+    result = _run(
+        crawler=CrawlerBoundary(rows),
+        ai=ai_service_fixtures.OpaqueAIQueue([_ai_error_response()]),
+    )
 
     assert len(result) == 1
     assert result[0].analysis_status == "Failed"
     assert result[0].analysis is None
-    assert result[0].analysis_error == "AI listing analysis failed"
+    assert result[0].analysis_error

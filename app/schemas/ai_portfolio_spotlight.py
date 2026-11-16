@@ -16,7 +16,7 @@ class PortfolioSpotlightRequest(BaseRequest):
     country: str = Field(
         min_length=2,
         max_length=64,
-        description="Portfolio market country as an ISO code or country name.",
+        description="Portfolio market country as an ISO code or country name; surrounding whitespace is trimmed.",
     )
     current_allocation: list[models_portfolio.PortfolioHolding] = Field(
         min_length=1,
@@ -26,7 +26,10 @@ class PortfolioSpotlightRequest(BaseRequest):
     investor_theme: str = Field(
         min_length=1,
         max_length=4000,
-        description="Required investor risk tolerance, horizon, goals, and relevant portfolio preferences.",
+        description=(
+            "Required investor risk tolerance, horizon, goals, and relevant portfolio preferences; "
+            "surrounding whitespace is trimmed."
+        ),
     )
 
     @field_validator("country", "investor_theme", mode="before")

@@ -19,7 +19,8 @@ def detect_asset_type(ticker: yf.Ticker | None) -> types.AssetType | None:
 
     Notes:
         Classification uses the provider's quote type, sector, industry, and
-        issuer name.
+        issuer name and follows the same equity-subtype precedence documented by
+        ``app.utils.asset.detect_asset_type``.
     """
     if not ticker:
         return None
@@ -99,10 +100,18 @@ def lookup_index_yf_static_symbol(*, ticker: yf.Ticker | None) -> str | None:
         KeyError: If required index membership data is not loaded.
 
     Notes:
-        ASX stocks use the most specific tracked ASX index, falling back to All
-        Ordinaries. NASDAQ stocks use NASDAQ-100 or the NASDAQ Composite. NYSE
-        stocks use the first matching S&P 500, 400, or 600 benchmark, falling
-        back to the Dow Jones U.S. Total Stock Market index.
+        ASX stocks prefer ASX 20, 50, 100, 200, then 300 before falling back to
+        All Ordinaries. NASDAQ stocks use NASDAQ-100 or the NASDAQ Composite.
+        NYSE stocks prefer S&P 500, then 400, then 600 before falling back to the
+        Dow Jones U.S. Total Stock Market index. These orders also resolve
+        overlapping registry memberships. The exact outputs are ASX 20
+        ``^ATLI``, ASX 50 ``^AFLI``, ASX 100 ``^ATOI``, ASX 200 ``^AXJO``,
+        ASX 300 ``^AXKO``, All Ordinaries ``^AORD``, NASDAQ-100 ``^NDX``,
+        NASDAQ Composite ``^IXIC``, S&P 500 ``^GSPC``, S&P 400 ``^SP400``,
+        S&P 600 ``^SP600``, and the Dow Jones U.S. Total Stock Market
+        ``^DWCF``. These canonical mappings are also exposed by
+        ``app.utils.data.asx_index_yf_static_tickers`` and
+        ``app.utils.data.us_index_yf_static_tickers``.
     """
     symbol = conv.to_exch_symb_format(ticker=ticker) or ""
     if not symbol:
@@ -146,7 +155,13 @@ def lookup_peer_yf_static_symbol(*, ticker: yf.Ticker | None) -> str | None:
     Notes:
         ASX matching uses sector metadata. NASDAQ and NYSE matching prefers a
         specific industry benchmark before falling back to the sector benchmark.
-        Metadata matching is case-insensitive.
+        That industry preference also resolves overlapping matches. Metadata
+        matching is case-insensitive. Exact outputs are defined by
+        ``app.utils.data.asx_sector_yf_static_tickers``,
+        ``app.utils.data.us_industry_yf_static_tickers``, and
+        ``app.utils.data.us_sector_yf_static_tickers``. For example, ASX
+        Financial Services returns ``^AXFJ``, U.S. Energy/Uranium returns
+        ``URA``, and the U.S. Technology sector fallback returns ``^SP500-45``.
     """
     info = ticker.info if ticker else None
     if not info:
@@ -192,9 +207,15 @@ def classify_market_cap(ticker: yf.Ticker | None) -> tuple[types.MarketCapType |
         the United States use tier thresholds of 10 billion, 2 billion,
         300 million, and 50 million in local currency. Vietnam uses thresholds
         of 10 trillion, 1 trillion, 100 billion, and 10 billion VND. Values below
-        the lowest threshold are Nano Cap. Recognized index membership can
-        override the threshold tier, while some untracked Australian and
-        Vietnamese listings are downgraded.
+        the lowest threshold are Nano Cap. ASX 50, NASDAQ-100, and S&P 500
+        membership sets Large Cap; S&P 400 sets Mid Cap; and S&P 600 sets Small
+        Cap. ASX 100 promotes threshold Mid or Small Caps, while Australian
+        listings outside ASX 300 demote them. VN30 sets Large Cap, VN100 sets Mid
+        Cap, and HNX30 promotes threshold Small Cap; other HOSE and HNX listings
+        demote threshold Large or Mid Caps. If memberships overlap, S&P 600
+        takes precedence over S&P 400 and broad large-cap memberships, ASX 50
+        takes precedence over broader ASX memberships, and VN30 takes precedence
+        over VN100.
     """
     info = ticker.info if ticker else None
     if not info or info.get("marketCap") is None:

@@ -111,7 +111,7 @@ class DividendEventAnalysis(EventBase):
     div_amount: float = Field(default=0.0, description="Dividend amount per share.")
     div_yield: float = Field(
         default=0.0,
-        description="Dividend amount divided by the current price.",
+        description="Caller-supplied dividend amount-to-price ratio; this legacy model does not recompute it.",
     )
     # ====== analysis result
     num_samples: int = Field(

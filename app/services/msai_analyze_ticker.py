@@ -295,7 +295,9 @@ async def ai_analyze_ticker(
     Returns:
         A :class:`TickerAnalysis` containing the verified market snapshot, optional
         holding valuation, sourced research, four ordered forecast horizons, and a
-        recommendation scoped to a new position or the supplied holding.
+        recommendation scoped to a new position or the supplied holding. Valid
+        research sources without matched provider citations remain in the result
+        with ``is_verified=False`` and produce ``CompleteWithWarnings``.
 
     Raises:
         TickerInputError: If the symbol is blank, invalid, or resolves to an
@@ -312,7 +314,9 @@ async def ai_analyze_ticker(
     Notes:
         Market and AI-stage results are cached for one hour. Final cached results
         distinguish different holdings, while reusable security-level evidence is
-        independent of the holding.
+        independent of the holding. Cache entries are expired at the one-hour
+        boundary; invalid market caches raise ``TickerVerificationError`` and
+        invalid AI-stage or final caches raise ``TickerAnalysisAIError``.
     """
 
     normalized_symbol = symbol.strip().upper()

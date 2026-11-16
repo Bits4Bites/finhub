@@ -158,13 +158,16 @@ async def ai_analyze_div_event(
         strategy analysis. Successful AI validation produces ``Complete`` or
         ``CompleteWithWarnings``. Recoverable research or assessment failures
         produce ``Failed`` while preserving the deterministic event and baseline.
-        A previously validated cached analysis may be returned.
+        Assessment failures also preserve validated research. Structurally valid
+        sources without a matching provider citation are retained with
+        ``is_verified=False`` rather than failing the analysis.
 
     Raises:
         DividendEventInputError: If a direct input is invalid, the symbol resolves
             to an unsupported security type, or provider metadata lacks a symbol.
         DividendEventInsufficientDataError: If exchange identity, timezone, price,
-            history, or comparable dividend events are insufficient for a baseline.
+            fewer than 90 complete market sessions, or usable historical dividend
+            events are unavailable for a baseline.
         ai_helper.LLMRateLimitError: If an AI provider remains rate limited beyond
             its retry budget; this failure is not cached as an analysis result.
         RuntimeError: If a cached analysis has an invalid value.
@@ -173,8 +176,13 @@ async def ai_analyze_div_event(
 
     Notes:
         Market data is always verified and the baseline is built before consulting
-        the final-result cache. Successful and failed AI results use different,
-        event-sensitive cache lifetimes.
+        the final-result cache. Failed AI results expire after five minutes.
+        Successful results expire after one hour on the ex-date or within one day
+        before it, six hours from two through seven days before it and during the
+        post-ex-date window, 24 hours more than seven days before it, and 72 hours
+        once historical. With no provider-verified sources, validated analysis is
+        retained but data quality is capped at ``Low`` unless already
+        ``Insufficient``; partial verification caps ``High`` at ``Medium``.
     """
     costs = transaction_costs or models_events_dividends.DividendTransactionCosts()
     _validate_request_values(

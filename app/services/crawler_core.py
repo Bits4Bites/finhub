@@ -260,15 +260,13 @@ async def fetch_multi_webpages_content_playwright(
         urls: Webpage URLs to fetch.
         after_load_func_async: Optional async callback that prepares each loaded
             page before its HTML is captured.
-        delay_between_requests: Delay in seconds between consecutive URLs.
+        delay_between_requests: Maximum delay in seconds between consecutive
+            URLs. Negative values are treated as zero.
         cache_ttl: Lifetime of each successful page's cached HTML in seconds.
 
     Returns:
         One entry per input URL in the same order. Successful entries contain
         HTML; cached entries are reused; failed entries are ``None``.
-
-    Raises:
-        ValueError: If ``delay_between_requests`` is negative.
 
     Notes:
         URLs are processed serially with one browser. Each uncached URL is
@@ -277,7 +275,7 @@ async def fetch_multi_webpages_content_playwright(
         browser are surfaced to the caller.
     """
     if delay_between_requests < 0:
-        raise ValueError("delay_between_requests must not be negative")
+        delay_between_requests = 0
     if not urls:
         return []
 
@@ -348,7 +346,8 @@ async def fetch_multi_webpages_content_playwright(
                 page_content = await _fetch_single_page(browser, url)
                 result.append(page_content if page_content else None)
                 if delay_between_requests > 0 and index < len(urls) - 1:
-                    await asyncio.sleep(delay_between_requests)
+                    delay_secs = random.uniform(0.0, delay_between_requests)
+                    await asyncio.sleep(delay_secs)
         finally:
             await browser.close()
 
@@ -365,8 +364,12 @@ async def fetch_webpage_content_fallback_to_playwright(url: str, *, cache_ttl: i
 
     Returns:
         HTML from the HTTP fetch when it returns any non-``None`` value;
-        otherwise HTML from Playwright. Returns ``None`` when both strategies
-        exhaust their two attempts.
+        otherwise HTML from Playwright. Returns ``None`` when neither strategy
+        succeeds.
+
+    Notes:
+        Non-retryable HTTP failures, including client errors, still fall back to
+        Playwright. Retryable failures use up to two attempts per strategy.
     """
     content = await fetch_webpage_content(url, retries=2, cache_ttl=cache_ttl)
     if content is not None:

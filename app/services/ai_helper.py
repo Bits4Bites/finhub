@@ -21,13 +21,13 @@ class LLMRateLimitError(RuntimeError):
 
 
 class LLMResponse(BaseModel):
-    """
-    Normalized result returned by an AI provider.
+    """Normalized result returned by an AI provider.
 
     Attributes:
-        is_error: Whether the provider request completed successfully.
-        completion: Generated response text. Empty when the request fails.
-        error_msg: Error message for a failed request. Empty on success.
+        is_error: Whether the provider reported that the request failed.
+        completion: Provider response text. On failure, this may contain provider
+            error details instead of generated content.
+        error_msg: Provider error text when available, otherwise ``None``.
         time_taken_ms: Time taken to complete the request in milliseconds.
         tokens_prompt: Number of input or prompt tokens reported by the provider.
         tokens_completion: Number of generated tokens reported by the provider.
@@ -679,7 +679,7 @@ async def _exec_prompt_openai_client(
         result.is_error,
     )
     if result.is_error:
-        result.error_msg = result.completion
+        result.error_msg = result.completion or None
     print(result.completion if _is_debug_mode() else "<response omitted>")
 
     return result
@@ -789,7 +789,7 @@ async def _exec_prompt_gemini(
         result.is_error,
     )
     if result.is_error:
-        result.error_msg = result.completion
+        result.error_msg = result.completion or None
     print(result.completion if _is_debug_mode() else "<response omitted>")
 
     return result

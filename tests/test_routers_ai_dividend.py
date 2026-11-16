@@ -1,4 +1,3 @@
-import asyncio
 from unittest import mock
 
 import pytest
@@ -7,250 +6,160 @@ from fastapi.testclient import TestClient
 from app import config
 from app.main import app
 from app.models import events_dividends as models_dividends
-from app.routers import ai_dividend
-from app.routers import async_task as router_async_task
-from app.schemas import ai_dividend as schemas_dividends
-from app.schemas import async_task
 from app.services import ai_helper
-from app.services import msai_analyze_div_event as service
+from app.services import msai_analyze_div_event as services_dividend
 from tests import dividend_fixtures
 
 client = TestClient(app)
 
 
 @pytest.fixture(autouse=True)
-def clear_task_cache():
-    asyncio.run(router_async_task.cache.clear())
-    yield
-    asyncio.run(router_async_task.cache.clear())
+def disable_ai_proxy(monkeypatch):
+    monkeypatch.setattr(config.settings_finhub_proxy, "proxy_mode", "None")
+    monkeypatch.setattr(config.settings_finhub_proxy, "url_ai_task_node", "")
 
 
-def _request_body() -> dict[str, object]:
-    return {
+def _request_body(**overrides) -> dict[str, object]:
+    body: dict[str, object] = {
         "symbol": "asx:cba",
         "ex_date": dividend_fixtures.EX_DATE.isoformat(),
-        "dividend_amount": 2.0,
+        "dividend_amount": 2.5,
     }
+    body.update(overrides)
+    return body
 
 
-def _request_model() -> schemas_dividends.AnalyzeDividendEventRequest:
-    return schemas_dividends.AnalyzeDividendEventRequest.model_validate(_request_body())
-
-
-def _response_for_state(state: async_task.TaskState) -> schemas_dividends.AnalyzeDividendEventResponse:
-    if state == async_task.TASK_STATE_FAILED:
-        return schemas_dividends.AnalyzeDividendEventResponse(
-            status=502,
-            message="Dividend research failed",
-            data=dividend_fixtures.failed_analysis(),
-        )
-    return schemas_dividends.AnalyzeDividendEventResponse(
-        status=200,
-        message="ok",
-        data=dividend_fixtures.complete_analysis(),
-    )
-
-
-async def _seed_task(state: async_task.TaskState) -> str:
-    task_id, _ = await router_async_task.start_task("analyze_dividend_event", _request_model())
-    if state == async_task.TASK_STATE_COMPLETED:
-        result = _response_for_state(state)
-        await router_async_task.complete_task(
-            task_id,
-            "analyze_dividend_event",
-            result,
-            status_code=result.status,
-            message=result.message,
-        )
-    elif state == async_task.TASK_STATE_FAILED:
-        result = _response_for_state(state)
-        await router_async_task.fail_task(
-            task_id,
-            "analyze_dividend_event",
-            status_code=result.status,
-            message=result.message,
-            result=result,
-        )
-    return task_id
-
-
-def test_sync_redirects_through_ai_proxy_handler():
-    with (
-        mock.patch.object(config.settings_finhub_proxy, "proxy_mode", "Redirect"),
-        mock.patch.object(
-            config.settings_finhub_proxy,
-            "url_ai_task_node",
-            "https://proxy.example/finhub/",
-        ),
-    ):
-        response = client.post(
-            "/ai/analyze_dividend_event",
-            json=_request_body(),
-            follow_redirects=False,
-        )
-
-    assert response.status_code == 307
-    assert response.headers["location"] == "https://proxy.example/finhub/ai/analyze_dividend_event"
-
-
-def test_async_start_redirects_through_ai_proxy_handler():
-    with (
-        mock.patch.object(config.settings_finhub_proxy, "proxy_mode", "Redirect"),
-        mock.patch.object(
-            config.settings_finhub_proxy,
-            "url_ai_task_node",
-            "https://proxy.example/finhub/",
-        ),
-    ):
-        response = client.post(
-            "/ai/start_analyze_dividend_event_async",
-            json=_request_body(),
-            follow_redirects=False,
-        )
-
-    assert response.status_code == 307
-    assert response.headers["location"] == "https://proxy.example/finhub/ai/start_analyze_dividend_event_async"
-
-
-def test_async_poll_redirects_through_ai_proxy_handler():
-    with (
-        mock.patch.object(config.settings_finhub_proxy, "proxy_mode", "Redirect"),
-        mock.patch.object(
-            config.settings_finhub_proxy,
-            "url_ai_task_node",
-            "https://proxy.example/finhub/",
-        ),
-    ):
-        response = client.post(
-            "/ai/poll_analyze_dividend_event_async",
-            params={"task_id": "task-123"},
-            follow_redirects=False,
-        )
-
-    assert response.status_code == 307
-    assert (
-        response.headers["location"]
-        == "https://proxy.example/finhub/ai/poll_analyze_dividend_event_async?task_id=task-123"
-    )
-
-
-def test_request_schema_has_class_and_field_documentation():
-    schema = schemas_dividends.AnalyzeDividendEventRequest.model_json_schema()
-
-    assert schema["description"].startswith("Request to research and assess a dividend event.")
-    assert all(
-        schema["properties"][field_name]["description"]
-        for field_name in (
-            "symbol",
-            "ex_date",
-            "dividend_amount",
-            "transaction_costs",
-            "holding_period_days",
-        )
-    )
-
-
-def test_openapi_requires_async_start_body_and_documents_public_outcomes():
-    paths = client.get("/openapi.json").json()["paths"]
-    sync_responses = paths["/ai/analyze_dividend_event"]["post"]["responses"]
-    start_operation = paths["/ai/start_analyze_dividend_event_async"]["post"]
-    poll_responses = paths["/ai/poll_analyze_dividend_event_async"]["post"]["responses"]
-
-    assert start_operation["requestBody"]["required"] is True
-    assert {"200", "400", "422", "500", "502"} <= set(sync_responses)
-    assert {"200", "202", "400", "404", "422", "500", "502"} <= set(start_operation["responses"])
-    assert {"200", "202", "400", "404", "422", "500", "502"} <= set(poll_responses)
-
-
-def test_post_analyzes_typed_request():
+async def _analysis_for_request(
+    *,
+    symbol,
+    ex_date,
+    dividend_amount,
+    transaction_costs,
+    holding_period_days,
+) -> models_dividends.DividendEventAnalysis:
     analysis = dividend_fixtures.complete_analysis()
-    with mock.patch.object(
-        ai_dividend.services_dividend,
-        "ai_analyze_div_event",
-        new_callable=mock.AsyncMock,
-        return_value=analysis,
-    ) as mock_analyze:
+    event_data = analysis.event.model_dump()
+    event_data.update(
+        {
+            "symbol": symbol,
+            "ex_date": ex_date,
+            "dividend_amount": dividend_amount,
+            "gross_dividend_yield": dividend_amount / event_data["reference_price"],
+            "transaction_costs": transaction_costs,
+            "holding_period_days": holding_period_days,
+        }
+    )
+    event = models_dividends.DividendEventContext.model_validate(event_data)
+    analysis_data = analysis.model_dump(mode="python")
+    analysis_data["event"] = event
+    return models_dividends.DividendEventAnalysis.model_validate(analysis_data)
+
+
+def test_sync_dividend_analysis_exposes_normalized_inputs_and_documented_defaults():
+    with mock.patch(
+        "app.routers.ai_dividend.services_dividend.ai_analyze_div_event",
+        new=_analysis_for_request,
+    ):
         response = client.post("/ai/analyze_dividend_event", json=_request_body())
 
     assert response.status_code == 200
-    assert response.json()["data"]["analysis_status"] == "Complete"
-    assert mock_analyze.await_args.kwargs["symbol"] == "ASX:CBA"
-    assert mock_analyze.await_args.kwargs["ex_date"] == dividend_fixtures.EX_DATE
+    event = response.json()["data"]["event"]
+    assert event["symbol"] == "ASX:CBA"
+    assert event["ex_date"] == dividend_fixtures.EX_DATE.isoformat()
+    assert event["dividend_amount"] == 2.5
+    assert event["holding_period_days"] == 28
+    assert event["transaction_costs"] == {
+        "dividend_capture_per_share": 0.0,
+        "post_dividend_discount_per_share": 0.0,
+    }
 
 
-def test_post_rejects_invalid_dividend_amount():
-    body = _request_body()
-    body["dividend_amount"] = 0
-
-    response = client.post("/ai/analyze_dividend_event", json=body)
-
-    assert response.status_code == 422
-
-
-def test_post_rejects_removed_intent_field():
-    body = _request_body()
-    body["intent"] = "Prefer dividend capture"
-
-    response = client.post("/ai/analyze_dividend_event", json=body)
-
-    assert response.status_code == 422
-
-
-def test_post_maps_input_error_to_400():
-    with mock.patch.object(
-        ai_dividend.services_dividend,
-        "ai_analyze_div_event",
-        new_callable=mock.AsyncMock,
-        side_effect=service.DividendEventInputError("Unsupported or unknown asset type"),
+def test_sync_dividend_analysis_exposes_supplied_costs_and_holding_window():
+    with mock.patch(
+        "app.routers.ai_dividend.services_dividend.ai_analyze_div_event",
+        new=_analysis_for_request,
     ):
-        response = client.post("/ai/analyze_dividend_event", json=_request_body())
+        response = client.post(
+            "/ai/analyze_dividend_event",
+            json=_request_body(
+                transaction_costs={
+                    "dividend_capture_per_share": 0.12,
+                    "post_dividend_discount_per_share": 0.34,
+                },
+                holding_period_days=45,
+            ),
+        )
 
-    assert response.status_code == 400
-    assert response.json()["status"] == 400
-    assert response.json()["message"]
+    assert response.status_code == 200
+    event = response.json()["data"]["event"]
+    assert event["holding_period_days"] == 45
+    assert event["transaction_costs"]["dividend_capture_per_share"] == 0.12
+    assert event["transaction_costs"]["post_dividend_discount_per_share"] == 0.34
 
 
-def test_post_maps_insufficient_data_to_422():
-    with mock.patch.object(
-        ai_dividend.services_dividend,
-        "ai_analyze_div_event",
-        new_callable=mock.AsyncMock,
-        side_effect=service.DividendEventInsufficientDataError("Insufficient market history"),
+@pytest.mark.parametrize("holding_period_days", [1, 365])
+def test_dividend_analysis_accepts_documented_holding_window_boundaries(holding_period_days):
+    with mock.patch(
+        "app.routers.ai_dividend.services_dividend.ai_analyze_div_event",
+        new=_analysis_for_request,
     ):
-        response = client.post("/ai/analyze_dividend_event", json=_request_body())
+        response = client.post(
+            "/ai/analyze_dividend_event",
+            json=_request_body(holding_period_days=holding_period_days),
+        )
 
-    assert response.status_code == 422
-    assert response.json()["status"] == 422
-    assert response.json()["message"]
+    assert response.status_code == 200
+    assert response.json()["data"]["event"]["holding_period_days"] == holding_period_days
 
 
 @pytest.mark.parametrize(
-    "error",
+    "body",
     [
-        service.DividendEventAIError("Provider output failed"),
-        ai_helper.LLMRateLimitError("Provider remained rate limited"),
+        _request_body(dividend_amount=0),
+        _request_body(holding_period_days=0),
+        _request_body(holding_period_days=366),
+        _request_body(ex_date="2026-2-1"),
+        _request_body(intent="capture"),
     ],
 )
-def test_post_maps_raised_ai_failures_to_502(error):
-    with mock.patch.object(
-        ai_dividend.services_dividend,
-        "ai_analyze_div_event",
-        new_callable=mock.AsyncMock,
-        side_effect=error,
+def test_dividend_request_schema_rejects_invalid_or_removed_inputs(body):
+    response = client.post("/ai/analyze_dividend_event", json=body)
+
+    assert response.status_code == 422
+    assert isinstance(response.json()["detail"], list)
+
+
+@pytest.mark.parametrize(
+    ("error", "expected_status"),
+    [
+        (services_dividend.DividendEventInputError("invalid event"), 400),
+        (services_dividend.DividendEventInsufficientDataError("insufficient history"), 422),
+        (services_dividend.DividendEventAIError("analysis unavailable"), 502),
+        (ai_helper.LLMRateLimitError("rate-limit budget exhausted"), 502),
+    ],
+)
+def test_sync_dividend_analysis_maps_documented_service_failures(error, expected_status):
+    async def fail(**kwargs):
+        raise error
+
+    with mock.patch(
+        "app.routers.ai_dividend.services_dividend.ai_analyze_div_event",
+        new=fail,
     ):
         response = client.post("/ai/analyze_dividend_event", json=_request_body())
 
-    assert response.status_code == 502
-    assert response.json()["status"] == 502
-    assert response.json()["message"]
+    assert response.status_code == expected_status
+    assert response.json()["status"] == expected_status
+    assert "data" not in response.json()
 
 
-def test_post_preserves_baseline_on_ai_failure():
-    with mock.patch.object(
-        ai_dividend.services_dividend,
-        "ai_analyze_div_event",
-        new_callable=mock.AsyncMock,
-        return_value=dividend_fixtures.failed_analysis(),
+def test_sync_dividend_analysis_preserves_deterministic_baseline_when_ai_result_failed():
+    async def failed_analysis(**kwargs):
+        return dividend_fixtures.failed_analysis()
+
+    with mock.patch(
+        "app.routers.ai_dividend.services_dividend.ai_analyze_div_event",
+        new=failed_analysis,
     ):
         response = client.post("/ai/analyze_dividend_event", json=_request_body())
 
@@ -259,151 +168,138 @@ def test_post_preserves_baseline_on_ai_failure():
     assert response.json()["data"]["historical_baseline"]["sample_count"] == 5
 
 
-def test_post_returns_completed_analysis_with_validation_warnings():
-    analysis_data = dividend_fixtures.complete_analysis().model_dump()
-    analysis_data["analysis_status"] = "CompleteWithWarnings"
-    analysis_data["validation_warnings"] = ["DividendCapture profit-and-loss estimates were corrected."]
-    analysis = models_dividends.DividendEventAnalysis.model_validate(analysis_data)
-    with mock.patch.object(
-        ai_dividend.services_dividend,
-        "ai_analyze_div_event",
-        new_callable=mock.AsyncMock,
-        return_value=analysis,
+def test_sync_dividend_analysis_preserves_validation_warnings():
+    async def warned_analysis(**kwargs):
+        analysis_data = dividend_fixtures.complete_analysis().model_dump(mode="python")
+        analysis_data.update(
+            {
+                "analysis_status": "CompleteWithWarnings",
+                "validation_warnings": ["Application corrected assessment arithmetic."],
+            }
+        )
+        return models_dividends.DividendEventAnalysis.model_validate(analysis_data)
+
+    with mock.patch(
+        "app.routers.ai_dividend.services_dividend.ai_analyze_div_event",
+        new=warned_analysis,
     ):
         response = client.post("/ai/analyze_dividend_event", json=_request_body())
 
     assert response.status_code == 200
     assert response.json()["data"]["analysis_status"] == "CompleteWithWarnings"
-    assert response.json()["data"]["validation_warnings"] == analysis_data["validation_warnings"]
+    assert response.json()["data"]["validation_warnings"] == ["Application corrected assessment arithmetic."]
 
 
-def test_async_start_to_poll_returns_service_analysis():
-    with mock.patch.object(
-        ai_dividend.services_dividend,
-        "ai_analyze_div_event",
-        new_callable=mock.AsyncMock,
-        return_value=dividend_fixtures.complete_analysis(),
-    ) as mock_analyze:
-        start_response = client.post(
+def test_async_dividend_lifecycle_returns_running_then_completed_analysis(deferred_task_store):
+    with mock.patch(
+        "app.routers.ai_dividend.services_dividend.ai_analyze_div_event",
+        new=_analysis_for_request,
+    ):
+        started = client.post(
             "/ai/start_analyze_dividend_event_async",
             json=_request_body(),
         )
-
-    task_id = start_response.json()["extra"]["task_id"]
-    poll_response = client.post(
-        "/ai/poll_analyze_dividend_event_async",
-        params={"task_id": task_id},
-    )
-
-    assert start_response.status_code == 202
-    assert start_response.json()["extra"]["state"] == async_task.TASK_STATE_RUNNING
-    assert poll_response.status_code == 200
-    assert poll_response.json()["extra"] == {
-        "task_id": task_id,
-        "state": async_task.TASK_STATE_COMPLETED,
-    }
-    assert poll_response.json()["data"]["analysis_status"] == "Complete"
-    assert mock_analyze.await_args.kwargs["symbol"] == "ASX:CBA"
-    assert mock_analyze.await_args.kwargs["ex_date"] == dividend_fixtures.EX_DATE
-
-
-def test_async_start_requires_request_body():
-    response = client.post("/ai/start_analyze_dividend_event_async")
-
-    assert response.status_code == 400
-    assert response.json() == {
-        "status": 400,
-        "message": "Request body is required when starting a task",
-    }
-
-
-@pytest.mark.parametrize(
-    ("task_state", "expected_status"),
-    [
-        (async_task.TASK_STATE_RUNNING, 202),
-        (async_task.TASK_STATE_COMPLETED, 200),
-        (async_task.TASK_STATE_FAILED, 502),
-    ],
-)
-def test_async_start_deduplicates_running_completed_and_failed_tasks(task_state, expected_status):
-    task_id = asyncio.run(_seed_task(task_state))
-
-    response = client.post("/ai/start_analyze_dividend_event_async", json=_request_body())
-
-    assert response.status_code == expected_status
-    assert response.json()["extra"] == {"task_id": task_id, "state": task_state}
-
-
-@pytest.mark.parametrize(
-    ("task_state", "expected_status"),
-    [
-        (async_task.TASK_STATE_RUNNING, 202),
-        (async_task.TASK_STATE_COMPLETED, 200),
-        (async_task.TASK_STATE_FAILED, 502),
-    ],
-)
-def test_poll_returns_running_completed_and_failed_tasks(task_state, expected_status):
-    task_id = asyncio.run(_seed_task(task_state))
-
-    response = client.post(
-        "/ai/poll_analyze_dividend_event_async",
-        params={"task_id": f"  {task_id}  "},
-    )
-
-    assert response.status_code == expected_status
-    assert response.json()["extra"] == {"task_id": task_id, "state": task_state}
-    if task_state == async_task.TASK_STATE_COMPLETED:
-        assert response.json()["data"]["analysis_status"] == "Complete"
-    elif task_state == async_task.TASK_STATE_FAILED:
-        assert response.json()["data"]["historical_baseline"]["sample_count"] == 5
-    else:
-        assert "data" not in response.json()
-
-
-def test_poll_returns_404_for_missing_task():
-    response = client.post(
-        "/ai/poll_analyze_dividend_event_async",
-        params={"task_id": "missing-task"},
-    )
-
-    assert response.status_code == 404
-    assert response.json()["status"] == 404
-
-
-def test_poll_returns_500_for_invalid_task_state():
-    with mock.patch.object(
-        router_async_task.cache,
-        "get",
-        new_callable=mock.AsyncMock,
-        return_value={"task_type": "analyze_dividend_event", "state": "UNKNOWN"},
-    ):
-        response = client.post(
+        task_id = started.json()["extra"]["task_id"]
+        running = client.post(
             "/ai/poll_analyze_dividend_event_async",
-            params={"task_id": "invalid-task"},
+            params={"task_id": task_id},
         )
 
-    assert response.status_code == 500
-    assert response.json()["status"] == 500
+        deferred_task_store.release()
 
-
-def test_async_provider_rate_limit_is_exposed_as_502_when_polled():
-    with mock.patch.object(
-        ai_dividend.services_dividend,
-        "ai_analyze_div_event",
-        new_callable=mock.AsyncMock,
-        side_effect=ai_helper.LLMRateLimitError("Provider remained rate limited"),
-    ):
-        start_response = client.post(
+        completed = client.post(
+            "/ai/poll_analyze_dividend_event_async",
+            params={"task_id": task_id},
+        )
+        duplicate = client.post(
             "/ai/start_analyze_dividend_event_async",
             json=_request_body(),
         )
 
-    poll_response = client.post(
-        "/ai/poll_analyze_dividend_event_async",
-        params={"task_id": start_response.json()["extra"]["task_id"]},
+    assert started.status_code == 202
+    assert running.status_code == 202
+    assert completed.status_code == 200
+    assert completed.json()["extra"] == {"task_id": task_id, "state": "COMPLETED"}
+    assert completed.json()["data"]["event"]["symbol"] == "ASX:CBA"
+    assert duplicate.json() == completed.json()
+
+
+def test_async_dividend_start_distinguishes_missing_and_invalid_bodies():
+    missing = client.post("/ai/start_analyze_dividend_event_async")
+    invalid = client.post(
+        "/ai/start_analyze_dividend_event_async",
+        json=_request_body(dividend_amount=0),
     )
 
-    assert start_response.status_code == 202
-    assert poll_response.status_code == 502
-    assert poll_response.json()["status"] == 502
-    assert poll_response.json()["extra"]["state"] == async_task.TASK_STATE_FAILED
+    assert missing.status_code == 400
+    assert missing.json()["status"] == 400
+    assert invalid.status_code == 422
+    assert isinstance(invalid.json()["detail"], list)
+
+
+def test_async_failed_analysis_retains_baseline_data(deferred_task_store):
+    async def failed_analysis(**kwargs):
+        return dividend_fixtures.failed_analysis()
+
+    with mock.patch(
+        "app.routers.ai_dividend.services_dividend.ai_analyze_div_event",
+        new=failed_analysis,
+    ):
+        started = client.post(
+            "/ai/start_analyze_dividend_event_async",
+            json=_request_body(),
+        )
+        task_id = started.json()["extra"]["task_id"]
+        deferred_task_store.release()
+        failed = client.post(
+            "/ai/poll_analyze_dividend_event_async",
+            params={"task_id": task_id},
+        )
+        duplicate = client.post(
+            "/ai/start_analyze_dividend_event_async",
+            json=_request_body(),
+        )
+
+    assert failed.status_code == 502
+    assert failed.json()["extra"] == {"task_id": task_id, "state": "FAILED"}
+    assert failed.json()["data"]["analysis_status"] == "Failed"
+    assert failed.json()["data"]["historical_baseline"]["sample_count"] == 5
+    assert duplicate.json() == failed.json()
+
+
+@pytest.mark.parametrize(
+    ("error", "expected_status"),
+    [
+        (services_dividend.DividendEventInputError("invalid event"), 400),
+        (services_dividend.DividendEventInsufficientDataError("insufficient history"), 422),
+        (services_dividend.DividendEventAIError("analysis unavailable"), 502),
+        (ai_helper.LLMRateLimitError("rate-limit budget exhausted"), 502),
+        (RuntimeError("unexpected failure"), 500),
+    ],
+)
+def test_async_raised_failures_are_pollable_without_partial_data(
+    deferred_task_store,
+    error,
+    expected_status,
+):
+    async def fail(**kwargs):
+        raise error
+
+    with mock.patch(
+        "app.routers.ai_dividend.services_dividend.ai_analyze_div_event",
+        new=fail,
+    ):
+        started = client.post(
+            "/ai/start_analyze_dividend_event_async",
+            json=_request_body(),
+        )
+        task_id = started.json()["extra"]["task_id"]
+        deferred_task_store.release()
+        failed = client.post(
+            "/ai/poll_analyze_dividend_event_async",
+            params={"task_id": task_id},
+        )
+
+    assert failed.status_code == expected_status
+    assert failed.json()["extra"] == {"task_id": task_id, "state": "FAILED"}
+    assert "data" not in failed.json()

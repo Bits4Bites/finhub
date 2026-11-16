@@ -123,10 +123,12 @@ async def handle_if_proxy(proxy_mode: str, node_url: str, request: Request, /) -
             temporary redirect, ``Forward`` sends the request to the node, and
             ``None`` or any unrecognized value leaves handling to the caller.
         node_url: Base node URL. An empty value disables proxying regardless
-            of the selected mode.
-        request: Incoming request whose path and query are appended to the
-            node URL. Forwarding also carries its method, body, and
-            end-to-end headers.
+            of the selected mode. Its path remains a prefix, its query
+            parameters precede request query parameters, and its fragment is
+            preserved.
+        request: Incoming request whose path is appended to the base path with
+            exactly one separating slash. Forwarding also carries its method,
+            body, query parameters, and end-to-end headers.
 
     Returns:
         ``None`` when proxying is disabled, a 307 redirect response in

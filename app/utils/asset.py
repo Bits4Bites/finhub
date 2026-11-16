@@ -22,9 +22,12 @@ def detect_asset_type(
         does not identify a recognized category.
 
     Notes:
-        Metadata matching is case-insensitive. Sector, industry, and issuer name
-        are used to distinguish equity subtypes such as REITs, listed investment
-        companies, and hybrid securities.
+        Metadata matching is case-insensitive. ETF, mutual-fund, and
+        cryptocurrency quote types map directly to those categories. Equities
+        default to Standard; real-estate REITs, asset-management or investment
+        companies, and note or hybrid issuers map to their corresponding equity
+        subtypes. When those equity signals overlap, REIT takes precedence over
+        listed investment company, which takes precedence over hybrid.
     """
     quote_type = (quote_type or "").upper()
     sector = (sector or "").upper()
@@ -78,8 +81,8 @@ def classify_market_cap(
     Args:
         country: The listing country as a country name or ISO code.
         exchange_symbol: The stock symbol in ``EXCHANGE:CODE`` format.
-        market_cap: The company's market capitalization in the home market's
-            currency.
+        market_cap: The company's non-negative market capitalization in the
+            home market's currency.
 
     Returns:
         The market-cap category and the most relevant recognized index containing
@@ -87,11 +90,25 @@ def classify_market_cap(
 
     Raises:
         KeyError: If required market-index data is not loaded.
+        ValueError: If ``market_cap`` is negative.
 
     Notes:
-        Australia, the United States, and Vietnam use market-specific thresholds.
-        Recognized index membership may adjust the threshold-only category.
+        Australia and the United States use thresholds of 10 billion, 2 billion,
+        300 million, and 50 million in local currency. Vietnam uses thresholds
+        of 10 trillion, 1 trillion, 100 billion, and 10 billion VND. Values below
+        the lowest threshold are Nano Cap. ASX 50, NASDAQ-100, and S&P 500
+        membership sets Large Cap; S&P 400 sets Mid Cap; and S&P 600 sets Small
+        Cap. ASX 100 promotes a threshold Mid or Small Cap by one tier, while an
+        Australian stock outside ASX 300 demotes either tier by one level. VN30
+        sets Large Cap, VN100 sets Mid Cap, and HNX30 promotes a threshold Small
+        Cap to Mid Cap. Other HOSE or HNX listings demote threshold Large or Mid
+        Caps by one level. If memberships overlap, S&P 600 takes precedence over
+        S&P 400 and broad large-cap memberships, ASX 50 takes precedence over
+        broader ASX memberships, and VN30 takes precedence over VN100.
     """
+    if market_cap < 0:
+        raise ValueError("market_cap must not be negative")
+
     cap_size: types.MarketCapType = None
     market_index = None
 

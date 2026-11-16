@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import hmac
 import secrets
-from typing import Any, Self
+from typing import Any, Protocol, Self
 
 from fastapi import HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
@@ -11,12 +11,36 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 from ..schemas import async_task as schemas_async_task
 from ..utils import cache
 
-_TASK_ID_SECRET = secrets.token_bytes(32)
-_TASK_START_LOCK = asyncio.Lock()
+
+def validation_error_response(
+    description: str,
+    *application_models: type[BaseModel],
+) -> dict[str, Any]:
+    """Describe request validation and application-level errors for OpenAPI.
+
+    Args:
+        description: Caller-facing explanation of the invalid request.
+        application_models: Additional response-envelope models that the
+            operation can return with HTTP 422 after request validation.
+
+    Returns:
+        A FastAPI ``responses`` entry accepting the standard validation-error
+        body and each supplied application response model.
+    """
+    schemas = [{"$ref": "#/components/schemas/HTTPValidationError"}]
+    schemas.extend({"$ref": f"#/components/schemas/{model.__name__}"} for model in application_models)
+    return {
+        "description": description,
+        "content": {
+            "application/json": {
+                "schema": {"anyOf": schemas},
+            }
+        },
+    }
 
 
 class TaskEntry(BaseModel):
-    """Validated lifecycle snapshot returned by ``load_task``.
+    """Validated lifecycle snapshot returned by a task store.
 
     Attributes:
         task_type: Workflow category that owns the task.
@@ -42,7 +66,7 @@ class TaskEntry(BaseModel):
     )
 
     @model_validator(mode="after")
-    def validate_state(self) -> Self:
+    def _validate_state(self) -> Self:
         if self.state == schemas_async_task.TASK_STATE_RUNNING:
             if self.status is not None or self.message is not None or self.result is not None:
                 raise ValueError("running task cannot contain a result")
@@ -50,193 +74,252 @@ class TaskEntry(BaseModel):
             raise ValueError("completed task requires a result")
         return self
 
+    @property
+    def failure_http_status(self) -> int:
+        """Return the public HTTP status for this failed task.
 
-def _serialize_result(result: BaseModel | None) -> dict[str, Any] | None:
-    return result.model_dump(mode="json") if result is not None else None
-
-
-async def _store(task_id: str, entry: TaskEntry) -> None:
-    await cache.set(
-        task_id,
-        entry.model_dump(mode="json", exclude_none=True),
-        ttl=schemas_async_task.ASYNC_TASK_TTL,
-    )
-
-
-def _generate_task_id(task_type: str, *task_input: str | BaseModel) -> str:
-    normalized_input = tuple(item.model_dump_json() if isinstance(item, BaseModel) else item for item in task_input)
-    request_key = cache.generate_key("async-task", task_type, *normalized_input)
-    return hmac.new(_TASK_ID_SECRET, request_key.encode(), digestmod="sha256").hexdigest()
+        Returns:
+            The stored status when it is between 400 and 599 inclusive;
+            otherwise HTTP 500.
+        """
+        if self.status is not None and 400 <= self.status <= 599:
+            return self.status
+        return status.HTTP_500_INTERNAL_SERVER_ERROR
 
 
-async def start_task(task_type: str, *task_input: str | BaseModel) -> tuple[str, bool]:
-    """Create a running task entry or reuse the matching persisted task.
+class TaskStore(Protocol):
+    """Persistence boundary used by asynchronous start and poll endpoints."""
 
-    Args:
-        task_type: Non-empty task category used to keep unrelated workflows separate.
-        task_input: Ordered string or Pydantic-model values that identify the request.
-            Models are identified by their JSON representation.
+    async def start(self, task_type: str, *task_input: str | BaseModel) -> tuple[str, bool]:
+        """Create or reuse a task identified by workflow and normalized input.
 
-    Returns:
-        The task identifier and ``True`` when a new running task was persisted.
-        ``False`` means an existing running, completed, or failed task was reused.
+        Args:
+            task_type: Non-empty workflow category.
+            task_input: Ordered strings or Pydantic request models identifying
+                an equivalent start request.
 
-    Raises:
-        HTTPException: With status 500 when a matching stored entry has the wrong
-            task type or is malformed.
-        ValidationError: If a new task entry does not satisfy the persistence contract.
-        Exception: Cache-backend failures propagate.
+        Returns:
+            The opaque task identifier and whether a new running entry was
+            created.
+        """
+        ...
 
-    Notes:
-        Equivalent inputs are deduplicated atomically within this process. Task
-        identifiers and entries are process-local, and entries expire after the
-        configured asynchronous-task lifetime.
+    async def complete(
+        self,
+        task_id: str,
+        task_type: str,
+        result: BaseModel,
+        *,
+        status_code: int | None = None,
+        message: str | None = None,
+    ) -> None:
+        """Persist a successful terminal result.
+
+        Args:
+            task_id: Identifier returned by ``start``.
+            task_type: Workflow category that owns the task.
+            result: Response model to retain for polling.
+            status_code: Optional application or HTTP completion status.
+            message: Optional caller-facing completion summary.
+        """
+        ...
+
+    async def fail(
+        self,
+        task_id: str,
+        task_type: str,
+        *,
+        status_code: int | None = None,
+        message: str = "Task failed",
+        result: BaseModel | None = None,
+    ) -> None:
+        """Persist a failed terminal result.
+
+        Args:
+            task_id: Identifier returned by ``start``.
+            task_type: Workflow category that owns the task.
+            status_code: Optional application or HTTP failure status.
+            message: Caller-facing failure summary.
+            result: Optional response model preserving partial result data.
+        """
+        ...
+
+    async def load(self, task_id: str, task_type: str) -> TaskEntry:
+        """Load a task for its owning workflow.
+
+        Args:
+            task_id: Identifier returned by ``start``.
+            task_type: Expected workflow category.
+
+        Returns:
+            The validated retained lifecycle snapshot.
+        """
+        ...
+
+
+class CacheTaskStore:
+    """Process-local task store backed by the application cache.
+
+    Equivalent requests reuse one opaque task identifier while the retained
+    running or terminal entry remains unexpired. Every lifecycle write starts a
+    fresh configured task lifetime.
     """
-    task_id = _generate_task_id(task_type, *task_input)
-    async with _TASK_START_LOCK:
-        cached_entry = await cache.get(task_id)
-        if cached_entry is not None:
-            if not isinstance(cached_entry, dict) or cached_entry.get("task_type") != task_type:
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="Invalid task state",
-                )
-            try:
-                TaskEntry.model_validate(cached_entry)
-            except ValidationError as exc:
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="Invalid task state",
-                ) from exc
-            return task_id, False
 
-        await _store(
+    def __init__(self) -> None:
+        self._id_secret = secrets.token_bytes(32)
+        self._start_lock = asyncio.Lock()
+
+    @staticmethod
+    def _serialize_result(result: BaseModel | None) -> dict[str, Any] | None:
+        return result.model_dump(mode="json") if result is not None else None
+
+    def _generate_id(self, task_type: str, *task_input: str | BaseModel) -> str:
+        normalized_input = tuple(item.model_dump_json() if isinstance(item, BaseModel) else item for item in task_input)
+        request_key = cache.generate_key("async-task", task_type, *normalized_input)
+        return hmac.new(self._id_secret, request_key.encode(), digestmod="sha256").hexdigest()
+
+    @staticmethod
+    async def _store(task_id: str, entry: TaskEntry) -> None:
+        await cache.set(
+            task_id,
+            entry.model_dump(mode="json", exclude_none=True),
+            ttl=schemas_async_task.ASYNC_TASK_TTL,
+        )
+
+    async def start(self, task_type: str, *task_input: str | BaseModel) -> tuple[str, bool]:
+        """Create a running task or reuse its retained lifecycle state.
+
+        Args:
+            task_type: Non-empty workflow category.
+            task_input: Ordered strings or Pydantic request models identifying
+                an equivalent start request.
+
+        Returns:
+            The opaque task identifier and whether a new running entry was
+            created.
+
+        Raises:
+            HTTPException: HTTP 500 when a matching retained entry is invalid.
+            Exception: Cache failures propagate.
+        """
+        task_id = self._generate_id(task_type, *task_input)
+        async with self._start_lock:
+            cached_entry = await cache.get(task_id)
+            if cached_entry is not None:
+                if not isinstance(cached_entry, dict) or cached_entry.get("task_type") != task_type:
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail="Invalid task state",
+                    )
+                try:
+                    TaskEntry.model_validate(cached_entry)
+                except ValidationError as exc:
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail="Invalid task state",
+                    ) from exc
+                return task_id, False
+
+            await self._store(
+                task_id,
+                TaskEntry(
+                    task_type=task_type,
+                    state=schemas_async_task.TASK_STATE_RUNNING,
+                ),
+            )
+            return task_id, True
+
+    async def complete(
+        self,
+        task_id: str,
+        task_type: str,
+        result: BaseModel,
+        *,
+        status_code: int | None = None,
+        message: str | None = None,
+    ) -> None:
+        """Persist a completed result and restart its retention lifetime.
+
+        Args:
+            task_id: Identifier returned by ``start``.
+            task_type: Workflow category that owns the task.
+            result: Response model serialized into JSON-compatible data.
+            status_code: Optional application or HTTP completion status.
+            message: Optional caller-facing completion summary.
+
+        Raises:
+            ValidationError: If the completed entry violates the lifecycle contract.
+            Exception: Serialization and cache failures propagate.
+        """
+        await self._store(
             task_id,
             TaskEntry(
                 task_type=task_type,
-                state=schemas_async_task.TASK_STATE_RUNNING,
+                state=schemas_async_task.TASK_STATE_COMPLETED,
+                status=status_code,
+                message=message,
+                result=self._serialize_result(result),
             ),
         )
-        return task_id, True
+
+    async def fail(
+        self,
+        task_id: str,
+        task_type: str,
+        *,
+        status_code: int | None = None,
+        message: str = "Task failed",
+        result: BaseModel | None = None,
+    ) -> None:
+        """Persist a failed result and restart its retention lifetime.
+
+        Args:
+            task_id: Identifier returned by ``start``.
+            task_type: Workflow category that owns the task.
+            status_code: Optional application or HTTP failure status.
+            message: Caller-facing failure summary.
+            result: Optional response model preserving partial result data.
+
+        Raises:
+            ValidationError: If the failed entry violates the lifecycle contract.
+            Exception: Serialization and cache failures propagate.
+        """
+        await self._store(
+            task_id,
+            TaskEntry(
+                task_type=task_type,
+                state=schemas_async_task.TASK_STATE_FAILED,
+                status=status_code,
+                message=message,
+                result=self._serialize_result(result),
+            ),
+        )
+
+    async def load(self, task_id: str, task_type: str) -> TaskEntry:
+        """Load a retained task owned by the requested workflow.
+
+        Args:
+            task_id: Identifier returned by ``start``.
+            task_type: Expected workflow category.
+
+        Returns:
+            The validated lifecycle snapshot.
+
+        Raises:
+            HTTPException: HTTP 404 when the task is missing, expired, or owned
+                by another workflow; HTTP 500 when retained state is invalid.
+            Exception: Cache failures propagate.
+        """
+        task_entry = await cache.get(task_id)
+        if not isinstance(task_entry, dict) or task_entry.get("task_type") != task_type:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+        try:
+            return TaskEntry.model_validate(task_entry)
+        except ValidationError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Invalid task state",
+            ) from exc
 
 
-async def complete_task(
-    task_id: str,
-    task_type: str,
-    result: BaseModel,
-    *,
-    status_code: int | None = None,
-    message: str | None = None,
-) -> None:
-    """Persist a successful terminal result for later polling.
-
-    Args:
-        task_id: Identifier returned by ``start_task``.
-        task_type: Task category that pollers must supply when loading the result.
-        result: Pydantic response model to serialize into JSON-compatible data.
-        status_code: Optional application or HTTP status associated with the result.
-        message: Optional caller-facing completion summary.
-
-    Returns:
-        None.
-
-    Raises:
-        ValidationError: If the completed entry violates the task persistence contract.
-        Exception: Result-serialization and cache-backend failures propagate.
-
-    Notes:
-        The completed entry replaces any value already stored under ``task_id`` and
-        starts a fresh configured asynchronous-task lifetime.
-    """
-    await _store(
-        task_id,
-        TaskEntry(
-            task_type=task_type,
-            state=schemas_async_task.TASK_STATE_COMPLETED,
-            status=status_code,
-            message=message,
-            result=_serialize_result(result),
-        ),
-    )
-
-
-async def fail_task(
-    task_id: str,
-    task_type: str,
-    *,
-    status_code: int | None = None,
-    message: str = "Task failed",
-    result: BaseModel | None = None,
-) -> None:
-    """Persist a failed terminal task for later polling.
-
-    Args:
-        task_id: Identifier returned by ``start_task``.
-        task_type: Task category that pollers must supply when loading the failure.
-        status_code: Optional application or HTTP failure status.
-        message: Caller-facing failure summary; defaults to ``"Task failed"``.
-        result: Optional structured response to preserve partial or baseline data.
-
-    Returns:
-        None.
-
-    Raises:
-        ValidationError: If the failed entry violates the task persistence contract.
-        Exception: Result-serialization and cache-backend failures propagate.
-
-    Notes:
-        The result is serialized into JSON-compatible data when supplied. The failed
-        entry replaces any value already stored under ``task_id`` and starts a fresh
-        configured asynchronous-task lifetime.
-    """
-    await _store(
-        task_id,
-        TaskEntry(
-            task_type=task_type,
-            state=schemas_async_task.TASK_STATE_FAILED,
-            status=status_code,
-            message=message,
-            result=_serialize_result(result),
-        ),
-    )
-
-
-async def load_task(task_id: str, task_type: str) -> TaskEntry:
-    """Load and validate a persisted task for a specific workflow.
-
-    Args:
-        task_id: Identifier returned by ``start_task``.
-        task_type: Expected task category.
-
-    Returns:
-        A validated task entry containing its lifecycle state and any optional
-        status, message, or serialized result.
-
-    Raises:
-        HTTPException: With status 404 when the identifier is missing, expired, or
-            belongs to another task type, or status 500 when a matching entry is
-            malformed.
-        Exception: Cache-backend failures propagate.
-    """
-    task_entry = await cache.get(task_id)
-    if not isinstance(task_entry, dict) or task_entry.get("task_type") != task_type:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
-    try:
-        return TaskEntry.model_validate(task_entry)
-    except ValidationError as exc:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Invalid task state") from exc
-
-
-def failure_status(task_entry: TaskEntry) -> int:
-    """Choose the public HTTP status for a failed task.
-
-    Args:
-        task_entry: Validated failed task entry returned by ``load_task``.
-
-    Returns:
-        The stored status when it is between 400 and 599 inclusive; otherwise
-        HTTP 500.
-    """
-    if task_entry.status is not None and 400 <= task_entry.status <= 599:
-        return task_entry.status
-    return status.HTTP_500_INTERNAL_SERVER_ERROR
+task_store: TaskStore = CacheTaskStore()

@@ -210,10 +210,19 @@ async def ai_get_asx_new_listings() -> list[models_events_listings.ListingEvent]
 
     Notes:
         Failed analysis attempts consume the five-attempt cap; Economy skips do not.
+        In Economy mode, an event is screened out only when it is explicitly not
+        underwritten and its public-offer close date is absent or earlier than the
+        current Sydney date. Unknown underwriting status and offers closing today
+        or later remain eligible.
         Per-listing research or assessment failures are represented as ``Failed``
         events rather than aborting the list. Upcoming price outlooks are explicitly
-        subjective and use the issue price only when one is available. The complete
-        list is cached only when every returned event completed analysis.
+        subjective and use the issue price only when one is available. Structurally
+        valid sources without matching provider citations are retained with
+        ``is_verified=False`` and explicit analysis warnings. Extraction is cached
+        for 24 hours. Listing research, assessment, and an all-completed result list
+        expire after one hour for listings within one day, six hours for listings
+        two through seven days away, and 24 hours for later listings; a result list
+        uses the shortest included lifetime.
     """
     today = _current_asx_date()
     events = _select_current_and_future_listings(

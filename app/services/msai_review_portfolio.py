@@ -487,14 +487,18 @@ async def ai_review_portfolio(
     Notes:
         Missing budgets are inferred at 10% of current value and may rise to 15%
         only when that enables a whole-share purchase. ``LongTerm`` reviews do
-        not trim retained overweight holdings and restrict exits to validated
-        critical or structural reasons; ``Swing`` reviews may use trims and
-        risk-control exits. An exit, a new target holding, or at least 20%
+        not trim retained overweight holdings: an AI ``TRIM`` assessment is
+        rejected, an ``EXIT`` requires a critical-risk or structural-change
+        reason, and a retained lower target is exposed as ``HOLD`` without a
+        sale action. ``Swing`` reviews may use trims and risk-control exits. An
+        exit, a new target holding, or at least 20%
         one-way turnover recommends a major rebalance. Without
         ``rebalance_plan``, such a recommendation intentionally has no action
         plan; otherwise actions use a balanced cash ledger and whole shares.
-        Non-major reviews receive a growth action plan. Validated stages and
-        final results are cached for one hour.
+        Non-major reviews receive a growth action plan. Structurally valid
+        sources remain in the result when provider citations cannot verify them,
+        with ``is_verified=False`` and ``CompleteWithWarnings`` review status.
+        Validated stages and final results are cached for one hour.
     """
 
     normalized_country = conv.country_to_iso2(country.strip())

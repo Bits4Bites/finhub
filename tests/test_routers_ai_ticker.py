@@ -1,6 +1,3 @@
-"""Tests for the dedicated ticker-analysis API routes."""
-
-import asyncio
 from unittest import mock
 
 import pytest
@@ -8,10 +5,7 @@ from fastapi.testclient import TestClient
 
 from app import config
 from app.main import app
-from app.routers import ai_ticker as router_ticker
-from app.routers import async_task as router_async_task
-from app.schemas import ai_ticker as schemas_ticker
-from app.schemas import async_task
+from app.models import ai_ticker as models_ticker
 from app.services import ai_helper
 from app.services import msai_analyze_ticker as services_ticker
 from tests import ticker_fixtures
@@ -20,385 +14,278 @@ client = TestClient(app)
 
 
 @pytest.fixture(autouse=True)
-def clear_task_cache():
-    asyncio.run(router_async_task.cache.clear())
-    yield
-    asyncio.run(router_async_task.cache.clear())
+def disable_ai_proxy(monkeypatch):
+    monkeypatch.setattr(config.settings_finhub_proxy, "proxy_mode", "None")
+    monkeypatch.setattr(config.settings_finhub_proxy, "url_ai_task_node", "")
 
 
-def _request_body() -> dict[str, str]:
-    return {"symbol": "nasdaq:aapl"}
+def _request_body(*, include_holding: bool = True) -> dict[str, object]:
+    body: dict[str, object] = {"symbol": " nasdaq:aapl "}
+    if include_holding:
+        body["current_holding"] = {"num_shares": 10, "avg_price": 80}
+    return body
 
 
-def _request_model() -> schemas_ticker.AnalyzeTickerRequest:
-    return schemas_ticker.AnalyzeTickerRequest.model_validate(_request_body())
-
-
-async def _seed_task(state: async_task.TaskState) -> str:
-    task_id, _ = await router_async_task.start_task("analyze_ticker", _request_model())
-    if state == async_task.TASK_STATE_COMPLETED:
-        result = schemas_ticker.AnalyzeTickerResponse(
-            status=200,
-            message="ok",
-            data=ticker_fixtures.make_analysis(),
-        )
-        await router_async_task.complete_task(
-            task_id,
-            "analyze_ticker",
-            result,
-            status_code=result.status,
-            message=result.message,
-        )
-    elif state == async_task.TASK_STATE_FAILED:
-        await router_async_task.fail_task(
-            task_id,
-            "analyze_ticker",
-            status_code=502,
-            message="Ticker research failed",
-        )
-    return task_id
-
-
-def test_sync_redirects_through_ai_proxy_handler():
-    with (
-        mock.patch.object(config.settings_finhub_proxy, "proxy_mode", "Redirect"),
-        mock.patch.object(
-            config.settings_finhub_proxy,
-            "url_ai_task_node",
-            "https://proxy.example/finhub/",
-        ),
-    ):
-        response = client.post(
-            "/ai/analyze_ticker",
-            json={"symbol": "NASDAQ:AAPL"},
-            follow_redirects=False,
+async def _analysis_for_request(
+    *,
+    symbol: str,
+    current_holding,
+) -> models_ticker.TickerAnalysis:
+    holding_snapshot = None
+    if current_holding is not None:
+        market_price = 100.0
+        cost_basis = current_holding.num_shares * current_holding.avg_price
+        market_value = current_holding.num_shares * market_price
+        profit_loss = market_value - cost_basis
+        holding_snapshot = models_ticker.TickerHoldingSnapshot(
+            num_shares=current_holding.num_shares,
+            avg_price=current_holding.avg_price,
+            currency="USD",
+            market_price=market_price,
+            cost_basis=cost_basis,
+            market_value=market_value,
+            unrealized_profit_loss=profit_loss,
+            unrealized_return_pct=profit_loss / cost_basis * 100,
+            break_even_price=current_holding.avg_price,
         )
 
-    assert response.status_code == 307
-    assert response.headers["location"] == "https://proxy.example/finhub/ai/analyze_ticker"
+    analysis = ticker_fixtures.make_analysis(holding=holding_snapshot)
+    analysis_data = analysis.model_dump(mode="python")
+    analysis_data["symbol"] = symbol
+    analysis_data["market_snapshot"]["symbol"] = symbol
+    return models_ticker.TickerAnalysis.model_validate(analysis_data)
 
 
-def test_async_start_redirects_through_ai_proxy_handler():
-    with (
-        mock.patch.object(config.settings_finhub_proxy, "proxy_mode", "Redirect"),
-        mock.patch.object(
-            config.settings_finhub_proxy,
-            "url_ai_task_node",
-            "https://proxy.example/finhub/",
-        ),
-    ):
-        response = client.post(
-            "/ai/start_analyze_ticker_async",
-            json=_request_body(),
-            follow_redirects=False,
-        )
-
-    assert response.status_code == 307
-    assert response.headers["location"] == "https://proxy.example/finhub/ai/start_analyze_ticker_async"
-
-
-def test_openapi_requires_async_start_body_and_documents_public_outcomes():
-    paths = client.get("/openapi.json").json()["paths"]
-    sync_responses = paths["/ai/analyze_ticker"]["post"]["responses"]
-    start_operation = paths["/ai/start_analyze_ticker_async"]["post"]
-    poll_responses = paths["/ai/poll_analyze_ticker_async"]["post"]["responses"]
-
-    assert start_operation["requestBody"]["required"] is True
-    assert {"200", "422", "500", "502"} <= set(sync_responses)
-    assert {"200", "202", "400", "404", "422", "500", "502"} <= set(start_operation["responses"])
-    assert {"200", "202", "404", "422", "500", "502"} <= set(poll_responses)
-
-
-def test_sync_returns_structured_analysis_and_passes_holding():
-    analysis = ticker_fixtures.make_analysis()
-    with mock.patch.object(
-        router_ticker.services_ticker,
-        "ai_analyze_ticker",
-        new_callable=mock.AsyncMock,
-        return_value=analysis,
-    ) as analyze:
-        response = client.post(
-            "/ai/analyze_ticker",
-            json={
-                "symbol": "nasdaq:aapl",
-                "current_holding": {"num_shares": 10, "avg_price": 80},
-            },
-        )
-
-    assert response.status_code == 200
-    assert response.json()["data"]["symbol"] == "NASDAQ:AAPL"
-    request = analyze.await_args.kwargs
-    assert request["symbol"] == "NASDAQ:AAPL"
-    assert request["current_holding"].num_shares == 10
-
-
-def test_sync_succeeds_without_optional_holding():
-    with mock.patch.object(
-        router_ticker.services_ticker,
-        "ai_analyze_ticker",
-        new_callable=mock.AsyncMock,
-        return_value=ticker_fixtures.make_analysis(),
-    ) as analyze:
-        response = client.post("/ai/analyze_ticker", json=_request_body())
-
-    assert response.status_code == 200
-    assert response.json()["data"]["symbol"] == "NASDAQ:AAPL"
-    assert analyze.await_args.kwargs["current_holding"] is None
-
-
-def test_request_rejects_removed_intent():
-    response = client.post(
-        "/ai/analyze_ticker",
-        json={
-            "symbol": "NASDAQ:AAPL",
-            "intent": "Focus on margins",
-        },
-    )
-
-    assert response.status_code == 422
-
-
-def test_sync_maps_input_error_to_422():
-    with mock.patch.object(
-        router_ticker.services_ticker,
-        "ai_analyze_ticker",
-        new_callable=mock.AsyncMock,
-        side_effect=services_ticker.TickerInputError("Unsupported security type"),
-    ):
-        response = client.post("/ai/analyze_ticker", json={"symbol": "FX:USD"})
-
-    assert response.status_code == 422
-    assert response.json()["status"] == 422
-    assert response.json()["message"]
-
-
-@pytest.mark.parametrize(
-    "error",
-    [
-        services_ticker.TickerVerificationError("Market data unavailable"),
-        services_ticker.TickerAnalysisAIError("AI output invalid"),
-    ],
-)
-def test_sync_maps_verification_and_explicit_ai_errors_to_502(error):
-    with mock.patch.object(
-        router_ticker.services_ticker,
-        "ai_analyze_ticker",
-        new_callable=mock.AsyncMock,
-        side_effect=error,
-    ):
-        response = client.post("/ai/analyze_ticker", json={"symbol": "NASDAQ:AAPL"})
-
-    assert response.status_code == 502
-    assert response.json()["status"] == 502
-    assert response.json()["message"]
-
-
-def test_sync_maps_rate_limit_to_502():
-    with mock.patch.object(
-        router_ticker.services_ticker,
-        "ai_analyze_ticker",
-        new_callable=mock.AsyncMock,
-        side_effect=ai_helper.LLMRateLimitError("Provider remained rate limited"),
+def test_sync_ticker_analysis_exposes_normalized_symbol_and_holding_snapshot():
+    with mock.patch(
+        "app.routers.ai_ticker.services_ticker.ai_analyze_ticker",
+        new=_analysis_for_request,
     ):
         response = client.post("/ai/analyze_ticker", json=_request_body())
 
-    assert response.status_code == 502
-    assert response.json()["status"] == 502
-    assert response.json()["message"]
-
-
-def test_request_rejects_invalid_holding():
-    response = client.post(
-        "/ai/analyze_ticker",
-        json={
-            "symbol": "NASDAQ:AAPL",
-            "current_holding": {"num_shares": 0, "avg_price": 80},
-        },
-    )
-
-    assert response.status_code == 422
-
-
-def test_async_start_to_poll_returns_service_analysis():
-    with mock.patch.object(
-        router_ticker.services_ticker,
-        "ai_analyze_ticker",
-        new_callable=mock.AsyncMock,
-        return_value=ticker_fixtures.make_analysis(),
-    ) as analyze:
-        start_response = client.post(
-            "/ai/start_analyze_ticker_async",
-            json=_request_body(),
-        )
-
-    task_id = start_response.json()["extra"]["task_id"]
-    poll_response = client.post(
-        "/ai/poll_analyze_ticker_async",
-        params={"task_id": task_id},
-    )
-
-    assert start_response.status_code == 202
-    assert start_response.json()["extra"]["state"] == async_task.TASK_STATE_RUNNING
-    assert poll_response.status_code == 200
-    assert poll_response.json()["extra"] == {
-        "task_id": task_id,
-        "state": async_task.TASK_STATE_COMPLETED,
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["symbol"] == "NASDAQ:AAPL"
+    assert data["market_snapshot"]["symbol"] == "NASDAQ:AAPL"
+    assert data["holding_snapshot"] == {
+        "num_shares": 10.0,
+        "avg_price": 80.0,
+        "currency": "USD",
+        "market_price": 100.0,
+        "cost_basis": 800.0,
+        "market_value": 1000.0,
+        "unrealized_profit_loss": 200.0,
+        "unrealized_return_pct": 25.0,
+        "break_even_price": 80.0,
     }
-    assert poll_response.json()["data"]["symbol"] == "NASDAQ:AAPL"
-    assert analyze.await_args.kwargs["symbol"] == "NASDAQ:AAPL"
-    assert analyze.await_args.kwargs["current_holding"] is None
+    assert data["recommendation"]["scope"] == "ExistingHolding"
 
 
-def test_async_poll_redirects_through_ai_proxy_handler():
-    with (
-        mock.patch.object(config.settings_finhub_proxy, "proxy_mode", "Redirect"),
-        mock.patch.object(
-            config.settings_finhub_proxy,
-            "url_ai_task_node",
-            "https://proxy.example/finhub/",
-        ),
+def test_sync_ticker_analysis_omits_holding_snapshot_for_a_new_position():
+    with mock.patch(
+        "app.routers.ai_ticker.services_ticker.ai_analyze_ticker",
+        new=_analysis_for_request,
     ):
         response = client.post(
-            "/ai/poll_analyze_ticker_async",
-            params={"task_id": "task-456"},
-            follow_redirects=False,
+            "/ai/analyze_ticker",
+            json=_request_body(include_holding=False),
         )
 
-    assert response.status_code == 307
-    assert response.headers["location"] == "https://proxy.example/finhub/ai/poll_analyze_ticker_async?task_id=task-456"
+    assert response.status_code == 200
+    assert "holding_snapshot" not in response.json()["data"]
+    assert response.json()["data"]["recommendation"]["scope"] == "NewPosition"
 
 
-def test_async_requires_body_when_starting():
-    response = client.post("/ai/start_analyze_ticker_async")
+def test_sync_ticker_analysis_exposes_fixed_forecast_horizons_and_ordered_ranges():
+    with mock.patch(
+        "app.routers.ai_ticker.services_ticker.ai_analyze_ticker",
+        new=_analysis_for_request,
+    ):
+        response = client.post(
+            "/ai/analyze_ticker",
+            json=_request_body(include_holding=False),
+        )
 
-    assert response.status_code == 400
-    assert response.json() == {
-        "status": 400,
-        "message": "Request body is required when starting a task",
-    }
+    assert response.status_code == 200
+    forecasts = response.json()["data"]["forecasts"]
+    assert [
+        (
+            forecast["horizon"],
+            forecast["horizon_days"],
+            forecast["period_end"],
+            forecast["expected_price_min"],
+            forecast["expected_price_max"],
+        )
+        for forecast in forecasts
+    ] == [
+        ("OneWeek", 7, "2026-08-31", 101.0, 104.0),
+        ("TwoWeeks", 14, "2026-09-07", 102.0, 105.0),
+        ("OneMonth", 30, "2026-09-23", 103.0, 106.0),
+        ("ThreeMonths", 90, "2026-11-22", 104.0, 107.0),
+    ]
 
 
 @pytest.mark.parametrize(
-    ("task_state", "expected_status"),
+    ("action", "expected_range", "absent_range"),
     [
-        (async_task.TASK_STATE_RUNNING, 202),
-        (async_task.TASK_STATE_COMPLETED, 200),
-        (async_task.TASK_STATE_FAILED, 502),
+        ("BUY", "buy_range", "sell_range"),
+        ("HOLD", None, None),
+        ("SELL", "sell_range", "buy_range"),
     ],
 )
-def test_async_start_deduplicates_running_completed_and_failed_tasks(task_state, expected_status):
-    task_id = asyncio.run(_seed_task(task_state))
+def test_sync_ticker_recommendation_exposes_only_the_action_specific_price_range(
+    action,
+    expected_range,
+    absent_range,
+):
+    async def analysis_with_recommendation(*, symbol, current_holding):
+        analysis = await _analysis_for_request(
+            symbol=symbol,
+            current_holding=current_holding,
+        )
+        analysis_data = analysis.model_dump(mode="python")
+        analysis_data["recommendation"] = ticker_fixtures.make_recommendation(
+            action=action,
+            holding=False,
+        )
+        return models_ticker.TickerAnalysis.model_validate(analysis_data)
 
-    response = client.post("/ai/start_analyze_ticker_async", json=_request_body())
+    with mock.patch(
+        "app.routers.ai_ticker.services_ticker.ai_analyze_ticker",
+        new=analysis_with_recommendation,
+    ):
+        response = client.post(
+            "/ai/analyze_ticker",
+            json=_request_body(include_holding=False),
+        )
 
-    assert response.status_code == expected_status
-    assert response.json()["extra"] == {"task_id": task_id, "state": task_state}
-
-
-@pytest.mark.parametrize(
-    ("task_state", "expected_status"),
-    [
-        (async_task.TASK_STATE_RUNNING, 202),
-        (async_task.TASK_STATE_COMPLETED, 200),
-        (async_task.TASK_STATE_FAILED, 502),
-    ],
-)
-def test_async_poll_returns_running_completed_and_failed_tasks(task_state, expected_status):
-    task_id = asyncio.run(_seed_task(task_state))
-
-    response = client.post(
-        "/ai/poll_analyze_ticker_async",
-        params={"task_id": f"  {task_id}  "},
-    )
-
-    assert response.status_code == expected_status
-    assert response.json()["extra"] == {"task_id": task_id, "state": task_state}
-    if task_state == async_task.TASK_STATE_COMPLETED:
-        assert response.json()["data"]["forecasts"][3]["horizon"] == "ThreeMonths"
+    assert response.status_code == 200
+    recommendation = response.json()["data"]["recommendation"]
+    assert recommendation["action"] == action
+    if expected_range is None:
+        assert "buy_range" not in recommendation
+        assert "sell_range" not in recommendation
     else:
-        assert "data" not in response.json()
+        assert recommendation[expected_range]["minimum"] <= recommendation[expected_range]["maximum"]
+        assert absent_range not in recommendation
 
 
-def test_async_poll_returns_404_for_missing_task():
-    response = client.post(
-        "/ai/poll_analyze_ticker_async",
-        params={"task_id": "missing-task"},
-    )
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"symbol": "NASDAQ:AAPL", "intent": "buy"},
+        {"symbol": "NASDAQ:AAPL", "current_holding": {"num_shares": 0, "avg_price": 100}},
+        {"symbol": "NASDAQ:AAPL", "current_holding": {"num_shares": 1, "avg_price": 0}},
+        {"symbol": "NASDAQ: AAPL"},
+        {"symbol": ""},
+    ],
+)
+def test_ticker_request_schema_rejects_undocumented_or_invalid_inputs(body):
+    response = client.post("/ai/analyze_ticker", json=body)
 
-    assert response.status_code == 404
-    assert response.json()["status"] == 404
+    assert response.status_code == 422
+    assert isinstance(response.json()["detail"], list)
 
 
-def test_async_poll_returns_500_for_invalid_task_state():
-    with mock.patch.object(
-        router_async_task.cache,
-        "get",
-        new_callable=mock.AsyncMock,
-        return_value={"task_type": "analyze_ticker", "state": "UNKNOWN"},
+@pytest.mark.parametrize(
+    ("error", "expected_status"),
+    [
+        (services_ticker.TickerInputError("unsupported symbol"), 422),
+        (services_ticker.TickerVerificationError("verification unavailable"), 502),
+        (services_ticker.TickerAnalysisAIError("analysis unavailable"), 502),
+        (ai_helper.LLMRateLimitError("rate-limit budget exhausted"), 502),
+    ],
+)
+def test_sync_ticker_analysis_maps_documented_service_failures(error, expected_status):
+    async def fail(**kwargs):
+        raise error
+
+    with mock.patch("app.routers.ai_ticker.services_ticker.ai_analyze_ticker", new=fail):
+        response = client.post("/ai/analyze_ticker", json=_request_body())
+
+    assert response.status_code == expected_status
+    assert response.json()["status"] == expected_status
+    assert "data" not in response.json()
+
+
+def test_async_ticker_lifecycle_returns_running_then_completed_holding_analysis(deferred_task_store):
+    with mock.patch(
+        "app.routers.ai_ticker.services_ticker.ai_analyze_ticker",
+        new=_analysis_for_request,
     ):
-        response = client.post(
-            "/ai/poll_analyze_ticker_async",
-            params={"task_id": "invalid-task"},
-        )
-
-    assert response.status_code == 500
-    assert response.json()["status"] == 500
-
-
-def test_async_explicit_ai_error_is_exposed_as_502_when_polled():
-    with mock.patch.object(
-        router_ticker.services_ticker,
-        "ai_analyze_ticker",
-        new_callable=mock.AsyncMock,
-        side_effect=services_ticker.TickerAnalysisAIError("AI output invalid"),
-    ):
-        start_response = client.post(
-            "/ai/start_analyze_ticker_async",
-            json=_request_body(),
-        )
-
-    poll_response = client.post(
-        "/ai/poll_analyze_ticker_async",
-        params={"task_id": start_response.json()["extra"]["task_id"]},
-    )
-
-    assert start_response.status_code == 202
-    assert poll_response.status_code == 502
-    assert poll_response.json()["status"] == 502
-    assert poll_response.json()["extra"]["state"] == async_task.TASK_STATE_FAILED
-
-
-def test_async_rate_limit_persists_502_and_duplicate_start_reuses_failure():
-    with mock.patch.object(
-        router_ticker.services_ticker,
-        "ai_analyze_ticker",
-        new_callable=mock.AsyncMock,
-        side_effect=ai_helper.LLMRateLimitError("Provider remained rate limited"),
-    ) as analyze:
-        start_response = client.post(
-            "/ai/start_analyze_ticker_async",
-            json=_request_body(),
-        )
-
-        task_id = start_response.json()["extra"]["task_id"]
-        poll_response = client.post(
+        started = client.post("/ai/start_analyze_ticker_async", json=_request_body())
+        task_id = started.json()["extra"]["task_id"]
+        running = client.post(
             "/ai/poll_analyze_ticker_async",
             params={"task_id": task_id},
         )
-        duplicate_response = client.post(
+        duplicate_running = client.post(
             "/ai/start_analyze_ticker_async",
             json=_request_body(),
         )
 
-    assert start_response.status_code == 202
-    assert poll_response.status_code == 502
-    assert poll_response.json()["extra"] == {
-        "task_id": task_id,
-        "state": async_task.TASK_STATE_FAILED,
-    }
-    assert duplicate_response.status_code == 502
-    assert duplicate_response.json()["extra"] == {
-        "task_id": task_id,
-        "state": async_task.TASK_STATE_FAILED,
-    }
-    analyze.assert_awaited_once()
+        deferred_task_store.release()
+
+        completed = client.post(
+            "/ai/poll_analyze_ticker_async",
+            params={"task_id": f"  {task_id}  "},
+        )
+        duplicate_completed = client.post(
+            "/ai/start_analyze_ticker_async",
+            json=_request_body(),
+        )
+
+    assert started.status_code == 202
+    assert started.json()["extra"]["state"] == "RUNNING"
+    assert running.status_code == 202
+    assert duplicate_running.json()["extra"] == {"task_id": task_id, "state": "RUNNING"}
+    assert completed.status_code == 200
+    assert completed.json()["extra"] == {"task_id": task_id, "state": "COMPLETED"}
+    assert completed.json()["data"]["holding_snapshot"]["market_value"] == 1000.0
+    assert duplicate_completed.json() == completed.json()
+
+
+def test_async_ticker_start_distinguishes_missing_and_invalid_bodies():
+    missing = client.post("/ai/start_analyze_ticker_async")
+    invalid = client.post("/ai/start_analyze_ticker_async", json={"symbol": ""})
+
+    assert missing.status_code == 400
+    assert missing.json()["status"] == 400
+    assert invalid.status_code == 422
+    assert isinstance(invalid.json()["detail"], list)
+
+
+@pytest.mark.parametrize(
+    ("error", "expected_status"),
+    [
+        (services_ticker.TickerInputError("unsupported symbol"), 422),
+        (services_ticker.TickerVerificationError("verification unavailable"), 502),
+        (services_ticker.TickerAnalysisAIError("analysis unavailable"), 502),
+        (ai_helper.LLMRateLimitError("rate-limit budget exhausted"), 502),
+        (RuntimeError("unexpected failure"), 500),
+    ],
+)
+def test_async_ticker_failures_are_pollable_and_deduplicated(
+    deferred_task_store,
+    error,
+    expected_status,
+):
+    async def fail(**kwargs):
+        raise error
+
+    with mock.patch("app.routers.ai_ticker.services_ticker.ai_analyze_ticker", new=fail):
+        started = client.post("/ai/start_analyze_ticker_async", json=_request_body())
+        task_id = started.json()["extra"]["task_id"]
+        deferred_task_store.release()
+        failed = client.post(
+            "/ai/poll_analyze_ticker_async",
+            params={"task_id": task_id},
+        )
+        duplicate = client.post("/ai/start_analyze_ticker_async", json=_request_body())
+
+    assert started.status_code == 202
+    assert failed.status_code == expected_status
+    assert failed.json()["extra"] == {"task_id": task_id, "state": "FAILED"}
+    assert "data" not in failed.json()
+    assert duplicate.status_code == expected_status
+    assert duplicate.json()["extra"] == {"task_id": task_id, "state": "FAILED"}

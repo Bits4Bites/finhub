@@ -24,7 +24,8 @@ async def verify_api_key(api_key: str | None = Security(_api_key_header)) -> Non
 
     Raises:
         HTTPException: With status 401 when authentication is enabled and the
-            supplied key is missing or invalid.
+            supplied key is missing or invalid. The application exposes this as
+            ``{"status": 401, "message": "Invalid or missing API key"}``.
 
     Notes:
         An empty server-side API key disables authentication. HTTP header names

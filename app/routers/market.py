@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Path, Response
 
+from ..schemas.base_req_resp import BaseResponse
 from ..services import market as services_market
 
 router = APIRouter(prefix="/market", tags=["market"])
@@ -22,7 +23,16 @@ SUPPORTED_INDEX_IDS = frozenset(
 )
 
 
-@router.get("/index/{index_id}", response_class=Response)
+@router.get(
+    "/index/{index_id}",
+    response_class=Response,
+    responses={
+        404: {
+            "model": BaseResponse,
+            "description": "The index identifier is unsupported or its bundled document is unavailable.",
+        }
+    },
+)
 def get_market_index(
     index_id: str = Path(
         description=(

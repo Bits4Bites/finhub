@@ -5,6 +5,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request, R
 from .. import config
 from ..schemas import async_task
 from ..schemas import events_listings as schemas_events_listings
+from ..schemas.base_req_resp import BaseResponse
 from ..services import msai_asx_listings as services_asx_listings
 from ..services import msai_us_listings as services_us_listings
 from ..utils import conv
@@ -14,6 +15,21 @@ from . import proxy_handler
 router = APIRouter(prefix="/events", tags=["events"])
 
 _NEW_LISTINGS_TASK_TYPE = "new_listings"
+_ASYNC_RESPONSES = {
+    202: {
+        "model": schemas_events_listings.ListingsAsyncResponse,
+        "description": "The new-listings task started or is still running.",
+    },
+    404: {"model": BaseResponse, "description": "The task was not found or has expired."},
+    422: router_async_task.validation_error_response(
+        "The required country or proxy forward-timeout header is missing, invalid, or unsupported.",
+        BaseResponse,
+    ),
+    500: {
+        "model": schemas_events_listings.ListingsAsyncResponse | BaseResponse,
+        "description": "The background request or retained task state failed.",
+    },
+}
 
 
 async def _get_new_listings_result(country: str) -> schemas_events_listings.ListingsResponse:
@@ -81,10 +97,10 @@ async def _run_new_listings_task(task_id: str, country: str) -> None:
         result = await _get_new_listings_result(country)
     except Exception:
         logging.exception("New listings task '%s' failed.", task_id)
-        await router_async_task.fail_task(task_id, _NEW_LISTINGS_TASK_TYPE)
+        await router_async_task.task_store.fail(task_id, _NEW_LISTINGS_TASK_TYPE)
         return
 
-    await router_async_task.complete_task(
+    await router_async_task.task_store.complete(
         task_id,
         _NEW_LISTINGS_TASK_TYPE,
         result,
@@ -95,7 +111,7 @@ async def _poll_task(
     task_id: str,
     response: Response,
 ) -> schemas_events_listings.ListingsAsyncResponse:
-    task_entry = await router_async_task.load_task(task_id, _NEW_LISTINGS_TASK_TYPE)
+    task_entry = await router_async_task.task_store.load(task_id, _NEW_LISTINGS_TASK_TYPE)
     task_state = task_entry.state
     task_info = async_task.AsyncTaskInfo(task_id=task_id, state=task_state)
     if task_state == async_task.TASK_STATE_RUNNING:
@@ -126,6 +142,7 @@ async def _poll_task(
     "/start_new_listings_async",
     response_model=schemas_events_listings.ListingsAsyncResponse,
     response_model_exclude_none=True,
+    responses=_ASYNC_RESPONSES,
 )
 async def start_new_listings_async(
     background_tasks: BackgroundTasks,
@@ -178,7 +195,7 @@ async def start_new_listings_async(
             detail="New listings supports only country 'AU' and 'US'",
         )
 
-    task_id, is_new = await router_async_task.start_task(_NEW_LISTINGS_TASK_TYPE, country)
+    task_id, is_new = await router_async_task.task_store.start(_NEW_LISTINGS_TASK_TYPE, country)
     if not is_new:
         return await _poll_task(task_id, response)
 
@@ -198,6 +215,7 @@ async def start_new_listings_async(
     "/poll_new_listings_async",
     response_model=schemas_events_listings.ListingsAsyncResponse,
     response_model_exclude_none=True,
+    responses=_ASYNC_RESPONSES,
 )
 async def poll_new_listings_async(
     request: Request,

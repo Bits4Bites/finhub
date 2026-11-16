@@ -7,7 +7,7 @@ A developer-first financial API hub for stock market data and AI-assisted invest
 ## ✨ Features
 
 - 📈 Stock quotes, detailed info, overviews, and historical data (via Yahoo Finance).
-- 📅 Upcoming dividends (AU, US, VN), earnings (AU, US), and new listings (AU).
+- 📅 Upcoming dividends (AU, US, VN), earnings (AU, US), and new listings (AU, US).
 - 🤖 AI-powered ticker and dividend analysis, portfolio construction and review, risk spotlighting, and need-based rebalance plans.
 - 🥇 Precious metals: gold/silver prices and historical data in multiple currencies.
 
@@ -82,14 +82,14 @@ Configuration is provided via environment variables, conventionally grouped into
 
 | Variable      | Default | Description                                            |
 |---------------|---------|--------------------------------------------------------|
-| `LISTEN_PORT` | `8000`  | Port the server listens on.                            |
+| `LISTEN_PORT` | `8000`  | Positive integer port. Missing, blank, malformed, zero, or negative values use `8000`. |
 | `RELOAD`      | `false` | Enable auto-reload on code changes (development only). |
 
 #### Application (`app_config.env`)
 
 | Variable         | Default | Description                                                                                                                           |
 |------------------|---------|---------------------------------------------------------------------------------------------------------------------------------------|
-| `FINHUB_API_KEY` | _empty_ | API key protecting `/stocks`, `/events`, `/ai`, and `/toz`. Root, health, and `/market` remain public. Empty disables authentication. |
+| `FINHUB_API_KEY` | _empty_ | API key protecting `/stocks`, `/events`, `/ai`, and `/toz`. Root, health, `/info`, and `/market` remain public. Empty disables authentication. |
 
 #### AI vendors (`ai_vendors.env`)
 
@@ -142,6 +142,9 @@ plus AI task APIs to the configured AI-task node. `/ai/vendors` always executes 
 node URL is empty, the request also executes locally. `Redirect` returns HTTP `307` and the client calls the next
 node. `Forward` makes the call from this server, relaying the request method, path, query, body, and end-to-end
 headers, then returns the upstream status, body, and end-to-end headers. `None` executes the request locally.
+When a node URL contains a base path, query, or fragment, FinHub preserves the base path as a prefix, appends the
+incoming path with one separating slash, places configured query parameters before incoming query parameters, and
+preserves the configured fragment.
 
 | Variable                    | Default | Description                                           |
 |-----------------------------|---------|-------------------------------------------------------|

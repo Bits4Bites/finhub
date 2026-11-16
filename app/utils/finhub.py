@@ -136,7 +136,9 @@ def analyze_past_dividends(data: pd.DataFrame, recovery_days_threshold: int = 28
     Notes:
         ``RecoveryDays`` counts calendar days until an available close reaches
         the previous close. It is null when no previous close exists or recovery
-        does not occur within the requested horizon.
+        does not occur within the requested horizon. The day exactly equal to
+        ``recovery_days_threshold`` is included, and each dividend event is
+        summarized independently.
     """
     if recovery_days_threshold < 1:
         raise ValueError("recovery_days_threshold must be positive")
@@ -229,6 +231,11 @@ def calc_bid_ask_spread_roll(data: pd.DataFrame) -> float | None:
 
     Raises:
         KeyError: If ``data`` does not contain ``Close``.
+
+    Notes:
+        For positive prices, a successful estimate is a positive proportion and
+        is unchanged when every closing price is scaled by the same positive
+        factor.
     """
     close = data["Close"]
     if len(data) < 2:

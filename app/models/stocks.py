@@ -1,42 +1,65 @@
 from __future__ import annotations
 
 import statistics
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
 
 import pandas as pd
 import yfinance as yf
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from ..utils import asset as asset_utils
 from ..utils import conv, yfutils
 from . import market_data as models_market_data
+from . import portfolio as models_portfolio
 from . import types
 
 
 class SymbolBase(BaseModel):
-    """Canonical identity and market metadata shared by symbol models."""
+    """Canonical identity and market metadata shared by symbol models.
 
-    symbol: str = Field(description="Provider-native security symbol.")
+    The constructor trims and uppercases symbol identifiers, canonicalizes
+    recognized exchange aliases, converts the provider country to an ISO
+    alpha-2 code, and requires an exchange-qualified normalized symbol.
+    """
+
+    symbol: types.NonEmptyString = Field(description="Trimmed, uppercase provider-native security symbol.")
     normalized_symbol: str = Field(
-        default="",
-        description="Canonical EXCHANGE:CODE symbol.",
+        min_length=1,
+        description="Canonical EXCHANGE:CODE symbol with a normalized exchange prefix.",
     )
-    currency: str = Field(description="Trading currency code.")
-    exchange: str = Field(description="Normalized exchange code.")
-    country: str = Field(description="ISO market country code.")
+    currency: types.CurrencyCode = Field(
+        description="Three-letter trading currency code, trimmed and uppercased from provider metadata."
+    )
+    exchange: types.NonEmptyString = Field(description="Normalized uppercase exchange code.")
+    country: types.CountryCode = Field(description="ISO 3166-1 alpha-2 market country code.")
+
+    @field_validator("normalized_symbol", mode="before")
+    @classmethod
+    def normalize_symbol(cls, value: object) -> object:
+        return models_portfolio.normalize_canonical_ticker(value)
 
     def __init__(self, ticker: yf.Ticker, /, **data: Any):
+        """Build normalized symbol identity from Yahoo Finance metadata.
+
+        Args:
+            ticker: Ticker providing symbol, currency, exchange, and country
+                metadata.
+            **data: Additional validated fields required by a subclass.
+        """
+        info = ticker.info
+        symbol = str(info.get("symbol") or "").strip().upper()
+        exchange = conv.normalize_exchange_code(str(info.get("fullExchangeName") or info.get("exchange") or ""))
+        country = conv.country_to_iso2(info.get("country") or info.get("region") or "US")
+        normalized_symbol = conv.to_exch_symb_format(ticker=ticker)
         super().__init__(
-            symbol=ticker.info.get("symbol"),
-            currency=ticker.info.get("currency"),
-            exchange=ticker.info.get("fullExchangeName", ticker.info.get("exchange")),
-            country=ticker.info.get("country", ticker.info.get("region", "US")),
+            symbol=symbol,
+            normalized_symbol=normalized_symbol,
+            currency=info.get("currency"),
+            exchange=exchange,
+            country=country,
             **data,
         )
-        self.country = conv.country_to_iso2(self.country)
-        self.exchange = conv.normalize_exchange_code(self.exchange)
-        self.normalized_symbol = conv.to_exch_symb_format(ticker=ticker)
 
 
 class SymbolOverview(SymbolBase):
@@ -119,6 +142,13 @@ class SymbolOverview(SymbolBase):
     )
 
     def __init__(self, ticker: yf.Ticker, /, **data: Any):
+        """Build a company overview from Yahoo Finance metadata.
+
+        Args:
+            ticker: Ticker providing company, financial, and classification
+                metadata.
+            **data: Additional validated fields required by a subclass.
+        """
         super().__init__(
             ticker,
             short_name=ticker.info.get("shortName"),
@@ -180,7 +210,7 @@ class SymbolDividend(BaseModel):
     )
     dividend_yield: float = Field(
         default=0.0,
-        description="Forward annual dividend yield as a percentage.",
+        description="Provider-reported forward annual dividend yield.",
     )
     payout_frequency: int = Field(
         default=0,
@@ -220,6 +250,17 @@ class SymbolDividend(BaseModel):
     )
 
     def __init__(self, ticker: yf.Ticker):
+        """Build dividend attributes from ticker metadata and daily history.
+
+        Args:
+            ticker: Ticker providing dividend metadata, exchange information,
+                and trailing daily history.
+
+        Notes:
+            Timestamp display values represent the same Unix instant in the
+            exchange timezone. Payout frequency counts positive dividend
+            observations in the trailing calendar year.
+        """
         super().__init__(
             dividend_rate=ticker.info.get("dividendRate", 0),
             dividend_yield=ticker.info.get("dividendYield", 0),
@@ -232,17 +273,15 @@ class SymbolDividend(BaseModel):
         )
         tz = yfutils.tz_from_yf_ticker(ticker)
         if self.ex_dividend_date:
-            self.ex_dividend_date_str = (
-                datetime.fromtimestamp(self.ex_dividend_date, tz=UTC)
-                .replace(tzinfo=tz)
-                .isoformat(sep=" ", timespec="seconds")
-            )
+            self.ex_dividend_date_str = datetime.fromtimestamp(
+                self.ex_dividend_date,
+                tz=tz,
+            ).isoformat(sep=" ", timespec="seconds")
         if self.last_dividend_date:
-            self.last_dividend_date_str = (
-                datetime.fromtimestamp(self.last_dividend_date, tz=UTC)
-                .replace(tzinfo=tz)
-                .isoformat(sep=" ", timespec="seconds")
-            )
+            self.last_dividend_date_str = datetime.fromtimestamp(
+                self.last_dividend_date,
+                tz=tz,
+            ).isoformat(sep=" ", timespec="seconds")
 
         # calculate payout frequency
         history365d = ticker.history(period="365d", interval="1d", auto_adjust=False)
@@ -255,7 +294,7 @@ class StockHistory(BaseModel):
 
     recent_high_price: float = Field(
         default=0.0,
-        description="Highest closing price in the recent 30-day lookback.",
+        description="Highest closing price in the latest 30 daily trading observations.",
     )
     pull_pack_percent: float = Field(
         default=0.0,
@@ -271,7 +310,7 @@ class StockHistory(BaseModel):
     )
     average_volume_30d: int = Field(
         default=0,
-        description="Average daily volume over the recent 30-day lookback.",
+        description="Average volume across the latest 30 daily trading observations.",
     )
     ma10: float = Field(default=0.0, description="Ten-day simple moving average.")
     ma20: float = Field(default=0.0, description="Twenty-day simple moving average.")
@@ -281,17 +320,28 @@ class StockHistory(BaseModel):
     rsi14: float = Field(default=0.0, description="Fourteen-period relative strength index.")
     history_90d: list[models_market_data.HistoryPoint] = Field(
         default=[],
-        description="Up to 90 recent daily price observations.",
+        description="Up to 90 latest daily trading observations when at least 30 are available.",
     )
 
     def __init__(self, ticker: yf.Ticker):
+        """Build recent technical history from daily Yahoo Finance observations.
+
+        Args:
+            ticker: Ticker providing at least 30 daily unadjusted price and
+                volume observations from the trailing 365 calendar days.
+
+        Notes:
+            Thirty-observation statistics use trading observations rather than
+            calendar days, and retained history contains at most the latest 90
+            observations.
+        """
         super().__init__()
-        currency = ticker.info.get("currency", "")
+        currency = str(ticker.info.get("currency") or "").strip().upper()
         history365d = ticker.history(period="365d", interval="1d", auto_adjust=False)
         history30d = history365d.iloc[-30:]
 
         # calculate pullback if any
-        self.recent_high_price = history30d["Close"].iloc[:-2].max()
+        self.recent_high_price = history30d["Close"].max()
         current_price = history365d["Close"].iloc[-1]
         self.pull_pack_percent = (
             (self.recent_high_price - current_price) * 100 / self.recent_high_price if self.recent_high_price else 0
@@ -300,12 +350,16 @@ class StockHistory(BaseModel):
         # calculate moving averages
         self.current_volume = int(history365d["Volume"].iloc[-1])
         self.yesterday_volume = int(history365d["Volume"].iloc[-2])
-        self.average_volume_30d = int(history30d["Volume"].iloc[:-2].mean())
-        self.ma10 = history365d["Close"].rolling(window=10).mean().iloc[-1] or 0.0
-        self.ma20 = history365d["Close"].rolling(window=20).mean().iloc[-1] or 0.0
-        self.ma50 = history365d["Close"].rolling(window=50).mean().iloc[-1] or 0.0
-        self.ma100 = history365d["Close"].rolling(window=100).mean().iloc[-1] or 0.0
-        self.ma200 = history365d["Close"].rolling(window=200).mean().iloc[-1] or 0.0
+        self.average_volume_30d = int(history30d["Volume"].mean())
+        for field_name, window in (
+            ("ma10", 10),
+            ("ma20", 20),
+            ("ma50", 50),
+            ("ma100", 100),
+            ("ma200", 200),
+        ):
+            value = history365d["Close"].rolling(window=window).mean().iloc[-1]
+            setattr(self, field_name, 0.0 if pd.isna(value) else value)
 
         # calculate Relative Strength Index (RSI)
         delta = history365d["Close"].diff()
@@ -317,7 +371,7 @@ class StockHistory(BaseModel):
 
         # store history for 90 days
         if len(history365d) >= 30:
-            num_points = 90 if len(history365d) >= 90 else 60 if len(history365d) >= 60 else 30
+            num_points = min(90, len(history365d))
             self.history_90d = [
                 models_market_data.HistoryPoint(
                     timestamp=int(history365d.index[-num_points + i].timestamp()),
@@ -353,6 +407,12 @@ class SymbolInfo(SymbolOverview):
     stock_history: StockHistory = Field(description="Recent history and technical indicators.")
 
     def __init__(self, ticker: yf.Ticker):
+        """Build a comprehensive symbol profile from one Yahoo Finance ticker.
+
+        Args:
+            ticker: Ticker used to build the overview, current quote, dividend
+                attributes, and recent technical history.
+        """
         super().__init__(
             ticker,
             stock_quote=models_market_data.StockQuote(ticker),

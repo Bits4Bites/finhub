@@ -20,17 +20,20 @@ _ASYNC_RESPONSES = {
         "description": "The portfolio-spotlight task started or is still running.",
     },
     404: {"model": BaseResponse, "description": "The task was not found."},
-    422: {
-        "model": schemas_spotlight.PortfolioSpotlightAsyncResponse | BaseResponse,
-        "description": "The start request or verified portfolio input is invalid.",
-    },
+    422: router_async_task.validation_error_response(
+        "The start request, verified portfolio input, or proxy forward-timeout header is invalid.",
+        schemas_spotlight.PortfolioSpotlightAsyncResponse,
+        BaseResponse,
+    ),
     500: {
         "model": schemas_spotlight.PortfolioSpotlightAsyncResponse | BaseResponse,
         "description": "The background task or retained task state failed unexpectedly.",
     },
     502: {
-        "model": schemas_spotlight.PortfolioSpotlightAsyncResponse,
-        "description": "Market verification, AI execution, structured output, or final validation failed.",
+        "model": schemas_spotlight.PortfolioSpotlightAsyncResponse | BaseResponse,
+        "description": (
+            "Market verification, AI execution, structured output, final validation, or proxy forwarding failed."
+        ),
     },
 }
 
@@ -72,13 +75,15 @@ async def _analyze(
     response_model=schemas_spotlight.PortfolioSpotlightResponse,
     response_model_exclude_none=True,
     responses={
-        422: {
-            "model": BaseResponse,
-            "description": "The request or verified portfolio input is invalid.",
-        },
+        422: router_async_task.validation_error_response(
+            "The request, verified portfolio input, or proxy forward-timeout header is invalid.",
+            BaseResponse,
+        ),
         502: {
             "model": BaseResponse,
-            "description": "Market verification, AI execution, structured output, or final validation failed.",
+            "description": (
+                "Market verification, AI execution, structured output, final validation, or proxy forwarding failed."
+            ),
         },
     },
 )
@@ -132,7 +137,7 @@ async def _run_task(
     try:
         result = await _analyze(request)
     except HTTPException as exc:
-        await router_async_task.fail_task(
+        await router_async_task.task_store.fail(
             task_id,
             _TASK_TYPE,
             status_code=exc.status_code,
@@ -141,14 +146,14 @@ async def _run_task(
         return
     except Exception:
         logging.exception("Spotlight portfolio task '%s' failed.", task_id)
-        await router_async_task.fail_task(
+        await router_async_task.task_store.fail(
             task_id,
             _TASK_TYPE,
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
         return
 
-    await router_async_task.complete_task(
+    await router_async_task.task_store.complete(
         task_id,
         _TASK_TYPE,
         result,
@@ -161,7 +166,7 @@ async def _poll_task(
     task_id: str,
     response: Response,
 ) -> schemas_spotlight.PortfolioSpotlightAsyncResponse:
-    task_entry = await router_async_task.load_task(task_id, _TASK_TYPE)
+    task_entry = await router_async_task.task_store.load(task_id, _TASK_TYPE)
     task_state = task_entry.state
     task_info = async_task.AsyncTaskInfo(task_id=task_id, state=task_state)
     if task_state == async_task.TASK_STATE_RUNNING:
@@ -172,7 +177,7 @@ async def _poll_task(
             extra=task_info,
         )
     if task_state == async_task.TASK_STATE_FAILED:
-        failure_status = router_async_task.failure_status(task_entry)
+        failure_status = task_entry.failure_http_status
         response.status_code = failure_status
         return schemas_spotlight.PortfolioSpotlightAsyncResponse(
             status=failure_status,
@@ -261,7 +266,7 @@ async def start_spotlight_portfolio_async(
             detail="Request body is required when starting a task",
         )
 
-    new_task_id, is_new = await router_async_task.start_task(_TASK_TYPE, request)
+    new_task_id, is_new = await router_async_task.task_store.start(_TASK_TYPE, request)
     if not is_new:
         return await _poll_task(new_task_id, response)
 

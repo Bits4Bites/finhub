@@ -15,18 +15,18 @@ Most responses follow a standard envelope format:
 `GET /market/index/{index_id}` returns the cached static JSON file directly. Redirect-mode proxy responses are
 HTTP `307` responses rather than standard envelopes.
 
-When executing locally, all `start_*_async` endpoints derive a process-local keyed task ID from the application
-version, task type, and normalized start input. Retrying an identical start while its record exists returns the same
-running or terminal task without scheduling duplicate work. Poll the matching `poll_*_async` endpoint with the
-returned task ID. Task records expire after one hour. Restarting the node that executes a task loses its process-local
-task records and changes the generated IDs.
+When executing locally, each `start_*_async` endpoint returns an opaque process-local task ID. Callers must not infer
+meaning or stability from its format. Retrying an equivalent start while its record exists may reuse the same running
+or terminal task without scheduling duplicate work. Poll the matching `poll_*_async` endpoint with the returned ID.
+Task records expire after one hour, and restarting the node that executes a task loses its process-local records.
 
 ---
 
 ## Authentication
 
 All endpoints under `/stocks`, `/events`, `/ai`, and `/toz` are protected by an API key. The
-root (`/`), health (`/health`), and market (`/market`) endpoints are open.
+root (`/`), health (`/health`), application-info (`/info`), and market (`/market`) endpoints are
+open.
 
 The server-side key is configured via the `FINHUB_API_KEY` environment variable (or the
 `app_config.env` file). When it is left empty, authentication is disabled and all requests are
@@ -68,6 +68,10 @@ Supported event and AI task APIs can execute locally or use another FinHub node.
 - `Forward` sends the method, path, query, body, and safe end-to-end headers from this server, then relays the
   upstream status, body, and safe end-to-end response headers. The client receives the remote node's task state
   and result as though it had called that node directly.
+
+If a configured node URL contains a base path, FinHub keeps that path as a prefix and appends the incoming request
+path with exactly one separating slash. Configured-node query parameters are retained before incoming request query
+parameters, and a configured URL fragment is preserved in the resulting redirect or forwarded target URL.
 
 Forward mode uses a 600-second read timeout by default. Clients may override it with
 `X-FinHub-Forward-Timeout-Seconds`, which must be finite, greater than zero, and no more than 86400 seconds.
@@ -187,7 +191,9 @@ Get stock quote at a specific date.
 | `symbol`   | path | Yes      | Stock symbol in YF format or `EXCHANGE:CODE`. |
 | `date_str` | path | Yes      | Date in `YYYY-MM-DD` format.                  |
 
-> If the date falls on a non-trading day, the API may return the quote for the most recent trading day before the given date.
+> If the date falls on a non-trading day, the API may return the most recent quote on or before that date within the
+> preceding 14 calendar days. If no eligible quote exists in that inclusive window, the HTTP response remains `200`
+> with application status `404` and no `data`.
 
 **Example:**
 
@@ -270,7 +276,7 @@ Starting a task returns HTTP `202`:
   "status": 202,
   "message": "Task started",
   "extra": {
-    "task_id": "4bd51f5da3146b1296ef9842d3bc6b3004df2b9c7a77cb608d63adfaa7caee94",
+    "task_id": "opaque-task-id",
     "state": "RUNNING"
   }
 }
@@ -331,7 +337,7 @@ Starting a task returns HTTP `202`:
   "status": 202,
   "message": "Task started",
   "extra": {
-    "task_id": "4bd51f5da3146b1296ef9842d3bc6b3004df2b9c7a77cb608d63adfaa7caee94",
+    "task_id": "opaque-task-id",
     "state": "RUNNING"
   }
 }
@@ -493,7 +499,7 @@ Starting a task returns HTTP `202`:
   "status": 202,
   "message": "Task started",
   "extra": {
-    "task_id": "4bd51f5da3146b1296ef9842d3bc6b3004df2b9c7a77cb608d63adfaa7caee94",
+    "task_id": "opaque-task-id",
     "state": "RUNNING"
   }
 }
@@ -561,8 +567,10 @@ curl -X POST 'http://localhost:8000/ai/analyze_dividend_event' \
 The response keeps deterministic ex-date open/close/intraday-low drops and later drawdown separate. It also returns
 recovery estimates for the pre-ex close and both strategy break-even targets, source-linked research, independent
 strategy assessments, and one of `DividendCapture`, `PostDividendDiscount`, `NoClearWinner`, or
-`InsufficientInsights`. If an AI stage fails, HTTP `502` still includes the deterministic baseline with
-`analysis_status=Failed`.
+`InsufficientInsights`. `Complete` means the workflow completed, not that every evidence-adjusted estimate was
+obtainable. When validated evidence is insufficient, those estimates may be `null` while strategy assessments remain
+and the recommendation is `InsufficientInsights`; this does not make the overall analysis `Failed`. If an AI stage
+fails, HTTP `502` still includes the deterministic baseline with `analysis_status=Failed`.
 
 Invalid market or event inputs return HTTP `400`; insufficient historical data returns HTTP `422`; and AI execution
 or structured-output failures return HTTP `502`.
@@ -1143,8 +1151,45 @@ curl 'http://localhost:8000/toz/silver/history?currency=EUR&days=7'
 
 ### `GET /`
 
-Returns a welcome message.
+Returns HTTP `200` with the complete body:
+
+```json
+{
+  "status": 200,
+  "message": "Welcome to the FinHub API!"
+}
+```
 
 ### `GET /health`
 
-Health check endpoint. Returns `{"status": 200, "message": "ok"}`.
+Reports process liveness without checking downstream market, crawler, or AI providers. It returns
+HTTP `200` with the complete body:
+
+```json
+{
+  "status": 200,
+  "message": "ok"
+}
+```
+
+### `GET /info`
+
+Returns HTTP `200` with application identity, version, and the server-local wall-clock time at
+response creation:
+
+```json
+{
+  "status": 200,
+  "message": "ok",
+  "data": {
+    "app_name": "FinHub API",
+    "app_description": "A developer-first financial API hub for stock market data.",
+    "version": "0.16.5",
+    "server_time": "2026-11-16 15:57:05"
+  }
+}
+```
+
+`server_time` is generated independently for every request in fixed-width
+`YYYY-MM-DD HH:MM:SS` form, using the server's local timezone and second precision. It deliberately
+does not include a timezone suffix.

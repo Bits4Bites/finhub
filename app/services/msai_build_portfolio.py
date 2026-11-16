@@ -271,8 +271,10 @@ async def ai_build_portfolio(
         contribution at 10% of current value and may increase it to 15% only
         when that enables a whole-share purchase. Supplied total and recurring
         budgets fund new purchases without forcing trims; utilized and
-        unallocated amounts reconcile to the budget. Validated stages and final
-        results are cached for one hour.
+        unallocated amounts reconcile to the budget. Structurally valid sources
+        remain in the result when provider citations cannot verify them, with
+        ``is_verified=False`` and ``CompleteWithWarnings`` construction status.
+        Validated stages and final results are cached for one hour.
     """
     normalized_country = conv.country_to_iso2(country.strip())
     if not normalized_country:

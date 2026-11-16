@@ -2,6 +2,7 @@
 
 import dataclasses
 import re
+import time
 from datetime import UTC, datetime
 from typing import Any
 
@@ -24,24 +25,25 @@ _ISO_DATETIME_PATTERN = re.compile(
 @dataclasses.dataclass(frozen=True, slots=True)
 class _CacheEntry:
     value: Any
+    expires_at: float
 
 
 _cache = SimpleMemoryCache()
 
 
 def generate_key(*items: str) -> str:
-    """Generate an application-version-scoped key for cached business data.
+    """Create an opaque cache identity for versioned business inputs.
 
     Args:
         items: Ordered string components that identify the cached result.
 
     Returns:
-        A deterministic cache key for the application version and supplied
-        components.
+        A deterministic key in the current application-version namespace.
 
     Notes:
-        Component order and boundaries are significant. Changing the application
-        version invalidates previously generated keys.
+        Repeating the same ordered components produces the same key. Different
+        component values, order, or application versions represent separate
+        cache entries.
     """
     hasher = xxhash.xxh3_128()
     for item in (version.VERSION, *items):
@@ -90,7 +92,12 @@ async def get(key: str, default: Any = None) -> Any:
         unexpired entry exists.
     """
     entry = await _cache.get(key)
-    return entry.value if isinstance(entry, _CacheEntry) else default
+    if not isinstance(entry, _CacheEntry):
+        return default
+    if time.monotonic() >= entry.expires_at:
+        await _cache.delete(key)
+        return default
+    return entry.value
 
 
 async def set(key: str, value: Any, ttl: float = _DEFAULT_TTL) -> bool:
@@ -104,10 +111,17 @@ async def set(key: str, value: Any, ttl: float = _DEFAULT_TTL) -> bool:
 
     Returns:
         ``True`` when the value is stored successfully.
+
+    Notes:
+        The value becomes unavailable when its full lifetime has elapsed.
     """
     if ttl <= 0:
         ttl = _DEFAULT_TTL
-    return await _cache.set(key, _CacheEntry(value), ttl=ttl)
+    return await _cache.set(
+        key,
+        _CacheEntry(value=value, expires_at=time.monotonic() + ttl),
+        ttl=ttl,
+    )
 
 
 async def exists(key: str) -> bool:
@@ -119,7 +133,8 @@ async def exists(key: str) -> bool:
     Returns:
         ``True`` when an unexpired entry exists; otherwise ``False``.
     """
-    return await _cache.exists(key)
+    missing = object()
+    return await get(key, missing) is not missing
 
 
 async def delete(key: str) -> bool:
@@ -131,6 +146,8 @@ async def delete(key: str) -> bool:
     Returns:
         ``True`` when an entry was deleted; otherwise ``False``.
     """
+    if not await exists(key):
+        return False
     return bool(await _cache.delete(key))
 
 
@@ -141,8 +158,8 @@ async def clear() -> bool:
         ``True`` when the cache is cleared successfully.
 
     Notes:
-        Expiry schedules belonging to cleared entries cannot affect values stored
-        after the clear.
+        Values written after a clear are independent of the lifetimes assigned
+        to removed entries.
     """
     global _cache
 

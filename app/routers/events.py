@@ -5,6 +5,7 @@ from fastapi import APIRouter, BackgroundTasks, Query, Request, Response, status
 from .. import config
 from ..schemas import async_task
 from ..schemas import events as schemas_event
+from ..schemas.base_req_resp import BaseResponse
 from ..services import event as services_event
 from ..utils import conv
 from . import async_task as router_async_task
@@ -13,6 +14,17 @@ from . import proxy_handler
 router = APIRouter(prefix="/events", tags=["events"])
 
 _UPCOMING_EARNINGS_TASK_TYPE = "upcoming_earnings"
+_ASYNC_RESPONSES = {
+    202: {
+        "model": schemas_event.UpcomingEarningsAsyncResponse,
+        "description": "The upcoming-earnings task started or is still running.",
+    },
+    404: {"model": BaseResponse, "description": "The task was not found or has expired."},
+    500: {
+        "model": schemas_event.UpcomingEarningsAsyncResponse | BaseResponse,
+        "description": "The background request or retained task state failed.",
+    },
+}
 
 
 async def _get_upcoming_earnings_event_result(country: str, index: str) -> schemas_event.UpcomingEarningsResponse:
@@ -80,10 +92,10 @@ async def _run_upcoming_earnings_event_task(task_id: str, country: str, index: s
         result = await _get_upcoming_earnings_event_result(country, index)
     except Exception:
         logging.exception("Upcoming earnings task '%s' failed.", task_id)
-        await router_async_task.fail_task(task_id, _UPCOMING_EARNINGS_TASK_TYPE)
+        await router_async_task.task_store.fail(task_id, _UPCOMING_EARNINGS_TASK_TYPE)
         return
 
-    await router_async_task.complete_task(
+    await router_async_task.task_store.complete(
         task_id,
         _UPCOMING_EARNINGS_TASK_TYPE,
         result,
@@ -94,7 +106,7 @@ async def _poll_upcoming_earnings_task(
     task_id: str,
     response: Response,
 ) -> schemas_event.UpcomingEarningsAsyncResponse:
-    task_entry = await router_async_task.load_task(task_id, _UPCOMING_EARNINGS_TASK_TYPE)
+    task_entry = await router_async_task.task_store.load(task_id, _UPCOMING_EARNINGS_TASK_TYPE)
     task_state = task_entry.state
     task_info = async_task.AsyncTaskInfo(task_id=task_id, state=task_state)
     if task_state == async_task.TASK_STATE_RUNNING:
@@ -125,6 +137,7 @@ async def _poll_upcoming_earnings_task(
     "/start_upcoming_earnings_async",
     response_model=schemas_event.UpcomingEarningsAsyncResponse,
     response_model_exclude_none=True,
+    responses=_ASYNC_RESPONSES,
 )
 async def start_upcoming_earnings_async(
     background_tasks: BackgroundTasks,
@@ -174,7 +187,7 @@ async def start_upcoming_earnings_async(
     if proxy_response is not None:
         return proxy_response
 
-    task_id, is_new = await router_async_task.start_task(
+    task_id, is_new = await router_async_task.task_store.start(
         _UPCOMING_EARNINGS_TASK_TYPE,
         conv.country_to_iso2(country),
         index.upper(),
@@ -195,6 +208,7 @@ async def start_upcoming_earnings_async(
     "/poll_upcoming_earnings_async",
     response_model=schemas_event.UpcomingEarningsAsyncResponse,
     response_model_exclude_none=True,
+    responses=_ASYNC_RESPONSES,
 )
 async def poll_upcoming_earnings_async(
     response: Response,

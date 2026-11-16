@@ -188,10 +188,15 @@ async def ai_get_us_new_listings() -> list[models_events_listings.ListingEvent]:
     Returns:
         Calendar events dated today or later in New York, ordered by date and then
         symbol. Calendar rows may retain ``None`` for unavailable offer prices and
-        deal sizes. Up to five crawl-ranked eligible IPOs receive cached or fresh
-        analysis and are marked ``Completed``. Unsupported, conflicting, ineligible,
-        crawl-failed, and unselected events remain ``Skipped``; selected events whose
-        cache or AI analysis fails are retained as ``Failed``.
+        deal sizes. Up to five eligible IPOs receive cached or fresh analysis and
+        are marked ``Completed``. Selection ranks a readiness score rounded to two
+        decimals from evidence completeness (50%), source reliability (20%),
+        financial depth (15%), and crawl efficiency (15%). Ties then prefer greater
+        raw completeness, reliability, deal sizes of at least USD 50 million,
+        larger deal size, larger market capitalization, the sooner listing date,
+        and finally symbol order. Unsupported, conflicting, ineligible,
+        crawl-failed, and unselected events remain ``Skipped``; selected events
+        whose cache or AI analysis fails are retained as ``Failed``.
 
     Raises:
         RuntimeError: If the IPO calendar cannot be fetched.
@@ -203,6 +208,15 @@ async def ai_get_us_new_listings() -> list[models_events_listings.ListingEvent]:
         time. Per-company crawl failures do not abort the response. Cached analysis
         is reused only when it matches the event; cache, research, or assessment
         failures for a selected event are reported through that event's status.
+        Research and analysis expire after one hour for listings within one day,
+        six hours for listings two through seven days away, and 24 hours for later
+        listings. Valid sources without matching provider citations are retained
+        with ``is_verified=False`` and explicit analysis warnings. Expected returns
+        are application-derived as ``(scenario_price / issue_price - 1) * 100``,
+        rounded to two decimals, using the fixed offer price or lower bound of a
+        range. They describe a hypothetical offer-price allocation, not an
+        aftermarket entry; without an offer-price anchor, absolute price and return
+        ranges are ``None``.
     """
     today = _current_ny_date()
     events = _select_current_and_future_listings(

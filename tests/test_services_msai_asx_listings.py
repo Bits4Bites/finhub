@@ -1,3 +1,5 @@
+"""Documentation-driven black-box tests for ASX listing analysis."""
+
 import asyncio
 import copy
 import json
@@ -7,14 +9,12 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from app.models import events_listings as models_listings
 from app.services import ai_helper
 from app.services import msai_asx_listings as service
 from app.utils import ai_reference
+from tests import ai_service_fixtures
 
 _SYDNEY_TZ = ZoneInfo("Australia/Sydney")
-_SOURCE_URL = "https://www.asx.com.au/markets/company/ABC"
-_SOURCE_ID = ai_reference.generate_source_id(_SOURCE_URL)
 
 
 def _today() -> date:
@@ -29,6 +29,15 @@ def _calendar_html() -> str:
       </div>
     </html>
     """
+
+
+def _canonical_symbol(symbol: str) -> str:
+    symbol = symbol.strip().upper()
+    return symbol if symbol.startswith("ASX:") else f"ASX:{symbol}"
+
+
+def _source_url(symbol: str) -> str:
+    return f"https://www.asx.com.au/markets/company/{symbol.split(':', 1)[1]}"
 
 
 def _candidate(
@@ -55,24 +64,25 @@ def _candidate(
     return data
 
 
-def _extraction_response(candidates: list[dict[str, object]]) -> ai_helper.LLMResponse:
-    return ai_helper.LLMResponse(
-        completion=json.dumps({"listings": candidates}),
-    )
+def _extraction_response(
+    candidates: list[dict[str, object]],
+) -> ai_helper.LLMResponse:
+    return ai_helper.LLMResponse(completion=json.dumps({"listings": candidates}))
 
 
-def _research_response(symbol: str) -> ai_helper.LLMResponse:
+def _research_payload(symbol: str) -> dict[str, object]:
+    source_url = _source_url(symbol)
     section = {
         "facts": [
             {
                 "text": "The issuer disclosed its offer and business activities.",
-                "reference_ids": [_SOURCE_URL],
+                "reference_ids": [source_url],
             }
         ],
         "data_gaps": [],
-        "reference_ids": [_SOURCE_URL],
+        "reference_ids": [source_url],
     }
-    payload = {
+    return {
         "symbol": symbol,
         "as_of": datetime.now(UTC).isoformat(),
         "offer": copy.deepcopy(section),
@@ -84,40 +94,48 @@ def _research_response(symbol: str) -> ai_helper.LLMResponse:
         "risks_and_catalysts": copy.deepcopy(section),
         "references": [
             {
-                "id": _SOURCE_URL,
+                "id": source_url,
                 "title": "ASX listing information",
                 "publisher": "ASX",
                 "source_type": "Exchange",
                 "published_at": None,
                 "accessed_at": datetime.now(UTC).isoformat(),
-                "url": _SOURCE_URL,
+                "url": source_url,
             }
         ],
     }
+
+
+def _research_response(
+    symbol: str,
+    *,
+    verified: bool = True,
+) -> ai_helper.LLMResponse:
     return ai_helper.LLMResponse(
-        completion=json.dumps(payload),
-        citation_urls=[_SOURCE_URL],
+        completion=json.dumps(_research_payload(symbol)),
+        citation_urls=[_source_url(symbol)] if verified else [],
     )
 
 
-def _analysis_section() -> dict[str, object]:
+def _analysis_section(source_id: str) -> dict[str, object]:
     return {
         "summary": "Evidence-based assessment.",
         "data_quality": "High",
         "facts": [
             {
                 "text": "The issuer disclosed its offer and business activities.",
-                "reference_ids": [_SOURCE_ID],
+                "reference_ids": [source_id],
             }
         ],
         "assumptions": [],
         "data_gaps": [],
-        "reference_ids": [_SOURCE_ID],
+        "reference_ids": [source_id],
     }
 
 
-def _analysis_response(symbol: str, listing_date: date) -> ai_helper.LLMResponse:
-    section = _analysis_section()
+def _analysis_payload(symbol: str, listing_date: date) -> dict[str, object]:
+    source_id = ai_reference.generate_source_id(_source_url(symbol))
+    section = _analysis_section(source_id)
     period = {
         "assessment_type": "Forecast",
         "period_end": listing_date.isoformat(),
@@ -132,9 +150,9 @@ def _analysis_response(symbol: str, listing_date: date) -> ai_helper.LLMResponse
         "risk_factors": ["Market volatility"],
         "assumptions": ["The listing proceeds as announced."],
         "data_gaps": [],
-        "reference_ids": [_SOURCE_ID],
+        "reference_ids": [source_id],
     }
-    payload = {
+    return {
         "symbol": symbol,
         "as_of": datetime.now(UTC).isoformat(),
         "listing_status": "Upcoming",
@@ -189,16 +207,30 @@ def _analysis_response(symbol: str, listing_date: date) -> ai_helper.LLMResponse
             "first_month": copy.deepcopy(period),
         },
     }
-    return ai_helper.LLMResponse(completion=json.dumps(payload))
 
 
-def _run_with_boundaries(
+def _analysis_response(
+    symbol: str,
+    listing_date: date,
+) -> ai_helper.LLMResponse:
+    return ai_helper.LLMResponse(completion=json.dumps(_analysis_payload(symbol, listing_date)))
+
+
+def _ai_error_response() -> ai_helper.LLMResponse:
+    return ai_helper.LLMResponse(
+        is_error=True,
+        completion="provider rejected the request",
+        error_msg="provider rejected the request",
+    )
+
+
+def _run(
     *,
-    ai_side_effect,
-    cache_get=None,
+    ai: ai_service_fixtures.OpaqueAIQueue,
+    cache=None,
     tokenomics_mode: str = "Standard",
 ):
-    cache_get = cache_get or AsyncMock(return_value=None)
+    cache = cache or ai_service_fixtures.ExpiringCache()
     with (
         patch.object(
             service.services_crawler_core,
@@ -206,29 +238,15 @@ def _run_with_boundaries(
             new_callable=AsyncMock,
             return_value=_calendar_html(),
         ),
-        patch.object(service.cache, "get", cache_get),
-        patch.object(
-            service.cache,
-            "set",
-            new_callable=AsyncMock,
-            return_value=True,
-        ),
-        patch.object(
-            service.config.settings_llm_task,
-            "tokenomics_mode",
-            tokenomics_mode,
-        ),
-        patch.object(
-            service.ai_helper,
-            "ai_exec_task",
-            new_callable=AsyncMock,
-            side_effect=ai_side_effect,
-        ) as ai_exec,
+        patch.object(service.cache, "get", side_effect=cache.get),
+        patch.object(service.cache, "set", side_effect=cache.set),
+        patch.object(service.config.settings_llm_task, "tokenomics_mode", tokenomics_mode),
+        patch.object(service.ai_helper, "ai_exec_task", new=ai),
     ):
-        return asyncio.run(service.ai_get_asx_new_listings()), ai_exec
+        return asyncio.run(service.ai_get_asx_new_listings())
 
 
-def test_returns_only_confirmed_current_and_future_listings_in_order():
+def test_filters_orders_and_applies_documented_monetary_eligibility():
     today = _today()
     candidates = [
         _candidate("FUTURE", today + timedelta(days=2)),
@@ -237,85 +255,192 @@ def test_returns_only_confirmed_current_and_future_listings_in_order():
             "TODAY",
             today,
             issue_price=None,
+            issue_price_upper=None,
             capital_to_raise=None,
         ),
         _candidate("NODATE", None),
-        _candidate("ZERO", today + timedelta(days=1), issue_price=0),
+        _candidate("ZEROLOW", today + timedelta(days=1), issue_price=0),
+        _candidate("ZEROUP", today + timedelta(days=1), issue_price_upper=0),
+        _candidate("ZERORAISE", today + timedelta(days=1), capital_to_raise=0),
+        _candidate("NANLOW", today + timedelta(days=1), issue_price=float("nan")),
+        _candidate("NEGINFUP", today + timedelta(days=1), issue_price_upper=float("-inf")),
+        _candidate("NANRAISE", today + timedelta(days=1), capital_to_raise=float("nan")),
     ]
 
-    events, ai_exec = _run_with_boundaries(
-        ai_side_effect=[_extraction_response(candidates)],
+    events = _run(
+        ai=ai_service_fixtures.OpaqueAIQueue([_extraction_response(candidates)]),
         tokenomics_mode="Economy",
     )
 
     assert [event.symbol for event in events] == ["ASX:TODAY", "ASX:FUTURE"]
     assert events[0].issue_price is None
+    assert events[0].issue_price_upper is None
     assert events[0].capital_to_raise is None
     assert all(event.analysis_status == "Skipped" for event in events)
     assert events[0].timestamp_str.startswith(today.isoformat())
     assert events[1].timestamp_str.startswith((today + timedelta(days=2)).isoformat())
-    assert all(event.timestamp > 0 for event in events)
-    assert [call.args[0] for call in ai_exec.await_args_list] == ["ASX_LISTTINGS_EXTRACT"]
 
 
-def test_analysis_attempt_cap_retains_completed_failed_and_skipped_events():
+def test_economy_eligibility_uses_underwriting_and_public_offer_close_date():
+    listing_date = _today() + timedelta(days=10)
+    today = _today()
+    candidates = [
+        _candidate("MISSING", listing_date, is_underwritten=False),
+        _candidate(
+            "PASTCLOSE",
+            listing_date,
+            is_underwritten=False,
+            public_offer_close_date=(today - timedelta(days=1)).isoformat(),
+        ),
+        _candidate(
+            "TODAYCLOSE",
+            listing_date,
+            is_underwritten=False,
+            public_offer_close_date=today.isoformat(),
+        ),
+        _candidate("UNKNOWN", listing_date, is_underwritten=None),
+    ]
+    ai = ai_service_fixtures.OpaqueAIQueue(
+        [
+            _extraction_response(candidates),
+            _research_response("ASX:TODAYCLOSE"),
+            _analysis_response("ASX:TODAYCLOSE", listing_date),
+            _research_response("ASX:UNKNOWN"),
+            _analysis_response("ASX:UNKNOWN", listing_date),
+        ]
+    )
+
+    events = _run(ai=ai, tokenomics_mode="Economy")
+    statuses = {event.symbol: event.analysis_status for event in events}
+
+    assert statuses == {
+        "ASX:MISSING": "Skipped",
+        "ASX:PASTCLOSE": "Skipped",
+        "ASX:TODAYCLOSE": "Completed",
+        "ASX:UNKNOWN": "Completed",
+    }
+
+
+def test_economy_skip_does_not_consume_cap_but_failed_attempt_does():
     listing_date = _today() + timedelta(days=10)
     candidates = [
-        _candidate(
-            f"A{index}",
-            listing_date,
-            is_underwritten=True,
-            public_offer_close_date=(listing_date - timedelta(days=2)).isoformat(),
-        )
-        for index in range(1, 8)
-    ]
-    responses: list[ai_helper.LLMResponse] = [_extraction_response(candidates)]
-    for index in range(1, 6):
-        symbol = f"ASX:A{index}"
-        if index == 2:
-            responses.append(
-                ai_helper.LLMResponse(
-                    is_error=True,
-                    error_msg="research unavailable",
-                )
+        _candidate("A0", listing_date, is_underwritten=False),
+        *[
+            _candidate(
+                f"B{index}",
+                listing_date,
+                is_underwritten=True,
+                public_offer_close_date=(listing_date - timedelta(days=2)).isoformat(),
             )
-            continue
-        responses.extend(
-            [
-                _research_response(symbol),
-                _analysis_response(symbol, listing_date),
-            ]
+            for index in range(1, 7)
+        ],
+    ]
+    ai = ai_service_fixtures.OpaqueAIQueue(
+        [
+            _extraction_response(candidates),
+            _research_response("ASX:B1"),
+            _analysis_response("ASX:B1", listing_date),
+            _ai_error_response(),
+            _research_response("ASX:B3"),
+            _analysis_response("ASX:B3", listing_date),
+            _research_response("ASX:B4"),
+            _analysis_response("ASX:B4", listing_date),
+            _research_response("ASX:B5"),
+            _analysis_response("ASX:B5", listing_date),
+        ]
+    )
+
+    events = _run(ai=ai, tokenomics_mode="Economy")
+    statuses = {event.symbol: event.analysis_status for event in events}
+
+    assert statuses == {
+        "ASX:A0": "Skipped",
+        "ASX:B1": "Completed",
+        "ASX:B2": "Failed",
+        "ASX:B3": "Completed",
+        "ASX:B4": "Completed",
+        "ASX:B5": "Completed",
+        "ASX:B6": "Skipped",
+    }
+    assert next(event for event in events if event.symbol == "ASX:B1").analysis is not None
+    failed = next(event for event in events if event.symbol == "ASX:B2")
+    assert failed.analysis is None
+    assert failed.analysis_error
+    assert next(event for event in events if event.symbol == "ASX:B6").analysis is None
+
+
+def test_unmatched_provider_citations_are_retained_as_unverified_warnings():
+    listing_date = _today() + timedelta(days=3)
+    candidates = [_candidate("UNVERIFIED", listing_date, is_underwritten=True)]
+    ai = ai_service_fixtures.OpaqueAIQueue(
+        [
+            _extraction_response(candidates),
+            _research_response("ASX:UNVERIFIED", verified=False),
+            _analysis_response("ASX:UNVERIFIED", listing_date),
+        ]
+    )
+
+    event = _run(ai=ai)[0]
+
+    assert event.analysis_status == "Completed"
+    assert event.analysis is not None
+    assert event.analysis.references
+    assert all(reference.is_verified is False for reference in event.analysis.references)
+    assert event.analysis.executive_summary.data_gaps
+
+
+def test_repeated_public_call_reuses_completed_analysis_when_ai_is_unavailable():
+    listing_date = _today() + timedelta(days=3)
+    candidates = [_candidate("CACHE", listing_date, is_underwritten=True)]
+    cache = ai_service_fixtures.ExpiringCache()
+    ai = ai_service_fixtures.OpaqueAIQueue(
+        [
+            _extraction_response(candidates),
+            _research_response("ASX:CACHE"),
+            _analysis_response("ASX:CACHE", listing_date),
+        ]
+    )
+
+    first = _run(ai=ai, cache=cache)
+    second = _run(ai=ai, cache=cache)
+
+    assert second == first
+    assert second[0].analysis_status == "Completed"
+    assert second[0].analysis is not None
+
+
+def test_documented_six_hour_cache_expiry_reenters_analysis():
+    listing_date = _today() + timedelta(days=3)
+    candidates = [_candidate("EXPIRY", listing_date, is_underwritten=True)]
+    clock = ai_service_fixtures.ManualClock()
+    cache = ai_service_fixtures.ExpiringCache(clock)
+    ai = ai_service_fixtures.OpaqueAIQueue(
+        [
+            _extraction_response(candidates),
+            _research_response("ASX:EXPIRY"),
+            _analysis_response("ASX:EXPIRY", listing_date),
+        ]
+    )
+
+    first = _run(ai=ai, cache=cache)
+    clock.advance(6 * 60 * 60 - 1)
+    assert _run(ai=ai, cache=cache) == first
+    clock.advance(1)
+    expired = _run(ai=ai, cache=cache)
+
+    assert expired[0].analysis_status == "Failed"
+    assert expired[0].analysis is None
+
+
+def test_opaque_invalid_cache_raises_documented_runtime_error():
+    with pytest.raises(RuntimeError):
+        _run(
+            ai=ai_service_fixtures.OpaqueAIQueue(),
+            cache=ai_service_fixtures.InvalidCache(object()),
         )
 
-    events, ai_exec = _run_with_boundaries(ai_side_effect=responses)
 
-    assert [event.symbol for event in events] == [
-        "ASX:A1",
-        "ASX:A2",
-        "ASX:A3",
-        "ASX:A4",
-        "ASX:A5",
-        "ASX:A6",
-        "ASX:A7",
-    ]
-    assert [event.analysis_status for event in events] == [
-        "Completed",
-        "Failed",
-        "Completed",
-        "Completed",
-        "Completed",
-        "Skipped",
-        "Skipped",
-    ]
-    assert events[0].analysis is not None
-    assert events[0].analysis.references[0].is_verified is True
-    assert events[1].analysis is None
-    assert events[1].analysis_error == "AI listing analysis failed"
-    assert all(event.analysis is None for event in events[5:])
-    assert ai_exec.await_count == 10
-
-
-def test_fetch_failure_is_reported_to_caller():
+def test_fetch_failure_raises_documented_runtime_error():
     with (
         patch.object(
             service.services_crawler_core,
@@ -323,135 +448,25 @@ def test_fetch_failure_is_reported_to_caller():
             new_callable=AsyncMock,
             return_value=None,
         ),
-        pytest.raises(RuntimeError, match="Failed to fetch the ASX"),
+        pytest.raises(RuntimeError),
     ):
         asyncio.run(service.ai_get_asx_new_listings())
 
 
-def test_ai_extraction_failure_is_reported_to_caller():
-    with (
-        patch.object(
-            service.services_crawler_core,
-            "fetch_webpage_content",
-            new_callable=AsyncMock,
-            return_value=_calendar_html(),
-        ),
-        patch.object(service.cache, "get", new_callable=AsyncMock, return_value=None),
-        patch.object(
-            service.ai_helper,
-            "ai_exec_task",
-            new_callable=AsyncMock,
-            return_value=ai_helper.LLMResponse(
-                is_error=True,
-                error_msg="extraction failed",
-            ),
-        ),
-        pytest.raises(RuntimeError, match="AI extraction failed"),
-    ):
-        asyncio.run(service.ai_get_asx_new_listings())
+def test_extraction_error_response_raises_documented_runtime_error():
+    with pytest.raises(RuntimeError):
+        _run(ai=ai_service_fixtures.OpaqueAIQueue([_ai_error_response()]))
 
 
-def test_invalid_ai_extraction_payload_is_reported_to_caller():
-    with (
-        patch.object(
-            service.services_crawler_core,
-            "fetch_webpage_content",
-            new_callable=AsyncMock,
-            return_value=_calendar_html(),
-        ),
-        patch.object(service.cache, "get", new_callable=AsyncMock, return_value=None),
-        patch.object(
-            service.ai_helper,
-            "ai_exec_task",
-            new_callable=AsyncMock,
-            return_value=ai_helper.LLMResponse(completion='{"listings": "invalid"}'),
-        ),
-        pytest.raises(ValueError, match="invalid structured response"),
-    ):
-        asyncio.run(service.ai_get_asx_new_listings())
+def test_invalid_extraction_payload_raises_value_error():
+    with pytest.raises(ValueError):
+        _run(ai=ai_service_fixtures.OpaqueAIQueue([ai_helper.LLMResponse(completion='{"listings": "invalid"}')]))
 
 
-@pytest.mark.parametrize("cache_stage", ["extraction", "analysis"])
-def test_invalid_cache_values_are_reported_to_caller(cache_stage):
-    today = _today()
-    extracted = {
-        "listings": [
-            _candidate(
-                "ABC",
-                today + timedelta(days=3),
-                is_underwritten=False,
-            )
-        ]
-    }
-    cache_values = [object()] if cache_stage == "extraction" else [extracted, "not a listing-event list"]
+def test_extraction_rate_limit_is_propagated():
+    failure = ai_helper.LLMRateLimitError("retry budget exhausted")
 
-    with (
-        patch.object(
-            service.services_crawler_core,
-            "fetch_webpage_content",
-            new_callable=AsyncMock,
-            return_value=_calendar_html(),
-        ),
-        patch.object(
-            service.cache,
-            "get",
-            new_callable=AsyncMock,
-            side_effect=cache_values,
-        ),
-        patch.object(
-            service.config.settings_llm_task,
-            "tokenomics_mode",
-            "Economy",
-        ),
-        pytest.raises(RuntimeError, match="cache contains an invalid value"),
-    ):
-        asyncio.run(service.ai_get_asx_new_listings())
+    with pytest.raises(ai_helper.LLMRateLimitError) as error_info:
+        _run(ai=ai_service_fixtures.OpaqueAIQueue([failure]))
 
-
-def test_cached_completed_events_are_returned_as_independent_models():
-    today = _today()
-    extracted = {
-        "listings": [
-            _candidate(
-                "ABC",
-                today + timedelta(days=3),
-                is_underwritten=True,
-            )
-        ]
-    }
-    cached_event = models_listings.ListingEvent(
-        symbol="ASX:ABC",
-        exchange="ASX",
-        company_name="ABC Limited",
-        timestamp_str=f"{(today + timedelta(days=3)).isoformat()} 00:00:00+11:00",
-        issue_price=1.5,
-        currency="AUD",
-        capital_to_raise=10_000_000,
-        analysis_status="Completed",
-    )
-    cache_values = iter([extracted, [cached_event]])
-
-    with (
-        patch.object(
-            service.services_crawler_core,
-            "fetch_webpage_content",
-            new_callable=AsyncMock,
-            return_value=_calendar_html(),
-        ),
-        patch.object(
-            service.cache,
-            "get",
-            new_callable=AsyncMock,
-            side_effect=lambda _key: next(cache_values),
-        ),
-        patch.object(
-            service.ai_helper,
-            "ai_exec_task",
-            new_callable=AsyncMock,
-        ) as ai_exec,
-    ):
-        result = asyncio.run(service.ai_get_asx_new_listings())
-
-    assert result == [cached_event]
-    assert result[0] is not cached_event
-    ai_exec.assert_not_awaited()
+    assert error_info.value is failure

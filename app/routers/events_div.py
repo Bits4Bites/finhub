@@ -5,6 +5,7 @@ import fastapi
 from .. import config
 from ..schemas import async_task
 from ..schemas import events as schemas_event
+from ..schemas.base_req_resp import BaseResponse
 from ..services import events_div as services_events_div
 from ..utils import asset as asset_utils
 from ..utils import conv
@@ -14,6 +15,17 @@ from . import proxy_handler
 router = fastapi.APIRouter(prefix="/events", tags=["events"])
 
 _UPCOMING_DIVIDENDS_TASK_TYPE = "upcoming_dividends"
+_ASYNC_RESPONSES = {
+    202: {
+        "model": schemas_event.UpcomingDividendsAsyncResponse,
+        "description": "The upcoming-dividends task started or is still running.",
+    },
+    404: {"model": BaseResponse, "description": "The task was not found or has expired."},
+    500: {
+        "model": schemas_event.UpcomingDividendsAsyncResponse | BaseResponse,
+        "description": "The background request or retained task state failed.",
+    },
+}
 
 
 async def _get_upcoming_dividends_event_result(country: str, index: str) -> schemas_event.UpcomingDividendsResponse:
@@ -106,10 +118,10 @@ async def _run_upcoming_dividends_event_task(task_id: str, country: str, index: 
         result = await _get_upcoming_dividends_event_result(country, index)
     except Exception:
         logging.exception("Upcoming dividends task '%s' failed.", task_id)
-        await router_async_task.fail_task(task_id, _UPCOMING_DIVIDENDS_TASK_TYPE)
+        await router_async_task.task_store.fail(task_id, _UPCOMING_DIVIDENDS_TASK_TYPE)
         return
 
-    await router_async_task.complete_task(
+    await router_async_task.task_store.complete(
         task_id,
         _UPCOMING_DIVIDENDS_TASK_TYPE,
         result,
@@ -120,7 +132,7 @@ async def _poll_upcoming_dividends_task(
     task_id: str,
     response: fastapi.Response,
 ) -> schemas_event.UpcomingDividendsAsyncResponse:
-    task_entry = await router_async_task.load_task(task_id, _UPCOMING_DIVIDENDS_TASK_TYPE)
+    task_entry = await router_async_task.task_store.load(task_id, _UPCOMING_DIVIDENDS_TASK_TYPE)
     task_state = task_entry.state
     task_info = async_task.AsyncTaskInfo(task_id=task_id, state=task_state)
     if task_state == async_task.TASK_STATE_RUNNING:
@@ -151,6 +163,7 @@ async def _poll_upcoming_dividends_task(
     "/start_upcoming_dividends_async",
     response_model=schemas_event.UpcomingDividendsAsyncResponse,
     response_model_exclude_none=True,
+    responses=_ASYNC_RESPONSES,
 )
 async def start_upcoming_dividends_async(
     background_tasks: fastapi.BackgroundTasks,
@@ -200,7 +213,7 @@ async def start_upcoming_dividends_async(
     if proxy_response is not None:
         return proxy_response
 
-    task_id, is_new = await router_async_task.start_task(
+    task_id, is_new = await router_async_task.task_store.start(
         _UPCOMING_DIVIDENDS_TASK_TYPE,
         conv.country_to_iso2(country),
         index.upper(),
@@ -221,6 +234,7 @@ async def start_upcoming_dividends_async(
     "/poll_upcoming_dividends_async",
     response_model=schemas_event.UpcomingDividendsAsyncResponse,
     response_model_exclude_none=True,
+    responses=_ASYNC_RESPONSES,
 )
 async def poll_upcoming_dividends_async(
     response: fastapi.Response,

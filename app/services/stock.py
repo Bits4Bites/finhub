@@ -139,7 +139,7 @@ def get_stock_quotes(symbols: list[str]) -> dict[str, models_market_data.StockQu
         Quotes for equities (``EQUITY``), ETFs (``ETF``), and mutual funds
         (``MUTUALFUND``), keyed by the original requested symbols. Missing
         symbols and other or missing quote types are omitted. An empty input
-        returns an empty dictionary.
+        returns an empty dictionary. Included entries retain request order.
 
     Notes:
         Provider, conversion, and model-validation failures propagate.
@@ -166,13 +166,14 @@ def get_stock_quote_at_date(symbol: str, date_str: str) -> models_market_data.Hi
 
     Args:
         symbol: A Yahoo symbol or an ``EXCHANGE:CODE`` identifier.
-        date_str: Requested date in ``YYYY-MM-DD`` format.
+        date_str: Requested date in strict, zero-padded ``YYYY-MM-DD`` format.
 
     Returns:
         The most recent daily quote on or before the requested date within the
         preceding 14 calendar days for an equity (``EQUITY``), ETF (``ETF``),
-        or mutual fund (``MUTUALFUND``). Returns ``None`` for an invalid date,
-        another or missing quote type, or unavailable history.
+        or mutual fund (``MUTUALFUND``). Returns ``None`` for an invalid or
+        non-zero-padded date, another or missing quote type, or unavailable
+        history.
 
     Notes:
         Provider, conversion, and model-validation failures propagate.
@@ -184,6 +185,8 @@ def get_stock_quote_at_date(symbol: str, date_str: str) -> models_market_data.Hi
         try:
             requested_date = datetime.strptime(date_str, "%Y-%m-%d").date()
         except ValueError:
+            return None
+        if requested_date.strftime("%Y-%m-%d") != date_str:
             return None
         end_date = requested_date + timedelta(days=1)
         start_date = requested_date - timedelta(days=14)

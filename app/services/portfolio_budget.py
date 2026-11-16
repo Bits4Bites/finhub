@@ -65,13 +65,17 @@ def extract_budget(
             digits. A recurring amount must also state a weekly, fortnightly,
             monthly, quarterly, or annual frequency.
         default_currency: Three-letter currency used when the amount omits a
-            currency and to interpret ambiguous ``$`` or ``¥`` symbols.
+            currency and to interpret ambiguous ``$`` or ``¥`` symbols. Supported
+            explicit codes are ``AUD``, ``CAD``, ``CHF``, ``CNY``, ``EUR``,
+            ``GBP``, ``HKD``, ``INR``, ``JPY``, ``NZD``, ``SGD``, ``USD``, and
+            ``VND``.
 
     Returns:
-        A normalized supplied budget, including the matching theme excerpt. When
-        no budget expression is present, returns ``NotProvided`` with no amount,
-        currency, frequency, or source text; the default currency is not copied
-        into that result.
+        A normalized supplied budget, including the matching theme excerpt.
+        One-off amounts return ``Total``; amounts with a supported recurring
+        frequency return ``Recurring``. When no budget expression is present,
+        returns ``NotProvided`` with no amount, currency, frequency, or source
+        text; the default currency is not copied into that result.
 
     Raises:
         PortfolioInputError: If an amount is non-positive or unsupported, a
@@ -79,8 +83,14 @@ def extract_budget(
             or distinct budget expressions make the available amount ambiguous.
 
     Notes:
+        ``€`` resolves to ``EUR``, ``£`` to ``GBP``, and ``A$`` to ``AUD``.
+        ``$`` uses an ``AUD``, ``CAD``, ``HKD``, ``NZD``, ``SGD``, or ``USD``
+        default when available and otherwise resolves to ``USD``. ``¥`` uses a
+        ``CNY`` or ``JPY`` default when available and otherwise resolves to
+        ``JPY``.
         Price limits, percentages, salaries, and similar non-budget amounts are
         ignored unless the surrounding text identifies them as investable funds.
+        This function never infers an amount from current holdings.
     """
     if _NEGATIVE_BUDGET_PATTERN.search(investor_theme):
         raise portfolio_verification.PortfolioInputError("Investment budget must be a positive finite amount")
@@ -250,7 +260,8 @@ def allocate_whole_shares(
     Args:
         budget: Positive finite amount available for purchases.
         desired_amounts: Non-empty mapping from each ticker to its non-negative
-            finite desired spend.
+            finite desired spend. These targets do not need to sum to
+            ``budget``.
         prices: Positive finite per-share prices for exactly the same tickers as
             ``desired_amounts``.
 
@@ -259,12 +270,19 @@ def allocate_whole_shares(
         utilized budget as a ``Decimal``. Quantities are non-negative integers,
         and utilized budget is the sum of quantity times price without exceeding
         ``budget``. Affordable extra shares are included only when they improve
-        alignment with the requested spends.
+        absolute alignment with the requested spends. Results do not depend on
+        mapping insertion order.
 
     Raises:
         ValueError: If the budget, desired amounts, or prices violate the input
-            constraints, their ticker sets differ, or the requested allocation
-            would exceed the available budget.
+            constraints, their ticker sets differ, or the whole-share allocation
+            implied by the requested spends would exceed the available budget.
+
+    Notes:
+        The result may leave money unallocated or assign zero shares to every
+        ticker when no affordable purchase improves alignment with the requested
+        spends. Extra-share ties prefer the larger desired spend, then the
+        lexicographically greater ticker.
     """
     if not budget.is_finite() or budget <= 0:
         raise ValueError("Whole-share allocation budget must be a positive finite amount")

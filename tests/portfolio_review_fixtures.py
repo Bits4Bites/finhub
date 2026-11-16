@@ -5,7 +5,6 @@ from datetime import UTC, datetime
 from app.models import ai as models_ai
 from app.models import ai_portfolio_review as models_review
 from app.models import portfolio as models_portfolio
-from app.services import msai_review_portfolio as service
 from app.services import portfolio_verification
 from app.utils import ai_reference
 
@@ -103,26 +102,26 @@ def total_budget(amount: float = 500) -> models_portfolio.PortfolioBudget:
     )
 
 
-def plan(
+def plan_data(
     *,
     portfolio_id: str = "portfolio-id",
     budget: models_portfolio.PortfolioBudget | None = None,
     strategy: models_review.PortfolioReviewStrategy = "LongTerm",
-) -> service._PortfolioReviewPlan:
-    return service._PortfolioReviewPlan(
-        portfolio_id=portfolio_id,
-        strategy=strategy,
-        budget=budget or total_budget(),
-        objective="Review alignment with durable long-term growth.",
-        theme_interpretation="Favor durable compounding with controlled concentration.",
-        research_priorities=["Issuer", "Portfolio", "Valuation"],
-        strength_questions=["Which holdings provide durable quality?"],
-        risk_questions=["Where is concentration material?", "Which issuer risks challenge the thesis?"],
-        holding_questions=["Does each thesis remain intact?", "What role does each holding serve?"],
-        target_design_questions=["Which weights improve alignment?", "Can new cash fund the target?"],
-        candidate_addition_queries=[],
-        data_gaps=[],
-    )
+) -> dict[str, object]:
+    return {
+        "portfolio_id": portfolio_id,
+        "strategy": strategy,
+        "budget": (budget or total_budget()).model_dump(mode="json"),
+        "objective": "Review alignment with durable long-term growth.",
+        "theme_interpretation": "Favor durable compounding with controlled concentration.",
+        "research_priorities": ["Issuer", "Portfolio", "Valuation"],
+        "strength_questions": ["Which holdings provide durable quality?"],
+        "risk_questions": ["Where is concentration material?", "Which issuer risks challenge the thesis?"],
+        "holding_questions": ["Does each thesis remain intact?", "What role does each holding serve?"],
+        "target_design_questions": ["Which weights improve alignment?", "Can new cash fund the target?"],
+        "candidate_addition_queries": [],
+        "data_gaps": [],
+    }
 
 
 def research_response_data(*, portfolio_id: str = "portfolio-id") -> dict[str, object]:
@@ -152,23 +151,6 @@ def research_response_data(*, portfolio_id: str = "portfolio-id") -> dict[str, o
             for company_name, url in zip(COMPANY_NAMES, SOURCE_URLS, strict=True)
         ],
     }
-
-
-def research(*, portfolio_id: str = "portfolio-id") -> service._PortfolioResearch:
-    data = research_response_data(portfolio_id=portfolio_id)
-    data["as_of"] = "2026-08-23T00:00:00Z"
-    data["references"] = [
-        {
-            **reference,
-            "id": source_id,
-            "accessed_at": "2026-08-23T00:00:00Z",
-            "is_verified": True,
-        }
-        for reference, source_id in zip(data["references"], SOURCE_IDS, strict=True)
-    ]
-    for claim, source_id in zip(data["claims"], SOURCE_IDS, strict=True):
-        claim["reference_ids"] = [source_id]
-    return service._PortfolioResearch.model_validate(data)
 
 
 def assessment_data(*, portfolio_id: str = "portfolio-id") -> dict[str, object]:
@@ -226,10 +208,6 @@ def assessment_data(*, portfolio_id: str = "portfolio-id") -> dict[str, object]:
     }
 
 
-def assessment(*, portfolio_id: str = "portfolio-id") -> service._PortfolioAssessmentDraft:
-    return service._PortfolioAssessmentDraft.model_validate(assessment_data(portfolio_id=portfolio_id))
-
-
 def target_data(*, portfolio_id: str = "portfolio-id") -> dict[str, object]:
     return {
         "portfolio_id": portfolio_id,
@@ -254,10 +232,6 @@ def target_data(*, portfolio_id: str = "portfolio-id") -> dict[str, object]:
         ],
         "data_gaps": [],
     }
-
-
-def target(*, portfolio_id: str = "portfolio-id") -> service._PortfolioTargetDraft:
-    return service._PortfolioTargetDraft.model_validate(target_data(portfolio_id=portfolio_id))
 
 
 def target_positions() -> list[models_review.PortfolioReviewTargetPosition]:

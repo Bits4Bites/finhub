@@ -166,7 +166,9 @@ async def ai_spotlight_portfolio(
     Notes:
         Verification always precedes the final-analysis cache lookup so the
         cache identity reflects current market data. Validated AI stages and
-        final analyses are cached for one hour.
+        final analyses are cached for one hour. Structurally valid sources
+        remain in the result when provider citations cannot verify them, with
+        ``is_verified=False`` and ``CompleteWithWarnings`` analysis status.
     """
 
     normalized_country = conv.country_to_iso2(country.strip())

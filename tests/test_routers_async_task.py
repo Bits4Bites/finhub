@@ -3,325 +3,186 @@ from unittest import mock
 
 import pytest
 from fastapi import HTTPException
+from fastapi.testclient import TestClient
 
+from app import config
+from app.main import app
+from app.models import event as models_event
 from app.routers import async_task as router_async_task
-from app.schemas import async_task as schemas_async_task
-from app.schemas import base_req_resp
+from app.schemas.base_req_resp import BaseResponse
+from app.utils import cache
 
-_EXPIRY_TTL_SECONDS = 10.0
-_BEFORE_EXPIRY_SECONDS = 9.0
-_PAST_EXPIRY_SECONDS = 2.0
-_PAST_RESET_EXPIRY_SECONDS = 9.0
+client = TestClient(app)
+
+START_EARNINGS = "/events/start_upcoming_earnings_async"
+POLL_EARNINGS = "/events/poll_upcoming_earnings_async"
 
 
-class _ControllableTaskCache:
-    def __init__(self):
-        self._now = 0.0
-        self._entries: dict[str, tuple[object, float]] = {}
-
-    async def get(self, key: str, default: object = None) -> object:
-        entry = self._entries.get(key)
-        if entry is None:
-            return default
-        value, expires_at = entry
-        if self._now >= expires_at:
-            self._entries.pop(key, None)
-            return default
-        return value
-
-    async def set(self, key: str, value: object, ttl: float) -> bool:
-        self._entries[key] = (value, self._now + ttl)
-        return True
-
-    def advance(self, seconds: float) -> None:
-        self._now += seconds
+def _earnings_event() -> models_event.UpcomingEarningsEvent:
+    return models_event.UpcomingEarningsEvent(
+        symbol="NASDAQ:AAPL",
+        exchange="NASDAQ",
+        company_name="Apple Inc.",
+        timestamp_str="2026-12-01 08:00:00-05:00",
+        status="estimated",
+        report_period="Q4",
+    )
 
 
 @pytest.fixture(autouse=True)
-def clear_task_cache():
-    asyncio.run(router_async_task.cache.clear())
-    yield
-    asyncio.run(router_async_task.cache.clear())
+def disable_proxy(monkeypatch):
+    monkeypatch.setattr(config.settings_finhub_proxy, "proxy_mode", "None")
+    monkeypatch.setattr(config.settings_finhub_proxy, "url_web_crawl_node", "")
+    monkeypatch.setattr(config.settings_finhub_proxy, "url_ai_task_node", "")
 
 
-@pytest.fixture
-def controllable_task_cache(monkeypatch):
-    task_cache = _ControllableTaskCache()
-    monkeypatch.setattr(router_async_task.cache, "get", task_cache.get)
-    monkeypatch.setattr(router_async_task.cache, "set", task_cache.set)
-    monkeypatch.setattr(schemas_async_task, "ASYNC_TASK_TTL", _EXPIRY_TTL_SECONDS)
-    return task_cache
+def test_http_lifecycle_runs_then_completes_and_reuses_the_terminal_task(deferred_task_store):
+    service = mock.AsyncMock(return_value=[_earnings_event()])
+    with mock.patch("app.routers.events.services_event.get_us_upcoming_earnings_events", new=service):
+        started = client.get(START_EARNINGS, params={"country": "US", "index": "SP500"})
+        task_id = started.json()["extra"]["task_id"]
+        running = client.get(POLL_EARNINGS, params={"task_id": task_id})
+        duplicate_running = client.get(START_EARNINGS, params={"country": "usa", "index": "sp500"})
+
+        deferred_task_store.release()
+
+        completed = client.get(POLL_EARNINGS, params={"task_id": f"  {task_id}  "})
+        duplicate_completed = client.get(START_EARNINGS, params={"country": "United States", "index": "SP500"})
+
+    assert started.status_code == 202
+    assert isinstance(task_id, str) and task_id
+    assert started.json()["extra"]["state"] == "RUNNING"
+    assert running.status_code == 202
+    assert running.json()["extra"] == {"task_id": task_id, "state": "RUNNING"}
+    assert duplicate_running.json()["extra"] == {"task_id": task_id, "state": "RUNNING"}
+    assert completed.status_code == 200
+    assert completed.json()["extra"] == {"task_id": task_id, "state": "COMPLETED"}
+    assert [event["symbol"] for event in completed.json()["data"]] == ["NASDAQ:AAPL"]
+    assert duplicate_completed.json() == completed.json()
 
 
-def test_start_task_persists_a_loadable_running_entry():
-    async def run_scenario():
-        task_id, is_new = await router_async_task.start_task("example", "input")
-        return task_id, is_new, await router_async_task.load_task(task_id, "example")
+def test_terminal_update_restarts_the_documented_task_lifetime(deferred_task_store):
+    service = mock.AsyncMock(side_effect=RuntimeError("source unavailable"))
+    with mock.patch("app.routers.events.services_event.get_us_upcoming_earnings_events", new=service):
+        started = client.get(START_EARNINGS, params={"country": "US"})
+        task_id = started.json()["extra"]["task_id"]
 
-    task_id, is_new, task_entry = asyncio.run(run_scenario())
+        deferred_task_store.advance(9)
+        deferred_task_store.release()
+        deferred_task_store.advance(2)
+        retained_failure = client.get(POLL_EARNINGS, params={"task_id": task_id})
+        duplicate_failure = client.get(START_EARNINGS, params={"country": "US"})
 
-    assert task_id
-    assert is_new is True
-    assert isinstance(task_entry, router_async_task.TaskEntry)
-    assert task_entry.state == schemas_async_task.TASK_STATE_RUNNING
-    assert task_entry.status is None
-    assert task_entry.message is None
-    assert task_entry.result is None
+        deferred_task_store.advance(9)
+        expired = client.get(POLL_EARNINGS, params={"task_id": task_id})
+
+    assert retained_failure.status_code == 500
+    assert retained_failure.json()["extra"] == {"task_id": task_id, "state": "FAILED"}
+    assert duplicate_failure.status_code == 500
+    assert duplicate_failure.json()["extra"] == {"task_id": task_id, "state": "FAILED"}
+    assert expired.status_code == 404
+    assert expired.json()["status"] == 404
 
 
-def test_start_task_deduplicates_concurrent_identical_inputs():
-    async def run_scenario():
-        starts = await asyncio.gather(
-            router_async_task.start_task("example", "same-input"),
-            router_async_task.start_task("example", "same-input"),
+def test_expired_running_task_is_not_pollable_and_can_be_started_again(deferred_task_store):
+    service = mock.AsyncMock(return_value=[_earnings_event()])
+    with mock.patch("app.routers.events.services_event.get_us_upcoming_earnings_events", new=service):
+        first = client.get(START_EARNINGS, params={"country": "US"})
+        task_id = first.json()["extra"]["task_id"]
+        deferred_task_store.advance(10)
+
+        expired = client.get(POLL_EARNINGS, params={"task_id": task_id})
+        restarted = client.get(START_EARNINGS, params={"country": "US"})
+
+    assert expired.status_code == 404
+    assert restarted.status_code == 202
+    assert restarted.json()["extra"]["state"] == "RUNNING"
+
+
+def test_polling_unknown_or_other_workflow_tasks_returns_not_found(deferred_task_store):
+    service = mock.AsyncMock(return_value=[_earnings_event()])
+    with mock.patch("app.routers.events.services_event.get_us_upcoming_earnings_events", new=service):
+        started = client.get(START_EARNINGS, params={"country": "US"})
+
+    unknown = client.get(POLL_EARNINGS, params={"task_id": "opaque-unknown-task"})
+    other_workflow = client.get(
+        "/events/poll_upcoming_dividends_async",
+        params={"task_id": started.json()["extra"]["task_id"]},
+    )
+
+    assert unknown.status_code == 404
+    assert other_workflow.status_code == 404
+
+
+def test_cache_task_store_conforms_to_public_lifecycle_and_workflow_boundaries():
+    async def exercise_store():
+        await cache.clear()
+        store = router_async_task.CacheTaskStore()
+
+        task_id, created = await store.start("workflow-a", "normalized-input")
+        duplicate_id, duplicate_created = await store.start("workflow-a", "normalized-input")
+        running = await store.load(task_id, "workflow-a")
+
+        completed_result = BaseResponse(status=200, message="ok", data={"value": 1})
+        await store.complete(
+            task_id,
+            "workflow-a",
+            completed_result,
+            status_code=200,
+            message="complete",
         )
-        task_entry = await router_async_task.load_task(starts[0][0], "example")
-        return starts, task_entry
+        completed = await store.load(task_id, "workflow-a")
+        terminal_id, terminal_created = await store.start("workflow-a", "normalized-input")
 
-    starts, task_entry = asyncio.run(run_scenario())
+        other_task_id, other_created = await store.start("workflow-b", "normalized-input")
+        with pytest.raises(HTTPException) as wrong_workflow:
+            await store.load(task_id, "workflow-b")
 
-    assert starts[0][0] == starts[1][0]
-    assert sorted(is_new for _, is_new in starts) == [False, True]
-    assert task_entry.state == schemas_async_task.TASK_STATE_RUNNING
-
-
-def test_start_task_expires_after_the_configured_lifetime(controllable_task_cache):
-    async def run_scenario():
-        task_id, _ = await router_async_task.start_task("example", "expiring-start")
-        controllable_task_cache.advance(_BEFORE_EXPIRY_SECONDS)
-        before_expiry = await router_async_task.load_task(task_id, "example")
-        controllable_task_cache.advance(_PAST_EXPIRY_SECONDS)
-        with pytest.raises(HTTPException) as exc_info:
-            await router_async_task.load_task(task_id, "example")
-        return before_expiry, exc_info.value.status_code
-
-    before_expiry, expired_status = asyncio.run(run_scenario())
-
-    assert before_expiry.state == schemas_async_task.TASK_STATE_RUNNING
-    assert expired_status == 404
-
-
-@pytest.mark.parametrize(
-    "state",
-    [
-        schemas_async_task.TASK_STATE_RUNNING,
-        schemas_async_task.TASK_STATE_COMPLETED,
-        schemas_async_task.TASK_STATE_FAILED,
-    ],
-)
-def test_start_task_deduplicates_running_and_terminal_entries(state):
-    result = base_req_resp.BaseResponse[str](status=200, message="ok", data="done")
-
-    async def run_scenario():
-        task_id, _ = await router_async_task.start_task("example", "same-input")
-        if state == schemas_async_task.TASK_STATE_COMPLETED:
-            await router_async_task.complete_task(task_id, "example", result)
-        elif state == schemas_async_task.TASK_STATE_FAILED:
-            await router_async_task.fail_task(task_id, "example", status_code=502, message="failed")
-
-        duplicate_id, is_new = await router_async_task.start_task("example", "same-input")
-        task_entry = await router_async_task.load_task(task_id, "example")
-        return task_id, duplicate_id, is_new, task_entry
-
-    task_id, duplicate_id, is_new, task_entry = asyncio.run(run_scenario())
-
-    assert duplicate_id == task_id
-    assert is_new is False
-    assert task_entry.state == state
-
-
-def test_complete_task_round_trips_result_and_optional_metadata():
-    result = base_req_resp.BaseResponse[str](status=200, message="ok", data="done")
-
-    async def run_scenario():
-        plain_id, _ = await router_async_task.start_task("example", "plain")
-        detailed_id, _ = await router_async_task.start_task("example", "detailed")
-        await router_async_task.complete_task(plain_id, "example", result)
-        await router_async_task.complete_task(
-            detailed_id,
-            "example",
-            result,
-            status_code=201,
-            message="created",
+        failed_result = BaseResponse(status=503, message="partial", data={"available": True})
+        await store.fail(
+            other_task_id,
+            "workflow-b",
+            status_code=299,
+            message="failed",
+            result=failed_result,
         )
-        return (
-            await router_async_task.load_task(plain_id, "example"),
-            await router_async_task.load_task(detailed_id, "example"),
-        )
+        failed = await store.load(other_task_id, "workflow-b")
+        await cache.clear()
 
-    plain_entry, detailed_entry = asyncio.run(run_scenario())
+        return {
+            "task_id": task_id,
+            "created": created,
+            "duplicate_id": duplicate_id,
+            "duplicate_created": duplicate_created,
+            "running": running,
+            "completed": completed,
+            "completed_result": completed_result,
+            "terminal_id": terminal_id,
+            "terminal_created": terminal_created,
+            "other_task_id": other_task_id,
+            "other_created": other_created,
+            "wrong_workflow_status": wrong_workflow.value.status_code,
+            "failed": failed,
+            "failed_result": failed_result,
+        }
 
-    assert plain_entry.state == schemas_async_task.TASK_STATE_COMPLETED
-    assert plain_entry.status is None
-    assert plain_entry.message is None
-    assert plain_entry.result == {
-        "status": 200,
-        "message": "ok",
-        "data": "done",
-        "extra": None,
-    }
-    assert detailed_entry.status == 201
-    assert detailed_entry.message == "created"
-    assert detailed_entry.result == plain_entry.result
+    outcome = asyncio.run(exercise_store())
 
-
-def test_complete_task_resets_the_configured_lifetime(controllable_task_cache):
-    result = base_req_resp.BaseResponse[str](status=200, message="ok", data="done")
-
-    async def run_scenario():
-        task_id, _ = await router_async_task.start_task("example", "expiring-completion")
-        controllable_task_cache.advance(_BEFORE_EXPIRY_SECONDS)
-        await router_async_task.complete_task(task_id, "example", result)
-        immediate = await router_async_task.load_task(task_id, "example")
-        controllable_task_cache.advance(_PAST_EXPIRY_SECONDS)
-        after_original_expiry = await router_async_task.load_task(task_id, "example")
-        controllable_task_cache.advance(_PAST_RESET_EXPIRY_SECONDS)
-        with pytest.raises(HTTPException) as exc_info:
-            await router_async_task.load_task(task_id, "example")
-        return immediate, after_original_expiry, exc_info.value.status_code
-
-    immediate, after_original_expiry, expired_status = asyncio.run(run_scenario())
-
-    assert immediate.state == schemas_async_task.TASK_STATE_COMPLETED
-    assert after_original_expiry.state == schemas_async_task.TASK_STATE_COMPLETED
-    assert expired_status == 404
-
-
-def test_fail_task_round_trips_optional_result_and_defaults():
-    result = base_req_resp.BaseResponse[str](status=502, message="failed", data="baseline")
-
-    async def run_scenario():
-        default_id, _ = await router_async_task.start_task("example", "default")
-        detailed_id, _ = await router_async_task.start_task("example", "detailed")
-        await router_async_task.fail_task(default_id, "example")
-        await router_async_task.fail_task(
-            detailed_id,
-            "example",
-            status_code=502,
-            message="analysis failed",
-            result=result,
-        )
-        return (
-            await router_async_task.load_task(default_id, "example"),
-            await router_async_task.load_task(detailed_id, "example"),
-        )
-
-    default_entry, detailed_entry = asyncio.run(run_scenario())
-
-    assert default_entry.state == schemas_async_task.TASK_STATE_FAILED
-    assert default_entry.status is None
-    assert default_entry.message == "Task failed"
-    assert default_entry.result is None
-    assert detailed_entry.status == 502
-    assert detailed_entry.message == "analysis failed"
-    assert detailed_entry.result == {
-        "status": 502,
-        "message": "failed",
-        "data": "baseline",
-        "extra": None,
-    }
-
-
-def test_fail_task_resets_the_configured_lifetime(controllable_task_cache):
-    async def run_scenario():
-        task_id, _ = await router_async_task.start_task("example", "expiring-failure")
-        controllable_task_cache.advance(_BEFORE_EXPIRY_SECONDS)
-        await router_async_task.fail_task(task_id, "example", status_code=502)
-        immediate = await router_async_task.load_task(task_id, "example")
-        controllable_task_cache.advance(_PAST_EXPIRY_SECONDS)
-        after_original_expiry = await router_async_task.load_task(task_id, "example")
-        controllable_task_cache.advance(_PAST_RESET_EXPIRY_SECONDS)
-        with pytest.raises(HTTPException) as exc_info:
-            await router_async_task.load_task(task_id, "example")
-        return immediate, after_original_expiry, exc_info.value.status_code
-
-    immediate, after_original_expiry, expired_status = asyncio.run(run_scenario())
-
-    assert immediate.state == schemas_async_task.TASK_STATE_FAILED
-    assert after_original_expiry.state == schemas_async_task.TASK_STATE_FAILED
-    assert expired_status == 404
-
-
-@pytest.mark.parametrize(
-    ("cached_entry", "expected_status"),
-    [
-        (None, 404),
-        ("not-an-entry", 404),
-        ({"task_type": "other", "state": schemas_async_task.TASK_STATE_RUNNING}, 404),
-        ({"task_type": "example", "state": "UNKNOWN"}, 500),
-        ({"task_type": "example", "state": schemas_async_task.TASK_STATE_COMPLETED}, 500),
-        (
-            {
-                "task_type": "example",
-                "state": schemas_async_task.TASK_STATE_RUNNING,
-                "message": "unexpected",
-            },
-            500,
-        ),
-        (
-            {
-                "task_type": "example",
-                "state": schemas_async_task.TASK_STATE_FAILED,
-                "unexpected": True,
-            },
-            500,
-        ),
-    ],
-)
-def test_load_task_rejects_missing_wrong_type_or_malformed_entries(cached_entry, expected_status):
-    with (
-        mock.patch.object(
-            router_async_task.cache,
-            "get",
-            new_callable=mock.AsyncMock,
-            return_value=cached_entry,
-        ),
-        pytest.raises(HTTPException) as exc_info,
-    ):
-        asyncio.run(router_async_task.load_task("unknown-task", "example"))
-
-    assert exc_info.value.status_code == expected_status
-
-
-@pytest.mark.parametrize(
-    "cached_entry",
-    [
-        "not-an-entry",
-        {"task_type": "other", "state": schemas_async_task.TASK_STATE_RUNNING},
-        {"task_type": "example", "state": "UNKNOWN"},
-    ],
-)
-def test_start_task_rejects_invalid_existing_entries(cached_entry):
-    with (
-        mock.patch.object(
-            router_async_task.cache,
-            "get",
-            new_callable=mock.AsyncMock,
-            return_value=cached_entry,
-        ),
-        pytest.raises(HTTPException) as exc_info,
-    ):
-        asyncio.run(router_async_task.start_task("example", "input"))
-
-    assert exc_info.value.status_code == 500
-
-
-@pytest.mark.parametrize(
-    ("stored_status", "expected_status"),
-    [
-        (None, 500),
-        (399, 500),
-        (400, 400),
-        (599, 599),
-        (600, 500),
-    ],
-)
-def test_failure_status_accepts_only_http_error_boundaries(stored_status, expected_status):
-    async def run_scenario():
-        task_id, _ = await router_async_task.start_task("example", str(stored_status))
-        await router_async_task.fail_task(task_id, "example", status_code=stored_status)
-        return await router_async_task.load_task(task_id, "example")
-
-    task_entry = asyncio.run(run_scenario())
-
-    assert router_async_task.failure_status(task_entry) == expected_status
+    assert isinstance(outcome["task_id"], str) and outcome["task_id"]
+    assert outcome["created"] is True
+    assert outcome["duplicate_id"] == outcome["task_id"]
+    assert outcome["duplicate_created"] is False
+    assert outcome["running"].state == "RUNNING"
+    assert outcome["completed"].state == "COMPLETED"
+    assert outcome["completed"].status == 200
+    assert outcome["completed"].message == "complete"
+    assert outcome["completed"].result == outcome["completed_result"].model_dump(mode="json")
+    assert outcome["terminal_id"] == outcome["task_id"]
+    assert outcome["terminal_created"] is False
+    assert outcome["other_created"] is True
+    assert outcome["other_task_id"] != outcome["task_id"]
+    assert outcome["wrong_workflow_status"] == 404
+    assert outcome["failed"].state == "FAILED"
+    assert outcome["failed"].message == "failed"
+    assert outcome["failed"].result == outcome["failed_result"].model_dump(mode="json")
+    assert outcome["failed"].failure_http_status == 500

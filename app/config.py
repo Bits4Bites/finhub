@@ -1,6 +1,5 @@
 import time
 import typing
-from abc import ABC
 from typing import Literal
 
 import openai
@@ -18,66 +17,121 @@ TokenomicsMode = Literal["Standard", "Economy"]
 # ----------------------------------------------------------------------#
 
 
-class LLMClientFactory(ABC):
-    # @abstractmethod
-    def create_gemini_client(self) -> genai.Client:
-        pass
+class LLMClientFactory:
+    """Provider-neutral fallback factory used by configured AI tasks.
 
-    # @abstractmethod
-    def create_openai_client(self) -> openai.AsyncOpenAI:
-        pass
+    The base factory is intentionally instantiable. Each provider method
+    returns ``None`` so callers can represent an unsupported provider without
+    a special sentinel or an abstract subclass.
+    """
 
-    # @abstractmethod
-    def create_azure_openai_client(self) -> openai.AsyncOpenAI:
-        pass
+    def create_gemini_client(self) -> genai.Client | None:
+        """Return a configured Gemini client, or ``None`` when unsupported."""
+        return None
 
-    # @abstractmethod
-    def create_openrouter_client(self) -> openai.AsyncOpenAI:
-        pass
+    def create_openai_client(self) -> openai.AsyncOpenAI | None:
+        """Return a configured OpenAI client, or ``None`` when unsupported."""
+        return None
+
+    def create_azure_openai_client(self) -> openai.AsyncOpenAI | None:
+        """Return a configured Azure OpenAI client, or ``None`` when unsupported."""
+        return None
+
+    def create_openrouter_client(self) -> openai.AsyncOpenAI | None:
+        """Return a configured OpenRouter client, or ``None`` when unsupported."""
+        return None
 
 
 class GeminiClientFactory(LLMClientFactory):
     def __init__(self, *, api_key: str, timeout_sec: float = 180):
+        """Create a reusable Gemini client immediately.
+
+        Args:
+            api_key: Gemini API key passed to the provider SDK.
+            timeout_sec: Request timeout in seconds. Non-positive values use
+                the 30-second fallback; positive values are converted to
+                integer milliseconds for the Gemini HTTP options.
+        """
         timeout_sec = timeout_sec if timeout_sec > 0 else 30
         self.client = genai.Client(api_key=api_key, http_options=HttpOptions(timeout=int(timeout_sec * 1000)))
 
     def create_gemini_client(self) -> genai.Client:
+        """Return the configured reusable Gemini client."""
         return self.client
 
 
 class OpenRouterClientFactory(LLMClientFactory):
     def __init__(self, *, endpoint: str, api_key: str, timeout_sec: float = 180):
+        """Create a reusable OpenRouter client immediately.
+
+        Args:
+            endpoint: OpenAI-compatible OpenRouter base URL.
+            api_key: OpenRouter API key.
+            timeout_sec: Request timeout in seconds. Non-positive values use
+                the 30-second fallback.
+        """
         timeout_sec = timeout_sec if timeout_sec > 0 else 30
         self.client = openai.AsyncOpenAI(api_key=api_key, base_url=endpoint, project="FinHub", timeout=timeout_sec)
 
     def create_openrouter_client(self) -> openai.AsyncOpenAI:
+        """Return the configured reusable OpenRouter client."""
         return self.client
 
 
 class OpenAIClientFactory(LLMClientFactory):
     def __init__(self, *, api_key: str, timeout_sec: float = 180):
+        """Create a reusable direct OpenAI client immediately.
+
+        Args:
+            api_key: OpenAI API key.
+            timeout_sec: Request timeout in seconds. Non-positive values use
+                the 30-second fallback.
+        """
         timeout_sec = timeout_sec if timeout_sec > 0 else 30
         self.client = openai.AsyncOpenAI(api_key=api_key, project="FinHub", timeout=timeout_sec)
 
     def create_openai_client(self) -> openai.AsyncOpenAI:
+        """Return the configured reusable OpenAI client."""
         return self.client
 
 
 class AzureOpenAIClientFactory(LLMClientFactory):
     def __init__(self, *, endpoint: str, timeout_sec: float = 180):
+        """Create a lazy Azure OpenAI client factory.
+
+        Args:
+            endpoint: Azure OpenAI-compatible base URL retained for each client.
+            timeout_sec: Request timeout in seconds. Non-positive values use
+                the 30-second fallback.
+
+        Notes:
+            Construction does not acquire Azure credentials or create a
+            provider client. :meth:`create_azure_openai_client` performs that
+            work on first use and after the refresh interval.
+        """
         self.client = None
         self.timeout_sec = timeout_sec if timeout_sec > 0 else 30
         self.endpoint = endpoint
         self.last_client_timestamp = 0
 
     def create_azure_openai_client(self) -> openai.AsyncOpenAI:
+        """Return an Azure OpenAI client with a refreshed bearer token.
+
+        Returns:
+            The current client. The first call always creates it, and calls
+            after 30 minutes replace it with a newly authenticated client.
+
+        Raises:
+            Exception: Azure credential, token, or client-construction failures
+                propagate to the caller.
+        """
         now = time.time()
-        if now - self.last_client_timestamp > 1800:  # 30 mins
+        if self.client is None or now - self.last_client_timestamp > 1800:
             token_provider = get_bearer_token_provider(EnvironmentCredential(), "https://ai.azure.com/.default")
             self.client = openai.AsyncOpenAI(
                 api_key=token_provider(), base_url=self.endpoint, project="FinHub", timeout=self.timeout_sec
             )
-            self.last_client_timestamp = time.time()
+            self.last_client_timestamp = now
         return self.client
 
 
@@ -85,6 +139,13 @@ class AzureOpenAIClientFactory(LLMClientFactory):
 
 
 class LLMConfig(BaseSettings):
+    """One vendor-tier catalog entry.
+
+    ``models`` accepts either a set or a comma-separated environment value.
+    String entries are trimmed, empty entries are discarded, and duplicates
+    collapse into the returned set.
+    """
+
     vendor_name: str = ""
     api_tier: str = ""
     api_key: str = Field(default="")
@@ -93,14 +154,19 @@ class LLMConfig(BaseSettings):
 
     @field_validator("models", mode="before")
     @classmethod
-    def decode_models(cls, v: str) -> set[str]:
+    def _decode_models(cls, v: object) -> object:
         if isinstance(v, str):
             return set(model.strip() for model in v.split(",") if model.strip())
-        return set()
+        return v
 
 
 class LLMTaskConfig(BaseSettings):
-    """LLM configurations for a task."""
+    """LLM configuration for a task.
+
+    ``reasoning_effort`` is case-insensitive, trims whitespace, and normalizes
+    non-empty values to ``High``, ``Medium``, or ``Low``. An empty value is
+    treated as omitted.
+    """
 
     task_name: str = ""
     vendor: str = ""
@@ -112,7 +178,7 @@ class LLMTaskConfig(BaseSettings):
 
     @field_validator("reasoning_effort", mode="before")
     @classmethod
-    def normalize_reasoning_effort(cls, v: str | None) -> str | None:
+    def _normalize_reasoning_effort(cls, v: str | None) -> str | None:
         if isinstance(v, str):
             return v.strip().title() or None
         return v
@@ -147,8 +213,26 @@ class LLMVendorSettings(BaseSettings):
     def get_llm_client(
         self, vendor: str, tier: str, timeout_sec: float = 180
     ) -> genai.Client | openai.AsyncOpenAI | None:
-        v_name = vendor.upper()
-        a_tier = tier.upper()
+        """Return the configured client for an AI vendor and service tier.
+
+        Args:
+            vendor: Case-insensitive provider name. Azure OpenAI and OpenRouter
+                also accept space- and underscore-separated aliases.
+            tier: Case-insensitive configured service-tier name.
+            timeout_sec: Retained for caller compatibility; client timeouts are
+                set when factories are constructed.
+
+        Returns:
+            The provider client, or ``None`` when the vendor, tier, or factory
+            is unavailable.
+
+        Notes:
+            Surrounding whitespace is ignored. Credential and factory failures
+            propagate.
+        """
+        del timeout_sec
+        v_name = vendor.strip().upper()
+        a_tier = tier.strip().upper()
         match v_name:
             case "AZUREOPENAI" | "AZURE OPENAI" | "AZURE_OPENAI":
                 return (
@@ -179,6 +263,14 @@ class LLMVendorSettings(BaseSettings):
 
 
 class LLMTaskSettings(BaseSettings):
+    """Task routing and tokenomics settings.
+
+    ``Economy`` is accepted case-insensitively. Missing, empty, non-string, or
+    unsupported tokenomics values normalize to ``Standard``. Explicit
+    constructor values follow normal Pydantic settings precedence over the
+    process environment.
+    """
+
     tasks: dict[str, LLMTaskConfig] = Field(alias="FINHUB_LLM_TASK", default={})
     tokenomics_mode: TokenomicsMode = Field(alias="FINHUB_LLM_TOKENOMICS_MODE", default="Standard")
     model_config = SettingsConfigDict(
@@ -191,7 +283,7 @@ class LLMTaskSettings(BaseSettings):
 
     @field_validator("tokenomics_mode", mode="before")
     @classmethod
-    def normalize_tokenomics_mode(cls, v: object) -> str:
+    def _normalize_tokenomics_mode(cls, v: object) -> str:
         supported_modes = {mode.casefold(): mode for mode in typing.get_args(TokenomicsMode)}
         return supported_modes.get(v.strip().casefold(), "Standard") if isinstance(v, str) else "Standard"
 
@@ -204,6 +296,8 @@ settings_llm_task = LLMTaskSettings()
 
 
 class FinHubProxySettings(BaseSettings):
+    """Node-chaining mode and optional web-crawl and AI-task node URLs."""
+
     proxy_mode: Literal["None", "Redirect", "Forward"] = Field(default="None", alias="FINHUB_PROXY_MODE")
     url_web_crawl_node: str = Field(default="", alias="FINHUB_URL_WEB_CRAWL_NODE")
     url_ai_task_node: str = Field(default="", alias="FINHUB_URL_AI_TASK_NODE")
@@ -220,6 +314,8 @@ settings_finhub_proxy = FinHubProxySettings()
 
 
 class AppSettings(BaseSettings):
+    """Application authentication settings."""
+
     api_key: str = Field(default="", alias="FINHUB_API_KEY")
     model_config = SettingsConfigDict(
         env_file="app_config.env",

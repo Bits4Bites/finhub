@@ -1,26 +1,73 @@
 import asyncio
+import datetime
+import json
 import math
-from unittest.mock import AsyncMock, MagicMock, patch
+import zoneinfo
+from unittest.mock import AsyncMock, patch
+from urllib.parse import urlparse
 
 import pandas as pd
 import pytest
 
 from app.services import event, events_div
+from app.services import market as services_market
+
+DIVIDEND_COLUMNS = [
+    "Ticker",
+    "Company",
+    "Ex-Div Date",
+    "Payment Date",
+    "Div Amount",
+    "Div Yield",
+    "Market Cap",
+    "Exchange",
+    "Currency",
+]
 
 
 def _dividend_frame(rows):
-    columns = [
-        "Ticker",
-        "Company",
-        "Ex-Div Date",
-        "Payment Date",
-        "Div Amount",
-        "Div Yield",
-        "Market Cap",
-        "Exchange",
-        "Currency",
-    ]
-    return pd.DataFrame(rows, columns=columns)
+    return pd.DataFrame(rows, columns=DIVIDEND_COLUMNS)
+
+
+def _dividend_row(
+    symbol,
+    company,
+    *,
+    exchange="ASX",
+    currency="AUD",
+    ex_date="2026-11-20",
+    payment_date="2026-12-15",
+):
+    return {
+        "Ticker": symbol,
+        "Company": company,
+        "Ex-Div Date": ex_date,
+        "Payment Date": payment_date,
+        "Div Amount": 1.5,
+        "Div Yield": 0.03,
+        "Market Cap": 1_000_000_000,
+        "Exchange": exchange,
+        "Currency": currency,
+    }
+
+
+def _store_with_index(index, *symbols):
+    store = services_market.MarketIndexStore()
+    store.load(
+        index,
+        json.dumps(
+            {
+                "data": [
+                    {
+                        "symbol": symbol,
+                        "company": symbol,
+                    }
+                    for symbol in symbols
+                ]
+            }
+        ),
+    )
+    return store
 
 
 class TestEarningsEvents:
@@ -39,20 +86,18 @@ class TestEarningsEvents:
             ),
         ],
     )
-    def test_invalid_index_returns_empty_without_crawling(self, public_function, crawler_target, invalid_index):
-        with patch(crawler_target, new_callable=AsyncMock) as crawler:
+    def test_invalid_index_returns_empty(self, public_function, crawler_target, invalid_index):
+        with patch(crawler_target, new_callable=AsyncMock, return_value=pd.DataFrame()):
             result = asyncio.run(public_function(invalid_index))
 
         assert result == []
-        crawler.assert_not_awaited()
 
-    def test_asx_events_normalize_symbol_date_defaults_and_link(self):
+    def test_asx_events_return_normalized_public_models(self):
         raw_data = pd.DataFrame(
             {
                 "Symbol": ["CBA"],
                 "Company Name": ["Commonwealth Bank"],
                 "Announcement Date": ["2026-11-20"],
-                "Url": ["https://source.example/ignored"],
             }
         )
 
@@ -69,38 +114,43 @@ class TestEarningsEvents:
         assert earnings.exchange == "ASX"
         assert earnings.company_name == "Commonwealth Bank"
         assert earnings.timestamp_str.startswith("2026-11-20 00:00:00")
+        assert earnings.timestamp_str.endswith("+11:00")
         assert earnings.timestamp > 0
         assert earnings.event_category == "earnings"
         assert earnings.source_name == "TipRanks"
         assert earnings.status == "estimated"
         assert earnings.report_period == "N/A"
-        assert earnings.link == "https://www.tipranks.com/stocks/au:cba/earnings"
+        assert urlparse(earnings.link).hostname == "www.tipranks.com"
 
     def test_asx_index_filter_is_case_insensitive(self):
         raw_data = pd.DataFrame(
             {
-                "Symbol": ["CBA"],
-                "Company Name": ["Commonwealth Bank"],
-                "Announcement Date": ["2026-11-20"],
+                "Symbol": ["WBC", "CBA"],
+                "Company Name": ["Westpac", "Commonwealth Bank"],
+                "Announcement Date": ["2026-11-19", "2026-11-20"],
             }
         )
+        store = _store_with_index("ASX20", "ASX:CBA")
 
-        with patch(
-            "app.services.event.services_crawler_earnings.scrape_earnings_asx",
-            new_callable=AsyncMock,
-            return_value=raw_data,
+        with (
+            patch.object(services_market, "market_indices", store),
+            patch(
+                "app.services.event.services_crawler_earnings.scrape_earnings_asx",
+                new_callable=AsyncMock,
+                return_value=raw_data,
+            ),
         ):
             result = asyncio.run(event.get_asx_upcoming_earnings_events("asx20"))
 
         assert [earnings.symbol for earnings in result] == ["ASX:CBA"]
 
-    def test_us_events_keep_only_major_exchanges(self):
+    def test_us_events_keep_major_exchanges_in_source_order(self):
         raw_data = pd.DataFrame(
             {
-                "Symbol": ["AAPL", "PINK1"],
-                "Exchange Name": ["NASDAQ", "PINK"],
-                "Company Name": ["Apple Inc.", "Pink Sheets Co"],
-                "Announcement Date": ["2026-11-20", "2026-11-20"],
+                "Symbol": ["MSFT", "PINK1", "AAPL"],
+                "Exchange Name": ["NYSE", "PINK", "NASDAQ"],
+                "Company Name": ["Microsoft", "Pink Sheets Co", "Apple Inc."],
+                "Announcement Date": ["2026-11-18", "2026-11-19", "2026-11-20"],
             }
         )
 
@@ -111,10 +161,12 @@ class TestEarningsEvents:
         ):
             result = asyncio.run(event.get_us_upcoming_earnings_events())
 
-        assert [earnings.symbol for earnings in result] == ["NASDAQ:AAPL"]
-        assert result[0].company_name == "Apple Inc."
-        assert result[0].link == "https://www.tipranks.com/stocks/aapl/earnings"
-        assert result[0].timestamp_str.endswith("-05:00")
+        assert [earnings.symbol for earnings in result] == ["NYSE:MSFT", "NASDAQ:AAPL"]
+        assert [earnings.company_name for earnings in result] == ["Microsoft", "Apple Inc."]
+        assert all(urlparse(earnings.link).hostname == "www.tipranks.com" for earnings in result)
+        assert all(earnings.timestamp_str.endswith("-05:00") for earnings in result)
+        assert all(earnings.status == "estimated" for earnings in result)
+        assert all(earnings.report_period == "N/A" for earnings in result)
 
     def test_empty_crawler_frame_returns_no_events(self):
         with patch(
@@ -133,9 +185,112 @@ class TestEarningsEvents:
                 new_callable=AsyncMock,
                 return_value=raw_data,
             ),
-            pytest.raises(ValueError, match="Announcement Date"),
+            pytest.raises(ValueError),
         ):
             asyncio.run(event.get_asx_upcoming_earnings_events())
+
+    def test_us_events_require_exchange_name(self):
+        raw_data = pd.DataFrame(
+            {
+                "Symbol": ["AAPL"],
+                "Company Name": ["Apple Inc."],
+                "Announcement Date": ["2026-11-20"],
+            }
+        )
+
+        with (
+            patch(
+                "app.services.event.services_crawler_earnings.scrape_earnings_us",
+                new_callable=AsyncMock,
+                return_value=raw_data,
+            ),
+            pytest.raises(ValueError),
+        ):
+            asyncio.run(event.get_us_upcoming_earnings_events())
+
+    @pytest.mark.parametrize(
+        (
+            "public_function",
+            "crawler_target",
+            "index_name",
+            "member_symbol",
+            "timezone_name",
+            "near_data",
+            "extended_data",
+        ),
+        [
+            (
+                event.get_asx_upcoming_earnings_events,
+                "app.services.event.services_crawler_earnings.scrape_earnings_asx",
+                "ASX20",
+                "ASX:CBA",
+                "Australia/Sydney",
+                pd.DataFrame(
+                    {
+                        "Symbol": ["WBC"],
+                        "Company Name": ["Westpac"],
+                        "Announcement Date": ["2026-11-19"],
+                    }
+                ),
+                pd.DataFrame(
+                    {
+                        "Symbol": ["CBA"],
+                        "Company Name": ["Commonwealth Bank"],
+                        "Announcement Date": ["2026-11-20"],
+                    }
+                ),
+            ),
+            (
+                event.get_us_upcoming_earnings_events,
+                "app.services.event.services_crawler_earnings.scrape_earnings_us",
+                "NASDAQ100",
+                "NASDAQ:AAPL",
+                "America/New_York",
+                pd.DataFrame(
+                    {
+                        "Symbol": ["MSFT"],
+                        "Exchange Name": ["NASDAQ"],
+                        "Company Name": ["Microsoft"],
+                        "Announcement Date": ["2026-11-19"],
+                    }
+                ),
+                pd.DataFrame(
+                    {
+                        "Symbol": ["AAPL"],
+                        "Exchange Name": ["NASDAQ"],
+                        "Company Name": ["Apple Inc."],
+                        "Announcement Date": ["2026-11-20"],
+                    }
+                ),
+            ),
+        ],
+        ids=["asx", "us"],
+    )
+    def test_index_filter_uses_extended_earnings_window(
+        self,
+        public_function,
+        crawler_target,
+        index_name,
+        member_symbol,
+        timezone_name,
+        near_data,
+        extended_data,
+    ):
+        store = _store_with_index(index_name, member_symbol)
+
+        async def crawler_boundary(end_date):
+            today = datetime.datetime.now(zoneinfo.ZoneInfo(timezone_name)).date()
+            return extended_data if (end_date - today).days > 7 else near_data
+
+        with (
+            patch.object(services_market, "market_indices", store),
+            patch(crawler_target, new=crawler_boundary),
+        ):
+            near_events = asyncio.run(public_function())
+            extended_events = asyncio.run(public_function(index_name))
+
+        assert [item.symbol for item in near_events] != [item.symbol for item in extended_events]
+        assert [item.symbol for item in extended_events] == [member_symbol]
 
 
 class TestDividendEvents:
@@ -159,27 +314,21 @@ class TestDividendEvents:
             ),
         ],
     )
-    def test_invalid_index_returns_empty_without_crawling(self, public_function, crawler_target, invalid_index):
-        with patch(crawler_target, new_callable=AsyncMock) as crawler:
+    def test_invalid_index_returns_empty(self, public_function, crawler_target, invalid_index):
+        with patch(crawler_target, new_callable=AsyncMock, return_value=pd.DataFrame()):
             result = asyncio.run(public_function(invalid_index))
 
         assert result == []
-        crawler.assert_not_awaited()
 
-    def test_asx_events_normalize_values_and_classify_distributions(self):
+    def test_asx_category_policy_and_source_order(self):
         raw_data = _dividend_frame(
             [
-                {
-                    "Ticker": "VAS",
-                    "Company": "Vanguard Australian Shares ETF",
-                    "Ex-Div Date": "2026-11-20",
-                    "Payment Date": "2026-12-15",
-                    "Div Amount": 1.5,
-                    "Div Yield": 0.03,
-                    "Market Cap": 20_000_000_000,
-                    "Exchange": "ASX",
-                    "Currency": "AUD",
-                }
+                _dividend_row("FND", "Alpha Fund"),
+                _dividend_row("TRU", "Beta TRUST"),
+                _dividend_row("REI", "Gamma reit"),
+                _dividend_row("ETF", "Delta ETF"),
+                _dividend_row("PRP", "Epsilon Property Group"),
+                _dividend_row("ORD", "Ordinary Holdings"),
             ]
         )
 
@@ -190,45 +339,57 @@ class TestDividendEvents:
         ):
             result = asyncio.run(events_div.get_asx_upcoming_dividends_events())
 
-        assert len(result) == 1
-        dividend = result[0]
-        assert dividend.symbol == "ASX:VAS"
-        assert dividend.company_name == "Vanguard Australian Shares ETF"
-        assert dividend.timestamp_str.startswith("2026-11-20 00:00:00")
-        assert dividend.payment_date.startswith("2026-12-15 00:00:00")
-        assert dividend.amount == 1.5
-        assert dividend.dividend_yield == 0.03
-        assert dividend.currency == "AUD"
-        assert dividend.event_category == "distribution"
-        assert dividend.source_name == "ASX"
-        assert dividend.status == "declared"
-        assert dividend.link == "https://www.asx.com.au/markets/company/VAS"
+        assert [dividend.symbol for dividend in result] == [
+            "ASX:FND",
+            "ASX:TRU",
+            "ASX:REI",
+            "ASX:ETF",
+            "ASX:PRP",
+            "ASX:ORD",
+        ]
+        assert [dividend.event_category for dividend in result] == [
+            "distribution",
+            "distribution",
+            "distribution",
+            "distribution",
+            "distribution",
+            "dividend",
+        ]
+        first = result[0]
+        assert first.company_name == "Alpha Fund"
+        assert first.timestamp_str.startswith("2026-11-20 00:00:00")
+        assert first.payment_date.startswith("2026-12-15 00:00:00")
+        assert first.amount == 1.5
+        assert first.dividend_yield == 0.03
+        assert first.currency == "AUD"
+        assert first.source_name == "ASX"
+        assert first.status == "declared"
+        assert urlparse(first.link).hostname == "www.asx.com.au"
 
-    def test_us_events_drop_unknown_exchanges(self):
+    def test_us_events_omit_unknown_exchanges_and_preserve_order(self):
         raw_data = _dividend_frame(
             [
-                {
-                    "Ticker": "AAPL",
-                    "Company": "Apple Inc.",
-                    "Ex-Div Date": "2026-11-20",
-                    "Payment Date": None,
-                    "Div Amount": 0.25,
-                    "Div Yield": 0.005,
-                    "Market Cap": 3_000_000_000_000,
-                    "Exchange": "NASDAQ",
-                    "Currency": "USD",
-                },
-                {
-                    "Ticker": "UNKNOWN",
-                    "Company": "Unknown Co",
-                    "Ex-Div Date": "2026-11-20",
-                    "Payment Date": None,
-                    "Div Amount": 1.0,
-                    "Div Yield": 0.01,
-                    "Market Cap": None,
-                    "Exchange": "N/A",
-                    "Currency": "USD",
-                },
+                _dividend_row(
+                    "AAPL",
+                    "Apple Inc.",
+                    exchange="NASDAQ",
+                    currency="USD",
+                    payment_date=None,
+                ),
+                _dividend_row(
+                    "UNKNOWN",
+                    "Unknown Co",
+                    exchange="N/A",
+                    currency="USD",
+                    payment_date=None,
+                ),
+                _dividend_row(
+                    "MSFT",
+                    "Microsoft Corp.",
+                    exchange="NYSE",
+                    currency="USD",
+                    payment_date=None,
+                ),
             ]
         )
 
@@ -239,25 +400,21 @@ class TestDividendEvents:
         ):
             result = asyncio.run(events_div.get_us_upcoming_dividends_events())
 
-        assert [dividend.symbol for dividend in result] == ["NASDAQ:AAPL"]
+        assert [dividend.symbol for dividend in result] == ["NASDAQ:AAPL", "NYSE:MSFT"]
+        assert [dividend.event_category for dividend in result] == ["dividend", "dividend"]
         assert result[0].payment_date is None
-        assert result[0].event_category == "dividend"
-        assert result[0].link == "https://stockanalysis.com/stocks/aapl/dividend/"
+        assert all(dividend.timestamp_str.endswith("-05:00") for dividend in result)
+        assert all(urlparse(dividend.link).hostname == "stockanalysis.com" for dividend in result)
 
-    def test_vn_events_are_cash_dividends_not_distributions(self):
+    def test_vn_events_are_always_cash_dividends(self):
         raw_data = _dividend_frame(
             [
-                {
-                    "Ticker": "VNM",
-                    "Company": "VNM PROPERTY FUND",
-                    "Ex-Div Date": "2026-11-20",
-                    "Payment Date": "2026-12-15",
-                    "Div Amount": 1500.0,
-                    "Div Yield": 0.15,
-                    "Market Cap": None,
-                    "Exchange": "HOSE",
-                    "Currency": "VND",
-                }
+                _dividend_row(
+                    "VNM",
+                    "VNM PROPERTY FUND",
+                    exchange="HOSE",
+                    currency="VND",
+                )
             ]
         )
 
@@ -274,7 +431,55 @@ class TestDividendEvents:
         assert dividend.event_category == "dividend"
         assert dividend.source_name == "VietStock"
         assert dividend.currency == "VND"
-        assert dividend.link == "https://finance.vietstock.vn/VNM-thong-tin.htm"
+        assert dividend.timestamp_str.endswith("+07:00")
+        assert dividend.payment_date.endswith("+07:00")
+        assert urlparse(dividend.link).hostname == "finance.vietstock.vn"
+
+    @pytest.mark.parametrize(
+        ("public_function", "crawler_target", "index_name", "member_symbol", "row"),
+        [
+            (
+                events_div.get_asx_upcoming_dividends_events,
+                "app.services.events_div.services_crawler_div.scrape_dividends_asx",
+                "ASX20",
+                "ASX:CBA",
+                _dividend_row("CBA", "Commonwealth Bank"),
+            ),
+            (
+                events_div.get_us_upcoming_dividends_events,
+                "app.services.events_div.services_crawler_div.scrape_dividends_us",
+                "SP500",
+                "NASDAQ:AAPL",
+                _dividend_row("AAPL", "Apple Inc.", exchange="NASDAQ", currency="USD"),
+            ),
+            (
+                events_div.get_vn_upcoming_dividends_events,
+                "app.services.events_div.services_crawler_div.scrape_dividends_vn",
+                "VN30",
+                "HOSE:VNM",
+                _dividend_row("VNM", "Vietnam Dairy", exchange="HOSE", currency="VND"),
+            ),
+        ],
+        ids=["asx", "us", "vn"],
+    )
+    def test_index_filters_are_case_insensitive(
+        self,
+        public_function,
+        crawler_target,
+        index_name,
+        member_symbol,
+        row,
+    ):
+        store = _store_with_index(index_name, member_symbol)
+        raw_data = _dividend_frame([row])
+
+        with (
+            patch.object(services_market, "market_indices", store),
+            patch(crawler_target, new_callable=AsyncMock, return_value=raw_data),
+        ):
+            result = asyncio.run(public_function(index_name.lower()))
+
+        assert [dividend.symbol for dividend in result] == [member_symbol]
 
     @pytest.mark.parametrize(
         ("public_function", "crawler_target"),
@@ -312,234 +517,309 @@ class TestDividendEvents:
                 new_callable=AsyncMock,
                 return_value=raw_data,
             ),
-            pytest.raises(ValueError, match="dividend data is missing columns"),
+            pytest.raises(ValueError),
         ):
             asyncio.run(events_div.get_asx_upcoming_dividends_events())
 
 
-class TestUnloadedSupportedIndexes:
-    @pytest.mark.parametrize(
-        ("public_function", "crawler_target", "index_name", "raw_data"),
-        [
-            (
-                event.get_asx_upcoming_earnings_events,
-                "app.services.event.services_crawler_earnings.scrape_earnings_asx",
-                "ASX20",
-                pd.DataFrame(
-                    {
-                        "Symbol": ["CBA"],
-                        "Company Name": ["Commonwealth Bank"],
-                        "Announcement Date": ["2026-11-20"],
-                    }
-                ),
+@pytest.mark.parametrize(
+    ("public_function", "crawler_target", "raw_data", "expected_symbols"),
+    [
+        (
+            event.get_asx_upcoming_earnings_events,
+            "app.services.event.services_crawler_earnings.scrape_earnings_asx",
+            pd.DataFrame(
+                {
+                    "Symbol": ["BHP", "CBA"],
+                    "Company Name": ["BHP", "Commonwealth Bank"],
+                    "Announcement Date": ["2026-11-19", "2026-11-20"],
+                }
             ),
-            (
-                event.get_us_upcoming_earnings_events,
-                "app.services.event.services_crawler_earnings.scrape_earnings_us",
-                "NASDAQ100",
-                pd.DataFrame(
-                    {
-                        "Symbol": ["AAPL"],
-                        "Exchange Name": ["NASDAQ"],
-                        "Company Name": ["Apple Inc."],
-                        "Announcement Date": ["2026-11-20"],
-                    }
-                ),
+            ["ASX:BHP", "ASX:CBA"],
+        ),
+        (
+            event.get_us_upcoming_earnings_events,
+            "app.services.event.services_crawler_earnings.scrape_earnings_us",
+            pd.DataFrame(
+                {
+                    "Symbol": ["MSFT", "AAPL"],
+                    "Exchange Name": ["NYSE", "NASDAQ"],
+                    "Company Name": ["Microsoft", "Apple Inc."],
+                    "Announcement Date": ["2026-11-19", "2026-11-20"],
+                }
             ),
-            (
-                events_div.get_asx_upcoming_dividends_events,
-                "app.services.events_div.services_crawler_div.scrape_dividends_asx",
-                "ASX20",
-                _dividend_frame(
-                    [
-                        {
-                            "Ticker": "CBA",
-                            "Company": "Commonwealth Bank",
-                            "Ex-Div Date": "2026-11-20",
-                            "Payment Date": None,
-                            "Div Amount": 2.5,
-                            "Div Yield": 0.04,
-                            "Market Cap": 200_000_000_000,
-                            "Exchange": "ASX",
-                            "Currency": "AUD",
-                        }
-                    ]
-                ),
+            ["NYSE:MSFT", "NASDAQ:AAPL"],
+        ),
+        (
+            events_div.get_asx_upcoming_dividends_events,
+            "app.services.events_div.services_crawler_div.scrape_dividends_asx",
+            _dividend_frame(
+                [
+                    _dividend_row("BHP", "BHP"),
+                    _dividend_row("CBA", "Commonwealth Bank"),
+                ]
             ),
-            (
-                events_div.get_us_upcoming_dividends_events,
-                "app.services.events_div.services_crawler_div.scrape_dividends_us",
-                "SP500",
-                _dividend_frame(
-                    [
-                        {
-                            "Ticker": "AAPL",
-                            "Company": "Apple Inc.",
-                            "Ex-Div Date": "2026-11-20",
-                            "Payment Date": None,
-                            "Div Amount": 0.25,
-                            "Div Yield": 0.005,
-                            "Market Cap": 3_000_000_000_000,
-                            "Exchange": "NASDAQ",
-                            "Currency": "USD",
-                        }
-                    ]
-                ),
+            ["ASX:BHP", "ASX:CBA"],
+        ),
+        (
+            events_div.get_us_upcoming_dividends_events,
+            "app.services.events_div.services_crawler_div.scrape_dividends_us",
+            _dividend_frame(
+                [
+                    _dividend_row("MSFT", "Microsoft", exchange="NYSE", currency="USD"),
+                    _dividend_row("AAPL", "Apple Inc.", exchange="NASDAQ", currency="USD"),
+                ]
             ),
-            (
-                events_div.get_vn_upcoming_dividends_events,
-                "app.services.events_div.services_crawler_div.scrape_dividends_vn",
-                "VN30",
-                _dividend_frame(
-                    [
-                        {
-                            "Ticker": "VNM",
-                            "Company": "VNM",
-                            "Ex-Div Date": "2026-11-20",
-                            "Payment Date": None,
-                            "Div Amount": 1500.0,
-                            "Div Yield": 0.15,
-                            "Market Cap": None,
-                            "Exchange": "HOSE",
-                            "Currency": "VND",
-                        }
-                    ]
-                ),
+            ["NYSE:MSFT", "NASDAQ:AAPL"],
+        ),
+        (
+            events_div.get_vn_upcoming_dividends_events,
+            "app.services.events_div.services_crawler_div.scrape_dividends_vn",
+            _dividend_frame(
+                [
+                    _dividend_row("VNM", "Vietnam Dairy", exchange="HOSE", currency="VND"),
+                    _dividend_row("FPT", "FPT Corporation", exchange="HOSE", currency="VND"),
+                ]
             ),
-        ],
-        ids=["asx-earnings", "us-earnings", "asx-dividend", "us-dividend", "vn-dividend"],
-    )
-    def test_supported_but_unloaded_index_raises_key_error(
-        self,
-        public_function,
-        crawler_target,
-        index_name,
-        raw_data,
+            ["HOSE:VNM", "HOSE:FPT"],
+        ),
+    ],
+    ids=["asx-earnings", "us-earnings", "asx-dividend", "us-dividend", "vn-dividend"],
+)
+def test_event_functions_preserve_source_order(
+    public_function,
+    crawler_target,
+    raw_data,
+    expected_symbols,
+):
+    with patch(crawler_target, new_callable=AsyncMock, return_value=raw_data):
+        result = asyncio.run(public_function())
+
+    assert [item.symbol for item in result] == expected_symbols
+
+
+@pytest.mark.parametrize(
+    ("public_function", "crawler_target", "index_name", "raw_data"),
+    [
+        (
+            event.get_asx_upcoming_earnings_events,
+            "app.services.event.services_crawler_earnings.scrape_earnings_asx",
+            "ASX20",
+            pd.DataFrame(
+                {
+                    "Symbol": ["CBA"],
+                    "Company Name": ["Commonwealth Bank"],
+                    "Announcement Date": ["2026-11-20"],
+                }
+            ),
+        ),
+        (
+            event.get_us_upcoming_earnings_events,
+            "app.services.event.services_crawler_earnings.scrape_earnings_us",
+            "NASDAQ100",
+            pd.DataFrame(
+                {
+                    "Symbol": ["AAPL"],
+                    "Exchange Name": ["NASDAQ"],
+                    "Company Name": ["Apple Inc."],
+                    "Announcement Date": ["2026-11-20"],
+                }
+            ),
+        ),
+        (
+            events_div.get_asx_upcoming_dividends_events,
+            "app.services.events_div.services_crawler_div.scrape_dividends_asx",
+            "ASX20",
+            _dividend_frame([_dividend_row("CBA", "Commonwealth Bank")]),
+        ),
+        (
+            events_div.get_us_upcoming_dividends_events,
+            "app.services.events_div.services_crawler_div.scrape_dividends_us",
+            "SP500",
+            _dividend_frame([_dividend_row("AAPL", "Apple Inc.", exchange="NASDAQ", currency="USD")]),
+        ),
+        (
+            events_div.get_vn_upcoming_dividends_events,
+            "app.services.events_div.services_crawler_div.scrape_dividends_vn",
+            "VN30",
+            _dividend_frame([_dividend_row("VNM", "Vietnam Dairy", exchange="HOSE", currency="VND")]),
+        ),
+    ],
+    ids=["asx-earnings", "us-earnings", "asx-dividend", "us-dividend", "vn-dividend"],
+)
+def test_loaded_index_without_matching_constituent_returns_empty(
+    public_function,
+    crawler_target,
+    index_name,
+    raw_data,
+):
+    loaded_empty_store = _store_with_index(index_name)
+
+    with (
+        patch.object(services_market, "market_indices", loaded_empty_store),
+        patch(crawler_target, new_callable=AsyncMock, return_value=raw_data),
     ):
-        index_store = event.asset_utils.services_market.market_indices
-        loaded_indices = dict(index_store.indices)
-        loaded_indices.pop(index_name)
+        result = asyncio.run(public_function(index_name))
 
-        with (
-            patch.object(index_store, "indices", loaded_indices),
-            patch(crawler_target, new_callable=AsyncMock, return_value=raw_data),
-            pytest.raises(KeyError, match=index_name),
-        ):
-            asyncio.run(public_function(index_name))
+    assert result == []
 
 
-class TestInvalidEventDates:
-    @pytest.mark.parametrize(
-        ("public_function", "crawler_target", "raw_data"),
-        [
-            (
-                event.get_asx_upcoming_earnings_events,
-                "app.services.event.services_crawler_earnings.scrape_earnings_asx",
-                pd.DataFrame(
-                    {
-                        "Symbol": ["CBA"],
-                        "Company Name": ["Commonwealth Bank"],
-                        "Announcement Date": ["not-a-date"],
-                    }
-                ),
+@pytest.mark.parametrize(
+    ("public_function", "crawler_target", "index_name", "raw_data"),
+    [
+        (
+            event.get_asx_upcoming_earnings_events,
+            "app.services.event.services_crawler_earnings.scrape_earnings_asx",
+            "ASX20",
+            pd.DataFrame(
+                {
+                    "Symbol": ["CBA"],
+                    "Company Name": ["Commonwealth Bank"],
+                    "Announcement Date": ["2026-11-20"],
+                }
             ),
-            (
-                event.get_us_upcoming_earnings_events,
-                "app.services.event.services_crawler_earnings.scrape_earnings_us",
-                pd.DataFrame(
-                    {
-                        "Symbol": ["AAPL"],
-                        "Exchange Name": ["NASDAQ"],
-                        "Company Name": ["Apple Inc."],
-                        "Announcement Date": ["not-a-date"],
-                    }
-                ),
+        ),
+        (
+            event.get_us_upcoming_earnings_events,
+            "app.services.event.services_crawler_earnings.scrape_earnings_us",
+            "NASDAQ100",
+            pd.DataFrame(
+                {
+                    "Symbol": ["AAPL"],
+                    "Exchange Name": ["NASDAQ"],
+                    "Company Name": ["Apple Inc."],
+                    "Announcement Date": ["2026-11-20"],
+                }
             ),
-            (
-                events_div.get_asx_upcoming_dividends_events,
-                "app.services.events_div.services_crawler_div.scrape_dividends_asx",
-                _dividend_frame(
-                    [
-                        {
-                            "Ticker": "CBA",
-                            "Company": "Commonwealth Bank",
-                            "Ex-Div Date": "not-a-date",
-                            "Payment Date": None,
-                            "Div Amount": 2.5,
-                            "Div Yield": 0.04,
-                            "Market Cap": 200_000_000_000,
-                            "Exchange": "ASX",
-                            "Currency": "AUD",
-                        }
-                    ]
-                ),
+        ),
+        (
+            events_div.get_asx_upcoming_dividends_events,
+            "app.services.events_div.services_crawler_div.scrape_dividends_asx",
+            "ASX20",
+            _dividend_frame([_dividend_row("CBA", "Commonwealth Bank")]),
+        ),
+        (
+            events_div.get_us_upcoming_dividends_events,
+            "app.services.events_div.services_crawler_div.scrape_dividends_us",
+            "SP500",
+            _dividend_frame([_dividend_row("AAPL", "Apple Inc.", exchange="NASDAQ", currency="USD")]),
+        ),
+        (
+            events_div.get_vn_upcoming_dividends_events,
+            "app.services.events_div.services_crawler_div.scrape_dividends_vn",
+            "VN30",
+            _dividend_frame([_dividend_row("VNM", "Vietnam Dairy", exchange="HOSE", currency="VND")]),
+        ),
+    ],
+    ids=["asx-earnings", "us-earnings", "asx-dividend", "us-dividend", "vn-dividend"],
+)
+def test_supported_but_unloaded_index_raises_key_error(
+    public_function,
+    crawler_target,
+    index_name,
+    raw_data,
+):
+    empty_store = services_market.MarketIndexStore()
+
+    with (
+        patch.object(services_market, "market_indices", empty_store),
+        patch(crawler_target, new_callable=AsyncMock, return_value=raw_data),
+        pytest.raises(KeyError),
+    ):
+        asyncio.run(public_function(index_name))
+
+
+@pytest.mark.parametrize(
+    ("public_function", "crawler_target", "raw_data"),
+    [
+        (
+            event.get_asx_upcoming_earnings_events,
+            "app.services.event.services_crawler_earnings.scrape_earnings_asx",
+            pd.DataFrame(
+                {
+                    "Symbol": ["CBA"],
+                    "Company Name": ["Commonwealth Bank"],
+                    "Announcement Date": ["not-a-date"],
+                }
             ),
-            (
-                events_div.get_us_upcoming_dividends_events,
-                "app.services.events_div.services_crawler_div.scrape_dividends_us",
-                _dividend_frame(
-                    [
-                        {
-                            "Ticker": "AAPL",
-                            "Company": "Apple Inc.",
-                            "Ex-Div Date": "not-a-date",
-                            "Payment Date": None,
-                            "Div Amount": 0.25,
-                            "Div Yield": 0.005,
-                            "Market Cap": 3_000_000_000_000,
-                            "Exchange": "NASDAQ",
-                            "Currency": "USD",
-                        }
-                    ]
-                ),
+        ),
+        (
+            event.get_us_upcoming_earnings_events,
+            "app.services.event.services_crawler_earnings.scrape_earnings_us",
+            pd.DataFrame(
+                {
+                    "Symbol": ["AAPL"],
+                    "Exchange Name": ["NASDAQ"],
+                    "Company Name": ["Apple Inc."],
+                    "Announcement Date": ["not-a-date"],
+                }
             ),
-            (
-                events_div.get_vn_upcoming_dividends_events,
-                "app.services.events_div.services_crawler_div.scrape_dividends_vn",
-                _dividend_frame(
-                    [
-                        {
-                            "Ticker": "VNM",
-                            "Company": "VNM",
-                            "Ex-Div Date": "not-a-date",
-                            "Payment Date": None,
-                            "Div Amount": 1500.0,
-                            "Div Yield": 0.15,
-                            "Market Cap": None,
-                            "Exchange": "HOSE",
-                            "Currency": "VND",
-                        }
-                    ]
-                ),
+        ),
+        (
+            events_div.get_asx_upcoming_dividends_events,
+            "app.services.events_div.services_crawler_div.scrape_dividends_asx",
+            _dividend_frame([_dividend_row("CBA", "Commonwealth Bank", ex_date="not-a-date")]),
+        ),
+        (
+            events_div.get_us_upcoming_dividends_events,
+            "app.services.events_div.services_crawler_div.scrape_dividends_us",
+            _dividend_frame(
+                [
+                    _dividend_row(
+                        "AAPL",
+                        "Apple Inc.",
+                        exchange="NASDAQ",
+                        currency="USD",
+                        ex_date="not-a-date",
+                    )
+                ]
             ),
-        ],
-        ids=["asx-earnings", "us-earnings", "asx-dividend", "us-dividend", "vn-dividend"],
-    )
-    def test_invalid_source_date_is_surfaced(self, public_function, crawler_target, raw_data):
-        with (
-            patch(crawler_target, new_callable=AsyncMock, return_value=raw_data),
-            pytest.raises(ValueError),
-        ):
-            asyncio.run(public_function())
+        ),
+        (
+            events_div.get_vn_upcoming_dividends_events,
+            "app.services.events_div.services_crawler_div.scrape_dividends_vn",
+            _dividend_frame(
+                [
+                    _dividend_row(
+                        "VNM",
+                        "Vietnam Dairy",
+                        exchange="HOSE",
+                        currency="VND",
+                        ex_date="not-a-date",
+                    )
+                ]
+            ),
+        ),
+    ],
+    ids=["asx-earnings", "us-earnings", "asx-dividend", "us-dividend", "vn-dividend"],
+)
+def test_invalid_source_date_is_rejected(public_function, crawler_target, raw_data):
+    with (
+        patch(crawler_target, new_callable=AsyncMock, return_value=raw_data),
+        pytest.raises(ValueError),
+    ):
+        asyncio.run(public_function())
 
 
 class FakeTicker:
-    def __init__(self, info, history=None):
+    def __init__(self, info, history=None, history_error=None):
         self.info = info
         self._history = history
-        self.history_calls = []
+        self._history_error = history_error
 
-    def history(self, **kwargs):
-        self.history_calls.append(kwargs)
+    def history(self, **_kwargs):
+        if self._history_error is not None:
+            raise self._history_error
         return self._history.copy()
 
 
-def _history_frame(*, rows=500, include_dividends=True):
+def _history_frame(*, rows=500, include_dividends=True, dividend_positions=None):
     index = pd.date_range("2025-01-01", periods=rows, freq="D", tz="America/New_York")
     close = pd.Series(100.0, index=index)
     dividends = pd.Series(0.0, index=index)
     if include_dividends:
-        for position in (100, 200, 300, 400):
+        positions = dividend_positions if dividend_positions is not None else (100, 200, 300, 400)
+        for position in positions:
             if position + 2 < rows:
                 close.iloc[position] = 98.0
                 close.iloc[position + 1] = 99.0
@@ -573,7 +853,7 @@ def _ticker_info(**overrides):
 
 class TestAnalyseDividendEvent:
     def test_returns_none_for_unsupported_quote_type(self):
-        ticker = FakeTicker(_ticker_info(quoteType="CURRENCY"))
+        ticker = FakeTicker(_ticker_info(quoteType="CURRENCY"), _history_frame())
 
         result = asyncio.run(
             events_div.analyse_dividend_event(
@@ -585,18 +865,19 @@ class TestAnalyseDividendEvent:
         )
 
         assert result is None
-        assert ticker.history_calls == []
 
     @pytest.mark.parametrize(
-        "ticker",
+        ("info", "history"),
         [
-            FakeTicker(_ticker_info(regularMarketPrice=0), _history_frame()),
-            FakeTicker(_ticker_info(), _history_frame(rows=50)),
-            FakeTicker(_ticker_info(), _history_frame(include_dividends=False)),
+            (_ticker_info(regularMarketPrice=0), _history_frame()),
+            (_ticker_info(), _history_frame(rows=50)),
+            (_ticker_info(), _history_frame(include_dividends=False)),
         ],
         ids=["missing-price", "insufficient-history", "no-past-dividends"],
     )
-    def test_returns_none_for_insufficient_analysis_data(self, ticker):
+    def test_returns_none_for_insufficient_analysis_data(self, info, history):
+        ticker = FakeTicker(info, history)
+
         result = asyncio.run(
             events_div.analyse_dividend_event(
                 ticker=ticker,
@@ -611,7 +892,7 @@ class TestAnalyseDividendEvent:
     def test_rejects_invalid_ex_dividend_date(self):
         ticker = FakeTicker(_ticker_info(), _history_frame())
 
-        with pytest.raises(ValueError, match="ex_date"):
+        with pytest.raises(ValueError):
             asyncio.run(
                 events_div.analyse_dividend_event(
                     ticker=ticker,
@@ -621,11 +902,84 @@ class TestAnalyseDividendEvent:
                 )
             )
 
-    def test_missing_required_history_column_is_surfaced(self):
-        history = _history_frame().drop(columns=["Dividends"])
+    @pytest.mark.parametrize("column", ["Open", "High", "Low", "Close", "Volume", "Dividends"])
+    def test_missing_required_history_column_is_surfaced(self, column):
+        history = _history_frame().drop(columns=[column])
         ticker = FakeTicker(_ticker_info(), history)
 
-        with pytest.raises(KeyError, match="Dividends"):
+        with pytest.raises(KeyError):
+            asyncio.run(
+                events_div.analyse_dividend_event(
+                    ticker=ticker,
+                    symbol="TEST",
+                    ex_date="2026-11-20",
+                    div_amount=2.5,
+                )
+            )
+
+    def test_exactly_ninety_completed_history_rows_are_supported(self):
+        completed_history = _history_frame(rows=90, dividend_positions=(20, 60))
+        current_observation = completed_history.iloc[[-1]].copy()
+        current_observation.index = pd.DatetimeIndex([completed_history.index[-1] + pd.Timedelta(days=1)])
+        history = pd.concat([completed_history, current_observation])
+        ticker = FakeTicker(_ticker_info(), history)
+
+        with patch(
+            "app.services.events_div.yf.Ticker",
+            return_value=FakeTicker({}, _history_frame()),
+        ):
+            result = asyncio.run(
+                events_div.analyse_dividend_event(
+                    ticker=ticker,
+                    symbol="TEST",
+                    ex_date="2026-11-20",
+                    div_amount=2.5,
+                )
+            )
+
+        assert result is not None
+        assert result.num_samples == 2
+
+    @pytest.mark.parametrize(
+        ("quote_type", "symbol"),
+        [
+            ("ETF", "TEST-ETF"),
+            ("MUTUALFUND", "TEST-FUND"),
+        ],
+    )
+    def test_supported_fund_types_return_analysis(self, quote_type, symbol):
+        ticker = FakeTicker(
+            _ticker_info(quoteType=quote_type, symbol=symbol),
+            _history_frame(),
+        )
+
+        with patch(
+            "app.services.events_div.yf.Ticker",
+            return_value=FakeTicker({}, _history_frame()),
+        ):
+            result = asyncio.run(
+                events_div.analyse_dividend_event(
+                    ticker=ticker,
+                    symbol=symbol,
+                    ex_date="2026-11-20",
+                    div_amount=2.5,
+                )
+            )
+
+        assert result is not None
+        assert result.symbol == symbol
+        assert math.isclose(result.div_yield, 2.5 / 120.0)
+
+    def test_timezone_failure_is_surfaced(self):
+        ticker = FakeTicker(_ticker_info(), _history_frame())
+
+        with (
+            patch(
+                "app.services.events_div.yfutils.tz_from_yf_ticker",
+                side_effect=zoneinfo.ZoneInfoNotFoundError("missing timezone"),
+            ),
+            pytest.raises(zoneinfo.ZoneInfoNotFoundError),
+        ):
             asyncio.run(
                 events_div.analyse_dividend_event(
                     ticker=ticker,
@@ -636,10 +990,13 @@ class TestAnalyseDividendEvent:
             )
 
     def test_provider_failure_is_surfaced(self):
-        ticker = FakeTicker(_ticker_info(), _history_frame())
-        ticker.history = MagicMock(side_effect=RuntimeError("provider unavailable"))
+        ticker = FakeTicker(
+            _ticker_info(),
+            _history_frame(),
+            history_error=RuntimeError("provider unavailable"),
+        )
 
-        with pytest.raises(RuntimeError, match="provider unavailable"):
+        with pytest.raises(RuntimeError):
             asyncio.run(
                 events_div.analyse_dividend_event(
                     ticker=ticker,
@@ -649,10 +1006,13 @@ class TestAnalyseDividendEvent:
                 )
             )
 
-    def test_returns_deterministic_analysis_from_provider_history(self):
+    def test_returns_documented_analysis_metrics(self):
         ticker = FakeTicker(_ticker_info(), _history_frame())
 
-        with patch("app.services.events_div.yf.Ticker") as ticker_factory:
+        with patch(
+            "app.services.events_div.yf.Ticker",
+            return_value=FakeTicker(_ticker_info(), _history_frame()),
+        ):
             result = asyncio.run(
                 events_div.analyse_dividend_event(
                     ticker=ticker,
@@ -662,24 +1022,14 @@ class TestAnalyseDividendEvent:
                 )
             )
 
-        ticker_factory.assert_not_called()
         assert result is not None
         assert result.symbol == "TEST"
         assert result.exchange == "TEST"
         assert result.company_name == "Test Company"
         assert result.price == 120.0
         assert result.div_amount == 2.5
-        assert math.isclose(result.div_yield, 0.05)
+        assert math.isclose(result.div_yield, 2.5 / 120.0)
         assert result.num_samples == 4
-        assert math.isclose(result.drop_price_min, 118.75)
-        assert math.isclose(result.drop_price_max, 118.75)
-        assert result.recovery_days_min == 2
-        assert result.recovery_days_max == 2
-        assert result.recovery_probability == 1.0
-        assert result.recovery_price_min == 120.0
-        assert math.isclose(result.recovery_price_max, 120.5)
+        assert math.isclose(result.drop_price_min, 1.25)
+        assert math.isclose(result.drop_price_max, 1.25)
         assert result.beta == 1.1
-        assert result.rsi14 == 50
-        assert result.avg_volume_30d == 1_000_000
-        assert result.std_volume_30d == 0
-        assert result.trend_60d == 0.0

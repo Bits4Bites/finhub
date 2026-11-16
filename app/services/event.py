@@ -84,6 +84,8 @@ async def get_asx_upcoming_earnings_events(index: str = "") -> list[models_event
     Returns:
         Earnings events with ``ASX:``-qualified symbols, timezone-aware
         timestamps, TipRanks provenance, and per-company TipRanks links.
+        Missing source values default to status ``estimated`` and report
+        period ``N/A``.
         Returns an empty list for an unsupported index or when no matching
         announcements are available.
 
@@ -94,7 +96,8 @@ async def get_asx_upcoming_earnings_events(index: str = "") -> list[models_event
 
     Notes:
         Supplying an index extends the crawler window and filters the normalized
-        events to that index's constituents.
+        events to that index's constituents. Source order is preserved after
+        filtering.
     """
     asx_indices = ["ASX20", "ASX50", "ASX100", "ASX200", "ASX300"]
     index = index.upper()
@@ -128,8 +131,9 @@ async def get_us_upcoming_earnings_events(index: str = "") -> list[models_event.
     Returns:
         NASDAQ and NYSE earnings events with exchange-qualified symbols,
         timezone-aware timestamps, TipRanks provenance, and per-company
-        TipRanks links. Returns an empty list for an unsupported index or when
-        no matching announcements are available.
+        TipRanks links. Missing source values default to status ``estimated``
+        and report period ``N/A``. Returns an empty list for an unsupported
+        index or when no matching announcements are available.
 
     Raises:
         ValueError: If non-empty crawler data lacks required symbol, exchange,
@@ -139,6 +143,7 @@ async def get_us_upcoming_earnings_events(index: str = "") -> list[models_event.
     Notes:
         Other US venues are excluded. Supplying an index extends the crawler
         window and filters the normalized events to that index's constituents.
+        Source order is preserved after filtering.
     """
     us_indices = ["NASDAQ100", "SP500", "SP400", "SP600"]
     index = index.upper()
