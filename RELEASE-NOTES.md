@@ -1,5 +1,12 @@
 # FinHub release notes
 
+## 2026-11-19 - v0.17.1
+
+### Added/Refactoring/Deprecation
+
+- Refactor(events/upcoming_dividends): refactor fetching upcoming dividends flow
+- Refactor(events/upcoming_earnings): refactor fetching upcoming earnings flow
+
 ## 2026-11-16 - v0.17.0
 
 ### Added/Refactoring/Deprecation

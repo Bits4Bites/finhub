@@ -38,7 +38,10 @@ def disable_proxy(monkeypatch):
 
 def test_http_lifecycle_runs_then_completes_and_reuses_the_terminal_task(deferred_task_store):
     service = mock.AsyncMock(return_value=[_earnings_event()])
-    with mock.patch("app.routers.events.services_event.get_us_upcoming_earnings_events", new=service):
+    with mock.patch(
+        "app.routers.events_earnings.services_events_earnings.get_us_upcoming_earnings_events",
+        new=service,
+    ):
         started = client.get(START_EARNINGS, params={"country": "US", "index": "SP500"})
         task_id = started.json()["extra"]["task_id"]
         running = client.get(POLL_EARNINGS, params={"task_id": task_id})
@@ -63,7 +66,10 @@ def test_http_lifecycle_runs_then_completes_and_reuses_the_terminal_task(deferre
 
 def test_terminal_update_restarts_the_documented_task_lifetime(deferred_task_store):
     service = mock.AsyncMock(side_effect=RuntimeError("source unavailable"))
-    with mock.patch("app.routers.events.services_event.get_us_upcoming_earnings_events", new=service):
+    with mock.patch(
+        "app.routers.events_earnings.services_events_earnings.get_us_upcoming_earnings_events",
+        new=service,
+    ):
         started = client.get(START_EARNINGS, params={"country": "US"})
         task_id = started.json()["extra"]["task_id"]
 
@@ -86,7 +92,10 @@ def test_terminal_update_restarts_the_documented_task_lifetime(deferred_task_sto
 
 def test_expired_running_task_is_not_pollable_and_can_be_started_again(deferred_task_store):
     service = mock.AsyncMock(return_value=[_earnings_event()])
-    with mock.patch("app.routers.events.services_event.get_us_upcoming_earnings_events", new=service):
+    with mock.patch(
+        "app.routers.events_earnings.services_events_earnings.get_us_upcoming_earnings_events",
+        new=service,
+    ):
         first = client.get(START_EARNINGS, params={"country": "US"})
         task_id = first.json()["extra"]["task_id"]
         deferred_task_store.advance(10)
@@ -101,7 +110,10 @@ def test_expired_running_task_is_not_pollable_and_can_be_started_again(deferred_
 
 def test_polling_unknown_or_other_workflow_tasks_returns_not_found(deferred_task_store):
     service = mock.AsyncMock(return_value=[_earnings_event()])
-    with mock.patch("app.routers.events.services_event.get_us_upcoming_earnings_events", new=service):
+    with mock.patch(
+        "app.routers.events_earnings.services_events_earnings.get_us_upcoming_earnings_events",
+        new=service,
+    ):
         started = client.get(START_EARNINGS, params={"country": "US"})
 
     unknown = client.get(POLL_EARNINGS, params={"task_id": "opaque-unknown-task"})
