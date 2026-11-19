@@ -94,7 +94,7 @@ def _parse_money_amount(value) -> float:
             raise ValueError("amount must be finite")
         return amount
     except ValueError as exc:
-        raise ValueError(f"invalid dividend amount: {value!r}") from exc
+        raise ValueError(f"invalid amount: {value!r}") from exc
 
 
 def _parse_market_cap(value) -> int:

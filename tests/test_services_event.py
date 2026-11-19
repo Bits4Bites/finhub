@@ -24,6 +24,24 @@ DIVIDEND_COLUMNS = [
     "Exchange",
     "Currency",
 ]
+EARNINGS_COLUMNS = [
+    "Announcement Date",
+    "Exchange",
+    "Ticker",
+    "Company",
+    "Market Cap",
+    "EPS",
+    "EPS Forecast",
+    "Revenue",
+    "Revenue Forecast",
+    "Currency",
+]
+
+
+class _FixedDateTime(datetime.datetime):
+    @classmethod
+    def now(cls, tz=None):
+        return cls(2026, 11, 16, 12, tzinfo=tz)
 
 
 def _dividend_frame(rows):
@@ -48,6 +66,32 @@ def _dividend_row(
         "Div Yield": 0.03,
         "Market Cap": 1_000_000_000,
         "Exchange": exchange,
+        "Currency": currency,
+    }
+
+
+def _earnings_frame(rows):
+    return pd.DataFrame(rows, columns=EARNINGS_COLUMNS)
+
+
+def _earnings_row(
+    symbol,
+    company,
+    *,
+    exchange="ASX",
+    currency="AUD",
+    announcement_date="2026-11-20",
+):
+    return {
+        "Announcement Date": announcement_date,
+        "Exchange": exchange,
+        "Ticker": symbol,
+        "Company": company,
+        "Market Cap": 1_000_000_000,
+        "EPS": -1.25,
+        "EPS Forecast": 0.0,
+        "Revenue": 0,
+        "Revenue Forecast": 1_001_000_000,
         "Currency": currency,
     }
 
@@ -94,13 +138,7 @@ class TestEarningsEvents:
         assert result == []
 
     def test_asx_events_return_normalized_public_models(self):
-        raw_data = pd.DataFrame(
-            {
-                "Symbol": ["CBA"],
-                "Company Name": ["Commonwealth Bank"],
-                "Announcement Date": ["2026-11-20"],
-            }
-        )
+        raw_data = _earnings_frame([_earnings_row("CBA", "Commonwealth Bank")])
 
         with patch(
             "app.services.events_earnings.services_crawler_earnings.scrape_earnings_asx",
@@ -114,22 +152,23 @@ class TestEarningsEvents:
         assert earnings.symbol == "ASX:CBA"
         assert earnings.exchange == "ASX"
         assert earnings.company_name == "Commonwealth Bank"
-        assert earnings.timestamp_str.startswith("2026-11-20 00:00:00")
-        assert earnings.timestamp_str.endswith("+11:00")
-        assert earnings.timestamp > 0
+        assert earnings.timestamp_str == "2026-11-20 00:00:00+11:00"
+        assert earnings.timestamp == int(
+            datetime.datetime(2026, 11, 20, tzinfo=zoneinfo.ZoneInfo("Australia/Sydney")).timestamp()
+        )
         assert earnings.event_category == "earnings"
-        assert earnings.source_name == "TipRanks"
+        assert earnings.source_name
         assert earnings.status == "estimated"
         assert earnings.report_period == "N/A"
-        assert urlparse(earnings.link).hostname == "www.tipranks.com"
+        assert urlparse(earnings.link).scheme in {"http", "https"}
+        assert urlparse(earnings.link).netloc
 
     def test_asx_index_filter_is_case_insensitive(self):
-        raw_data = pd.DataFrame(
-            {
-                "Symbol": ["WBC", "CBA"],
-                "Company Name": ["Westpac", "Commonwealth Bank"],
-                "Announcement Date": ["2026-11-19", "2026-11-20"],
-            }
+        raw_data = _earnings_frame(
+            [
+                _earnings_row("WBC", "Westpac", announcement_date="2026-11-19"),
+                _earnings_row("CBA", "Commonwealth Bank"),
+            ]
         )
         store = _store_with_index("ASX20", "ASX:CBA")
 
@@ -146,13 +185,14 @@ class TestEarningsEvents:
         assert [earnings.symbol for earnings in result] == ["ASX:CBA"]
 
     def test_us_events_keep_major_exchanges_in_source_order(self):
-        raw_data = pd.DataFrame(
-            {
-                "Symbol": ["MSFT", "PINK1", "AAPL"],
-                "Exchange Name": ["NYSE", "PINK", "NASDAQ"],
-                "Company Name": ["Microsoft", "Pink Sheets Co", "Apple Inc."],
-                "Announcement Date": ["2026-11-18", "2026-11-19", "2026-11-20"],
-            }
+        raw_data = _earnings_frame(
+            [
+                _earnings_row("MSFT", "Microsoft", exchange="NYSE", currency="USD", announcement_date="2026-11-18"),
+                _earnings_row("PINK1", "Pink Sheets Co", exchange="PINK", currency="USD"),
+                _earnings_row("UNKNOWN", "Unknown Co", exchange="N/A", currency="USD"),
+                _earnings_row("NOEXCHANGE", "No Exchange Co", exchange="", currency="USD"),
+                _earnings_row("AAPL", "Apple Inc.", exchange="NASDAQ", currency="USD"),
+            ]
         )
 
         with patch(
@@ -164,50 +204,67 @@ class TestEarningsEvents:
 
         assert [earnings.symbol for earnings in result] == ["NYSE:MSFT", "NASDAQ:AAPL"]
         assert [earnings.company_name for earnings in result] == ["Microsoft", "Apple Inc."]
-        assert all(urlparse(earnings.link).hostname == "www.tipranks.com" for earnings in result)
+        assert all(urlparse(earnings.link).scheme in {"http", "https"} for earnings in result)
+        assert all(urlparse(earnings.link).netloc for earnings in result)
+        assert len({earnings.link for earnings in result}) == len(result)
         assert all(earnings.timestamp_str.endswith("-05:00") for earnings in result)
         assert all(earnings.status == "estimated" for earnings in result)
         assert all(earnings.report_period == "N/A" for earnings in result)
 
-    def test_empty_crawler_frame_returns_no_events(self):
-        with patch(
-            "app.services.events_earnings.services_crawler_earnings.scrape_earnings_asx",
-            new_callable=AsyncMock,
-            return_value=pd.DataFrame(),
-        ):
-            assert asyncio.run(events_earnings.get_asx_upcoming_earnings_events()) == []
-
-    def test_missing_required_crawler_column_is_rejected(self):
-        raw_data = pd.DataFrame({"Symbol": ["CBA"], "Company Name": ["Commonwealth Bank"]})
-
-        with (
-            patch(
-                "app.services.events_earnings.services_crawler_earnings.scrape_earnings_asx",
-                new_callable=AsyncMock,
-                return_value=raw_data,
-            ),
-            pytest.raises(ValueError),
-        ):
-            asyncio.run(events_earnings.get_asx_upcoming_earnings_events())
-
-    def test_us_events_require_exchange_name(self):
-        raw_data = pd.DataFrame(
-            {
-                "Symbol": ["AAPL"],
-                "Company Name": ["Apple Inc."],
-                "Announcement Date": ["2026-11-20"],
-            }
+    def test_us_events_without_a_supported_exchange_return_empty(self):
+        raw_data = _earnings_frame(
+            [
+                _earnings_row("UNKNOWN", "Unknown Co", exchange=exchange, currency="USD")
+                for exchange in ["N/A", "", "PINK"]
+            ]
         )
+        with patch(
+            "app.services.events_earnings.services_crawler_earnings.scrape_earnings_us",
+            new_callable=AsyncMock,
+            return_value=raw_data,
+        ):
+            assert asyncio.run(events_earnings.get_us_upcoming_earnings_events()) == []
 
+    @pytest.mark.parametrize(
+        ("public_function", "crawler_target"),
+        [
+            (
+                events_earnings.get_asx_upcoming_earnings_events,
+                "app.services.events_earnings.services_crawler_earnings.scrape_earnings_asx",
+            ),
+            (
+                events_earnings.get_us_upcoming_earnings_events,
+                "app.services.events_earnings.services_crawler_earnings.scrape_earnings_us",
+            ),
+        ],
+        ids=["asx", "us"],
+    )
+    def test_empty_crawler_frame_returns_no_events(self, public_function, crawler_target):
+        with patch(crawler_target, new_callable=AsyncMock, return_value=_earnings_frame([])):
+            assert asyncio.run(public_function()) == []
+
+    @pytest.mark.parametrize(
+        "public_function",
+        [
+            events_earnings.get_asx_upcoming_earnings_events,
+            events_earnings.get_us_upcoming_earnings_events,
+        ],
+        ids=["asx", "us"],
+    )
+    def test_missing_crawled_ticker_is_rejected(self, public_function):
+        html = (
+            "<table><thead><tr><th>Company Name</th></tr></thead>"
+            "<tbody><tr><td>Missing Ticker Co</td></tr></tbody></table>"
+        )
         with (
             patch(
-                "app.services.events_earnings.services_crawler_earnings.scrape_earnings_us",
+                "app.services.crawler_earnings.crawler_core.fetch_multi_webpages_content_playwright",
                 new_callable=AsyncMock,
-                return_value=raw_data,
+                return_value=[html],
             ),
             pytest.raises(ValueError),
         ):
-            asyncio.run(events_earnings.get_us_upcoming_earnings_events())
+            asyncio.run(public_function())
 
     @pytest.mark.parametrize(
         (
@@ -215,9 +272,9 @@ class TestEarningsEvents:
             "crawler_target",
             "index_name",
             "member_symbol",
-            "timezone_name",
-            "near_data",
-            "extended_data",
+            "later_symbol",
+            "lookahead_days",
+            "currency",
         ),
         [
             (
@@ -225,73 +282,120 @@ class TestEarningsEvents:
                 "app.services.events_earnings.services_crawler_earnings.scrape_earnings_asx",
                 "ASX20",
                 "ASX:CBA",
-                "Australia/Sydney",
-                pd.DataFrame(
-                    {
-                        "Symbol": ["WBC"],
-                        "Company Name": ["Westpac"],
-                        "Announcement Date": ["2026-11-19"],
-                    }
-                ),
-                pd.DataFrame(
-                    {
-                        "Symbol": ["CBA"],
-                        "Company Name": ["Commonwealth Bank"],
-                        "Announcement Date": ["2026-11-20"],
-                    }
-                ),
+                "ASX:WBC",
+                14,
+                "AUD",
             ),
             (
                 events_earnings.get_us_upcoming_earnings_events,
                 "app.services.events_earnings.services_crawler_earnings.scrape_earnings_us",
                 "NASDAQ100",
                 "NASDAQ:AAPL",
-                "America/New_York",
-                pd.DataFrame(
-                    {
-                        "Symbol": ["MSFT"],
-                        "Exchange Name": ["NASDAQ"],
-                        "Company Name": ["Microsoft"],
-                        "Announcement Date": ["2026-11-19"],
-                    }
-                ),
-                pd.DataFrame(
-                    {
-                        "Symbol": ["AAPL"],
-                        "Exchange Name": ["NASDAQ"],
-                        "Company Name": ["Apple Inc."],
-                        "Announcement Date": ["2026-11-20"],
-                    }
-                ),
+                "NASDAQ:MSFT",
+                7,
+                "USD",
             ),
         ],
         ids=["asx", "us"],
     )
-    def test_index_filter_uses_extended_earnings_window(
+    def test_index_filter_preserves_the_market_date_window(
         self,
         public_function,
         crawler_target,
         index_name,
         member_symbol,
-        timezone_name,
-        near_data,
-        extended_data,
+        later_symbol,
+        lookahead_days,
+        currency,
     ):
-        store = _store_with_index(index_name, member_symbol)
+        store = _store_with_index(index_name, member_symbol, later_symbol)
+        boundary_date = datetime.date(2026, 11, 16) + datetime.timedelta(days=lookahead_days)
+        exchange, ticker = member_symbol.split(":")
+        later_exchange, later_ticker = later_symbol.split(":")
+        raw_data = _earnings_frame(
+            [
+                _earnings_row(
+                    ticker,
+                    "Boundary Company",
+                    exchange=exchange,
+                    currency=currency,
+                    announcement_date=boundary_date.isoformat(),
+                ),
+                _earnings_row(
+                    later_ticker,
+                    "Later Company",
+                    exchange=later_exchange,
+                    currency=currency,
+                    announcement_date=(boundary_date + datetime.timedelta(days=1)).isoformat(),
+                ),
+            ]
+        )
 
         async def crawler_boundary(end_date):
-            today = datetime.datetime.now(zoneinfo.ZoneInfo(timezone_name)).date()
-            return extended_data if (end_date - today).days > 7 else near_data
+            return raw_data[raw_data["Announcement Date"] <= end_date.isoformat()]
 
         with (
+            patch("app.services.events_earnings.datetime.datetime", _FixedDateTime),
             patch.object(services_market, "market_indices", store),
             patch(crawler_target, new=crawler_boundary),
         ):
-            near_events = asyncio.run(public_function())
-            extended_events = asyncio.run(public_function(index_name))
+            unfiltered_events = asyncio.run(public_function())
+            filtered_events = asyncio.run(public_function(index_name.lower()))
 
-        assert [item.symbol for item in near_events] != [item.symbol for item in extended_events]
-        assert [item.symbol for item in extended_events] == [member_symbol]
+        assert [item.symbol for item in unfiltered_events] == [member_symbol]
+        assert [item.symbol for item in filtered_events] == [member_symbol]
+
+    @pytest.mark.parametrize(
+        ("public_function", "index_name", "symbols", "timezone_name"),
+        [
+            (
+                events_earnings.get_asx_upcoming_earnings_events,
+                "ASX20",
+                ["ASX:WBC", "ASX:CBA"],
+                "Australia/Sydney",
+            ),
+            (
+                events_earnings.get_us_upcoming_earnings_events,
+                "SP500",
+                ["NYSE:IBM", "NASDAQ:AAPL"],
+                "America/New_York",
+            ),
+        ],
+        ids=["asx", "us"],
+    )
+    def test_crawled_rows_reach_public_event_models(self, public_function, index_name, symbols, timezone_name):
+        first_ticker, second_ticker = [symbol.split(":")[-1] for symbol in symbols]
+        html = (
+            "<table><thead><tr><th>Name</th><th>Company Name</th>"
+            "<th>EPS / Forecast</th><th>Revenue / Forecast</th></tr></thead><tbody>"
+            f"<tr><td>{first_ticker}</td><td>Named Company</td><td>N/A / -$2.5</td><td>$1.001B /</td></tr>"
+            f"<tr><td>{second_ticker}</td><td></td><td>-$1.25 / N/A</td><td>N/A / $2B</td></tr>"
+            "<tr><td>OUTSIDE</td><td>Outside Company</td><td></td><td></td></tr>"
+            "</tbody></table>"
+        )
+        store = _store_with_index(index_name, *symbols)
+
+        async def fetch_pages(urls, **_kwargs):
+            return [html] + [None] * (len(urls) - 1)
+
+        with (
+            patch("app.services.events_earnings.datetime.datetime", _FixedDateTime),
+            patch.object(services_market, "market_indices", store),
+            patch(
+                "app.services.crawler_earnings.crawler_core.fetch_multi_webpages_content_playwright",
+                new=fetch_pages,
+            ),
+        ):
+            result = asyncio.run(public_function(index_name.lower()))
+
+        assert [event.symbol for event in result] == symbols
+        assert [event.company_name for event in result] == ["Named Company", second_ticker]
+        expected_date = datetime.datetime(2026, 11, 16, tzinfo=zoneinfo.ZoneInfo(timezone_name))
+        assert all(event.timestamp_str == expected_date.isoformat(sep=" ", timespec="seconds") for event in result)
+        assert all(event.timestamp == int(expected_date.timestamp()) for event in result)
+        assert all(event.event_category == "earnings" for event in result)
+        assert all(event.status == "estimated" and event.report_period == "N/A" for event in result)
+        assert len({event.link for event in result}) == len(result)
 
 
 class TestDividendEvents:
@@ -528,25 +632,22 @@ class TestDividendEvents:
         (
             events_earnings.get_asx_upcoming_earnings_events,
             "app.services.events_earnings.services_crawler_earnings.scrape_earnings_asx",
-            pd.DataFrame(
-                {
-                    "Symbol": ["BHP", "CBA"],
-                    "Company Name": ["BHP", "Commonwealth Bank"],
-                    "Announcement Date": ["2026-11-19", "2026-11-20"],
-                }
+            _earnings_frame(
+                [
+                    _earnings_row("BHP", "BHP", announcement_date="2026-11-19"),
+                    _earnings_row("CBA", "Commonwealth Bank"),
+                ]
             ),
             ["ASX:BHP", "ASX:CBA"],
         ),
         (
             events_earnings.get_us_upcoming_earnings_events,
             "app.services.events_earnings.services_crawler_earnings.scrape_earnings_us",
-            pd.DataFrame(
-                {
-                    "Symbol": ["MSFT", "AAPL"],
-                    "Exchange Name": ["NYSE", "NASDAQ"],
-                    "Company Name": ["Microsoft", "Apple Inc."],
-                    "Announcement Date": ["2026-11-19", "2026-11-20"],
-                }
+            _earnings_frame(
+                [
+                    _earnings_row("MSFT", "Microsoft", exchange="NYSE", currency="USD", announcement_date="2026-11-19"),
+                    _earnings_row("AAPL", "Apple Inc.", exchange="NASDAQ", currency="USD"),
+                ]
             ),
             ["NYSE:MSFT", "NASDAQ:AAPL"],
         ),
@@ -605,26 +706,13 @@ def test_event_functions_preserve_source_order(
             events_earnings.get_asx_upcoming_earnings_events,
             "app.services.events_earnings.services_crawler_earnings.scrape_earnings_asx",
             "ASX20",
-            pd.DataFrame(
-                {
-                    "Symbol": ["CBA"],
-                    "Company Name": ["Commonwealth Bank"],
-                    "Announcement Date": ["2026-11-20"],
-                }
-            ),
+            _earnings_frame([_earnings_row("CBA", "Commonwealth Bank")]),
         ),
         (
             events_earnings.get_us_upcoming_earnings_events,
             "app.services.events_earnings.services_crawler_earnings.scrape_earnings_us",
             "NASDAQ100",
-            pd.DataFrame(
-                {
-                    "Symbol": ["AAPL"],
-                    "Exchange Name": ["NASDAQ"],
-                    "Company Name": ["Apple Inc."],
-                    "Announcement Date": ["2026-11-20"],
-                }
-            ),
+            _earnings_frame([_earnings_row("AAPL", "Apple Inc.", exchange="NASDAQ", currency="USD")]),
         ),
         (
             events_div.get_asx_upcoming_dividends_events,
@@ -671,26 +759,13 @@ def test_loaded_index_without_matching_constituent_returns_empty(
             events_earnings.get_asx_upcoming_earnings_events,
             "app.services.events_earnings.services_crawler_earnings.scrape_earnings_asx",
             "ASX20",
-            pd.DataFrame(
-                {
-                    "Symbol": ["CBA"],
-                    "Company Name": ["Commonwealth Bank"],
-                    "Announcement Date": ["2026-11-20"],
-                }
-            ),
+            _earnings_frame([_earnings_row("CBA", "Commonwealth Bank")]),
         ),
         (
             events_earnings.get_us_upcoming_earnings_events,
             "app.services.events_earnings.services_crawler_earnings.scrape_earnings_us",
             "NASDAQ100",
-            pd.DataFrame(
-                {
-                    "Symbol": ["AAPL"],
-                    "Exchange Name": ["NASDAQ"],
-                    "Company Name": ["Apple Inc."],
-                    "Announcement Date": ["2026-11-20"],
-                }
-            ),
+            _earnings_frame([_earnings_row("AAPL", "Apple Inc.", exchange="NASDAQ", currency="USD")]),
         ),
         (
             events_div.get_asx_upcoming_dividends_events,
@@ -735,24 +810,13 @@ def test_supported_but_unloaded_index_raises_key_error(
         (
             events_earnings.get_asx_upcoming_earnings_events,
             "app.services.events_earnings.services_crawler_earnings.scrape_earnings_asx",
-            pd.DataFrame(
-                {
-                    "Symbol": ["CBA"],
-                    "Company Name": ["Commonwealth Bank"],
-                    "Announcement Date": ["not-a-date"],
-                }
-            ),
+            _earnings_frame([_earnings_row("CBA", "Commonwealth Bank", announcement_date="not-a-date")]),
         ),
         (
             events_earnings.get_us_upcoming_earnings_events,
             "app.services.events_earnings.services_crawler_earnings.scrape_earnings_us",
-            pd.DataFrame(
-                {
-                    "Symbol": ["AAPL"],
-                    "Exchange Name": ["NASDAQ"],
-                    "Company Name": ["Apple Inc."],
-                    "Announcement Date": ["not-a-date"],
-                }
+            _earnings_frame(
+                [_earnings_row("AAPL", "Apple Inc.", exchange="NASDAQ", currency="USD", announcement_date="not-a-date")]
             ),
         ),
         (

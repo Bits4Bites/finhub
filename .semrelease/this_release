@@ -3,4 +3,4 @@
 #   git log origin..HEAD | grep "^\s" > .semrelease/this_release
 #!VERSION=0.17.1
 - refactor(events/upcoming_earnings): refactor fetching upcoming earnings flow
-- impr(events/upcoming_dividends): optimize flow
+- refactor(events/upcoming_dividends): refactor fetching upcoming dividends flow

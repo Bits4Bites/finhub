@@ -8,7 +8,6 @@ from unittest.mock import AsyncMock, patch
 import bs4
 import pandas as pd
 import pytest
-from playwright import async_api as playwright_async_api
 
 from app.services import crawler_core, crawler_div, crawler_earnings, events_div
 
@@ -21,6 +20,18 @@ DIVIDEND_COLUMNS = [
     "Div Yield",
     "Market Cap",
     "Exchange",
+    "Currency",
+]
+EARNINGS_COLUMNS = [
+    "Announcement Date",
+    "Exchange",
+    "Ticker",
+    "Company",
+    "Market Cap",
+    "EPS",
+    "EPS Forecast",
+    "Revenue",
+    "Revenue Forecast",
     "Currency",
 ]
 
@@ -148,89 +159,6 @@ class FakePlaywrightContext:
 
     async def __aexit__(self, *_args):
         return None
-
-
-class FakeControlLocator:
-    def __init__(self, *, count=0, items=None, on_click=None, on_evaluate=None, click_error=None):
-        self._count = count
-        self._items = items
-        self._on_click = on_click
-        self._on_evaluate = on_evaluate
-        self._click_error = click_error
-
-    async def count(self):
-        return self._count
-
-    def nth(self, index):
-        return self._items[index] if self._items is not None else self
-
-    async def click(self):
-        if self._click_error is not None:
-            raise self._click_error
-        if self._on_click is not None:
-            self._on_click()
-
-    async def evaluate(self, _script):
-        if self._on_evaluate is not None:
-            self._on_evaluate()
-
-
-class FakeTipRanksPage:
-    def __init__(self, *, ad_mode=None, controls=False, interaction_error=None):
-        self.visible_ads = set()
-        if ad_mode == "primary":
-            self.visible_ads.update({"primary-1", "primary-2"})
-        elif ad_mode == "fallback":
-            self.visible_ads.update({"footer", "header"})
-        self.controls = controls
-        self.interaction_error = interaction_error
-        self.column_menu_open = False
-        self.exchange_requested = False
-        self.exchange_column_selected = False
-
-    def _hide_ad(self, ad_name):
-        self.visible_ads.discard(ad_name)
-
-    def _open_columns(self):
-        self.column_menu_open = True
-
-    def _request_exchange(self):
-        if self.column_menu_open:
-            self.exchange_requested = True
-
-    def _save_columns(self):
-        if self.exchange_requested:
-            self.exchange_column_selected = True
-
-    def locator(self, selector):
-        if selector == "div[data-google-query-id]":
-            ads = sorted(ad for ad in self.visible_ads if ad.startswith("primary"))
-            items = [
-                FakeControlLocator(count=1, on_evaluate=lambda ad_name=ad_name: self._hide_ad(ad_name))
-                for ad_name in ads
-            ]
-            return FakeControlLocator(count=len(items), items=items)
-        if selector == "div[id='AdThrive_Footer_1_desktop']":
-            return FakeControlLocator(
-                count=int("footer" in self.visible_ads),
-                on_evaluate=lambda: self._hide_ad("footer"),
-            )
-        if selector == "div[id='AdThrive_Header_1_desktop']":
-            return FakeControlLocator(
-                count=int("header" in self.visible_ads),
-                on_evaluate=lambda: self._hide_ad("header"),
-            )
-        if selector == "button[data-id='select-columns-button']":
-            return FakeControlLocator(count=int(self.controls), on_click=self._open_columns)
-        if selector == "label[title='Exchange Name']":
-            return FakeControlLocator(
-                count=int(self.controls),
-                on_click=self._request_exchange,
-                click_error=self.interaction_error,
-            )
-        if selector == "button[id='save']":
-            return FakeControlLocator(count=int(self.controls), on_click=self._save_columns)
-        return FakeControlLocator()
 
 
 class FakeCompany:
@@ -1469,290 +1397,356 @@ class TestDividendCrawlers:
             asyncio.run(public_function(datetime.date(2026, 11, 16)))
 
 
-class TestEarningsCallback:
-    def test_missing_controls_leave_the_page_unchanged(self):
-        page = FakeTipRanksPage()
-        initial_state = (set(page.visible_ads), page.exchange_column_selected)
-
-        result = asyncio.run(crawler_earnings.tipranks_after_load_func(page))
-
-        assert result is None
-        assert (page.visible_ads, page.exchange_column_selected) == initial_state
-
-    @pytest.mark.parametrize("ad_mode", ["primary", "fallback"])
-    def test_hides_present_ads_and_selects_the_exchange_column(self, ad_mode):
-        page = FakeTipRanksPage(ad_mode=ad_mode, controls=True)
-
-        asyncio.run(crawler_earnings.tipranks_after_load_func(page))
-
-        assert page.visible_ads == set()
-        assert page.exchange_column_selected is True
-
-    def test_playwright_interaction_errors_are_propagated(self):
-        failure = playwright_async_api.Error("interaction failed")
-        page = FakeTipRanksPage(controls=True, interaction_error=failure)
-
-        with pytest.raises(playwright_async_api.Error):
-            asyncio.run(crawler_earnings.tipranks_after_load_func(page))
-
-
 class TestEarningsCrawlers:
-    def test_default_end_date_is_resolved_at_call_time_and_is_inclusive(self):
-        pages = [
-            pd.DataFrame(
+    @pytest.mark.parametrize(
+        ("public_function", "exchange", "currency", "prefix"),
+        [
+            (crawler_earnings.scrape_earnings_asx, "ASX", "AUD", "AU$"),
+            (crawler_earnings.scrape_earnings_us, "NASDAQ", "USD", "US$"),
+        ],
+        ids=["asx", "us"],
+    )
+    def test_normalizes_financial_values_and_market_metadata(self, public_function, exchange, currency, prefix):
+        page = _table_html(
+            ["Name", "Company", "Market Cap", "EPS / Forecast", "Revenue / Forecast", "Price"],
+            [
                 [
-                    {
-                        "Name": "AAPL",
-                        "Company Name": "Apple",
-                        "Exchange Name": "NASDAQ",
-                        "Market Cap": "$3T",
-                    }
+                    "KNOWN",
+                    "Known Company",
+                    f"{prefix}200B",
+                    f"-{prefix}2.650 / {prefix}-2.08",
+                    f"{prefix}27.067B / {prefix}1.001B",
+                    "$100",
                 ]
-            ),
-            pd.DataFrame(
-                [
-                    {
-                        "Name": "MSFT",
-                        "Company Name": "Microsoft",
-                        "Exchange Name": "NASDAQ",
-                        "Market Cap": "$3T",
-                    }
-                ]
-            ),
-        ]
-
+            ],
+        )
         with (
             patch(
                 "app.services.crawler_earnings.datetime.datetime",
                 _fixed_datetime(datetime.datetime(2026, 11, 16, 9)),
             ),
             patch(
-                "app.services.crawler_earnings.crawler_core.scrape_data_table",
+                "app.services.crawler_earnings.crawler_core.fetch_multi_webpages_content_playwright",
                 new_callable=AsyncMock,
-                side_effect=pages,
+                return_value=[page],
             ),
-            patch("app.services.crawler_earnings.random.uniform", return_value=0.0),
+            patch(
+                "app.services.crawler_earnings.market.market_indices.revert_lookup_company",
+                return_value=FakeCompany(exchange, "KNOWN"),
+            ),
         ):
-            result = asyncio.run(crawler_earnings.scrape_earnings_from_tipranks("https://example.test/earnings/{date}"))
+            result = asyncio.run(public_function(datetime.date(2026, 11, 16)))
 
-        assert list(result.columns) == ["Symbol", "Announcement Date", "Company Name", "Exchange Name"]
+        assert list(result.columns) == EARNINGS_COLUMNS
         assert result.to_dict(orient="records") == [
             {
-                "Symbol": "AAPL",
                 "Announcement Date": "2026-11-16",
-                "Company Name": "Apple",
-                "Exchange Name": "NASDAQ",
-            },
-            {
-                "Symbol": "MSFT",
-                "Announcement Date": "2026-11-17",
-                "Company Name": "Microsoft",
-                "Exchange Name": "NASDAQ",
-            },
-        ]
-
-    def test_weekend_start_and_failed_page_do_not_hide_a_later_weekday(self):
-        tuesday_page = pd.DataFrame(
-            [
-                {
-                    "Name": "MSFT",
-                    "Company Name": "Microsoft",
-                    "Exchange Name": "NASDAQ",
-                }
-            ]
-        )
-
-        with (
-            patch(
-                "app.services.crawler_earnings.datetime.datetime",
-                _fixed_datetime(datetime.datetime(2026, 11, 14, 9)),
-            ),
-            patch(
-                "app.services.crawler_earnings.crawler_core.scrape_data_table",
-                new_callable=AsyncMock,
-                side_effect=[pd.DataFrame(), tuesday_page],
-            ),
-            patch("app.services.crawler_earnings.random.uniform", return_value=0.0),
-        ):
-            result = asyncio.run(
-                crawler_earnings.scrape_earnings_from_tipranks(
-                    "https://example.test/earnings/{date}",
-                    end_date=datetime.date(2026, 11, 17),
-                )
-            )
-
-        assert result.to_dict(orient="records") == [
-            {
-                "Symbol": "MSFT",
-                "Announcement Date": "2026-11-17",
-                "Company Name": "Microsoft",
-                "Exchange Name": "NASDAQ",
+                "Exchange": exchange,
+                "Ticker": "KNOWN",
+                "Company": "Known Company",
+                "Market Cap": 200_000_000_000,
+                "EPS": -2.65,
+                "EPS Forecast": -2.08,
+                "Revenue": 27_067_000_000,
+                "Revenue Forecast": 1_001_000_000,
+                "Currency": currency,
             }
         ]
 
-    def test_end_date_before_the_first_eligible_day_returns_empty(self):
+    @pytest.mark.parametrize(
+        "public_function",
+        [crawler_earnings.scrape_earnings_asx, crawler_earnings.scrape_earnings_us],
+        ids=["asx", "us"],
+    )
+    def test_missing_pair_components_default_independently_to_zero(self, public_function):
+        cases = [
+            (None, 0, 0),
+            (pd.NA, 0, 0),
+            (float("nan"), 0, 0),
+            ("", 0, 0),
+            ("N/A", 0, 0),
+            ("NA", 0, 0),
+            ("NaN", 0, 0),
+            ("-", 0, 0),
+            ("--", 0, 0),
+            ("\u2014", 0, 0),
+            ("/", 0, 0),
+            ("NA / -", 0, 0),
+            ("N/A/N/A", 0, 0),
+            ("$1 / $2", 1, 2),
+            ("$1 /", 1, 0),
+            ("/ $2", 0, 2),
+            ("N/A/$2", 0, 2),
+            ("$1/n/a", 1, 0),
+            ("$1", 1, 0),
+        ]
+        source_data = pd.DataFrame(
+            [
+                {"Name": f"MISSING{i}", "EPS / Forecast": value, "Revenue / Forecast": value}
+                for i, (value, _, _) in enumerate(cases)
+            ]
+        )
         with (
             patch(
                 "app.services.crawler_earnings.datetime.datetime",
                 _fixed_datetime(datetime.datetime(2026, 11, 16, 9)),
             ),
             patch(
-                "app.services.crawler_earnings.crawler_core.scrape_data_table",
+                "app.services.crawler_earnings.crawler_core.fetch_multi_webpages_content_playwright",
                 new_callable=AsyncMock,
-                side_effect=AssertionError("no date is eligible"),
+                return_value=["unused"],
+            ),
+            patch(
+                "app.services.crawler_earnings.crawler_core.extract_data_table_from_html",
+                return_value=source_data,
+            ),
+            patch(
+                "app.services.crawler_earnings.market.market_indices.revert_lookup_company",
+                return_value=None,
             ),
         ):
-            result = asyncio.run(
-                crawler_earnings.scrape_earnings_from_tipranks(
-                    "https://example.test/earnings/{date}",
-                    end_date=datetime.date(2026, 11, 15),
-                )
-            )
+            result = asyncio.run(public_function(datetime.date(2026, 11, 16)))
 
-        assert result.empty
+        assert len(result) == len(cases)
+        for actual_column, forecast_column in (("EPS", "EPS Forecast"), ("Revenue", "Revenue Forecast")):
+            assert result[actual_column].tolist() == [actual for _, actual, _ in cases]
+            assert result[forecast_column].tolist() == [forecast for _, _, forecast in cases]
+        assert result["Market Cap"].eq(0).all()
 
-    def test_invalid_timezone_is_propagated(self):
-        with pytest.raises(zoneinfo.ZoneInfoNotFoundError):
-            asyncio.run(
-                crawler_earnings.scrape_earnings_from_tipranks(
-                    "https://example.test/earnings/{date}",
-                    end_date=datetime.date(2026, 11, 16),
-                    tz_name="Invalid/Timezone",
-                )
-            )
-
-    def test_nonempty_table_without_a_symbol_is_rejected(self):
-        page = pd.DataFrame([{"Company Name": "Missing Symbol Ltd"}])
-
+    @pytest.mark.parametrize(
+        "public_function",
+        [crawler_earnings.scrape_earnings_asx, crawler_earnings.scrape_earnings_us],
+        ids=["asx", "us"],
+    )
+    @pytest.mark.parametrize("missing_value", [None, float("nan"), "N/A"], ids=["null", "nan", "marker"])
+    def test_entirely_missing_pair_columns_default_to_zero(self, public_function, missing_value):
+        source_data = pd.DataFrame(
+            [{"Name": "EMPTY", "EPS / Forecast": missing_value, "Revenue / Forecast": missing_value}]
+        )
         with (
             patch(
                 "app.services.crawler_earnings.datetime.datetime",
                 _fixed_datetime(datetime.datetime(2026, 11, 16, 9)),
             ),
             patch(
-                "app.services.crawler_earnings.crawler_core.scrape_data_table",
+                "app.services.crawler_earnings.crawler_core.fetch_multi_webpages_content_playwright",
                 new_callable=AsyncMock,
-                return_value=page,
+                return_value=["unused"],
             ),
-            patch("app.services.crawler_earnings.random.uniform", return_value=0.0),
-            pytest.raises(ValueError),
+            patch(
+                "app.services.crawler_earnings.crawler_core.extract_data_table_from_html",
+                return_value=source_data,
+            ),
+            patch(
+                "app.services.crawler_earnings.market.market_indices.revert_lookup_company",
+                return_value=None,
+            ),
         ):
-            asyncio.run(
-                crawler_earnings.scrape_earnings_from_tipranks(
-                    "https://example.test/earnings/{date}",
-                    end_date=datetime.date(2026, 11, 16),
-                )
-            )
+            result = asyncio.run(public_function(datetime.date(2026, 11, 16)))
 
-    def test_http_mode_does_not_run_the_browser_callback(self):
-        async def browser_only_callback(_page):
-            raise AssertionError("HTTP mode must not run a browser callback")
+        assert len(result) == 1
+        assert result[["Market Cap", "EPS", "EPS Forecast", "Revenue", "Revenue Forecast"]].eq(0).all().all()
+        assert result["Company"].tolist() == ["EMPTY"]
 
+    @pytest.mark.parametrize(
+        ("pair", "expected"),
+        [
+            ("-1.25/-2.5", (-1.25, -2.5)),
+            ("(AU$2.65) / -$2.08", (-2.65, -2.08)),
+            ("\u2212$0.50 / ($0.25)", (-0.5, -0.25)),
+            ("-$1.25 /", (-1.25, 0.0)),
+            ("/ -$2.5", (0.0, -2.5)),
+        ],
+        ids=["plain", "accounting", "unicode-minus", "missing-forecast", "missing-actual"],
+    )
+    def test_negative_eps_values_are_retained(self, pair, expected):
+        page = _table_html(["Name", "EPS / Forecast"], [["LOSS", pair]])
         with (
             patch(
                 "app.services.crawler_earnings.datetime.datetime",
                 _fixed_datetime(datetime.datetime(2026, 11, 16, 9)),
             ),
             patch(
-                "app.services.crawler_earnings.crawler_core.scrape_data_table",
+                "app.services.crawler_earnings.crawler_core.fetch_multi_webpages_content_playwright",
                 new_callable=AsyncMock,
-                return_value=pd.DataFrame([{"Name": "AAPL"}]),
+                return_value=[page],
             ),
-            patch("app.services.crawler_earnings.random.uniform", return_value=0.0),
-        ):
-            result = asyncio.run(
-                crawler_earnings.scrape_earnings_from_tipranks(
-                    "https://example.test/earnings/{date}",
-                    end_date=datetime.date(2026, 11, 16),
-                    after_load_func_async=browser_only_callback,
-                )
-            )
-
-        assert result["Symbol"].tolist() == ["AAPL"]
-
-    def test_playwright_wrapper_uses_callback_visible_page_state(self):
-        async def prepare(page):
-            page.prepared = True
-
-        async def scrape_rendered_page(_url, *, after_load_func_async=None):
-            page = SimpleNamespace(prepared=False)
-            await after_load_func_async(page)
-            symbol = "READY" if page.prepared else "NOT_READY"
-            return pd.DataFrame([{"Name": symbol}])
-
-        with (
-            patch(
-                "app.services.crawler_earnings.datetime.datetime",
-                _fixed_datetime(datetime.datetime(2026, 11, 16, 9)),
-            ),
-            patch(
-                "app.services.crawler_earnings.crawler_core.scrape_data_table_playwright",
-                new=scrape_rendered_page,
-            ),
-            patch("app.services.crawler_earnings.random.uniform", return_value=0.0),
-        ):
-            result = asyncio.run(
-                crawler_earnings.scrape_earnings_from_tipranks_playwright(
-                    "https://example.test/earnings/{date}",
-                    end_date=datetime.date(2026, 11, 16),
-                    after_load_func_async=prepare,
-                )
-            )
-
-        assert result["Symbol"].tolist() == ["READY"]
-
-    def test_asx_wrapper_returns_normalized_rows(self):
-        page = pd.DataFrame([{"Name": "CBA", "Company Name": "Commonwealth Bank"}])
-
-        with (
-            patch(
-                "app.services.crawler_earnings.datetime.datetime",
-                _fixed_datetime(datetime.datetime(2026, 11, 16, 9)),
-            ),
-            patch(
-                "app.services.crawler_earnings.crawler_core.scrape_data_table",
-                new_callable=AsyncMock,
-                return_value=page,
-            ),
-            patch("app.services.crawler_earnings.random.uniform", return_value=0.0),
         ):
             result = asyncio.run(crawler_earnings.scrape_earnings_asx(datetime.date(2026, 11, 16)))
 
-        assert result.to_dict(orient="records") == [
-            {
-                "Symbol": "CBA",
-                "Announcement Date": "2026-11-16",
-                "Company Name": "Commonwealth Bank",
-            }
+        assert tuple(result.loc[0, ["EPS", "EPS Forecast"]]) == expected
+
+    def test_optional_fields_and_company_fallback_are_consistent_across_dates(self):
+        pages = [
+            None,
+            _table_html(
+                ["Name", "Company", "Market Cap", "EPS / Forecast"],
+                [["AAA", "Alpha Ltd", "$1B", "$1 / $2"]],
+            ),
+            _table_html(["Name"], [["BBB"]]),
+            _table_html(["Name", "Company"], [["CCC", " "]]),
+            _table_html(["Name", "Company Name"], [["DDD", "Delta Ltd"]]),
         ]
-
-    def test_us_wrapper_requests_and_returns_the_exchange_column(self):
-        async def scrape_rendered_page(_url, *, after_load_func_async=None):
-            page = FakeTipRanksPage(ad_mode="primary", controls=True)
-            await after_load_func_async(page)
-            data = {"Name": ["MSFT"], "Company Name": ["Microsoft"]}
-            if page.exchange_column_selected:
-                data["Exchange Name"] = ["NASDAQ"]
-            return pd.DataFrame(data)
-
         with (
             patch(
                 "app.services.crawler_earnings.datetime.datetime",
                 _fixed_datetime(datetime.datetime(2026, 11, 16, 9)),
             ),
             patch(
-                "app.services.crawler_earnings.crawler_core.scrape_data_table_playwright",
-                new=scrape_rendered_page,
+                "app.services.crawler_earnings.crawler_core.fetch_multi_webpages_content_playwright",
+                new_callable=AsyncMock,
+                return_value=pages,
             ),
-            patch("app.services.crawler_earnings.random.uniform", return_value=0.0),
+        ):
+            result = asyncio.run(crawler_earnings.scrape_earnings_asx(datetime.date(2026, 11, 20)))
+
+        assert list(result.columns) == EARNINGS_COLUMNS
+        assert result["Ticker"].tolist() == ["AAA", "BBB", "CCC", "DDD"]
+        assert result["Company"].tolist() == ["Alpha Ltd", "BBB", "CCC", "Delta Ltd"]
+        assert result["Announcement Date"].tolist() == ["2026-11-17", "2026-11-18", "2026-11-19", "2026-11-20"]
+        assert result["Market Cap"].tolist() == [1_000_000_000, 0, 0, 0]
+        assert result["EPS"].tolist() == [1.0, 0.0, 0.0, 0.0]
+        assert result["EPS Forecast"].tolist() == [2.0, 0.0, 0.0, 0.0]
+        assert result[["Revenue", "Revenue Forecast"]].eq(0).all().all()
+        assert result.index.tolist() == [0, 1, 2, 3]
+
+    @pytest.mark.parametrize(
+        "public_function",
+        [crawler_earnings.scrape_earnings_asx, crawler_earnings.scrape_earnings_us],
+        ids=["asx", "us"],
+    )
+    @pytest.mark.parametrize(
+        "invalid_row",
+        [
+            {"Company": "No Ticker Ltd"},
+            {"Name": " ", "Company": "Blank Ticker Ltd"},
+            {"Name": pd.NA, "Company": "Null Ticker Ltd"},
+        ],
+        ids=["missing-header", "blank-value", "null-value"],
+    )
+    def test_invalid_tickers_on_later_pages_are_rejected(self, public_function, invalid_row):
+        with (
+            patch(
+                "app.services.crawler_earnings.datetime.datetime",
+                _fixed_datetime(datetime.datetime(2026, 11, 16, 9)),
+            ),
+            patch(
+                "app.services.crawler_earnings.crawler_core.fetch_multi_webpages_content_playwright",
+                new_callable=AsyncMock,
+                return_value=["first", "second"],
+            ),
+            patch(
+                "app.services.crawler_earnings.crawler_core.extract_data_table_from_html",
+                side_effect=[pd.DataFrame([{"Name": "AAA", "Company": "Alpha Ltd"}]), pd.DataFrame([invalid_row])],
+            ),
+            pytest.raises(ValueError) as exc_info,
+        ):
+            asyncio.run(public_function(datetime.date(2026, 11, 17)))
+
+        assert "Ticker" in str(exc_info.value)
+        assert "TipRanks" not in str(exc_info.value)
+
+    @pytest.mark.parametrize(
+        "public_function",
+        [crawler_earnings.scrape_earnings_asx, crawler_earnings.scrape_earnings_us],
+        ids=["asx", "us"],
+    )
+    @pytest.mark.parametrize(
+        ("column", "value"),
+        [
+            ("Market Cap", "not-money"),
+            ("Market Cap", "Infinity"),
+            ("EPS / Forecast", "$1 / bad"),
+            ("EPS / Forecast", "Infinity / $1"),
+            ("Revenue / Forecast", "inf / $1B"),
+        ],
+        ids=["invalid-cap", "infinite-cap", "invalid-eps-forecast", "infinite-eps", "infinite-revenue"],
+    )
+    def test_malformed_or_nonfinite_financial_values_are_rejected(self, public_function, column, value):
+        page = _table_html(["Name", "Company", column], [["BAD", "Bad Data Ltd", value]])
+        with (
+            patch(
+                "app.services.crawler_earnings.datetime.datetime",
+                _fixed_datetime(datetime.datetime(2026, 11, 16, 9)),
+            ),
+            patch(
+                "app.services.crawler_earnings.crawler_core.fetch_multi_webpages_content_playwright",
+                new_callable=AsyncMock,
+                return_value=[page],
+            ),
+            pytest.raises(ValueError),
+        ):
+            asyncio.run(public_function(datetime.date(2026, 11, 16)))
+
+    @pytest.mark.parametrize(
+        "public_function",
+        [crawler_earnings.scrape_earnings_asx, crawler_earnings.scrape_earnings_us],
+        ids=["asx", "us"],
+    )
+    @pytest.mark.parametrize(
+        ("end_date", "pages"),
+        [
+            (datetime.date(2026, 11, 15), []),
+            (datetime.date(2026, 11, 16), [None]),
+            (
+                datetime.date(2026, 11, 16),
+                [_table_html(["Name"], [["Currently there are no reports available for this date."]])],
+            ),
+        ],
+        ids=["before-today", "unavailable-page", "no-announcements"],
+    )
+    def test_empty_results_retain_the_canonical_columns(self, public_function, end_date, pages):
+        with (
+            patch(
+                "app.services.crawler_earnings.datetime.datetime",
+                _fixed_datetime(datetime.datetime(2026, 11, 16, 9)),
+            ),
+            patch(
+                "app.services.crawler_earnings.crawler_core.fetch_multi_webpages_content_playwright",
+                new_callable=AsyncMock,
+                return_value=pages,
+            ),
+        ):
+            result = asyncio.run(public_function(end_date))
+
+        pd.testing.assert_frame_equal(result, pd.DataFrame(columns=EARNINGS_COLUMNS))
+
+    def test_us_preserves_known_and_unknown_exchange_rows(self):
+        page = _table_html(["Name"], [["KNOWN"], ["UNKNOWN"]])
+        known_company = FakeCompany("NASDAQ", "KNOWN")
+        with (
+            patch(
+                "app.services.crawler_earnings.datetime.datetime",
+                _fixed_datetime(datetime.datetime(2026, 11, 16, 9)),
+            ),
+            patch(
+                "app.services.crawler_earnings.crawler_core.fetch_multi_webpages_content_playwright",
+                new_callable=AsyncMock,
+                return_value=[page],
+            ),
+            patch(
+                "app.services.crawler_earnings.market.market_indices.revert_lookup_company",
+                side_effect=lambda _country, ticker: known_company if ticker == "KNOWN" else None,
+            ),
         ):
             result = asyncio.run(crawler_earnings.scrape_earnings_us(datetime.date(2026, 11, 16)))
 
-        assert result.to_dict(orient="records") == [
-            {
-                "Symbol": "MSFT",
-                "Announcement Date": "2026-11-16",
-                "Company Name": "Microsoft",
-                "Exchange Name": "NASDAQ",
-            }
-        ]
+        assert list(result.columns) == EARNINGS_COLUMNS
+        assert result["Ticker"].tolist() == ["KNOWN", "UNKNOWN"]
+        assert result["Exchange"].tolist() == ["NASDAQ", "N/A"]
+        assert result["Currency"].tolist() == ["USD", "USD"]
+
+    @pytest.mark.parametrize(
+        "public_function",
+        [crawler_earnings.scrape_earnings_asx, crawler_earnings.scrape_earnings_us],
+        ids=["asx", "us"],
+    )
+    def test_timezone_lookup_failures_are_propagated(self, public_function):
+        with (
+            patch(
+                "app.services.crawler_earnings.zoneinfo.ZoneInfo",
+                side_effect=zoneinfo.ZoneInfoNotFoundError("missing timezone"),
+            ),
+            pytest.raises(zoneinfo.ZoneInfoNotFoundError),
+        ):
+            asyncio.run(public_function(datetime.date(2026, 11, 16)))
