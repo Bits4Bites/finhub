@@ -49,7 +49,7 @@ async def _get_upcoming_earnings_events(
     events = models_event.parse_upcoming_earnings_events_from_json(raw_data_json, default_vals)
     for event in events:
         event.symbol = f"{event.exchange}:{event.symbol}"
-        event.timestamp_str = conv.yyyymmdd_to_iso(event.timestamp_str or "", tz)
+        event.timestamp_str = conv.yyyymmdd_to_iso(event.timestamp_str or "", tz) or event.timestamp_str
         if event.timestamp_str is None:
             raise ValueError("earnings announcement date must use YYYY-MM-DD format")
         event.timestamp = int(datetime.datetime.fromisoformat(event.timestamp_str).timestamp())

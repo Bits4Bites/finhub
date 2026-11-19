@@ -1076,7 +1076,7 @@ class TestDividendCrawlers:
             (
                 ["Name", "Company", "Dividend Amount"],
                 ["BAD", "Bad Amount Ltd", "not-money"],
-                "invalid dividend amount: 'not-money'",
+                "invalid amount: 'not-money'",
             ),
             (
                 ["Company", "Payment Date"],
@@ -1091,7 +1091,7 @@ class TestDividendCrawlers:
             (
                 ["Name", "Dividend Amount"],
                 ["BAD", "Infinity"],
-                "invalid dividend amount: 'Infinity'",
+                "invalid amount: 'Infinity'",
             ),
         ],
         ids=["malformed-amount", "missing-columns", "missing-ticker-value", "infinite-amount"],
