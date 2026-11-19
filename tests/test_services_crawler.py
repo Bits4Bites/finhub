@@ -10,7 +10,7 @@ import pandas as pd
 import pytest
 from playwright import async_api as playwright_async_api
 
-from app.services import crawler_core, crawler_div, crawler_earnings
+from app.services import crawler_core, crawler_div, crawler_earnings, events_div
 
 DIVIDEND_COLUMNS = [
     "Ticker",
@@ -994,7 +994,7 @@ class TestTableScraping:
 
 
 class TestDividendCrawlers:
-    def test_asx_includes_today_and_the_inclusive_end_date_with_nullable_fields(self):
+    def test_asx_includes_today_and_the_inclusive_end_date_with_zero_numeric_defaults(self):
         today = datetime.date(2026, 11, 16)
         headers = ["Name", "Company", "Dividend Amount", "Dividend Yield", "Market Cap", "Payment Date"]
         pages = [
@@ -1035,8 +1035,8 @@ class TestDividendCrawlers:
         assert nullable_row["Ticker"] == "TLS"
         assert nullable_row["Div Amount"] == 0.09
         assert pd.isna(nullable_row["Payment Date"])
-        assert pd.isna(nullable_row["Div Yield"])
-        assert pd.isna(nullable_row["Market Cap"])
+        assert nullable_row["Div Yield"] == 0.0
+        assert nullable_row["Market Cap"] == 0
 
     def test_asx_keeps_later_dates_after_an_earlier_page_fails(self):
         today = datetime.date(2026, 11, 16)
@@ -1057,6 +1057,65 @@ class TestDividendCrawlers:
 
         assert result["Ticker"].tolist() == ["TLS"]
         assert result["Ex-Div Date"].tolist() == ["2026-11-17"]
+        assert result["Payment Date"].isna().all()
+        assert result[["Div Yield", "Market Cap"]].eq(0).all().all()
+
+    @pytest.mark.parametrize(
+        "public_function",
+        [crawler_div.scrape_dividends_asx, crawler_div.scrape_dividends_us, crawler_div.scrape_dividends_vn],
+        ids=["asx", "us", "vn"],
+    )
+    def test_missing_numeric_values_default_to_zero(self, public_function):
+        missing_values = [None, pd.NA, float("nan"), "", "N/A", "NA", "NaN", "-"]
+        if public_function is crawler_div.scrape_dividends_vn:
+            source_data = pd.DataFrame(
+                [
+                    {"Mã CK": f"ZERO{i}", "Sàn": "HOSE", "Ngày GDKHQ▼": "16/11/2026", "Tỷ lệ": value}
+                    for i, value in enumerate(missing_values)
+                ]
+            )
+            table_boundary = patch(
+                "app.services.crawler_div.crawler_core.scrape_data_table_playwright",
+                new_callable=AsyncMock,
+                side_effect=[source_data, pd.DataFrame()],
+            )
+        else:
+            source_data = pd.DataFrame(
+                [
+                    {
+                        "Name": f"ZERO{i}",
+                        "Company": "Missing Values Ltd",
+                        "Dividend Amount": value,
+                        "Dividend Yield": value,
+                        "Market Cap": value,
+                    }
+                    for i, value in enumerate(missing_values)
+                ]
+            )
+            table_boundary = patch(
+                "app.services.crawler_div.crawler_core.extract_data_table_from_html",
+                return_value=source_data,
+            )
+
+        with (
+            patch("app.services.crawler_div.datetime.datetime", _fixed_datetime(datetime.datetime(2026, 11, 16, 9))),
+            patch(
+                "app.services.crawler_div.crawler_core.fetch_multi_webpages_content_playwright",
+                new_callable=AsyncMock,
+                return_value=["unused"],
+            ),
+            table_boundary,
+            patch(
+                "app.services.crawler_div.market.market_indices.revert_lookup_company",
+                return_value=FakeCompany("NASDAQ", "ZERO"),
+            ),
+            patch("app.services.crawler_div.random.uniform", return_value=0.0),
+        ):
+            result = asyncio.run(public_function(datetime.date(2026, 11, 16)))
+
+        assert len(result) == len(missing_values)
+        assert result[["Div Amount", "Div Yield", "Market Cap"]].eq(0).all().all()
+        assert result["Payment Date"].isna().all()
 
     @pytest.mark.parametrize(
         ("public_function", "now"),
@@ -1076,14 +1135,41 @@ class TestDividendCrawlers:
         ):
             result = asyncio.run(public_function(datetime.date(2026, 11, 15)))
 
-        assert result.empty
-        assert list(result.columns) == DIVIDEND_COLUMNS
+        pd.testing.assert_frame_equal(result, pd.DataFrame(columns=DIVIDEND_COLUMNS))
 
-    def test_asx_propagates_source_normalization_failures(self):
-        page = _table_html(
-            ["Name", "Company", "Dividend Amount"],
-            [["BAD", "Bad Amount Ltd", "not-money"]],
-        )
+    @pytest.mark.parametrize(
+        "public_function",
+        [crawler_div.scrape_dividends_asx, crawler_div.scrape_dividends_us],
+        ids=["asx", "us"],
+    )
+    @pytest.mark.parametrize(
+        ("headers", "row", "expected_error"),
+        [
+            (
+                ["Name", "Company", "Dividend Amount"],
+                ["BAD", "Bad Amount Ltd", "not-money"],
+                "invalid dividend amount: 'not-money'",
+            ),
+            (
+                ["Company", "Payment Date"],
+                ["Incomplete Ltd", "N/A"],
+                "Dividend table is missing columns: ['Div Amount', 'Ticker']",
+            ),
+            (
+                ["Name", "Dividend Amount"],
+                [" ", "$0.25"],
+                "Dividend table has missing values in required columns: ['Ticker']",
+            ),
+            (
+                ["Name", "Dividend Amount"],
+                ["BAD", "Infinity"],
+                "invalid dividend amount: 'Infinity'",
+            ),
+        ],
+        ids=["malformed-amount", "missing-columns", "missing-ticker-value", "infinite-amount"],
+    )
+    def test_propagates_source_normalization_failures(self, public_function, headers, row, expected_error):
+        page = _table_html(headers, [row])
 
         with (
             patch("app.services.crawler_div.datetime.datetime", _fixed_datetime(datetime.datetime(2026, 11, 16, 9))),
@@ -1092,9 +1178,59 @@ class TestDividendCrawlers:
                 new_callable=AsyncMock,
                 return_value=[page],
             ),
-            pytest.raises(ValueError),
+            pytest.raises(ValueError) as exc_info,
         ):
-            asyncio.run(crawler_div.scrape_dividends_asx(datetime.date(2026, 11, 16)))
+            asyncio.run(public_function(datetime.date(2026, 11, 16)))
+
+        assert str(exc_info.value) == expected_error
+
+    @pytest.mark.parametrize(
+        "public_function",
+        [crawler_div.scrape_dividends_asx, crawler_div.scrape_dividends_us],
+        ids=["asx", "us"],
+    )
+    @pytest.mark.parametrize(
+        ("source_column", "expected_column"),
+        [("Name", "Ticker"), ("Dividend Amount", "Div Amount")],
+        ids=["missing-ticker", "missing-amount"],
+    )
+    def test_daily_pages_are_validated_before_merging(self, public_function, source_column, expected_column):
+        incomplete_row = {"Name": "BBB", "Company": "Beta Ltd", "Dividend Amount": "$0.20"}
+        incomplete_row.pop(source_column)
+        pages = [
+            _table_html(["Name", "Company", "Dividend Amount"], [["AAA", "Alpha Ltd", "$0.10"]]),
+            _table_html(list(incomplete_row), [list(incomplete_row.values())]),
+        ]
+
+        with (
+            patch("app.services.crawler_div.datetime.datetime", _fixed_datetime(datetime.datetime(2026, 11, 16, 9))),
+            patch(
+                "app.services.crawler_div.crawler_core.fetch_multi_webpages_content_playwright",
+                new_callable=AsyncMock,
+                return_value=pages,
+            ),
+            pytest.raises(ValueError, match=rf"missing columns.*{expected_column}"),
+        ):
+            asyncio.run(public_function(datetime.date(2026, 11, 17)))
+
+    def test_missing_company_names_fall_back_to_each_ticker(self):
+        pages = [
+            _table_html(["Name", "Company", "Dividend Amount"], [["AAA", "Alpha Ltd", "$0.10"]]),
+            _table_html(["Name", "Dividend Amount"], [["BBB", "$0.20"]]),
+            _table_html(["Name", "Company", "Dividend Amount"], [["CCC", " ", "$0.30"]]),
+        ]
+
+        with (
+            patch("app.services.crawler_div.datetime.datetime", _fixed_datetime(datetime.datetime(2026, 11, 16, 9))),
+            patch(
+                "app.services.crawler_div.crawler_core.fetch_multi_webpages_content_playwright",
+                new_callable=AsyncMock,
+                return_value=pages,
+            ),
+        ):
+            result = asyncio.run(crawler_div.scrape_dividends_asx(datetime.date(2026, 11, 18)))
+
+        assert result["Company"].tolist() == ["Alpha Ltd", "BBB", "CCC"]
 
     def test_us_marks_unknown_tickers_and_uses_loaded_exchange_data_for_known_tickers(self):
         page = _table_html(
@@ -1123,19 +1259,48 @@ class TestDividendCrawlers:
         ):
             result = asyncio.run(crawler_div.scrape_dividends_us(datetime.date(2026, 11, 16)))
 
+        assert list(result.columns) == DIVIDEND_COLUMNS
         assert result["Ticker"].tolist() == ["KNOWN", "UNKNOWN"]
         assert result["Exchange"].tolist() == ["NASDAQ", "N/A"]
         assert result["Currency"].tolist() == ["USD", "USD"]
 
-    def test_vn_uses_the_two_working_day_boundary_and_normalizes_cash_dividends(self):
+    def test_vn_returns_dividends_after_rendering_the_calendar(self):
+        html = _table_html(
+            ["Mã CK", "Sàn", "Ngày GDKHQ▼", "Tỷ lệ"],
+            [["VNM", "HOSE", "16/11/2026", "15%"]],
+            table_id="event-content",
+        )
+
+        def content(page):
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(page.url).query)
+            return html if query.get("page") == ["1"] else "<html></html>"
+
+        browser = FakeBrowser(default_html=content)
+        with (
+            patch("app.services.crawler_div.datetime.datetime", _fixed_datetime(datetime.datetime(2026, 11, 16, 9))),
+            _playwright_boundary(browser),
+            patch("app.services.crawler_div.random.uniform", return_value=0.0),
+        ):
+            result = asyncio.run(crawler_div.scrape_dividends_vn(datetime.date(2026, 11, 16)))
+
+        assert result["Ticker"].tolist() == ["VNM"]
+        assert result.iloc[0]["Div Amount"] == 1500.0
+        assert pd.isna(result.iloc[0]["Payment Date"])
+
+    @pytest.mark.parametrize(
+        ("rate", "expected_amount", "expected_yield"),
+        [("15%", 1500.0, 0.15), ("N/A", 0.0, 0.0)],
+        ids=["reported-rate", "unavailable-rate"],
+    )
+    def test_vn_uses_today_as_the_boundary_and_normalizes_cash_dividends(self, rate, expected_amount, expected_yield):
         source_data = pd.DataFrame(
             [
                 {
                     "Mã CK": "VNM",
                     "Sàn": "hose",
-                    "Ngày GDKHQ▼": "12/11/2026",
+                    "Ngày GDKHQ▼": "16/11/2026",
                     "Ngày thực hiện": "N/A",
-                    "Tỷ lệ": "15%",
+                    "Tỷ lệ": rate,
                 }
             ]
         )
@@ -1146,35 +1311,60 @@ class TestDividendCrawlers:
                 "app.services.crawler_div.crawler_core.scrape_data_table_playwright",
                 new=_vn_range_scraper(
                     source_data,
-                    expected_start=datetime.date(2026, 11, 12),
-                    expected_end=datetime.date(2026, 11, 12),
+                    expected_start=datetime.date(2026, 11, 16),
+                    expected_end=datetime.date(2026, 11, 16),
                 ),
             ),
             patch("app.services.crawler_div.random.uniform", return_value=0.0),
         ):
-            result = asyncio.run(crawler_div.scrape_dividends_vn(datetime.date(2026, 11, 12)))
+            result = asyncio.run(crawler_div.scrape_dividends_vn(datetime.date(2026, 11, 16)))
+            with patch(
+                "app.services.events_div.services_crawler_div.scrape_dividends_vn",
+                new_callable=AsyncMock,
+                return_value=result,
+            ):
+                events = asyncio.run(events_div.get_vn_upcoming_dividends_events())
 
         assert list(result.columns) == DIVIDEND_COLUMNS
         row = result.iloc[0]
-        assert row.drop(labels=["Payment Date", "Market Cap"]).to_dict() == {
+        assert row.drop(labels=["Payment Date", "Market Cap", "Div Amount", "Div Yield"]).to_dict() == {
             "Ticker": "VNM",
             "Company": "VNM",
-            "Ex-Div Date": "2026-11-12",
-            "Div Amount": 1500.0,
-            "Div Yield": 0.15,
+            "Ex-Div Date": "2026-11-16",
             "Exchange": "HOSE",
             "Currency": "VND",
         }
+        assert row["Div Amount"] == expected_amount
+        assert row["Div Yield"] == expected_yield
         assert pd.isna(row["Payment Date"])
-        assert pd.isna(row["Market Cap"])
+        assert row["Market Cap"] == 0
+        assert len(events) == 1
+        assert events[0].amount == expected_amount
+        assert events[0].dividend_yield == expected_yield
 
-    def test_vn_end_date_before_the_two_working_day_boundary_returns_empty(self):
+    def test_vn_pages_are_validated_before_merging(self):
+        valid_page = pd.DataFrame([{"Mã CK": "VNM", "Sàn": "HOSE", "Ngày GDKHQ▼": "16/11/2026", "Tỷ lệ": "15%"}])
+        incomplete_page = valid_page.drop(columns=["Ngày GDKHQ▼"])
+
+        with (
+            patch("app.services.crawler_div.datetime.datetime", _fixed_datetime(datetime.datetime(2026, 11, 16, 9))),
+            patch(
+                "app.services.crawler_div.crawler_core.scrape_data_table_playwright",
+                new_callable=AsyncMock,
+                side_effect=[valid_page, incomplete_page, pd.DataFrame()],
+            ),
+            patch("app.services.crawler_div.random.uniform", return_value=0.0),
+            pytest.raises(ValueError, match="missing columns.*Ex-Div Date"),
+        ):
+            asyncio.run(crawler_div.scrape_dividends_vn(datetime.date(2026, 11, 16)))
+
+    def test_vn_end_date_before_today_returns_empty(self):
         source_data = pd.DataFrame(
             [
                 {
                     "Mã CK": "TOO_LATE",
                     "Sàn": "HOSE",
-                    "Ngày GDKHQ▼": "12/11/2026",
+                    "Ngày GDKHQ▼": "16/11/2026",
                     "Tỷ lệ": "10%",
                 }
             ]
@@ -1188,35 +1378,62 @@ class TestDividendCrawlers:
             ),
             patch("app.services.crawler_div.random.uniform", return_value=0.0),
         ):
-            result = asyncio.run(crawler_div.scrape_dividends_vn(datetime.date(2026, 11, 11)))
+            result = asyncio.run(crawler_div.scrape_dividends_vn(datetime.date(2026, 11, 15)))
 
         assert result.empty
         assert list(result.columns) == DIVIDEND_COLUMNS
 
     @pytest.mark.parametrize(
-        "source_row",
+        ("source_row", "error_pattern"),
         [
-            {
-                "Sàn": "HOSE",
-                "Ngày GDKHQ▼": "12/11/2026",
-                "Tỷ lệ": "15%",
-            },
-            {
-                "Mã CK": "VNM",
-                "Sàn": "HOSE",
-                "Ngày GDKHQ▼": "not-a-date",
-                "Tỷ lệ": "15%",
-            },
-            {
-                "Mã CK": "VNM",
-                "Sàn": "HOSE",
-                "Ngày GDKHQ▼": "12/11/2026",
-                "Tỷ lệ": "not-a-rate",
-            },
+            (
+                {
+                    "Sàn": "HOSE",
+                    "Ngày GDKHQ▼": "16/11/2026",
+                    "Tỷ lệ": "15%",
+                },
+                r"^Dividend table is missing columns: \['Ticker'\]$",
+            ),
+            (
+                {
+                    "Mã CK": "VNM",
+                    "Sàn": "HOSE",
+                    "Ngày GDKHQ▼": "not-a-date",
+                    "Tỷ lệ": "15%",
+                },
+                "not-a-date",
+            ),
+            (
+                {
+                    "Mã CK": "VNM",
+                    "Sàn": "HOSE",
+                    "Ngày GDKHQ▼": "16/11/2026",
+                    "Tỷ lệ": "not-a-rate",
+                },
+                "not-a-rate",
+            ),
+            (
+                {
+                    "Mã CK": pd.NA,
+                    "Sàn": " ",
+                    "Ngày GDKHQ▼": pd.NA,
+                    "Tỷ lệ": "15%",
+                },
+                "missing values.*Ex-Div Date.*Exchange.*Ticker",
+            ),
+            (
+                {
+                    "Mã CK": "VNM",
+                    "Sàn": "HOSE",
+                    "Ngày GDKHQ▼": "NaT",
+                    "Tỷ lệ": "15%",
+                },
+                "invalid ex-dividend date",
+            ),
         ],
-        ids=["missing-ticker", "malformed-ex-date", "malformed-yield"],
+        ids=["missing-ticker", "malformed-ex-date", "malformed-yield", "missing-values", "missing-date-after-parsing"],
     )
-    def test_vn_propagates_required_source_normalization_failures(self, source_row):
+    def test_vn_propagates_required_source_normalization_failures(self, source_row, error_pattern):
         source_data = pd.DataFrame([source_row])
 
         with (
@@ -1225,14 +1442,14 @@ class TestDividendCrawlers:
                 "app.services.crawler_div.crawler_core.scrape_data_table_playwright",
                 new=_vn_range_scraper(
                     source_data,
-                    expected_start=datetime.date(2026, 11, 12),
-                    expected_end=datetime.date(2026, 11, 12),
+                    expected_start=datetime.date(2026, 11, 16),
+                    expected_end=datetime.date(2026, 11, 16),
                 ),
             ),
             patch("app.services.crawler_div.random.uniform", return_value=0.0),
-            pytest.raises(ValueError),
+            pytest.raises(ValueError, match=error_pattern),
         ):
-            asyncio.run(crawler_div.scrape_dividends_vn(datetime.date(2026, 11, 12)))
+            asyncio.run(crawler_div.scrape_dividends_vn(datetime.date(2026, 11, 16)))
 
     @pytest.mark.parametrize(
         "public_function",

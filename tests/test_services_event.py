@@ -2,6 +2,7 @@ import asyncio
 import datetime
 import json
 import math
+import threading
 import zoneinfo
 from unittest.mock import AsyncMock, patch
 from urllib.parse import urlparse
@@ -9,7 +10,7 @@ from urllib.parse import urlparse
 import pandas as pd
 import pytest
 
-from app.services import event, events_div
+from app.services import events_div, events_earnings
 from app.services import market as services_market
 
 DIVIDEND_COLUMNS = [
@@ -75,13 +76,13 @@ class TestEarningsEvents:
         ("public_function", "crawler_target", "invalid_index"),
         [
             (
-                event.get_asx_upcoming_earnings_events,
-                "app.services.event.services_crawler_earnings.scrape_earnings_asx",
+                events_earnings.get_asx_upcoming_earnings_events,
+                "app.services.events_earnings.services_crawler_earnings.scrape_earnings_asx",
                 "SP500",
             ),
             (
-                event.get_us_upcoming_earnings_events,
-                "app.services.event.services_crawler_earnings.scrape_earnings_us",
+                events_earnings.get_us_upcoming_earnings_events,
+                "app.services.events_earnings.services_crawler_earnings.scrape_earnings_us",
                 "ASX200",
             ),
         ],
@@ -102,11 +103,11 @@ class TestEarningsEvents:
         )
 
         with patch(
-            "app.services.event.services_crawler_earnings.scrape_earnings_asx",
+            "app.services.events_earnings.services_crawler_earnings.scrape_earnings_asx",
             new_callable=AsyncMock,
             return_value=raw_data,
         ):
-            result = asyncio.run(event.get_asx_upcoming_earnings_events())
+            result = asyncio.run(events_earnings.get_asx_upcoming_earnings_events())
 
         assert len(result) == 1
         earnings = result[0]
@@ -135,12 +136,12 @@ class TestEarningsEvents:
         with (
             patch.object(services_market, "market_indices", store),
             patch(
-                "app.services.event.services_crawler_earnings.scrape_earnings_asx",
+                "app.services.events_earnings.services_crawler_earnings.scrape_earnings_asx",
                 new_callable=AsyncMock,
                 return_value=raw_data,
             ),
         ):
-            result = asyncio.run(event.get_asx_upcoming_earnings_events("asx20"))
+            result = asyncio.run(events_earnings.get_asx_upcoming_earnings_events("asx20"))
 
         assert [earnings.symbol for earnings in result] == ["ASX:CBA"]
 
@@ -155,11 +156,11 @@ class TestEarningsEvents:
         )
 
         with patch(
-            "app.services.event.services_crawler_earnings.scrape_earnings_us",
+            "app.services.events_earnings.services_crawler_earnings.scrape_earnings_us",
             new_callable=AsyncMock,
             return_value=raw_data,
         ):
-            result = asyncio.run(event.get_us_upcoming_earnings_events())
+            result = asyncio.run(events_earnings.get_us_upcoming_earnings_events())
 
         assert [earnings.symbol for earnings in result] == ["NYSE:MSFT", "NASDAQ:AAPL"]
         assert [earnings.company_name for earnings in result] == ["Microsoft", "Apple Inc."]
@@ -170,24 +171,24 @@ class TestEarningsEvents:
 
     def test_empty_crawler_frame_returns_no_events(self):
         with patch(
-            "app.services.event.services_crawler_earnings.scrape_earnings_asx",
+            "app.services.events_earnings.services_crawler_earnings.scrape_earnings_asx",
             new_callable=AsyncMock,
             return_value=pd.DataFrame(),
         ):
-            assert asyncio.run(event.get_asx_upcoming_earnings_events()) == []
+            assert asyncio.run(events_earnings.get_asx_upcoming_earnings_events()) == []
 
     def test_missing_required_crawler_column_is_rejected(self):
         raw_data = pd.DataFrame({"Symbol": ["CBA"], "Company Name": ["Commonwealth Bank"]})
 
         with (
             patch(
-                "app.services.event.services_crawler_earnings.scrape_earnings_asx",
+                "app.services.events_earnings.services_crawler_earnings.scrape_earnings_asx",
                 new_callable=AsyncMock,
                 return_value=raw_data,
             ),
             pytest.raises(ValueError),
         ):
-            asyncio.run(event.get_asx_upcoming_earnings_events())
+            asyncio.run(events_earnings.get_asx_upcoming_earnings_events())
 
     def test_us_events_require_exchange_name(self):
         raw_data = pd.DataFrame(
@@ -200,13 +201,13 @@ class TestEarningsEvents:
 
         with (
             patch(
-                "app.services.event.services_crawler_earnings.scrape_earnings_us",
+                "app.services.events_earnings.services_crawler_earnings.scrape_earnings_us",
                 new_callable=AsyncMock,
                 return_value=raw_data,
             ),
             pytest.raises(ValueError),
         ):
-            asyncio.run(event.get_us_upcoming_earnings_events())
+            asyncio.run(events_earnings.get_us_upcoming_earnings_events())
 
     @pytest.mark.parametrize(
         (
@@ -220,8 +221,8 @@ class TestEarningsEvents:
         ),
         [
             (
-                event.get_asx_upcoming_earnings_events,
-                "app.services.event.services_crawler_earnings.scrape_earnings_asx",
+                events_earnings.get_asx_upcoming_earnings_events,
+                "app.services.events_earnings.services_crawler_earnings.scrape_earnings_asx",
                 "ASX20",
                 "ASX:CBA",
                 "Australia/Sydney",
@@ -241,8 +242,8 @@ class TestEarningsEvents:
                 ),
             ),
             (
-                event.get_us_upcoming_earnings_events,
-                "app.services.event.services_crawler_earnings.scrape_earnings_us",
+                events_earnings.get_us_upcoming_earnings_events,
+                "app.services.events_earnings.services_crawler_earnings.scrape_earnings_us",
                 "NASDAQ100",
                 "NASDAQ:AAPL",
                 "America/New_York",
@@ -365,6 +366,24 @@ class TestDividendEvents:
         assert first.source_name == "ASX"
         assert first.status == "declared"
         assert urlparse(first.link).hostname == "www.asx.com.au"
+
+    def test_missing_crawled_numeric_fields_are_zero_in_events(self):
+        html = (
+            "<table><thead><tr><th>Name</th><th>Company</th><th>Dividend Amount</th></tr></thead>"
+            "<tbody><tr><td>AAA</td><td>Alpha Ltd</td><td>AU$0.25</td></tr></tbody></table>"
+        )
+
+        with patch(
+            "app.services.crawler_div.crawler_core.fetch_multi_webpages_content_playwright",
+            new_callable=AsyncMock,
+            return_value=[html],
+        ):
+            result = asyncio.run(events_div.get_asx_upcoming_dividends_events())
+
+        assert len(result) == 1
+        assert result[0].amount == 0.25
+        assert result[0].dividend_yield == 0.0
+        assert result[0].payment_date is None
 
     def test_us_events_omit_unknown_exchanges_and_preserve_order(self):
         raw_data = _dividend_frame(
@@ -502,32 +521,13 @@ class TestDividendEvents:
         with patch(crawler_target, new_callable=AsyncMock, return_value=pd.DataFrame()):
             assert asyncio.run(public_function()) == []
 
-    def test_noncanonical_crawler_frame_is_rejected(self):
-        raw_data = pd.DataFrame(
-            {
-                "Ticker": ["CBA"],
-                "Company": ["Commonwealth Bank"],
-                "Ex-Div Date": ["2026-11-20"],
-            }
-        )
-
-        with (
-            patch(
-                "app.services.events_div.services_crawler_div.scrape_dividends_asx",
-                new_callable=AsyncMock,
-                return_value=raw_data,
-            ),
-            pytest.raises(ValueError),
-        ):
-            asyncio.run(events_div.get_asx_upcoming_dividends_events())
-
 
 @pytest.mark.parametrize(
     ("public_function", "crawler_target", "raw_data", "expected_symbols"),
     [
         (
-            event.get_asx_upcoming_earnings_events,
-            "app.services.event.services_crawler_earnings.scrape_earnings_asx",
+            events_earnings.get_asx_upcoming_earnings_events,
+            "app.services.events_earnings.services_crawler_earnings.scrape_earnings_asx",
             pd.DataFrame(
                 {
                     "Symbol": ["BHP", "CBA"],
@@ -538,8 +538,8 @@ class TestDividendEvents:
             ["ASX:BHP", "ASX:CBA"],
         ),
         (
-            event.get_us_upcoming_earnings_events,
-            "app.services.event.services_crawler_earnings.scrape_earnings_us",
+            events_earnings.get_us_upcoming_earnings_events,
+            "app.services.events_earnings.services_crawler_earnings.scrape_earnings_us",
             pd.DataFrame(
                 {
                     "Symbol": ["MSFT", "AAPL"],
@@ -602,8 +602,8 @@ def test_event_functions_preserve_source_order(
     ("public_function", "crawler_target", "index_name", "raw_data"),
     [
         (
-            event.get_asx_upcoming_earnings_events,
-            "app.services.event.services_crawler_earnings.scrape_earnings_asx",
+            events_earnings.get_asx_upcoming_earnings_events,
+            "app.services.events_earnings.services_crawler_earnings.scrape_earnings_asx",
             "ASX20",
             pd.DataFrame(
                 {
@@ -614,8 +614,8 @@ def test_event_functions_preserve_source_order(
             ),
         ),
         (
-            event.get_us_upcoming_earnings_events,
-            "app.services.event.services_crawler_earnings.scrape_earnings_us",
+            events_earnings.get_us_upcoming_earnings_events,
+            "app.services.events_earnings.services_crawler_earnings.scrape_earnings_us",
             "NASDAQ100",
             pd.DataFrame(
                 {
@@ -668,8 +668,8 @@ def test_loaded_index_without_matching_constituent_returns_empty(
     ("public_function", "crawler_target", "index_name", "raw_data"),
     [
         (
-            event.get_asx_upcoming_earnings_events,
-            "app.services.event.services_crawler_earnings.scrape_earnings_asx",
+            events_earnings.get_asx_upcoming_earnings_events,
+            "app.services.events_earnings.services_crawler_earnings.scrape_earnings_asx",
             "ASX20",
             pd.DataFrame(
                 {
@@ -680,8 +680,8 @@ def test_loaded_index_without_matching_constituent_returns_empty(
             ),
         ),
         (
-            event.get_us_upcoming_earnings_events,
-            "app.services.event.services_crawler_earnings.scrape_earnings_us",
+            events_earnings.get_us_upcoming_earnings_events,
+            "app.services.events_earnings.services_crawler_earnings.scrape_earnings_us",
             "NASDAQ100",
             pd.DataFrame(
                 {
@@ -733,8 +733,8 @@ def test_supported_but_unloaded_index_raises_key_error(
     ("public_function", "crawler_target", "raw_data"),
     [
         (
-            event.get_asx_upcoming_earnings_events,
-            "app.services.event.services_crawler_earnings.scrape_earnings_asx",
+            events_earnings.get_asx_upcoming_earnings_events,
+            "app.services.events_earnings.services_crawler_earnings.scrape_earnings_asx",
             pd.DataFrame(
                 {
                     "Symbol": ["CBA"],
@@ -744,8 +744,8 @@ def test_supported_but_unloaded_index_raises_key_error(
             ),
         ),
         (
-            event.get_us_upcoming_earnings_events,
-            "app.services.event.services_crawler_earnings.scrape_earnings_us",
+            events_earnings.get_us_upcoming_earnings_events,
+            "app.services.events_earnings.services_crawler_earnings.scrape_earnings_us",
             pd.DataFrame(
                 {
                     "Symbol": ["AAPL"],
@@ -852,6 +852,55 @@ def _ticker_info(**overrides):
 
 
 class TestAnalyseDividendEvent:
+    @pytest.mark.parametrize("blocked_access", ["info", "history"])
+    def test_market_data_access_does_not_block_event_loop(self, blocked_access):
+        async def run_analysis():
+            loop = asyncio.get_running_loop()
+            access_started = asyncio.Event()
+            release_access = threading.Event()
+            ticker = FakeTicker(_ticker_info(), _history_frame())
+
+            def block_access():
+                loop.call_soon_threadsafe(access_started.set)
+                if not release_access.wait(timeout=5):
+                    raise TimeoutError("Market-data access blocked the event loop")
+
+            class BlockingTicker:
+                @property
+                def info(self):
+                    if blocked_access == "info":
+                        block_access()
+                    return ticker.info
+
+                def history(self, **kwargs):
+                    if blocked_access == "history":
+                        block_access()
+                    return ticker.history(**kwargs)
+
+            with patch(
+                "app.services.events_div.yf.Ticker",
+                return_value=FakeTicker({}, _history_frame()),
+            ):
+                task = asyncio.create_task(
+                    events_div.analyse_dividend_event(
+                        ticker=BlockingTicker(),
+                        symbol="TEST",
+                        ex_date="2026-11-20",
+                        div_amount=2.5,
+                    )
+                )
+                try:
+                    await asyncio.wait_for(access_started.wait(), timeout=5)
+                finally:
+                    release_access.set()
+                    result = await task
+            return result
+
+        result = asyncio.run(run_analysis())
+
+        assert result is not None
+        assert result.num_samples == 4
+
     def test_returns_none_for_unsupported_quote_type(self):
         ticker = FakeTicker(_ticker_info(quoteType="CURRENCY"), _history_frame())
 

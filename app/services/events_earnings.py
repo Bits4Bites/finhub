@@ -8,23 +8,16 @@ from ..utils import asset as asset_utils
 from ..utils import conv
 
 
-def _calc_end_date_to_fetch_events(*, event_type: str, tz: zoneinfo.ZoneInfo, index: str = ""):
-    today = datetime.datetime.now(tz).date()
-    if index:  # if index is provided to filter events, we look further into the future to capture more relevant events
-        if "EARNINGS" in event_type.upper():
-            end_date = today + datetime.timedelta(days=10)
-        else:
-            end_date = today + datetime.timedelta(days=14)
-    else:  # if no index filter is provided, we can look at a shorter time window for more immediate events
-        end_date = today + datetime.timedelta(days=7)
-    return end_date
-
-
 async def _get_upcoming_earnings_events(
-    country: str, tz: zoneinfo.ZoneInfo, *, default_vals: dict[str, typing.Any] | None = None, index: str = ""
+    country: str,
+    tz: zoneinfo.ZoneInfo,
+    *,
+    default_vals: dict[str, typing.Any] | None = None,
 ) -> list[models_event.UpcomingEarningsEvent]:
     country = conv.country_to_iso2(country)
-    end_date = _calc_end_date_to_fetch_events(event_type="EARNINGS", tz=tz, index=index)
+    end_date = datetime.datetime.now(tz).date() + (
+        datetime.timedelta(days=14) if country == "AU" else datetime.timedelta(days=7)
+    )
     raw_data = (
         await services_crawler_earnings.scrape_earnings_asx(end_date)
         if country == "AU"
@@ -107,7 +100,6 @@ async def get_asx_upcoming_earnings_events(index: str = "") -> list[models_event
     country = "AU"
     tz = zoneinfo.ZoneInfo("Australia/Sydney")
     default_vals = {
-        "exchange": "ASX",
         "src": "TipRanks",
         "status": "estimated",
         "report_period": "N/A",

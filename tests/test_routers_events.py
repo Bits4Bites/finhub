@@ -381,11 +381,11 @@ def test_earnings_country_aliases_select_the_documented_market():
 
     with (
         mock.patch(
-            "app.routers.events.services_event.get_asx_upcoming_earnings_events",
+            "app.routers.events_earnings.services_events_earnings.get_asx_upcoming_earnings_events",
             new=au,
         ),
         mock.patch(
-            "app.routers.events.services_event.get_us_upcoming_earnings_events",
+            "app.routers.events_earnings.services_events_earnings.get_us_upcoming_earnings_events",
             new=us,
         ),
     ):
@@ -414,11 +414,11 @@ def test_invalid_or_cross_market_earnings_index_returns_empty_data(country, inde
 
     with (
         mock.patch(
-            "app.routers.events.services_event.get_asx_upcoming_earnings_events",
+            "app.routers.events_earnings.services_events_earnings.get_asx_upcoming_earnings_events",
             new=no_events,
         ),
         mock.patch(
-            "app.routers.events.services_event.get_us_upcoming_earnings_events",
+            "app.routers.events_earnings.services_events_earnings.get_us_upcoming_earnings_events",
             new=no_events,
         ),
     ):
@@ -566,7 +566,7 @@ def test_sync_listing_omitted_or_unsupported_country_returns_501(country):
             {"country": "AU"},
         ),
         (
-            "app.routers.events.services_event.get_us_upcoming_earnings_events",
+            "app.routers.events_earnings.services_events_earnings.get_us_upcoming_earnings_events",
             "/events/upcoming_earnings",
             {"country": "US"},
         ),
@@ -603,7 +603,7 @@ ASYNC_EVENT_CASES = [
         "/events/poll_upcoming_earnings_async",
         {"country": "US", "index": "SP500"},
         {"country": "U.S.A.", "index": "sp500"},
-        "app.routers.events.services_event.get_us_upcoming_earnings_events",
+        "app.routers.events_earnings.services_events_earnings.get_us_upcoming_earnings_events",
         _earnings_event("NASDAQ:ROUTEUS"),
     ),
     (
