@@ -14,8 +14,8 @@ from .routers import (
     ai_portfolio_review,
     ai_portfolio_spotlight,
     ai_ticker,
-    events,
     events_div,
+    events_earnings,
     events_listings,
     market,
     stocks,
@@ -220,7 +220,7 @@ app.include_router(
     responses={**_AUTH_RESPONSES, **_SERVER_ERROR_RESPONSES, **_PROXY_RESPONSES},
 )
 app.include_router(
-    events.router,
+    events_earnings.router,
     dependencies=[Depends(auth.verify_api_key)],
     responses={**_AUTH_RESPONSES, **_SERVER_ERROR_RESPONSES, **_PROXY_RESPONSES},
 )

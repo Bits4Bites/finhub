@@ -6,7 +6,7 @@ from .. import config
 from ..schemas import async_task
 from ..schemas import events as schemas_event
 from ..schemas.base_req_resp import BaseResponse
-from ..services import event as services_event
+from ..services import events_earnings as services_events_earnings
 from ..utils import conv
 from . import async_task as router_async_task
 from . import proxy_handler
@@ -31,9 +31,9 @@ async def _get_upcoming_earnings_event_result(country: str, index: str) -> schem
     country = conv.country_to_iso2(country)
     match country:
         case "AU":
-            events = await services_event.get_asx_upcoming_earnings_events(index)
+            events = await services_events_earnings.get_asx_upcoming_earnings_events(index)
         case "US":
-            events = await services_event.get_us_upcoming_earnings_events(index)
+            events = await services_events_earnings.get_us_upcoming_earnings_events(index)
         case _:
             return schemas_event.UpcomingEarningsResponse(status=501, message=f"Unsupported country '{country}'")
 
