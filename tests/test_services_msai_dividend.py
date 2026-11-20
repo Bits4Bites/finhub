@@ -13,7 +13,7 @@ import pandas as pd
 import pytest
 from pydantic import ValidationError
 
-from app.models import events_dividends as models_dividends
+from app.models import events_div as models_dividends
 from app.services import ai_helper
 from app.services import msai_analyze_div_event as service
 from app.utils import ai_reference

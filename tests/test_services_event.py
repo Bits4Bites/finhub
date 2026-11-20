@@ -396,6 +396,14 @@ class TestEarningsEvents:
         assert all(event.event_category == "earnings" for event in result)
         assert all(event.status == "estimated" and event.report_period == "N/A" for event in result)
         assert len({event.link for event in result}) == len(result)
+        currency = "AUD" if timezone_name == "Australia/Sydney" else "USD"
+        assert [
+            (event.market_cap, event.eps, event.eps_forecast, event.revenue, event.revenue_forecast, event.currency)
+            for event in result
+        ] == [
+            (0, 0.0, -2.5, 1_001_000_000, 0, currency),
+            (0, -1.25, 0.0, 0, 2_000_000_000, currency),
+        ]
 
 
 class TestDividendEvents:

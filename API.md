@@ -300,6 +300,11 @@ data; polling returns HTTP `200` with envelope `status=501` and an unsupported-c
 
 Get upcoming earnings events for a market.
 
+Each event includes `market_cap`, `eps`, `eps_forecast`, `revenue`, `revenue_forecast`, and `currency`.
+Market capitalization and revenues use whole currency units; EPS values retain fractions and may be negative.
+Unavailable financial amounts use zero, so zero does not distinguish missing data from an actual zero.
+Currency is `AUD` for Australia and `USD` for the United States. Completed asynchronous requests return the same fields.
+
 | Parameter | Type  | Required | Description                                                                                              |
 |-----------|-------|----------|----------------------------------------------------------------------------------------------------------|
 | `country` | query | Yes      | Country code: `AU` or `US`.                                                                              |

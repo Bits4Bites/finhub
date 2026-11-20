@@ -1,7 +1,7 @@
 from datetime import UTC, date, datetime
 
 from app.models import ai as models_ai
-from app.models import events_dividends as models_dividends
+from app.models import events_div as models_dividends
 from app.models import types
 
 SOURCE_ID = "src-0123456789abcdef0123456789abcdef"
