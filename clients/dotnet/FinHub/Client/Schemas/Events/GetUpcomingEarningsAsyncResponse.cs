@@ -1,4 +1,4 @@
-using FinHub.Client.Models.Events;
+using FinHub.Client.Models.Earnings;
 using MyPo.Shared.Api;
 
 namespace FinHub.Client.Schemas.Events;

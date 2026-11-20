@@ -145,6 +145,10 @@ responses use HTTP `202`, completed polls can contain the event collection in
 `Data`, and failed polls use HTTP `500`. Async responses require the shared `AsyncTaskInfo` metadata and strict
 `TaskState`; cached tasks expire after one hour.
 
+Dividend event models are in `FinHub.Client.Models.Dividends`, earnings event models are in
+`FinHub.Client.Models.Earnings`, and both inherit `FinHub.Client.Models.Events.EventBase`.
+Response schemas remain in `FinHub.Client.Schemas.Events`.
+
 `EventBase.TimestampStr` is required and non-null for every event. It maps the unformatted `timestamp_str` wire value
 and is the human-readable display label paired with the canonical Unix-seconds `Timestamp`. Its `[JsonIgnore]` computed
 `DateUTC` is a UTC `DateTimeOffset` parsed from `TimestampStr` when valid and otherwise derived from `Timestamp`.
@@ -152,7 +156,7 @@ Dividend `PaymentDate` and earnings `ReportPeriod` remain strings because OpenAP
 `UpcomingDividendEvent.PaymentDate` is nullable and may be absent. Unix timestamps, traded-value metrics, and volume
 metrics use `long`; sample counts, recovery-day ranges, and `Rsi14` use `int`.
 
-An upcoming dividend can contain nullable `DividendEventMetrics` in its `Analysis` property. This Events-domain type
+An upcoming dividend can contain nullable `DividendEventMetrics` in its `Analysis` property. This dividend-domain type
 contains only the current event identity, historical recovery, and technical metrics. It is intentionally distinct
 from `FinHub.Client.Models.Dividends.DividendEventAnalysis` and excludes the removed AI error, search, strategy,
 reasoning, sentiment, adjusted-forecast, expected-profit/loss, confidence, and risk fields.
@@ -347,8 +351,9 @@ position. Risk levels are limited to `Critical`, `High`, and `Medium`;
 ## Contract namespaces
 
 - `FinHub.Client.Models.AI`: reusable AI contracts for vendor discovery, data quality, evidence, and reference sources.
-- `FinHub.Client.Models.Dividends`: reusable dividend-event analysis domain contracts.
-- `FinHub.Client.Models.Events`: reusable event contracts.
+- `FinHub.Client.Models.Dividends`: dividend events, historical event metrics, and dividend-analysis contracts.
+- `FinHub.Client.Models.Earnings`: earnings-event contracts.
+- `FinHub.Client.Models.Events`: shared market-event base contracts.
 - `FinHub.Client.Models.Listings`: listing-domain contracts shared by listing APIs.
 - `FinHub.Client.Models.Markets`: reusable market-index constituent contracts.
 - `FinHub.Client.Models.Portfolios`: reusable holdings, construction, analysis-union, snapshot, risk, and spotlight contracts.

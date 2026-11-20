@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
+using FinHub.Client.Models.Events;
 
-namespace FinHub.Client.Models.Events;
+namespace FinHub.Client.Models.Dividends;
 
 public sealed record DividendEventMetrics : EventBase
 {
