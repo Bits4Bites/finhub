@@ -28,8 +28,8 @@ public sealed class ComponentContractParityTests
             ["UpcomingDividendEvent.company_name"] = (true, false),
             ["UpcomingEarningsEvent.exchange"] = (true, false),
             ["UpcomingEarningsEvent.company_name"] = (true, false),
-            ["app__models__event__DividendEventAnalysis.exchange"] = (true, false),
-            ["app__models__event__DividendEventAnalysis.company_name"] = (true, false),
+            ["DividendEventMetrics.exchange"] = (true, false),
+            ["DividendEventMetrics.company_name"] = (true, false),
         };
 
     private static readonly IReadOnlyList<string> AnalyzeTickerRootComponents =
@@ -54,6 +54,11 @@ public sealed class ComponentContractParityTests
         new HashSet<string>(StringComparer.Ordinal)
         {
             "CompanyBriefInfo.market_cap",
+            "DividendEventMetrics.avg_dvt_7d",
+            "DividendEventMetrics.avg_volume_30d",
+            "DividendEventMetrics.std_dvt_7d",
+            "DividendEventMetrics.std_volume_30d",
+            "DividendEventMetrics.timestamp",
             "HistoryPoint.timestamp",
             "HistoryPoint.volume",
             "ListingEvent.capital_to_raise",
@@ -80,12 +85,10 @@ public sealed class ComponentContractParityTests
             "TickerMarketSnapshot.market_cap",
             "TickerMarketSnapshot.market_volume",
             "UpcomingDividendEvent.timestamp",
+            "UpcomingEarningsEvent.market_cap",
+            "UpcomingEarningsEvent.revenue",
+            "UpcomingEarningsEvent.revenue_forecast",
             "UpcomingEarningsEvent.timestamp",
-            "app__models__event__DividendEventAnalysis.avg_dvt_7d",
-            "app__models__event__DividendEventAnalysis.avg_volume_30d",
-            "app__models__event__DividendEventAnalysis.std_dvt_7d",
-            "app__models__event__DividendEventAnalysis.std_volume_30d",
-            "app__models__event__DividendEventAnalysis.timestamp",
         };
 
     private readonly ITestOutputHelper _output;
@@ -407,6 +410,9 @@ public sealed class ComponentContractParityTests
         }
 
         var properties = GetPropertiesByJsonName(contractType, errors);
+        var serializerProperties = JsonSerializerOptions
+            .Default.GetTypeInfo(contractType)
+            .Properties.ToDictionary(property => property.Name, StringComparer.Ordinal);
         var schemaProperties = schema
             .GetProperty("properties")
             .EnumerateObject()
@@ -447,6 +453,17 @@ public sealed class ComponentContractParityTests
                 Nullable.GetUnderlyingType(property.PropertyType) is not null
                 || Nullability.Create(property).ReadState == NullabilityState.Nullable;
             var openApiNullable = OpenApiContract.AllowsNull(propertySchema);
+            if (
+                isNullable
+                && serializerProperties.TryGetValue(jsonName, out var serializerProperty)
+                && serializerProperty.IsRequired
+            )
+            {
+                errors.Add(
+                    $"{path}: nullable members must allow omission from null-excluding API responses."
+                );
+            }
+
             if (
                 !UsesSharedEnvelopeNullability(property)
                 && isNullable != openApiNullable

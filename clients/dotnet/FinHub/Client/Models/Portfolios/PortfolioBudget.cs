@@ -11,14 +11,14 @@ public sealed record PortfolioBudget
     public required bool IsInferred { get; init; }
 
     [JsonPropertyName("amount")]
-    public required double? Amount { get; init; }
+    public double? Amount { get; init; }
 
     [JsonPropertyName("currency")]
-    public required string? Currency { get; init; }
+    public string? Currency { get; init; }
 
     [JsonPropertyName("frequency")]
-    public required PortfolioBudgetFrequency? Frequency { get; init; }
+    public PortfolioBudgetFrequency? Frequency { get; init; }
 
     [JsonPropertyName("source_text")]
-    public required string? SourceText { get; init; }
+    public string? SourceText { get; init; }
 }
