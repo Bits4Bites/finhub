@@ -1,5 +1,5 @@
 {
-    "date": "2026-11-07",
+    "date": "2026-11-21",
     "data": [
         {
             "symbol": "ASX:360",
@@ -39,7 +39,7 @@
         {
             "symbol": "ASX:ALD",
             "company": "AMPOL LIMITED",
-            "sector": "Consumer Products & Services, Crude Oil"
+            "sector": "Crude Oil, Consumer Products & Services"
         },
         {
             "symbol": "ASX:ALK",
@@ -140,6 +140,11 @@
             "symbol": "ASX:BHP",
             "company": "BHP GROUP LIMITED",
             "sector": "Bulks, Crude Oil"
+        },
+        {
+            "symbol": "ASX:BJY",
+            "company": "BARRENJOEY GROUP LIMITED",
+            "sector": "Wealth Management & Investments"
         },
         {
             "symbol": "ASX:BOQ",
@@ -279,12 +284,12 @@
         {
             "symbol": "ASX:DNL",
             "company": "DYNO NOBEL LIMITED",
-            "sector": "Mining Sector Contracting"
+            "sector": "Aerospace & Defence, Mining Sector Contracting"
         },
         {
             "symbol": "ASX:DOW",
             "company": "DOWNER EDI LIMITED",
-            "sector": "Mining Sector Contracting, Industrial Sector Contractors & Engineers"
+            "sector": "Industrial Sector Contractors & Engineers, Mining Sector Contracting"
         },
         {
             "symbol": "ASX:DRO",
@@ -359,7 +364,7 @@
         {
             "symbol": "ASX:FFM",
             "company": "FIREFLY METALS LIMITED",
-            "sector": "Gold & Silver, Gold & Silver, Copper"
+            "sector": "Copper, Gold & Silver, Gold & Silver"
         },
         {
             "symbol": "ASX:FLT",
@@ -512,11 +517,6 @@
             "sector": "Rare Earth Minerals"
         },
         {
-            "symbol": "ASX:MFG",
-            "company": "",
-            "sector": ""
-        },
-        {
             "symbol": "ASX:MGR",
             "company": "MIRVAC GROUP",
             "sector": "Infra & Property Developers"
@@ -534,7 +534,7 @@
         {
             "symbol": "ASX:MND",
             "company": "MONADELPHOUS GROUP LIMITED",
-            "sector": "Mining Sector Contracting, Energy Sector Contracting"
+            "sector": "Energy Sector Contracting, Mining Sector Contracting"
         },
         {
             "symbol": "ASX:MP1",
@@ -579,7 +579,7 @@
         {
             "symbol": "ASX:NEM",
             "company": "NEWMONT CORPORATION REGISTERED",
-            "sector": "Gold & Silver, Copper"
+            "sector": "Copper, Gold & Silver"
         },
         {
             "symbol": "ASX:NEU",
@@ -899,7 +899,7 @@
         {
             "symbol": "ASX:TWE",
             "company": "TREASURY WINE ESTATES LIMITED",
-            "sector": "Luxury, Food, Beverages & Tobacco"
+            "sector": "Food, Beverages & Tobacco, Luxury"
         },
         {
             "symbol": "ASX:VAU",
