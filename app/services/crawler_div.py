@@ -161,6 +161,7 @@ async def _scrape_dividends_from_tipranks(
     page_content_list = await crawler_core.fetch_multi_webpages_content_playwright(
         urls,
         delay_between_requests=1.5,
+        cache_ttl=60 * 60,
     )
     frames = []
     rename_map = {
@@ -237,6 +238,7 @@ async def scrape_dividends_asx(end_date: datetime.date) -> pd.DataFrame:
             or closed.
 
     Notes:
+        Source pages may be cached for up to one hour.
         Missing amounts and yields use ``0.0``; missing market capitalization
         uses ``0``. Required source columns must still be present.
         Null denotes a pandas missing value, not a particular scalar or dtype.
@@ -290,6 +292,7 @@ async def scrape_dividends_us(end_date: datetime.date) -> pd.DataFrame:
             or closed.
 
     Notes:
+        Source pages may be cached for up to one hour.
         Missing amounts and yields use ``0.0``; missing market capitalization
         uses ``0``. Required source columns must still be present.
         Null denotes a pandas missing value, not a particular scalar or dtype.
@@ -350,6 +353,7 @@ async def _scrape_cash_dividends_vn_vietstock(end_date: datetime.date) -> pd.Dat
             target_url,
             table_attr_filter={"id": "event-content"},
             after_load_func_async=_wait_for_vietstock_page_render_after_load_func,
+            cache_ttl=60 * 60,
         )
         if df.empty or len(df.columns) < 2:
             break
@@ -425,6 +429,7 @@ async def scrape_dividends_vn(end_date: datetime.date) -> pd.DataFrame:
             ex-dividend date or dividend rate is malformed.
 
     Notes:
+        Source pages may be cached for up to one hour.
         Missing amounts and rates use ``0.0``; missing market capitalization
         uses ``0``. Required source columns must still be present.
         Null denotes a pandas missing value, not a particular scalar or dtype.
