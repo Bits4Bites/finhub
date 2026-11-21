@@ -1,5 +1,5 @@
 {
-    "date": "2026-11-07",
+    "date": "2026-11-21",
     "data": [
         {
             "symbol": "NYSE:AA",
@@ -242,11 +242,6 @@
             "sector": "Consumer Staples"
         },
         {
-            "symbol": "NYSE:BKH",
-            "company": "Black Hills Corporation",
-            "sector": "Utilities"
-        },
-        {
             "symbol": "NASDAQ:BMRN",
             "company": "BioMarin Pharmaceutical",
             "sector": "Health Care"
@@ -385,6 +380,11 @@
             "symbol": "NYSE:CHWY",
             "company": "Chewy",
             "sector": "Consumer Discretionary"
+        },
+        {
+            "symbol": "NASDAQ:CHYM",
+            "company": "Chime Financial",
+            "sector": "Financials"
         },
         {
             "symbol": "NYSE:CLF",
@@ -927,6 +927,11 @@
             "sector": "Industrials"
         },
         {
+            "symbol": "NYSE:HZN",
+            "company": "Bright Horizon Energy Corporation",
+            "sector": "Utilities"
+        },
+        {
             "symbol": "NASDAQ:IBOC",
             "company": "Intl Bancshares Corp",
             "sector": "Financials"
@@ -975,6 +980,11 @@
             "symbol": "NYSE:JEF",
             "company": "Jefferies",
             "sector": "Financials"
+        },
+        {
+            "symbol": "NYSE:JHX",
+            "company": "James Hardie Industries",
+            "sector": "Materials"
         },
         {
             "symbol": "NYSE:JLL",
@@ -1257,11 +1267,6 @@
             "sector": "Industrials"
         },
         {
-            "symbol": "NYSE:NWE",
-            "company": "NorthWestern Energy",
-            "sector": "Utilities"
-        },
-        {
             "symbol": "NASDAQ:NXST",
             "company": "Nexstar Media Group",
             "sector": "Communication Services"
@@ -1510,11 +1515,6 @@
             "symbol": "NASDAQ:ROIV",
             "company": "Roivant Sciences",
             "sector": "Health Care"
-        },
-        {
-            "symbol": "NASDAQ:ROKU",
-            "company": "Roku, Inc.",
-            "sector": "Communication Services"
         },
         {
             "symbol": "NYSE:RPM",
