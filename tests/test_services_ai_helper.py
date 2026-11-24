@@ -1,10 +1,13 @@
 import asyncio
+import json
+import logging
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import openai
 import pytest
+from openai.types import responses
 from pydantic import BaseModel, ValidationError
 
 from app import config
@@ -251,6 +254,193 @@ def test_ai_exec_prompt_normalizes_provider_error_fields(
     assert result.is_error is True
     assert result.completion == expected_completion
     assert result.error_msg == expected_error
+
+
+@pytest.mark.parametrize(
+    ("status", "error", "incomplete_details"),
+    [
+        ("failed", {"code": "invalid_prompt", "message": "private provider error"}, None),
+        ("incomplete", None, SimpleNamespace(reason="content_filter")),
+    ],
+)
+def test_provider_diagnostics_expose_failure_metadata_without_portfolio_content(
+    status, error, incomplete_details, monkeypatch, caplog, capsys
+):
+    monkeypatch.setenv("LLM_DEBUG_MODE", "false")
+    response = _openai_response(status=status, text="private portfolio response")
+    response.id = "resp-research"
+    response._request_id = "req-research"
+    response.error = error
+    response.incomplete_details = incomplete_details
+    response.output.append(
+        SimpleNamespace(
+            type="web_search_call",
+            status="failed",
+            action=SimpleNamespace(type="search", query="private investor query"),
+        )
+    )
+    client = _provider_client("responses", response)
+    with patch.object(ai_helper.config.LLMVendorSettings, "get_llm_client", return_value=client):
+        result = asyncio.run(ai_helper.ai_exec_prompt(_task_config("Azure OpenAI"), "private portfolio prompt"))
+
+    diagnostic = next(record for record in caplog.records if "Provider diagnostics: " in record.message)
+    details = json.loads(diagnostic.message.split("Provider diagnostics: ", 1)[1])
+    assert diagnostic.levelno == logging.WARNING
+    assert details["task"] == "documented task"
+    assert details["vendor"] == "Azure OpenAI"
+    assert details["model"] == "provider-model"
+    assert details["response_id"] == "resp-research"
+    assert details["request_id"] == "req-research"
+    assert details["status"] == status
+    assert details["error_code"] == ("invalid_prompt" if error else None)
+    assert details["incomplete_reason"] == ("content_filter" if incomplete_details else None)
+    assert details["output"][-1] == {
+        "type": "web_search_call",
+        "status": "failed",
+        "action_type": "search",
+        "content_types": [],
+    }
+    logged = caplog.text + capsys.readouterr().out
+    assert "private" not in logged
+    assert result.is_error is True
+    assert result.completion == "private portfolio response"
+
+
+@pytest.mark.parametrize("debug", [False, True])
+def test_completed_refusal_is_logged_without_changing_result_handling(debug, monkeypatch, caplog, capsys):
+    monkeypatch.setenv("LLM_DEBUG_MODE", str(debug))
+    refusal = "I cannot assist with this private portfolio request."
+    response = responses.Response.model_construct(
+        id="resp-refusal",
+        status="completed",
+        usage=None,
+        output=[
+            responses.ResponseOutputMessage(
+                id="msg-refusal",
+                type="message",
+                status="completed",
+                role="assistant",
+                content=[responses.ResponseOutputRefusal(type="refusal", refusal=refusal)],
+            )
+        ],
+    )
+    client = _provider_client("responses", response)
+    with patch.object(ai_helper.config.LLMVendorSettings, "get_llm_client", return_value=client):
+        result = asyncio.run(ai_helper.ai_exec_prompt(_task_config("Azure OpenAI"), "private portfolio prompt"))
+
+    diagnostic = next(record for record in caplog.records if "Provider diagnostics: " in record.message)
+    details = json.loads(diagnostic.message.split("Provider diagnostics: ", 1)[1])
+    assert diagnostic.levelno == logging.WARNING
+    assert details["response_id"] == "resp-refusal"
+    assert details["status"] == "completed"
+    assert details["refusal_count"] == 1
+    assert details["output"][0]["content_types"] == ["refusal"]
+    assert ("refusals" in details) is debug
+    if debug:
+        assert details["refusals"] == [refusal]
+    assert (refusal in caplog.text) is debug
+    assert ("Raw provider response" in caplog.text) is debug
+    if not debug:
+        assert "private" not in caplog.text + capsys.readouterr().out
+    assert result.is_error is False
+    assert result.completion == ""
+
+
+def test_chat_refusal_diagnostics_include_finish_reason_without_exposing_text(monkeypatch, caplog):
+    monkeypatch.setenv("LLM_DEBUG_MODE", "false")
+    response = _openrouter_response(text="")
+    response.choices[0].finish_reason = "content_filter"
+    response.choices[0].message.refusal = "private refusal explanation"
+    client = _provider_client("chat", response)
+    with patch.object(ai_helper.config.LLMVendorSettings, "get_llm_client", return_value=client):
+        result = asyncio.run(ai_helper.ai_exec_prompt(_task_config("OpenRouter"), "private portfolio prompt"))
+
+    diagnostic = next(record for record in caplog.records if "Provider diagnostics: " in record.message)
+    details = json.loads(diagnostic.message.split("Provider diagnostics: ", 1)[1])
+    assert details["finish_reasons"] == ["content_filter"]
+    assert details["refusal_count"] == 1
+    assert "private" not in caplog.text
+    assert result.is_error is False
+
+
+@pytest.mark.parametrize("debug", [False, True])
+def test_http_rejection_diagnostics_capture_azure_request_id_and_preserve_exception(debug, monkeypatch, caplog):
+    monkeypatch.setenv("LLM_DEBUG_MODE", str(debug))
+    failure = openai.BadRequestError(
+        "private provider error",
+        response=httpx.Response(
+            400,
+            headers={"apim-request-id": "azure-request"},
+            request=httpx.Request("POST", "https://example.test/responses"),
+        ),
+        body={
+            "error": {
+                "code": "content_filter",
+                "message": "private moderation explanation",
+                "innererror": {"code": "ResponsibleAIPolicyViolation"},
+            }
+        },
+    )
+    client = _provider_client("responses")
+    client.responses.create.side_effect = failure
+    with (
+        patch.object(ai_helper.config.LLMVendorSettings, "get_llm_client", return_value=client),
+        pytest.raises(openai.BadRequestError) as error_info,
+    ):
+        asyncio.run(ai_helper.ai_exec_prompt(_task_config("Azure OpenAI"), "private portfolio prompt"))
+
+    diagnostic = next(record for record in caplog.records if "Provider diagnostics: " in record.message)
+    details = json.loads(diagnostic.message.split("Provider diagnostics: ", 1)[1])
+    assert details["http_status"] == 400
+    assert details["request_id"] == "azure-request"
+    assert details["error_code"] == "content_filter"
+    assert details["inner_error_code"] == "ResponsibleAIPolicyViolation"
+    assert ("private moderation explanation" in caplog.text) is debug
+    assert ("Raw provider response" in caplog.text) is debug
+    if not debug:
+        assert "private" not in caplog.text
+    assert error_info.value is failure
+    assert client.responses.create.await_count == 1
+
+
+def test_success_diagnostics_exclude_response_text_and_debug_response_is_bounded(monkeypatch, caplog):
+    response = _openai_response(text="private output " * 4000)
+    client = _provider_client("responses", response)
+    caplog.set_level(logging.INFO)
+    with patch.object(ai_helper.config.LLMVendorSettings, "get_llm_client", return_value=client):
+        monkeypatch.setenv("LLM_DEBUG_MODE", "false")
+        asyncio.run(ai_helper.ai_exec_prompt(_task_config("OPENAI"), "private prompt"))
+        assert "Provider diagnostics: " in caplog.text
+        assert "private" not in caplog.text
+
+        caplog.clear()
+        monkeypatch.setenv("LLM_DEBUG_MODE", "true")
+        asyncio.run(ai_helper.ai_exec_prompt(_task_config("OPENAI"), "private prompt"))
+
+    raw = next(record.message for record in caplog.records if "Raw provider response" in record.message)
+    assert "private output" in raw
+    assert raw.endswith("[truncated]")
+    assert len(raw) < 33_000
+
+
+def test_debug_diagnostics_preserve_refusal_reason_when_raw_response_is_truncated(monkeypatch, caplog):
+    monkeypatch.setenv("LLM_DEBUG_MODE", "true")
+    response = _openai_response(text="")
+    refusal = "I cannot fulfill this request because of the provider's safety policy."
+    response.output = [
+        {"type": "reasoning", "summary": [{"text": "long research output " * 4000}]},
+        {"type": "message", "content": [{"type": "refusal", "refusal": refusal}]},
+    ]
+    client = _provider_client("responses", response)
+    with patch.object(ai_helper.config.LLMVendorSettings, "get_llm_client", return_value=client):
+        asyncio.run(ai_helper.ai_exec_prompt(_task_config("Azure OpenAI"), "portfolio prompt"))
+
+    diagnostic = next(record for record in caplog.records if "Provider diagnostics: " in record.message)
+    details = json.loads(diagnostic.message.split("Provider diagnostics: ", 1)[1])
+    assert details["refusals"] == [refusal]
+    raw = next(record.message for record in caplog.records if "Raw provider response" in record.message)
+    assert raw.endswith("[truncated]")
+    assert refusal not in raw
 
 
 def test_ai_exec_task_uses_exact_case_sensitive_configuration_lookup():
