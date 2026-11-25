@@ -12,7 +12,7 @@
       "name": "MIT",
       "url": "https://github.com/btnguyen2k/qnd-papi-template/blob/main/LICENSE.md"
     },
-    "version": "0.16.5"
+    "version": "0.17.1"
   },
   "paths": {
     "/ai/vendors": {
@@ -4183,7 +4183,7 @@
           "data": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/app__models__events_dividends__DividendEventAnalysis"
+                "$ref": "#/components/schemas/DividendEventAnalysis"
               },
               {
                 "type": "null"
@@ -4264,7 +4264,7 @@
           "data": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/app__models__events_dividends__DividendEventAnalysis"
+                "$ref": "#/components/schemas/DividendEventAnalysis"
               },
               {
                 "type": "null"
@@ -4884,6 +4884,187 @@
         "title": "DividendDropEstimate",
         "description": "Estimated price decline for a dividend-event measurement point."
       },
+      "DividendEventAnalysis": {
+        "properties": {
+          "as_of": {
+            "type": "string",
+            "format": "date-time",
+            "title": "As Of",
+            "description": "Timezone-aware timestamp when analysis was finalized."
+          },
+          "analysis_status": {
+            "type": "string",
+            "enum": [
+              "Complete",
+              "CompleteWithWarnings",
+              "Failed"
+            ],
+            "title": "Analysis Status",
+            "description": "Completion state of the dividend-event analysis."
+          },
+          "failure_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Reason",
+            "description": "Failure detail when analysis_status is Failed; otherwise null."
+          },
+          "overall_data_quality": {
+            "type": "string",
+            "enum": [
+              "High",
+              "Medium",
+              "Low",
+              "Insufficient"
+            ],
+            "title": "Overall Data Quality",
+            "description": "Overall quality of historical and researched evidence."
+          },
+          "event": {
+            "$ref": "#/components/schemas/DividendEventContext",
+            "description": "Verified security and dividend-event context."
+          },
+          "historical_baseline": {
+            "$ref": "#/components/schemas/DividendHistoricalBaseline",
+            "description": "Deterministic historical and technical baseline."
+          },
+          "research": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DividendResearch"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Validated sourced research, or null when research failed."
+          },
+          "evidence_adjusted_ex_date_close_drop": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DividendDropEstimate"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Research-adjusted ex-date close-drop estimate, or null when validated evidence is insufficient to produce that estimate; Failed results also use null."
+          },
+          "evidence_adjusted_pre_ex_close_recovery": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DividendRecoveryEstimate"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Research-adjusted recovery estimate to the pre-ex close, or null when validated evidence is insufficient to produce that estimate; Failed results also use null."
+          },
+          "evidence_adjusted_capture_break_even_recovery": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DividendRecoveryEstimate"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Research-adjusted recovery estimate to capture break-even, or null when validated evidence is insufficient to produce that estimate; Failed results also use null."
+          },
+          "evidence_adjusted_discount_break_even_recovery": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DividendRecoveryEstimate"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Research-adjusted recovery estimate to discount-entry break-even, or null when validated evidence is insufficient to produce that estimate; Failed results also use null."
+          },
+          "dividend_capture": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DividendStrategyAssessment"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Dividend-capture strategy assessment, or null on failure."
+          },
+          "post_dividend_discount": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DividendStrategyAssessment"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Post-dividend-discount strategy assessment, or null on failure."
+          },
+          "recommendation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DividendRecommendation"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Comparison outcome across strategies, or null on failure."
+          },
+          "validation_warnings": {
+            "items": {
+              "type": "string",
+              "maxLength": 4000,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Validation Warnings",
+            "description": "Application corrections or validation caveats applied to AI output."
+          },
+          "references": {
+            "items": {
+              "$ref": "#/components/schemas/ReferenceSource"
+            },
+            "type": "array",
+            "maxItems": 6,
+            "title": "References",
+            "description": "Canonical sources cited by research and assessment, in application-supplied order."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "as_of",
+          "analysis_status",
+          "failure_reason",
+          "overall_data_quality",
+          "event",
+          "historical_baseline",
+          "research",
+          "evidence_adjusted_ex_date_close_drop",
+          "evidence_adjusted_pre_ex_close_recovery",
+          "evidence_adjusted_capture_break_even_recovery",
+          "evidence_adjusted_discount_break_even_recovery",
+          "dividend_capture",
+          "post_dividend_discount",
+          "recommendation",
+          "validation_warnings",
+          "references"
+        ],
+        "title": "DividendEventAnalysis",
+        "description": "Final structured analysis of a dividend event and two trading strategies.\n\nComplete and CompleteWithWarnings mean the workflow completed, not that\nevery estimate was obtainable. When validated evidence is insufficient,\nthese results may retain null evidence-adjusted estimates while keeping both\nstrategy assessments and an InsufficientInsights recommendation. They\nrequire research and references, with warnings absent or present\nrespectively. Failed results require a failure reason, contain no strategy\nresults or validation warnings, and may retain references only when retained\nresearch uses them."
+      },
       "DividendEventContext": {
         "properties": {
           "symbol": {
@@ -5019,6 +5200,207 @@
         ],
         "title": "DividendEventContext",
         "description": "Verified security and event inputs for dividend analysis.\n\nThe symbol accepts Yahoo Finance or canonical EXCHANGE:CODE format. String\nidentifiers are trimmed and uppercased where applicable. Gross dividend\nyield must equal dividend amount divided by reference price, and phase must\nmatch the exchange-local analysis date."
+      },
+      "DividendEventMetrics": {
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "title": "Symbol",
+            "description": "Security symbol associated with the event."
+          },
+          "exchange": {
+            "type": "string",
+            "title": "Exchange",
+            "description": "Exchange code associated with the security, when available.",
+            "default": ""
+          },
+          "company_name": {
+            "type": "string",
+            "title": "Company Name",
+            "description": "Company or issuer name, when available.",
+            "default": ""
+          },
+          "timestamp": {
+            "type": "integer",
+            "title": "Timestamp",
+            "description": "Unix timestamp in seconds representing the event date or time.",
+            "default": 0
+          },
+          "timestamp_str": {
+            "type": "string",
+            "title": "Timestamp Str",
+            "description": "Human-readable string representation of the event timestamp."
+          },
+          "event_category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Category",
+            "description": "Category identifying the type of market event."
+          },
+          "source_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Name",
+            "description": "Name of the source that reported the event."
+          },
+          "link": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Link",
+            "description": "Source URL containing additional event details."
+          },
+          "price": {
+            "type": "number",
+            "title": "Price",
+            "description": "Current security price.",
+            "default": 0.0
+          },
+          "div_amount": {
+            "type": "number",
+            "title": "Div Amount",
+            "description": "Dividend amount per share.",
+            "default": 0.0
+          },
+          "div_yield": {
+            "type": "number",
+            "title": "Div Yield",
+            "description": "Caller-supplied dividend amount-to-price ratio; this legacy model does not recompute it.",
+            "default": 0.0
+          },
+          "num_samples": {
+            "type": "integer",
+            "title": "Num Samples",
+            "description": "Number of historical dividend events used for analysis.",
+            "default": 0
+          },
+          "drop_price_min": {
+            "type": "number",
+            "title": "Drop Price Min",
+            "description": "Lower historical estimate of the ex-dividend price drop.",
+            "default": 0.0
+          },
+          "drop_price_max": {
+            "type": "number",
+            "title": "Drop Price Max",
+            "description": "Upper historical estimate of the ex-dividend price drop.",
+            "default": 0.0
+          },
+          "recovery_probability": {
+            "type": "number",
+            "title": "Recovery Probability",
+            "description": "Estimated probability of recovering the reference price.",
+            "default": 0.0
+          },
+          "recovery_days_min": {
+            "type": "integer",
+            "title": "Recovery Days Min",
+            "description": "Lower estimate of calendar days to price recovery.",
+            "default": 0
+          },
+          "recovery_days_max": {
+            "type": "integer",
+            "title": "Recovery Days Max",
+            "description": "Upper estimate of calendar days to price recovery.",
+            "default": 0
+          },
+          "recovery_price_min": {
+            "type": "number",
+            "title": "Recovery Price Min",
+            "description": "Lower price estimate for recovery.",
+            "default": 0.0
+          },
+          "recovery_price_max": {
+            "type": "number",
+            "title": "Recovery Price Max",
+            "description": "Upper price estimate for recovery.",
+            "default": 0.0
+          },
+          "beta": {
+            "type": "number",
+            "title": "Beta",
+            "description": "Security beta used as market-sensitivity context.",
+            "default": 0.0
+          },
+          "rsi14": {
+            "type": "integer",
+            "title": "Rsi14",
+            "description": "Fourteen-period relative strength index.",
+            "default": 0
+          },
+          "avg_dvt_7d": {
+            "type": "integer",
+            "title": "Avg Dvt 7D",
+            "description": "Average daily value traded over seven trading days.",
+            "default": 0
+          },
+          "std_dvt_7d": {
+            "type": "integer",
+            "title": "Std Dvt 7D",
+            "description": "Standard deviation of daily value traded over seven trading days.",
+            "default": 0
+          },
+          "avg_volume_30d": {
+            "type": "integer",
+            "title": "Avg Volume 30D",
+            "description": "Average daily volume over 30 trading days.",
+            "default": 0
+          },
+          "std_volume_30d": {
+            "type": "integer",
+            "title": "Std Volume 30D",
+            "description": "Standard deviation of daily volume over 30 trading days.",
+            "default": 0
+          },
+          "bid_ask_spread": {
+            "type": "number",
+            "title": "Bid Ask Spread",
+            "description": "Observed bid-ask spread.",
+            "default": 0.0
+          },
+          "trend_60d": {
+            "type": "number",
+            "title": "Trend 60D",
+            "description": "Security price trend over 60 trading days.",
+            "default": 0.0
+          },
+          "market_trend_60d": {
+            "type": "number",
+            "title": "Market Trend 60D",
+            "description": "Relevant market trend over 60 trading days.",
+            "default": 0.0
+          },
+          "peer_trend_60d": {
+            "type": "number",
+            "title": "Peer Trend 60D",
+            "description": "Relevant peer-group trend over 60 trading days.",
+            "default": 0.0
+          }
+        },
+        "type": "object",
+        "required": [
+          "symbol",
+          "timestamp_str"
+        ],
+        "title": "DividendEventMetrics",
+        "description": "Legacy dividend-event metrics and AI assessment attached to an event."
       },
       "DividendEvidenceClaim": {
         "properties": {
@@ -12290,7 +12672,7 @@
           "analysis": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/app__models__event__DividendEventAnalysis"
+                "$ref": "#/components/schemas/DividendEventMetrics"
               },
               {
                 "type": "null"
@@ -12525,6 +12907,42 @@
             ],
             "title": "Status",
             "description": "Source-reported event status."
+          },
+          "market_cap": {
+            "type": "integer",
+            "title": "Market Cap",
+            "description": "Company market capitalization in whole currency units; zero when unavailable.",
+            "default": 0
+          },
+          "eps": {
+            "type": "number",
+            "title": "Eps",
+            "description": "Reported earnings per share in the stated currency; may be negative, or zero when unavailable.",
+            "default": 0.0
+          },
+          "eps_forecast": {
+            "type": "number",
+            "title": "Eps Forecast",
+            "description": "Forecast earnings per share in the stated currency; may be negative, or zero when unavailable.",
+            "default": 0.0
+          },
+          "revenue": {
+            "type": "integer",
+            "title": "Revenue",
+            "description": "Reported revenue in whole currency units; zero when unavailable.",
+            "default": 0
+          },
+          "revenue_forecast": {
+            "type": "integer",
+            "title": "Revenue Forecast",
+            "description": "Forecast revenue in whole currency units; zero when unavailable.",
+            "default": 0
+          },
+          "currency": {
+            "type": "string",
+            "title": "Currency",
+            "description": "Currency code for market capitalization, earnings per share, and revenue.",
+            "default": ""
           }
         },
         "type": "object",
@@ -12533,7 +12951,7 @@
           "timestamp_str"
         ],
         "title": "UpcomingEarningsEvent",
-        "description": "An announced upcoming earnings-report event."
+        "description": "An upcoming earnings announcement with actual and forecast financials.\n\nMissing numeric values use zero, which does not distinguish unavailable\ndata from an actual zero. Market capitalization and revenue use whole\ncurrency units; earnings per share retain fractional and negative values."
       },
       "UpcomingEarningsResponse": {
         "properties": {
@@ -12620,388 +13038,6 @@
           "type"
         ],
         "title": "ValidationError"
-      },
-      "app__models__event__DividendEventAnalysis": {
-        "properties": {
-          "symbol": {
-            "type": "string",
-            "title": "Symbol",
-            "description": "Security symbol associated with the event."
-          },
-          "exchange": {
-            "type": "string",
-            "title": "Exchange",
-            "description": "Exchange code associated with the security, when available.",
-            "default": ""
-          },
-          "company_name": {
-            "type": "string",
-            "title": "Company Name",
-            "description": "Company or issuer name, when available.",
-            "default": ""
-          },
-          "timestamp": {
-            "type": "integer",
-            "title": "Timestamp",
-            "description": "Unix timestamp in seconds representing the event date or time.",
-            "default": 0
-          },
-          "timestamp_str": {
-            "type": "string",
-            "title": "Timestamp Str",
-            "description": "Human-readable string representation of the event timestamp."
-          },
-          "event_category": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Event Category",
-            "description": "Category identifying the type of market event."
-          },
-          "source_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source Name",
-            "description": "Name of the source that reported the event."
-          },
-          "link": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Link",
-            "description": "Source URL containing additional event details."
-          },
-          "price": {
-            "type": "number",
-            "title": "Price",
-            "description": "Current security price.",
-            "default": 0.0
-          },
-          "div_amount": {
-            "type": "number",
-            "title": "Div Amount",
-            "description": "Dividend amount per share.",
-            "default": 0.0
-          },
-          "div_yield": {
-            "type": "number",
-            "title": "Div Yield",
-            "description": "Caller-supplied dividend amount-to-price ratio; this legacy model does not recompute it.",
-            "default": 0.0
-          },
-          "num_samples": {
-            "type": "integer",
-            "title": "Num Samples",
-            "description": "Number of historical dividend events used for analysis.",
-            "default": 0
-          },
-          "drop_price_min": {
-            "type": "number",
-            "title": "Drop Price Min",
-            "description": "Lower historical estimate of the ex-dividend price drop.",
-            "default": 0.0
-          },
-          "drop_price_max": {
-            "type": "number",
-            "title": "Drop Price Max",
-            "description": "Upper historical estimate of the ex-dividend price drop.",
-            "default": 0.0
-          },
-          "recovery_probability": {
-            "type": "number",
-            "title": "Recovery Probability",
-            "description": "Estimated probability of recovering the reference price.",
-            "default": 0.0
-          },
-          "recovery_days_min": {
-            "type": "integer",
-            "title": "Recovery Days Min",
-            "description": "Lower estimate of calendar days to price recovery.",
-            "default": 0
-          },
-          "recovery_days_max": {
-            "type": "integer",
-            "title": "Recovery Days Max",
-            "description": "Upper estimate of calendar days to price recovery.",
-            "default": 0
-          },
-          "recovery_price_min": {
-            "type": "number",
-            "title": "Recovery Price Min",
-            "description": "Lower price estimate for recovery.",
-            "default": 0.0
-          },
-          "recovery_price_max": {
-            "type": "number",
-            "title": "Recovery Price Max",
-            "description": "Upper price estimate for recovery.",
-            "default": 0.0
-          },
-          "beta": {
-            "type": "number",
-            "title": "Beta",
-            "description": "Security beta used as market-sensitivity context.",
-            "default": 0.0
-          },
-          "rsi14": {
-            "type": "integer",
-            "title": "Rsi14",
-            "description": "Fourteen-period relative strength index.",
-            "default": 0
-          },
-          "avg_dvt_7d": {
-            "type": "integer",
-            "title": "Avg Dvt 7D",
-            "description": "Average daily value traded over seven trading days.",
-            "default": 0
-          },
-          "std_dvt_7d": {
-            "type": "integer",
-            "title": "Std Dvt 7D",
-            "description": "Standard deviation of daily value traded over seven trading days.",
-            "default": 0
-          },
-          "avg_volume_30d": {
-            "type": "integer",
-            "title": "Avg Volume 30D",
-            "description": "Average daily volume over 30 trading days.",
-            "default": 0
-          },
-          "std_volume_30d": {
-            "type": "integer",
-            "title": "Std Volume 30D",
-            "description": "Standard deviation of daily volume over 30 trading days.",
-            "default": 0
-          },
-          "bid_ask_spread": {
-            "type": "number",
-            "title": "Bid Ask Spread",
-            "description": "Observed bid-ask spread.",
-            "default": 0.0
-          },
-          "trend_60d": {
-            "type": "number",
-            "title": "Trend 60D",
-            "description": "Security price trend over 60 trading days.",
-            "default": 0.0
-          },
-          "market_trend_60d": {
-            "type": "number",
-            "title": "Market Trend 60D",
-            "description": "Relevant market trend over 60 trading days.",
-            "default": 0.0
-          },
-          "peer_trend_60d": {
-            "type": "number",
-            "title": "Peer Trend 60D",
-            "description": "Relevant peer-group trend over 60 trading days.",
-            "default": 0.0
-          }
-        },
-        "type": "object",
-        "required": [
-          "symbol",
-          "timestamp_str"
-        ],
-        "title": "DividendEventAnalysis",
-        "description": "Legacy dividend-event metrics and AI assessment attached to an event."
-      },
-      "app__models__events_dividends__DividendEventAnalysis": {
-        "properties": {
-          "as_of": {
-            "type": "string",
-            "format": "date-time",
-            "title": "As Of",
-            "description": "Timezone-aware timestamp when analysis was finalized."
-          },
-          "analysis_status": {
-            "type": "string",
-            "enum": [
-              "Complete",
-              "CompleteWithWarnings",
-              "Failed"
-            ],
-            "title": "Analysis Status",
-            "description": "Completion state of the dividend-event analysis."
-          },
-          "failure_reason": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Failure Reason",
-            "description": "Failure detail when analysis_status is Failed; otherwise null."
-          },
-          "overall_data_quality": {
-            "type": "string",
-            "enum": [
-              "High",
-              "Medium",
-              "Low",
-              "Insufficient"
-            ],
-            "title": "Overall Data Quality",
-            "description": "Overall quality of historical and researched evidence."
-          },
-          "event": {
-            "$ref": "#/components/schemas/DividendEventContext",
-            "description": "Verified security and dividend-event context."
-          },
-          "historical_baseline": {
-            "$ref": "#/components/schemas/DividendHistoricalBaseline",
-            "description": "Deterministic historical and technical baseline."
-          },
-          "research": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/DividendResearch"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Validated sourced research, or null when research failed."
-          },
-          "evidence_adjusted_ex_date_close_drop": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/DividendDropEstimate"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Research-adjusted ex-date close-drop estimate, or null when validated evidence is insufficient to produce that estimate; Failed results also use null."
-          },
-          "evidence_adjusted_pre_ex_close_recovery": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/DividendRecoveryEstimate"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Research-adjusted recovery estimate to the pre-ex close, or null when validated evidence is insufficient to produce that estimate; Failed results also use null."
-          },
-          "evidence_adjusted_capture_break_even_recovery": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/DividendRecoveryEstimate"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Research-adjusted recovery estimate to capture break-even, or null when validated evidence is insufficient to produce that estimate; Failed results also use null."
-          },
-          "evidence_adjusted_discount_break_even_recovery": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/DividendRecoveryEstimate"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Research-adjusted recovery estimate to discount-entry break-even, or null when validated evidence is insufficient to produce that estimate; Failed results also use null."
-          },
-          "dividend_capture": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/DividendStrategyAssessment"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Dividend-capture strategy assessment, or null on failure."
-          },
-          "post_dividend_discount": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/DividendStrategyAssessment"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Post-dividend-discount strategy assessment, or null on failure."
-          },
-          "recommendation": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/DividendRecommendation"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Comparison outcome across strategies, or null on failure."
-          },
-          "validation_warnings": {
-            "items": {
-              "type": "string",
-              "maxLength": 4000,
-              "minLength": 1
-            },
-            "type": "array",
-            "maxItems": 20,
-            "title": "Validation Warnings",
-            "description": "Application corrections or validation caveats applied to AI output."
-          },
-          "references": {
-            "items": {
-              "$ref": "#/components/schemas/ReferenceSource"
-            },
-            "type": "array",
-            "maxItems": 6,
-            "title": "References",
-            "description": "Canonical sources cited by research and assessment, in application-supplied order."
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "as_of",
-          "analysis_status",
-          "failure_reason",
-          "overall_data_quality",
-          "event",
-          "historical_baseline",
-          "research",
-          "evidence_adjusted_ex_date_close_drop",
-          "evidence_adjusted_pre_ex_close_recovery",
-          "evidence_adjusted_capture_break_even_recovery",
-          "evidence_adjusted_discount_break_even_recovery",
-          "dividend_capture",
-          "post_dividend_discount",
-          "recommendation",
-          "validation_warnings",
-          "references"
-        ],
-        "title": "DividendEventAnalysis",
-        "description": "Final structured analysis of a dividend event and two trading strategies.\n\nComplete and CompleteWithWarnings mean the workflow completed, not that\nevery estimate was obtainable. When validated evidence is insufficient,\nthese results may retain null evidence-adjusted estimates while keeping both\nstrategy assessments and an InsufficientInsights recommendation. They\nrequire research and references, with warnings absent or present\nrespectively. Failed results require a failure reason, contain no strategy\nresults or validation warnings, and may retain references only when retained\nresearch uses them."
       }
     },
     "securitySchemes": {

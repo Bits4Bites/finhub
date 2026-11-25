@@ -12,7 +12,7 @@ public sealed record DividendEventAnalysis
     public required DividendAnalysisStatus AnalysisStatus { get; init; }
 
     [JsonPropertyName("failure_reason")]
-    public required string? FailureReason { get; init; }
+    public string? FailureReason { get; init; }
 
     [JsonPropertyName("overall_data_quality")]
     public required DataQuality OverallDataQuality { get; init; }
@@ -24,28 +24,28 @@ public sealed record DividendEventAnalysis
     public required DividendHistoricalBaseline HistoricalBaseline { get; init; }
 
     [JsonPropertyName("research")]
-    public required DividendResearch? Research { get; init; }
+    public DividendResearch? Research { get; init; }
 
     [JsonPropertyName("evidence_adjusted_ex_date_close_drop")]
-    public required DividendDropEstimate? EvidenceAdjustedExDateCloseDrop { get; init; }
+    public DividendDropEstimate? EvidenceAdjustedExDateCloseDrop { get; init; }
 
     [JsonPropertyName("evidence_adjusted_pre_ex_close_recovery")]
-    public required DividendRecoveryEstimate? EvidenceAdjustedPreExCloseRecovery { get; init; }
+    public DividendRecoveryEstimate? EvidenceAdjustedPreExCloseRecovery { get; init; }
 
     [JsonPropertyName("evidence_adjusted_capture_break_even_recovery")]
-    public required DividendRecoveryEstimate? EvidenceAdjustedCaptureBreakEvenRecovery { get; init; }
+    public DividendRecoveryEstimate? EvidenceAdjustedCaptureBreakEvenRecovery { get; init; }
 
     [JsonPropertyName("evidence_adjusted_discount_break_even_recovery")]
-    public required DividendRecoveryEstimate? EvidenceAdjustedDiscountBreakEvenRecovery { get; init; }
+    public DividendRecoveryEstimate? EvidenceAdjustedDiscountBreakEvenRecovery { get; init; }
 
     [JsonPropertyName("dividend_capture")]
-    public required DividendStrategyAssessment? DividendCapture { get; init; }
+    public DividendStrategyAssessment? DividendCapture { get; init; }
 
     [JsonPropertyName("post_dividend_discount")]
-    public required DividendStrategyAssessment? PostDividendDiscount { get; init; }
+    public DividendStrategyAssessment? PostDividendDiscount { get; init; }
 
     [JsonPropertyName("recommendation")]
-    public required DividendRecommendation? Recommendation { get; init; }
+    public DividendRecommendation? Recommendation { get; init; }
 
     [JsonPropertyName("validation_warnings")]
     public required IReadOnlyList<string> ValidationWarnings { get; init; }

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using FinHub.Client.Models.AI;
-using FinHub.Client.Models.Events;
+using FinHub.Client.Models.Dividends;
+using FinHub.Client.Models.Earnings;
 using FinHub.Client.Models.Listings;
 using FinHub.Client.Models.Portfolios;
 using FinHub.Client.Models.Stocks;
@@ -126,6 +127,87 @@ public sealed class JsonSerializationTests
         Assert.Same(response.Data, synchronousResponse.Data);
         Assert.Same(taskInfo, synchronousResponse.Extra);
         Assert.Same(debugInfo, synchronousResponse.DebugInfo);
+    }
+
+    [Fact]
+    public void Upcoming_dividend_response_allows_an_omitted_payment_date()
+    {
+        const string json =
+            """
+            {
+              "status": 200,
+              "message": "ok",
+              "data": [
+                {
+                  "symbol": "ASX:TEST",
+                  "timestamp_str": "2026-11-20 00:00:00+11:00",
+                  "amount": 1.25,
+                  "currency": "AUD"
+                }
+              ]
+            }
+            """;
+
+        var response = JsonSerializer.Deserialize<GetUpcomingDividendsResponse>(json);
+
+        Assert.NotNull(response);
+        Assert.NotNull(response.Data);
+        Assert.Null(Assert.Single(response.Data).PaymentDate);
+    }
+
+    [Fact]
+    public void Ineligible_dividend_strategy_allows_omitted_estimates()
+    {
+        const string json =
+            """
+            {
+              "strategy": "DividendCapture",
+              "eligibility": "Ineligible",
+              "ineligibility_reason": "The ex-dividend date has passed.",
+              "confidence": 80,
+              "risk": 50,
+              "rationale": "The strategy is no longer available.",
+              "risk_factors": [],
+              "assumptions": [],
+              "data_gaps": [],
+              "reference_ids": ["source-1"]
+            }
+            """;
+
+        var assessment = JsonSerializer.Deserialize<DividendStrategyAssessment>(json);
+
+        Assert.NotNull(assessment);
+        Assert.Equal(DividendStrategyEligibility.Ineligible, assessment.Eligibility);
+        Assert.Null(assessment.ExpectedEntryPrice);
+        Assert.Null(assessment.RecoveryDays);
+    }
+
+    [Fact]
+    public void Earnings_financial_fields_preserve_signed_EPS_and_large_whole_unit_amounts()
+    {
+        const string json =
+            """
+            {
+              "symbol": "NASDAQ:TEST",
+              "timestamp_str": "2026-11-20 00:00:00-05:00",
+              "market_cap": 200000000000,
+              "eps": -2.65,
+              "eps_forecast": -2.08,
+              "revenue": 27067000000,
+              "revenue_forecast": 4001000000,
+              "currency": "USD"
+            }
+            """;
+
+        var earnings = JsonSerializer.Deserialize<UpcomingEarningsEvent>(json);
+
+        Assert.NotNull(earnings);
+        Assert.Equal(200_000_000_000L, earnings.MarketCap);
+        Assert.Equal(-2.65m, earnings.Eps);
+        Assert.Equal(-2.08m, earnings.EpsForecast);
+        Assert.Equal(27_067_000_000L, earnings.Revenue);
+        Assert.Equal(4_001_000_000L, earnings.RevenueForecast);
+        Assert.Equal("USD", earnings.Currency);
     }
 
     [Fact]
@@ -297,7 +379,6 @@ public sealed class JsonSerializationTests
               "summary": "Diversified target allocation.",
               "verified_seed_holdings": [],
               "target_portfolio": [],
-              "action_plan": null,
               "overall_data_quality": "High",
               "data_gaps": [],
               "validation_warnings": [],
@@ -309,6 +390,7 @@ public sealed class JsonSerializationTests
 
         var construction = Assert.IsType<PortfolioConstruction>(result);
         Assert.Equal("PortfolioConstruction", construction.ResultType);
+        Assert.Null(construction.ActionPlan);
         Assert.Throws<JsonException>(
             () =>
                 JsonSerializer.Deserialize<IPortfolioAnalysisResult>(

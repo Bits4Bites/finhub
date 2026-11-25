@@ -1,5 +1,21 @@
 # FinHub release notes
 
+## 2026-11-25 - v0.18.0
+
+### Added/Refactoring/Deprecation
+
+- Feat(clients/.NET): expose earnings financials in event contracts
+- Refactor(clients/.NET): reorganize event models by domain
+- Refactor(models): reorganize market event models by domain
+
+### Fixed/Improvements
+
+- Patch(ai_helper): log provider refusal and failure diagnostics
+- Patch(ai_tasks): disengage Sol by default, route light tasks to Luna and heavy tasks to Terra
+- Patch(clients/.NET): accept omitted nullable response fields
+- Patch(crawler/cache): set page content cache expiration to 1 hour
+- Patch(msai_spotlight_portfolio): improve validation diagnostics and bound reference-repair warnings
+
 ## 2026-11-19 - v0.17.1
 
 ### Added/Refactoring/Deprecation

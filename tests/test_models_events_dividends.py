@@ -3,7 +3,7 @@ import datetime
 import pydantic
 import pytest
 
-from app.models import events_dividends as models_dividends
+from app.models import events_div as models_dividends
 from tests import dividend_fixtures
 
 

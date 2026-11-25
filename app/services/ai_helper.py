@@ -1,8 +1,10 @@
 import asyncio
+import json
 import logging
 import os
 import random
 import time
+import typing
 import weakref
 from collections.abc import Mapping
 from datetime import UTC, datetime
@@ -51,10 +53,27 @@ class LLMResponse(BaseModel):
     citation_urls: list[str] = Field(default_factory=list)
 
 
+def _schema_field_names(response_model: type[BaseModel]) -> set[str]:
+    field_names: set[str] = set()
+    pending: list[object] = [response_model.model_json_schema()]
+    while pending:
+        value = pending.pop()
+        if isinstance(value, Mapping):
+            properties = value.get("properties")
+            if isinstance(properties, Mapping):
+                field_names.update(properties)
+            pending.extend(value.values())
+        elif isinstance(value, list):
+            pending.extend(value)
+    return field_names
+
+
 def log_structured_validation_failure(
     feature: str,
     stage: str,
     error: Exception,
+    *,
+    response_model: type[BaseModel] | None = None,
 ) -> None:
     """Log a safe summary of a structured-output validation failure.
 
@@ -62,14 +81,17 @@ def log_structured_validation_failure(
         feature: Non-sensitive business-feature label used to identify the log entry.
         stage: Non-sensitive processing-stage label used to identify the failure.
         error: Validation failure to summarize. Pydantic validation errors contribute
-            only error counts and types; other exceptions contribute only their
-            class name.
+            error counts, types, and numeric maximum-length limits; other exceptions
+            contribute only their class name.
+        response_model: Optional expected schema used to allow only declared field
+            names in logged paths. Collection indexes and unrecognized location
+            keys are redacted.
 
     Returns:
         None.
 
     Notes:
-        Rejected values, exception messages, and validation context are never logged.
+        Rejected values, exception messages, and other validation context are never logged.
         Callers must keep ``feature`` and ``stage`` free of sensitive data because
         those labels are included verbatim.
     """
@@ -77,13 +99,29 @@ def log_structured_validation_failure(
     if isinstance(error, ValidationError):
         errors = error.errors(
             include_url=False,
-            include_context=False,
+            include_context=True,
             include_input=False,
         )
-        error_types = [str(item["type"]) for item in errors[:8]]
-        if len(errors) > len(error_types):
-            error_types.append(f"{len(errors) - len(error_types)} additional")
-        summary = f"{len(errors)} validation error(s): {'; '.join(error_types)}"
+        field_names = _schema_field_names(response_model) if response_model is not None else set()
+        error_details = []
+        for item in errors[:8]:
+            detail = str(item["type"])
+            if response_model is not None:
+                location = ""
+                for component in item["loc"]:
+                    if isinstance(component, int):
+                        location += "[*]"
+                    else:
+                        name = component if component in field_names else "<field>"
+                        location += f"{'.' if location else ''}{name}"
+                detail = f"{location or '<root>'}: {detail}"
+            max_length = item.get("ctx", {}).get("max_length")
+            if type(max_length) is int:
+                detail += f" (max_length={max_length})"
+            error_details.append(detail)
+        if len(errors) > len(error_details):
+            error_details.append(f"{len(errors) - len(error_details)} additional")
+        summary = f"{len(errors)} validation error(s): {'; '.join(error_details)}"
     else:
         summary = type(error).__name__
 
@@ -97,6 +135,130 @@ def log_structured_validation_failure(
 
 def _is_debug_mode() -> bool:
     return os.getenv("LLM_DEBUG_MODE", "").lower() in ("1", "true", "yes")
+
+
+_PROVIDER_LOG_ITEM_LIMIT = 20
+_PROVIDER_LOG_TEXT_LIMIT = 2000
+_PROVIDER_RAW_LOG_LIMIT = 32_000
+
+
+def _provider_field(value: object, name: str) -> typing.Any:
+    return value.get(name) if isinstance(value, Mapping) else getattr(value, name, None)
+
+
+def _provider_debug_text(value: object) -> str | None:
+    return str(value)[:_PROVIDER_LOG_TEXT_LIMIT] if value is not None else None
+
+
+def _provider_json_default(value: object) -> object:
+    if isinstance(value, BaseModel):
+        return value.model_dump(mode="json")
+    return vars(value) if hasattr(value, "__dict__") else str(value)
+
+
+def _log_provider_diagnostics(
+    task_cfg: config.LLMTaskConfig,
+    details: dict[str, object],
+    raw_response: object,
+    *,
+    failed: bool,
+) -> None:
+    level = logging.WARNING if failed else logging.INFO
+    metadata = {
+        "task": task_cfg.task_name,
+        "vendor": task_cfg.vendor,
+        "tier": task_cfg.tier,
+        "model": task_cfg.model,
+        **details,
+    }
+    logging.log(level, "Provider diagnostics: %s", json.dumps(metadata, default=_provider_json_default))
+    if _is_debug_mode():
+        raw_json = json.dumps(raw_response, default=_provider_json_default)
+        suffix = " [truncated]" if len(raw_json) > _PROVIDER_RAW_LOG_LIMIT else ""
+        logging.log(
+            level,
+            "Raw provider response for '%s' (LLM_DEBUG_MODE): %s%s",
+            task_cfg.task_name,
+            raw_json[:_PROVIDER_RAW_LOG_LIMIT],
+            suffix,
+        )
+
+
+def _log_openai_response_diagnostics(
+    task_cfg: config.LLMTaskConfig,
+    response: object,
+    *,
+    is_error: bool,
+) -> None:
+    output = _provider_field(response, "output") or []
+    choices = _provider_field(response, "choices") or []
+    error = _provider_field(response, "error")
+    refusals = [
+        _provider_field(content, "refusal")
+        for item in output
+        for content in (_provider_field(item, "content") or [])
+        if _provider_field(content, "type") == "refusal"
+    ] + [
+        _provider_field(_provider_field(choice, "message"), "refusal")
+        for choice in choices
+        if _provider_field(_provider_field(choice, "message"), "refusal")
+    ]
+    finish_reasons = [_provider_field(choice, "finish_reason") for choice in choices]
+    details = {
+        "response_id": _provider_field(response, "id"),
+        "request_id": _provider_field(response, "_request_id"),
+        "response_model": _provider_field(response, "model"),
+        "status": _provider_field(response, "status"),
+        "error_code": _provider_field(error, "code"),
+        "incomplete_reason": _provider_field(_provider_field(response, "incomplete_details"), "reason"),
+        "refusal_count": len(refusals),
+        "finish_reasons": finish_reasons[:_PROVIDER_LOG_ITEM_LIMIT],
+        "output_count": len(output),
+        "output": [
+            {
+                "type": _provider_field(item, "type"),
+                "status": _provider_field(item, "status"),
+                "action_type": _provider_field(_provider_field(item, "action"), "type"),
+                "content_types": [
+                    _provider_field(content, "type")
+                    for content in (_provider_field(item, "content") or [])[:_PROVIDER_LOG_ITEM_LIMIT]
+                ],
+            }
+            for item in output[:_PROVIDER_LOG_ITEM_LIMIT]
+        ],
+    }
+    if _is_debug_mode():
+        details["error_message"] = _provider_debug_text(_provider_field(error, "message"))
+        details["refusals"] = [_provider_debug_text(refusal) for refusal in refusals[:_PROVIDER_LOG_ITEM_LIMIT]]
+    _log_provider_diagnostics(
+        task_cfg,
+        details,
+        response,
+        failed=is_error or error is not None or bool(refusals) or "content_filter" in finish_reasons,
+    )
+
+
+def _log_openai_http_error_diagnostics(
+    task_cfg: config.LLMTaskConfig,
+    error: openai.APIStatusError,
+) -> None:
+    body = _provider_field(error.body, "error") or error.body
+    _log_provider_diagnostics(
+        task_cfg,
+        {
+            "http_status": error.status_code,
+            "request_id": (
+                error.request_id
+                or error.response.headers.get("apim-request-id")
+                or error.response.headers.get("x-ms-request-id")
+            ),
+            "error_code": _provider_field(body, "code"),
+            "error_type": _provider_field(body, "type"),
+            "inner_error_code": _provider_field(_provider_field(body, "innererror"), "code"),
+        },
+        error.body,
+        failed=True,
+    )
 
 
 def _extract_url_citations(response: object) -> list[str]:
@@ -248,7 +410,10 @@ async def ai_exec_prompt(
     Notes:
         Vendor matching is case-insensitive. Supported names are ``OPENAI`` and
         ``GEMINI``; ``AZUREOPENAI`` and ``OPENROUTER`` also accept space,
-        underscore, or hyphen separators.
+        underscore, or hyphen separators. OpenAI-compatible provider diagnostics
+        omit response text by default. ``LLM_DEBUG_MODE`` additionally logs bounded
+        raw responses and prints prompts and completions, which may contain
+        sensitive user data.
     """
     used_vendor = task_cfg.vendor.upper()
     match used_vendor:
@@ -595,12 +760,16 @@ async def _exec_prompt_openai_client(
                     "schema": openai_json_schema,
                 }
             }
-    ai_resp = await _execute_openai_request(
-        client,
-        task_cfg,
-        request_kwargs,
-        is_openrouter=is_openrouter,
-    )
+    try:
+        ai_resp = await _execute_openai_request(
+            client,
+            task_cfg,
+            request_kwargs,
+            is_openrouter=is_openrouter,
+        )
+    except openai.APIStatusError as exc:
+        _log_openai_http_error_diagnostics(task_cfg, exc)
+        raise
 
     timer_end = time.perf_counter()
     token_usage_input = 0
@@ -680,6 +849,7 @@ async def _exec_prompt_openai_client(
     )
     if result.is_error:
         result.error_msg = result.completion or None
+    _log_openai_response_diagnostics(task_cfg, ai_resp, is_error=result.is_error)
     print(result.completion if _is_debug_mode() else "<response omitted>")
 
     return result

@@ -10,6 +10,11 @@ public sealed record HistoryPoint
     [JsonPropertyName("timestamp_str")]
     public required string TimestampStr { get; init; }
 
+    [JsonIgnore]
+    public DateTimeOffset DateUTC => DateTimeOffset.TryParse(TimestampStr, out var dt)
+        ? dt.ToUniversalTime()
+        : DateTimeOffset.FromUnixTimeSeconds(Timestamp).ToUniversalTime();
+
     [JsonPropertyName("currency")]
     public string Currency { get; init; } = string.Empty;
 

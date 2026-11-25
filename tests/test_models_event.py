@@ -3,7 +3,8 @@ import json
 import pydantic
 import pytest
 
-from app.models import event as models_event
+from app.models import events_div as models_dividends
+from app.models import events_earnings as models_earnings
 from app.models import events_listings as models_events_listings
 
 
@@ -149,11 +150,11 @@ def _listing_event_data() -> dict[str, object]:
 
 def test_event_base_requires_timestamp_str():
     with pytest.raises(pydantic.ValidationError):
-        models_event.UpcomingEarningsEvent(symbol="NASDAQ:AAPL")
+        models_earnings.UpcomingEarningsEvent(symbol="NASDAQ:AAPL")
 
 
 def test_parse_dividend_events_accepts_fenced_array_in_order_and_uses_utc_midnight():
-    events = models_event.parse_upcoming_dividend_events_from_json(
+    events = models_dividends.parse_upcoming_dividend_events_from_json(
         """```json
 [
   {
@@ -198,7 +199,7 @@ def test_parse_dividend_events_accepts_fenced_array_in_order_and_uses_utc_midnig
 
 
 def test_parse_dividend_events_uses_source_key_defaults_for_missing_values():
-    event = models_event.parse_upcoming_dividend_events_from_json(
+    event = models_dividends.parse_upcoming_dividend_events_from_json(
         "[{}]",
         {
             "sym": "CBA",
@@ -240,7 +241,7 @@ def test_parse_earnings_events_accepts_fenced_array_in_order_and_uses_defaults()
         {"sym": "MSFT", "date": "1970-01-03", "exchange": "NYSE", "src": "SEC"},
     ]
 
-    events = models_event.parse_upcoming_earnings_events_from_json(
+    events = models_earnings.parse_upcoming_earnings_events_from_json(
         f"```json\n{json.dumps(records)}\n```",
         {
             "exchange": "NASDAQ",
@@ -264,11 +265,49 @@ def test_parse_earnings_events_accepts_fenced_array_in_order_and_uses_defaults()
     assert events[1].status == "estimated"
 
 
+def test_parse_earnings_events_preserves_financial_values_and_zero_defaults():
+    financial_values = {
+        "market_cap": 200_000_000_000,
+        "eps": -2.65,
+        "eps_forecast": -2.08,
+        "revenue": 27_067_000_000,
+        "revenue_forecast": 1_001_000_000,
+        "currency": "USD",
+    }
+    records = [
+        {"sym": "AAPL", "date": "2026-11-20", **financial_values},
+        {"sym": "MSFT", "date": "2026-11-21"},
+    ]
+
+    events = models_earnings.parse_upcoming_earnings_events_from_json(json.dumps(records))
+
+    assert [event.model_dump(mode="json", include=set(financial_values)) for event in events] == [
+        financial_values,
+        {
+            "market_cap": 0,
+            "eps": 0.0,
+            "eps_forecast": 0.0,
+            "revenue": 0,
+            "revenue_forecast": 0,
+            "currency": "",
+        },
+    ]
+
+
+@pytest.mark.parametrize("field", ["market_cap", "eps", "eps_forecast", "revenue", "revenue_forecast", "currency"])
+def test_earnings_parser_does_not_replace_explicit_null_financial_values_with_defaults(field):
+    record = {"sym": "AAPL", "date": "2026-11-20", field: None}
+    defaults = {field: "USD" if field == "currency" else 1}
+
+    with pytest.raises(pydantic.ValidationError):
+        models_earnings.parse_upcoming_earnings_events_from_json(json.dumps([record]), defaults)
+
+
 @pytest.mark.parametrize(
     "parser",
     [
-        models_event.parse_upcoming_dividend_events_from_json,
-        models_event.parse_upcoming_earnings_events_from_json,
+        models_dividends.parse_upcoming_dividend_events_from_json,
+        models_earnings.parse_upcoming_earnings_events_from_json,
     ],
     ids=["dividend", "earnings"],
 )
@@ -279,8 +318,8 @@ def test_event_parsers_return_empty_list_for_empty_array(parser):
 @pytest.mark.parametrize(
     "parser",
     [
-        models_event.parse_upcoming_dividend_events_from_json,
-        models_event.parse_upcoming_earnings_events_from_json,
+        models_dividends.parse_upcoming_dividend_events_from_json,
+        models_earnings.parse_upcoming_earnings_events_from_json,
     ],
     ids=["dividend", "earnings"],
 )
@@ -292,8 +331,8 @@ def test_event_parsers_reject_non_array_top_level_values(parser):
 @pytest.mark.parametrize(
     "parser",
     [
-        models_event.parse_upcoming_dividend_events_from_json,
-        models_event.parse_upcoming_earnings_events_from_json,
+        models_dividends.parse_upcoming_dividend_events_from_json,
+        models_earnings.parse_upcoming_earnings_events_from_json,
     ],
     ids=["dividend", "earnings"],
 )
@@ -305,8 +344,8 @@ def test_event_parsers_reject_non_object_records(parser):
 @pytest.mark.parametrize(
     "parser",
     [
-        models_event.parse_upcoming_dividend_events_from_json,
-        models_event.parse_upcoming_earnings_events_from_json,
+        models_dividends.parse_upcoming_dividend_events_from_json,
+        models_earnings.parse_upcoming_earnings_events_from_json,
     ],
     ids=["dividend", "earnings"],
 )
@@ -319,11 +358,11 @@ def test_event_parsers_propagate_json_errors(parser):
     ("parser", "record"),
     [
         (
-            models_event.parse_upcoming_dividend_events_from_json,
+            models_dividends.parse_upcoming_dividend_events_from_json,
             {"sym": "AAA", "date": "2026/01/01", "pdate": None},
         ),
         (
-            models_event.parse_upcoming_earnings_events_from_json,
+            models_earnings.parse_upcoming_earnings_events_from_json,
             {"sym": "AAA", "date": "2026/01/01"},
         ),
     ],
@@ -338,11 +377,11 @@ def test_event_parsers_reject_dates_outside_yyyy_mm_dd_format(parser, record):
     ("parser", "record"),
     [
         (
-            models_event.parse_upcoming_dividend_events_from_json,
+            models_dividends.parse_upcoming_dividend_events_from_json,
             {"sym": "AAA", "date": "2026-1-1", "pdate": None},
         ),
         (
-            models_event.parse_upcoming_earnings_events_from_json,
+            models_earnings.parse_upcoming_earnings_events_from_json,
             {"sym": "AAA", "date": "2026-1-1"},
         ),
     ],
@@ -357,11 +396,11 @@ def test_event_parsers_reject_non_zero_padded_dates(parser, record):
     ("parser", "record"),
     [
         (
-            models_event.parse_upcoming_dividend_events_from_json,
+            models_dividends.parse_upcoming_dividend_events_from_json,
             {"sym": "AAA", "date": "2026-02-30", "pdate": None},
         ),
         (
-            models_event.parse_upcoming_earnings_events_from_json,
+            models_earnings.parse_upcoming_earnings_events_from_json,
             {"sym": "AAA", "date": "2026-02-30"},
         ),
     ],
@@ -376,11 +415,11 @@ def test_event_parsers_reject_invalid_calendar_dates(parser, record):
     ("parser", "record"),
     [
         (
-            models_event.parse_upcoming_dividend_events_from_json,
+            models_dividends.parse_upcoming_dividend_events_from_json,
             {"sym": None, "date": "2026-01-01", "pdate": None},
         ),
         (
-            models_event.parse_upcoming_earnings_events_from_json,
+            models_earnings.parse_upcoming_earnings_events_from_json,
             {"sym": None, "date": "2026-01-01"},
         ),
     ],

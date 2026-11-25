@@ -18,7 +18,7 @@ public sealed record TickerAnalysis
     public string? CompanyName { get; init; }
 
     [JsonPropertyName("asset_type")]
-    public required TickerAssetType? AssetType { get; init; }
+    public TickerAssetType? AssetType { get; init; }
 
     [JsonPropertyName("exchange")]
     public required string Exchange { get; init; }
@@ -33,7 +33,7 @@ public sealed record TickerAnalysis
     public required TickerMarketSnapshot MarketSnapshot { get; init; }
 
     [JsonPropertyName("holding_snapshot")]
-    public required TickerHoldingSnapshot? HoldingSnapshot { get; init; }
+    public TickerHoldingSnapshot? HoldingSnapshot { get; init; }
 
     [JsonPropertyName("research")]
     public required TickerResearch Research { get; init; }

@@ -57,7 +57,7 @@ public sealed record PortfolioReview : IPortfolioAnalysisResult
     public required IReadOnlyList<string> MajorRebalanceReasons { get; init; }
 
     [JsonPropertyName("action_plan")]
-    public required PortfolioReviewActionPlan? ActionPlan { get; init; }
+    public PortfolioReviewActionPlan? ActionPlan { get; init; }
 
     [JsonPropertyName("overall_data_quality")]
     public required DataQuality OverallDataQuality { get; init; }

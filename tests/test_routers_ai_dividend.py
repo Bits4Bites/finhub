@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from app import config
 from app.main import app
-from app.models import events_dividends as models_dividends
+from app.models import events_div as models_dividends
 from app.services import ai_helper
 from app.services import msai_analyze_div_event as services_dividend
 from tests import dividend_fixtures

@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 from app import config
 from app.main import app
-from app.models import event as models_event
+from app.models import events_earnings as models_event
 from app.routers import async_task as router_async_task
 from app.schemas.base_req_resp import BaseResponse
 from app.utils import cache

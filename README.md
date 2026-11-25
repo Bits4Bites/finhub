@@ -135,6 +135,21 @@ FINHUB_LLM_TASK__ANALYZE_TICKER_RESEARCH__USE_WEB_SEARCH=True
 FINHUB_LLM_TASK__ANALYZE_TICKER_RESEARCH__MAX_TOOL_CALLS=25
 ```
 
+#### AI diagnostics
+
+OpenAI-compatible calls log the task/model, available response and request IDs, response status,
+error codes, incomplete-response reasons, refusal counts, and output/tool types and statuses.
+Failures and explicit refusals are logged at warning level, including refusals in otherwise
+completed responses. Normal diagnostics omit prompts, response text, and search queries.
+
+For detailed investigation, set the **process environment variable** `LLM_DEBUG_MODE=true`
+before starting the AI-task server. This additionally logs provider response bodies (up to
+32,000 characters per response) and separate refusal excerpts, and prints full prompts and
+completions. Debug output can contain sensitive portfolio data; use it only in a controlled
+environment and disable it
+after capturing the failure. Diagnostic logging does not change model selection, retries,
+or response handling.
+
 #### Node chaining (`finhub_proxy_config.env`)
 
 Node chaining routes dividend and earnings event APIs to the configured web-crawl node, and routes new-listings

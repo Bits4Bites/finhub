@@ -4,7 +4,7 @@ import asyncio
 import copy
 import json
 from datetime import UTC, date, datetime, timedelta
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -407,6 +407,52 @@ def test_repeated_public_call_reuses_completed_analysis_when_ai_is_unavailable()
     assert second == first
     assert second[0].analysis_status == "Completed"
     assert second[0].analysis is not None
+
+
+def test_hourly_source_refresh_discovers_new_listings_without_expiring_unchanged_ai_results():
+    listing_date = _today() + timedelta(days=3)
+    before_html = _calendar_html()
+    after_html = before_html.replace("Example issuer.", "Example issuer. Additional issuer BBB.")
+    scraper = Mock()
+    scraper.get.side_effect = [
+        Mock(status_code=200, text=before_html),
+        Mock(status_code=200, text=after_html),
+        Mock(status_code=200, text=after_html),
+    ]
+    clock = ai_service_fixtures.ManualClock()
+    cache = ai_service_fixtures.ExpiringCache(clock)
+    first_candidate = _candidate("AAA", listing_date)
+    ai = ai_service_fixtures.OpaqueAIQueue(
+        [
+            _extraction_response([first_candidate]),
+            _research_response("ASX:AAA"),
+            _analysis_response("ASX:AAA", listing_date),
+            _extraction_response([first_candidate, _candidate("BBB", listing_date)]),
+            _research_response("ASX:BBB"),
+            _analysis_response("ASX:BBB", listing_date),
+        ]
+    )
+    with (
+        patch.object(service.services_crawler_core.cloudscraper, "create_scraper", return_value=scraper),
+        patch.object(service.cache, "get", side_effect=cache.get),
+        patch.object(service.cache, "set", side_effect=cache.set),
+        patch.object(service.config.settings_llm_task, "tokenomics_mode", "Standard"),
+        patch.object(service.ai_helper, "ai_exec_task", new=ai),
+    ):
+        first = asyncio.run(service.ai_get_asx_new_listings())
+        clock.advance(1800)
+        cached = asyncio.run(service.ai_get_asx_new_listings())
+        clock.advance(1800)
+        updated = asyncio.run(service.ai_get_asx_new_listings())
+        clock.advance(3600)
+        reused = asyncio.run(service.ai_get_asx_new_listings())
+
+    assert [event.symbol for event in first] == ["ASX:AAA"]
+    assert cached == first
+    assert [event.symbol for event in updated] == ["ASX:AAA", "ASX:BBB"]
+    assert all(event.analysis_status == "Completed" for event in updated)
+    assert reused == updated
+    assert not ai.responses
 
 
 def test_documented_six_hour_cache_expiry_reenters_analysis():
