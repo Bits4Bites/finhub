@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import openai
+import pydantic
 import pytest
 from openai.types import responses
 from pydantic import BaseModel, ValidationError
@@ -143,6 +144,77 @@ def test_structured_validation_logging_for_generic_error_only_exposes_error_type
     assert "ValueError" in caplog.text
     assert "private-sensitive-value" not in caplog.text
     assert "api-key" not in caplog.text
+
+
+def test_structured_validation_logging_reports_schema_fields_and_limits_without_input_keys(caplog):
+    class Source(BaseModel):
+        title: str = pydantic.Field(max_length=5)
+
+    class ExampleModel(BaseModel):
+        references: list[Source]
+        sources_by_name: dict[str, Source]
+
+    with pytest.raises(ValidationError) as error_info:
+        ExampleModel.model_validate(
+            {
+                "references": [{"title": "private source title"}],
+                "sources_by_name": {"private dictionary key": {"title": "private source title"}},
+            }
+        )
+
+    ai_helper.log_structured_validation_failure(
+        "Portfolio Spotlight",
+        "Research",
+        error_info.value,
+        response_model=ExampleModel,
+    )
+
+    assert "references[*].title: string_too_long (max_length=5)" in caplog.text
+    assert "sources_by_name.<field>.title: string_too_long (max_length=5)" in caplog.text
+    assert "private" not in caplog.text
+    assert "String should have" not in caplog.text
+
+
+def test_structured_validation_logging_redacts_unknown_extra_field_names(caplog):
+    class ExampleModel(BaseModel):
+        model_config = pydantic.ConfigDict(extra="forbid")
+        value: int
+
+    with pytest.raises(ValidationError) as error_info:
+        ExampleModel.model_validate({"value": 1, "private unexpected property": "private value"})
+
+    ai_helper.log_structured_validation_failure(
+        "Portfolio Spotlight",
+        "Research",
+        error_info.value,
+        response_model=ExampleModel,
+    )
+
+    assert "<field>: extra_forbidden" in caplog.text
+    assert "private" not in caplog.text
+
+
+def test_structured_validation_logging_excludes_custom_validation_context(caplog):
+    class ExampleModel(BaseModel):
+        value: str
+
+        @pydantic.field_validator("value")
+        @classmethod
+        def validate_value(cls, value: str) -> str:
+            raise ValueError("private validation context")
+
+    with pytest.raises(ValidationError) as error_info:
+        ExampleModel.model_validate({"value": "private rejected value"})
+
+    ai_helper.log_structured_validation_failure(
+        "Portfolio Spotlight",
+        "Research",
+        error_info.value,
+        response_model=ExampleModel,
+    )
+
+    assert "value: value_error" in caplog.text
+    assert "private" not in caplog.text
 
 
 @pytest.mark.parametrize(

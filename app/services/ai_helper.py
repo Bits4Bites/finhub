@@ -53,10 +53,27 @@ class LLMResponse(BaseModel):
     citation_urls: list[str] = Field(default_factory=list)
 
 
+def _schema_field_names(response_model: type[BaseModel]) -> set[str]:
+    field_names: set[str] = set()
+    pending: list[object] = [response_model.model_json_schema()]
+    while pending:
+        value = pending.pop()
+        if isinstance(value, Mapping):
+            properties = value.get("properties")
+            if isinstance(properties, Mapping):
+                field_names.update(properties)
+            pending.extend(value.values())
+        elif isinstance(value, list):
+            pending.extend(value)
+    return field_names
+
+
 def log_structured_validation_failure(
     feature: str,
     stage: str,
     error: Exception,
+    *,
+    response_model: type[BaseModel] | None = None,
 ) -> None:
     """Log a safe summary of a structured-output validation failure.
 
@@ -64,14 +81,17 @@ def log_structured_validation_failure(
         feature: Non-sensitive business-feature label used to identify the log entry.
         stage: Non-sensitive processing-stage label used to identify the failure.
         error: Validation failure to summarize. Pydantic validation errors contribute
-            only error counts and types; other exceptions contribute only their
-            class name.
+            error counts, types, and numeric maximum-length limits; other exceptions
+            contribute only their class name.
+        response_model: Optional expected schema used to allow only declared field
+            names in logged paths. Collection indexes and unrecognized location
+            keys are redacted.
 
     Returns:
         None.
 
     Notes:
-        Rejected values, exception messages, and validation context are never logged.
+        Rejected values, exception messages, and other validation context are never logged.
         Callers must keep ``feature`` and ``stage`` free of sensitive data because
         those labels are included verbatim.
     """
@@ -79,13 +99,29 @@ def log_structured_validation_failure(
     if isinstance(error, ValidationError):
         errors = error.errors(
             include_url=False,
-            include_context=False,
+            include_context=True,
             include_input=False,
         )
-        error_types = [str(item["type"]) for item in errors[:8]]
-        if len(errors) > len(error_types):
-            error_types.append(f"{len(errors) - len(error_types)} additional")
-        summary = f"{len(errors)} validation error(s): {'; '.join(error_types)}"
+        field_names = _schema_field_names(response_model) if response_model is not None else set()
+        error_details = []
+        for item in errors[:8]:
+            detail = str(item["type"])
+            if response_model is not None:
+                location = ""
+                for component in item["loc"]:
+                    if isinstance(component, int):
+                        location += "[*]"
+                    else:
+                        name = component if component in field_names else "<field>"
+                        location += f"{'.' if location else ''}{name}"
+                detail = f"{location or '<root>'}: {detail}"
+            max_length = item.get("ctx", {}).get("max_length")
+            if type(max_length) is int:
+                detail += f" (max_length={max_length})"
+            error_details.append(detail)
+        if len(errors) > len(error_details):
+            error_details.append(f"{len(errors) - len(error_details)} additional")
+        summary = f"{len(errors)} validation error(s): {'; '.join(error_details)}"
     else:
         summary = type(error).__name__
 

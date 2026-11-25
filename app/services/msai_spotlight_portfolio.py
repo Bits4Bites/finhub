@@ -340,7 +340,12 @@ async def _research_portfolio(
             accessed_at=datetime.now(UTC),
         )
     except (TypeError, ValueError, ValidationError) as exc:
-        ai_helper.log_structured_validation_failure("Portfolio Spotlight", "Research", exc)
+        ai_helper.log_structured_validation_failure(
+            "Portfolio Spotlight",
+            "Research",
+            exc,
+            response_model=_PortfolioResearchResponse,
+        )
         raise PortfolioSpotlightAIError("Portfolio spotlight research returned invalid structured data") from exc
 
     await cache.set(
@@ -386,8 +391,7 @@ def _repair_research_references(
         reference for reference in research_data["references"] if reference["id"] in used_ids
     ]
     if missing_ids or dropped_claims:
-        missing_text = ", ".join(sorted(missing_ids)) or "none"
-        warning = f"Ignored missing source IDs: {missing_text}."
+        warning = f"Ignored {len(missing_ids)} missing source ID(s)."
         if dropped_claims:
             warning += f" Removed {dropped_claims} unsupported claim(s)."
         research_data["data_gaps"] = [*research_data["data_gaps"][:19], warning]
@@ -469,7 +473,12 @@ async def _assess_portfolio(
         assessment = _repair_assessment_references(assessment, research)
         _validate_assessment(assessment, snapshot, research)
     except (ValueError, ValidationError) as exc:
-        ai_helper.log_structured_validation_failure("Portfolio Spotlight", "Assessment", exc)
+        ai_helper.log_structured_validation_failure(
+            "Portfolio Spotlight",
+            "Assessment",
+            exc,
+            response_model=_PortfolioAssessmentDraft,
+        )
         raise PortfolioSpotlightAIError("Portfolio spotlight assessment returned invalid structured data") from exc
 
     await cache.set(
@@ -523,7 +532,7 @@ def _repair_assessment_references(
             continue
         risk_data["reference_ids"] = filtered.reference_ids
         if filtered.removed_ids:
-            warning = f"Ignored unsupported source IDs: {', '.join(sorted(filtered.removed_ids))}."
+            warning = f"Ignored {len(filtered.removed_ids)} unsupported source ID(s)."
             risk_data["data_gaps"] = [*risk_data["data_gaps"][:19], warning]
         repaired_risks.append(risk_data)
 
@@ -534,7 +543,7 @@ def _repair_assessment_references(
         assessment_data["overall_data_quality"] = "Insufficient"
 
     if removed_ids or dropped_risks:
-        warning = f"Ignored unsupported assessment source IDs: {', '.join(sorted(removed_ids)) or 'none'}."
+        warning = f"Ignored {len(removed_ids)} unsupported assessment source ID(s)."
         if dropped_risks:
             warning += f" Removed {dropped_risks} unsupported risk(s)."
         assessment_data["data_gaps"] = [*assessment_data["data_gaps"][:19], warning]

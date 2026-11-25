@@ -9,3 +9,4 @@
 - patch(crawler/cache): set page content cache expiration to 1 hour
 - patch(ai_helper): log provider refusal and failure diagnostics
 - patch(ai_tasks): disengage Sol by default, route light tasks to Luna and heavy tasks to Terra
+- patch(msai_spotlight_portfolio): improve validation diagnostics and bound reference-repair warnings

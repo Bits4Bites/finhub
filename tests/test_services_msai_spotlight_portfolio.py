@@ -244,6 +244,101 @@ def test_ai_spotlight_portfolio_rejects_invalid_structured_ai_output():
         )
 
 
+@pytest.mark.parametrize(
+    ("collection", "field", "limit"),
+    [
+        ("references", "title", 500),
+        ("references", "publisher", 200),
+        ("claims", "text", 4000),
+    ],
+)
+def test_research_length_failure_identifies_field_and_limit_without_rejected_text(collection, field, limit, caplog):
+    research = _research_data()
+    rejected_text = "private research value" + "x" * limit
+    research[collection][0][field] = rejected_text
+    ai = boundaries.QueuedAI(
+        boundaries.AIResponse(_plan_data()),
+        boundaries.AIResponse(research),
+    )
+
+    with pytest.raises(service.PortfolioSpotlightAIError):
+        _invoke_spotlight(
+            [fixtures.request_holding()],
+            country="US",
+            investor_theme="Growth focused",
+            ai=ai,
+        )
+
+    assert "[Portfolio Spotlight] Research structured-output validation failed" in caplog.text
+    assert f"{collection}[*].{field}: string_too_long (max_length={limit})" in caplog.text
+    assert "private research value" not in caplog.text
+    assert rejected_text not in caplog.text
+
+
+@pytest.mark.parametrize("keep_supported_claim", [True, False])
+def test_ai_spotlight_portfolio_repairs_long_missing_reference_urls(keep_supported_claim, caplog):
+    unknown_ids = [f"https://example.com/missing-{index}/" + "x" * 2100 for index in range(2)]
+    research = _research_data()
+    research["claims"][0]["reference_ids"] = ([_SOURCE_URL] if keep_supported_claim else []) + unknown_ids
+    risks = [_risk()] if keep_supported_claim else []
+    ai = boundaries.QueuedAI(
+        boundaries.AIResponse(_plan_data()),
+        boundaries.AIResponse(research, citation_urls=(_SOURCE_URL,)),
+        boundaries.AIResponse(_assessment_data(risks)),
+    )
+
+    result = _invoke_spotlight(
+        [fixtures.request_holding()],
+        country="US",
+        investor_theme="Growth focused",
+        ai=ai,
+    )
+
+    assert any("Ignored 2 missing source ID(s)." in gap for gap in result.data_gaps)
+    if keep_supported_claim:
+        assert result.risks[0].reference_ids == [_SOURCE_ID]
+        assert [reference.id for reference in result.references] == [_SOURCE_ID]
+    else:
+        assert result.risks == []
+        assert result.references == []
+        assert any("Removed 1 unsupported claim(s)." in gap for gap in result.data_gaps)
+    for unknown_id in unknown_ids:
+        assert unknown_id not in result.model_dump_json()
+        assert unknown_id not in caplog.text
+
+
+@pytest.mark.parametrize("keep_supported_risk", [True, False])
+def test_ai_spotlight_portfolio_repairs_long_unsupported_reference_urls(keep_supported_risk, caplog):
+    unknown_ids = [f"https://example.com/unsupported-{index}/" + "x" * 2100 for index in range(2)]
+    assessment = _assessment_data([_risk()])
+    assessment["risks"][0]["reference_ids"] = ([_SOURCE_ID] if keep_supported_risk else []) + unknown_ids
+    ai = boundaries.QueuedAI(
+        boundaries.AIResponse(_plan_data()),
+        boundaries.AIResponse(_research_data(), citation_urls=(_SOURCE_URL,)),
+        boundaries.AIResponse(assessment),
+    )
+
+    result = _invoke_spotlight(
+        [fixtures.request_holding()],
+        country="US",
+        investor_theme="Growth focused",
+        ai=ai,
+    )
+
+    assert any("Ignored 2 unsupported assessment source ID(s)." in gap for gap in result.data_gaps)
+    if keep_supported_risk:
+        assert result.risks[0].reference_ids == [_SOURCE_ID]
+        assert "Ignored 2 unsupported source ID(s)." in result.risks[0].data_gaps
+    else:
+        assert result.risks == []
+        assert result.references == []
+        assert result.overall_data_quality == "Insufficient"
+        assert any("Removed 1 unsupported risk(s)." in gap for gap in result.data_gaps)
+    for unknown_id in unknown_ids:
+        assert unknown_id not in result.model_dump_json()
+        assert unknown_id not in caplog.text
+
+
 def test_ai_spotlight_portfolio_repeated_calls_return_equal_public_results():
     cache = boundaries.MemoryCache()
     first = _invoke_spotlight(
