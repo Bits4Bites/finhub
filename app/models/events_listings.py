@@ -1,31 +1,31 @@
 from __future__ import annotations
 
-from datetime import date, datetime
-from typing import Literal, Self
+import datetime
+import typing
 
-from pydantic import ConfigDict, Field, field_validator, model_validator
+import pydantic
 
 from ..utils import ai_reference as ai_reference_utils
 from . import ai as models_ai
-from . import event
+from . import events_base
 from . import portfolio as models_portfolio
 from . import types as models_types
 
-ListingStatus = Literal["Upcoming", "Listed"]
-ListingStance = Literal["Bullish", "Neutral", "Bearish", "InsufficientData"]
-ListingAnalysisStatus = Literal["NotStarted", "Completed", "Failed", "Skipped"]
-ListingOutlookAssessmentType = Literal["Forecast", "Observed", "InsufficientData"]
-ListingOutlookDirection = Literal["Up", "Flat", "Down", "InsufficientData"]
-ListingRiskSeverity = Literal["Critical", "High", "Medium", "Low"]
-ListingLikelihood = Literal["High", "Medium", "Low"]
-ListingHorizon = Literal["IPO Day", "First Week", "First Two Weeks", "First Month", "Longer Term"]
+ListingStatus = typing.Literal["Upcoming", "Listed"]
+ListingStance = typing.Literal["Bullish", "Neutral", "Bearish", "InsufficientData"]
+ListingAnalysisStatus = typing.Literal["NotStarted", "Completed", "Failed", "Skipped"]
+ListingOutlookAssessmentType = typing.Literal["Forecast", "Observed", "InsufficientData"]
+ListingOutlookDirection = typing.Literal["Up", "Flat", "Down", "InsufficientData"]
+ListingRiskSeverity = typing.Literal["Critical", "High", "Medium", "Low"]
+ListingLikelihood = typing.Literal["High", "Medium", "Low"]
+ListingHorizon = typing.Literal["IPO Day", "First Week", "First Two Weeks", "First Month", "Longer Term"]
 
 
 class ListingEvidenceClaim(models_ai.StrictAIModel):
     """One factual claim used in a new-listing analysis."""
 
-    text: models_types.NonEmptyString = Field(description="Factual evidence statement.")
-    reference_ids: list[models_types.NonEmptyString] = Field(
+    text: models_types.NonEmptyString = pydantic.Field(description="Factual evidence statement.")
+    reference_ids: list[models_types.NonEmptyString] = pydantic.Field(
         min_length=1,
         description="Identifiers of sources supporting the claim.",
     )
@@ -34,9 +34,9 @@ class ListingEvidenceClaim(models_ai.StrictAIModel):
 class ListingEvidenceSection(models_ai.StrictAIModel):
     """A group of sourced listing facts and known evidence gaps."""
 
-    facts: list[ListingEvidenceClaim] = Field(description="Sourced facts relevant to this analysis section.")
-    data_gaps: list[str] = Field(description="Missing, unavailable, or conflicting evidence for the section.")
-    reference_ids: list[models_types.NonEmptyString] = Field(
+    facts: list[ListingEvidenceClaim] = pydantic.Field(description="Sourced facts relevant to this analysis section.")
+    data_gaps: list[str] = pydantic.Field(description="Missing, unavailable, or conflicting evidence for the section.")
+    reference_ids: list[models_types.NonEmptyString] = pydantic.Field(
         min_length=1,
         description="Identifiers of all sources used by the section.",
     )
@@ -45,23 +45,27 @@ class ListingEvidenceSection(models_ai.StrictAIModel):
 class ListingAnalysisSection(ListingEvidenceSection):
     """Common assessment content shared by listing-analysis sections."""
 
-    summary: models_types.NonEmptyString = Field(description="Concise conclusion for the analysis section.")
-    data_quality: models_types.DataQuality = Field(description="Quality of the evidence supporting the section.")
-    assumptions: list[str] = Field(description="Assumptions used when interpreting available evidence.")
+    summary: models_types.NonEmptyString = pydantic.Field(description="Concise conclusion for the analysis section.")
+    data_quality: models_types.DataQuality = pydantic.Field(
+        description="Quality of the evidence supporting the section."
+    )
+    assumptions: list[str] = pydantic.Field(description="Assumptions used when interpreting available evidence.")
 
 
 class ListingOfferAnalysis(ListingAnalysisSection):
     """Assessment of the listing offer structure and capital raising."""
 
-    issue_price_assessment: models_types.NonEmptyString = Field(description="Assessment of the offered issue price.")
-    capital_raise_assessment: models_types.NonEmptyString = Field(
+    issue_price_assessment: models_types.NonEmptyString = pydantic.Field(
+        description="Assessment of the offered issue price."
+    )
+    capital_raise_assessment: models_types.NonEmptyString = pydantic.Field(
         description="Assessment of the amount and structure of capital raised."
     )
-    underwriting_assessment: models_types.NonEmptyString = Field(
+    underwriting_assessment: models_types.NonEmptyString = pydantic.Field(
         description="Assessment of underwriting support and execution risk."
     )
-    use_of_funds: list[str] = Field(description="Material stated uses of listing proceeds.")
-    dilution_and_escrow: str | None = Field(
+    use_of_funds: list[str] = pydantic.Field(description="Material stated uses of listing proceeds.")
+    dilution_and_escrow: str | None = pydantic.Field(
         description="Assessment of dilution, escrow, and lock-up effects, when available."
     )
 
@@ -69,29 +73,31 @@ class ListingOfferAnalysis(ListingAnalysisSection):
 class ListingBusinessAnalysis(ListingAnalysisSection):
     """Assessment of the issuer's business model and competitive context."""
 
-    business_model: models_types.NonEmptyString = Field(
+    business_model: models_types.NonEmptyString = pydantic.Field(
         description="Description and assessment of how the issuer creates value."
     )
-    revenue_sources: list[str] = Field(description="Material sources of issuer revenue.")
-    competitive_position: models_types.NonEmptyString = Field(
+    revenue_sources: list[str] = pydantic.Field(description="Material sources of issuer revenue.")
+    competitive_position: models_types.NonEmptyString = pydantic.Field(
         description="Assessment of the issuer's competitive position."
     )
-    sector_context: models_types.NonEmptyString = Field(description="Relevant sector conditions affecting the issuer.")
+    sector_context: models_types.NonEmptyString = pydantic.Field(
+        description="Relevant sector conditions affecting the issuer."
+    )
 
 
 class ListingFinancialAnalysis(ListingAnalysisSection):
     """Assessment of issuer financial performance and funding quality."""
 
-    historical_performance: models_types.NonEmptyString = Field(
+    historical_performance: models_types.NonEmptyString = pydantic.Field(
         description="Assessment of available historical financial performance."
     )
-    profitability_and_cash_flow: models_types.NonEmptyString = Field(
+    profitability_and_cash_flow: models_types.NonEmptyString = pydantic.Field(
         description="Assessment of profitability and cash-flow characteristics."
     )
-    balance_sheet_and_funding: models_types.NonEmptyString = Field(
+    balance_sheet_and_funding: models_types.NonEmptyString = pydantic.Field(
         description="Assessment of balance-sheet strength and funding requirements."
     )
-    forecast_quality: models_types.NonEmptyString = Field(
+    forecast_quality: models_types.NonEmptyString = pydantic.Field(
         description="Assessment of management forecasts and their supporting evidence."
     )
 
@@ -99,12 +105,12 @@ class ListingFinancialAnalysis(ListingAnalysisSection):
 class ListingValuationAnalysis(ListingAnalysisSection):
     """Assessment of listing valuation and sensitivity."""
 
-    valuation_view: models_types.NonEmptyString = Field(description="Overall view of the offer valuation.")
-    implied_market_cap: float | None = Field(
+    valuation_view: models_types.NonEmptyString = pydantic.Field(description="Overall view of the offer valuation.")
+    implied_market_cap: float | None = pydantic.Field(
         description="Implied market capitalization at the issue price, when derivable."
     )
-    peer_comparison: models_types.NonEmptyString = Field(description="Comparison with relevant listed peers.")
-    sensitivity: models_types.NonEmptyString = Field(
+    peer_comparison: models_types.NonEmptyString = pydantic.Field(description="Comparison with relevant listed peers.")
+    sensitivity: models_types.NonEmptyString = pydantic.Field(
         description="Key assumptions and variables to which valuation is sensitive."
     )
 
@@ -112,13 +118,13 @@ class ListingValuationAnalysis(ListingAnalysisSection):
 class ListingGovernanceAnalysis(ListingAnalysisSection):
     """Assessment of issuer leadership, ownership, and governance."""
 
-    board_and_management: models_types.NonEmptyString = Field(
+    board_and_management: models_types.NonEmptyString = pydantic.Field(
         description="Assessment of board and management experience and suitability."
     )
-    ownership_and_escrow: models_types.NonEmptyString = Field(
+    ownership_and_escrow: models_types.NonEmptyString = pydantic.Field(
         description="Assessment of post-listing ownership, escrow, and lock-up arrangements."
     )
-    governance_concerns: list[str] = Field(
+    governance_concerns: list[str] = pydantic.Field(
         description="Material governance concerns identified from available evidence."
     )
 
@@ -126,13 +132,13 @@ class ListingGovernanceAnalysis(ListingAnalysisSection):
 class ListingDriver(models_ai.StrictAIModel):
     """Common evidence-linked driver affecting a new listing."""
 
-    title: models_types.NonEmptyString = Field(description="Short label for the driver.")
-    description: models_types.NonEmptyString = Field(
+    title: models_types.NonEmptyString = pydantic.Field(description="Short label for the driver.")
+    description: models_types.NonEmptyString = pydantic.Field(
         description="Explanation of how the driver may affect the listing."
     )
-    likelihood: ListingLikelihood = Field(description="Estimated likelihood that the driver will materialize.")
-    horizon: ListingHorizon = Field(description="Period over which the driver is relevant.")
-    reference_ids: list[models_types.NonEmptyString] = Field(
+    likelihood: ListingLikelihood = pydantic.Field(description="Estimated likelihood that the driver will materialize.")
+    horizon: ListingHorizon = pydantic.Field(description="Period over which the driver is relevant.")
+    reference_ids: list[models_types.NonEmptyString] = pydantic.Field(
         min_length=1,
         description="Identifiers of sources supporting the driver.",
     )
@@ -141,7 +147,7 @@ class ListingDriver(models_ai.StrictAIModel):
 class ListingRisk(ListingDriver):
     """A material downside driver for a new listing."""
 
-    severity: ListingRiskSeverity = Field(description="Potential impact severity of the risk.")
+    severity: ListingRiskSeverity = pydantic.Field(description="Potential impact severity of the risk.")
 
 
 class ListingCatalyst(ListingDriver):
@@ -151,8 +157,8 @@ class ListingCatalyst(ListingDriver):
 class ListingRiskCatalystAnalysis(ListingAnalysisSection):
     """Assessment of material listing risks and positive catalysts."""
 
-    risks: list[ListingRisk] = Field(description="Material downside risks for the listing.")
-    catalysts: list[ListingCatalyst] = Field(description="Potential positive catalysts for the listing.")
+    risks: list[ListingRisk] = pydantic.Field(description="Material downside risks for the listing.")
+    catalysts: list[ListingCatalyst] = pydantic.Field(description="Potential positive catalysts for the listing.")
 
 
 class ListingPeriodOutlook(models_ai.StrictAIModel):
@@ -162,32 +168,46 @@ class ListingPeriodOutlook(models_ai.StrictAIModel):
     Insufficient-data assessments use the matching direction.
     """
 
-    assessment_type: ListingOutlookAssessmentType = Field(
+    assessment_type: ListingOutlookAssessmentType = pydantic.Field(
         description="Whether the outlook is observed, forecast, or unavailable."
     )
-    period_end: date | None = Field(description="End date of the assessment period, or null when unavailable.")
-    direction: ListingOutlookDirection = Field(description="Expected or observed price direction over the period.")
-    expected_price_min: float | None = Field(description="Lower expected or observed price bound, when available.")
-    expected_price_max: float | None = Field(description="Upper expected or observed price bound, when available.")
-    expected_return_min_pct: float | None = Field(description="Lower expected or observed percentage-return bound.")
-    expected_return_max_pct: float | None = Field(description="Upper expected or observed percentage-return bound.")
-    confidence: int = Field(
+    period_end: datetime.date | None = pydantic.Field(
+        description="End date of the assessment period, or null when unavailable."
+    )
+    direction: ListingOutlookDirection = pydantic.Field(
+        description="Expected or observed price direction over the period."
+    )
+    expected_price_min: float | None = pydantic.Field(
+        description="Lower expected or observed price bound, when available."
+    )
+    expected_price_max: float | None = pydantic.Field(
+        description="Upper expected or observed price bound, when available."
+    )
+    expected_return_min_pct: float | None = pydantic.Field(
+        description="Lower expected or observed percentage-return bound."
+    )
+    expected_return_max_pct: float | None = pydantic.Field(
+        description="Upper expected or observed percentage-return bound."
+    )
+    confidence: int = pydantic.Field(
         ge=0,
         le=100,
         description="Confidence score for the outlook from zero through 100.",
     )
-    rationale: models_types.NonEmptyString = Field(description="Evidence-based explanation of the period outlook.")
-    key_drivers: list[str] = Field(description="Factors expected to drive the period outcome.")
-    risk_factors: list[str] = Field(description="Factors that could impair the period outcome.")
-    assumptions: list[str] = Field(description="Assumptions underlying the outlook.")
-    data_gaps: list[str] = Field(description="Missing or uncertain information affecting the outlook.")
-    reference_ids: list[models_types.NonEmptyString] = Field(
+    rationale: models_types.NonEmptyString = pydantic.Field(
+        description="Evidence-based explanation of the period outlook."
+    )
+    key_drivers: list[str] = pydantic.Field(description="Factors expected to drive the period outcome.")
+    risk_factors: list[str] = pydantic.Field(description="Factors that could impair the period outcome.")
+    assumptions: list[str] = pydantic.Field(description="Assumptions underlying the outlook.")
+    data_gaps: list[str] = pydantic.Field(description="Missing or uncertain information affecting the outlook.")
+    reference_ids: list[models_types.NonEmptyString] = pydantic.Field(
         min_length=1,
         description="Identifiers of sources supporting the outlook.",
     )
 
-    @model_validator(mode="after")
-    def validate_ranges(self) -> Self:
+    @pydantic.model_validator(mode="after")
+    def validate_ranges(self) -> typing.Self:
         if (
             self.expected_price_min is not None
             and self.expected_price_max is not None
@@ -208,42 +228,44 @@ class ListingPeriodOutlook(models_ai.StrictAIModel):
 class ListingOutlook(models_ai.StrictAIModel):
     """Listing outlook across the initial trading periods."""
 
-    ipo_day: ListingPeriodOutlook = Field(description="Outlook for the initial listing day.")
-    first_week: ListingPeriodOutlook = Field(description="Outlook through the first week.")
-    first_two_weeks: ListingPeriodOutlook = Field(description="Outlook through the first two weeks.")
-    first_month: ListingPeriodOutlook = Field(description="Outlook through the first month.")
+    ipo_day: ListingPeriodOutlook = pydantic.Field(description="Outlook for the initial listing day.")
+    first_week: ListingPeriodOutlook = pydantic.Field(description="Outlook through the first week.")
+    first_two_weeks: ListingPeriodOutlook = pydantic.Field(description="Outlook through the first two weeks.")
+    first_month: ListingPeriodOutlook = pydantic.Field(description="Outlook through the first month.")
 
 
 class ListingAnalysisBase(models_ai.StrictAIModel):
     """Core structured assessment of a new or recently completed listing."""
 
-    symbol: models_types.NonEmptyString = Field(
+    symbol: models_types.NonEmptyString = pydantic.Field(
         description=(
             "Canonical exchange-qualified listing symbol; input is trimmed, "
             "uppercased, and exchange aliases are canonicalized."
         )
     )
-    as_of: datetime = Field(description="Timestamp when the analysis was finalized.")
-    listing_status: ListingStatus = Field(description="Whether the security is upcoming or already listed.")
-    overall_data_quality: models_types.DataQuality = Field(
+    as_of: datetime.datetime = pydantic.Field(description="Timestamp when the analysis was finalized.")
+    listing_status: ListingStatus = pydantic.Field(description="Whether the security is upcoming or already listed.")
+    overall_data_quality: models_types.DataQuality = pydantic.Field(
         description="Overall quality of evidence supporting the analysis."
     )
-    executive_summary: ListingAnalysisSection = Field(description="Concise evidence-backed summary of the listing.")
-    overall_stance: ListingStance = Field(description="Overall directional assessment of the listing.")
-    overall_confidence: int = Field(
+    executive_summary: ListingAnalysisSection = pydantic.Field(
+        description="Concise evidence-backed summary of the listing."
+    )
+    overall_stance: ListingStance = pydantic.Field(description="Overall directional assessment of the listing.")
+    overall_confidence: int = pydantic.Field(
         ge=0,
         le=100,
         description="Confidence score for the overall assessment from zero through 100.",
     )
-    offer: ListingOfferAnalysis = Field(description="Offer-structure assessment.")
-    business: ListingBusinessAnalysis = Field(description="Business-model assessment.")
-    financials: ListingFinancialAnalysis = Field(description="Financial assessment.")
-    valuation: ListingValuationAnalysis = Field(description="Valuation assessment.")
-    governance: ListingGovernanceAnalysis = Field(description="Governance assessment.")
-    risks_and_catalysts: ListingRiskCatalystAnalysis = Field(description="Material risks and catalysts.")
-    outlook: ListingOutlook = Field(description="Outlook across initial trading periods.")
+    offer: ListingOfferAnalysis = pydantic.Field(description="Offer-structure assessment.")
+    business: ListingBusinessAnalysis = pydantic.Field(description="Business-model assessment.")
+    financials: ListingFinancialAnalysis = pydantic.Field(description="Financial assessment.")
+    valuation: ListingValuationAnalysis = pydantic.Field(description="Valuation assessment.")
+    governance: ListingGovernanceAnalysis = pydantic.Field(description="Governance assessment.")
+    risks_and_catalysts: ListingRiskCatalystAnalysis = pydantic.Field(description="Material risks and catalysts.")
+    outlook: ListingOutlook = pydantic.Field(description="Outlook across initial trading periods.")
 
-    @field_validator("symbol", mode="before")
+    @pydantic.field_validator("symbol", mode="before")
     @classmethod
     def normalize_symbol(cls, value: object) -> object:
         return models_portfolio.normalize_canonical_ticker(value)
@@ -261,18 +283,18 @@ class ListingAnalysisBase(models_ai.StrictAIModel):
 class ListingAnalysis(ListingAnalysisBase):
     """Final listing analysis with a validated source registry."""
 
-    references: list[models_ai.ReferenceSource] = Field(
+    references: list[models_ai.ReferenceSource] = pydantic.Field(
         min_length=1,
         description="Canonical sources cited throughout the listing analysis, in application-supplied order.",
     )
 
-    @model_validator(mode="after")
-    def validate_references(self) -> Self:
+    @pydantic.model_validator(mode="after")
+    def validate_references(self) -> typing.Self:
         ai_reference_utils.validate_reference_registry(self.references, self)
         return self
 
 
-class ListingEvent(event.EventBase):
+class ListingEvent(events_base.EventBase):
     """A new or recently completed exchange-listing event.
 
     Completed events contain matching structured analysis and no error. Failed
@@ -280,78 +302,78 @@ class ListingEvent(event.EventBase):
     events contain neither analysis nor an error.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = pydantic.ConfigDict(extra="forbid")
 
-    symbol: models_types.NonEmptyString = Field(
+    symbol: models_types.NonEmptyString = pydantic.Field(
         description=(
             "Canonical exchange-qualified symbol assigned to the listing; input "
             "is trimmed, uppercased, and exchange aliases are canonicalized."
         )
     )
-    issue_price: float | None = Field(
+    issue_price: float | None = pydantic.Field(
         gt=0,
         description="Fixed offer price per security or the lower bound of a price range, or null when unavailable.",
     )
-    issue_price_upper: float | None = Field(
+    issue_price_upper: float | None = pydantic.Field(
         default=None,
         gt=0,
         description="Upper bound of an issue-price range, or null for a fixed or unavailable price.",
     )
-    issue_type: str | None = Field(
+    issue_type: str | None = pydantic.Field(
         default=None,
         description="Type of security or offer being listed.",
     )
-    sector: str | None = Field(default=None, description="Issuer sector, when available.")
-    industry: str | None = Field(default=None, description="Issuer industry, when available.")
-    principal_activities: str | None = Field(
+    sector: str | None = pydantic.Field(default=None, description="Issuer sector, when available.")
+    industry: str | None = pydantic.Field(default=None, description="Issuer industry, when available.")
+    principal_activities: str | None = pydantic.Field(
         default=None,
         description="Summary of the issuer's principal business activities.",
     )
-    currency: models_types.CurrencyCode = Field(
+    currency: models_types.CurrencyCode = pydantic.Field(
         description=("Three-letter currency of issue price and capital raised; input is trimmed and uppercased.")
     )
-    capital_to_raise: int | None = Field(
+    capital_to_raise: int | None = pydantic.Field(
         gt=0,
         description="Target capital raise, or null when unavailable.",
     )
-    public_offer_close_date: str | None = Field(
+    public_offer_close_date: str | None = pydantic.Field(
         default=None,
         description="Public-offer closing date, when applicable.",
     )
-    is_underwritten: bool | None = Field(
+    is_underwritten: bool | None = pydantic.Field(
         default=None,
         description="Whether the offer is underwritten, or null when not disclosed.",
     )
-    underwriters: list[str] = Field(
+    underwriters: list[str] = pydantic.Field(
         default_factory=list,
         description="Organizations underwriting the offer.",
     )
-    lead_managers: list[str] = Field(
+    lead_managers: list[str] = pydantic.Field(
         default_factory=list,
         description="Lead managers responsible for the offer.",
     )
-    analysis_status: ListingAnalysisStatus = Field(
+    analysis_status: ListingAnalysisStatus = pydantic.Field(
         default="NotStarted",
         description=(
             "Lifecycle state of AI analysis: Completed includes analysis, Failed "
             "includes a nonblank error, and NotStarted or Skipped includes neither."
         ),
     )
-    analysis_error: str | None = Field(
+    analysis_error: str | None = pydantic.Field(
         default=None,
         description="Nonblank failure detail for Failed analysis, otherwise null.",
     )
-    analysis: ListingAnalysis | None = Field(
+    analysis: ListingAnalysis | None = pydantic.Field(
         default=None,
         description="Structured listing analysis for Completed status, otherwise null.",
     )
 
-    @field_validator("symbol", mode="before")
+    @pydantic.field_validator("symbol", mode="before")
     @classmethod
     def normalize_symbol(cls, value: object) -> object:
         return models_portfolio.normalize_canonical_ticker(value)
 
-    @field_validator("analysis_error", mode="before")
+    @pydantic.field_validator("analysis_error", mode="before")
     @classmethod
     def normalize_analysis_error(cls, value: object) -> object:
         if not isinstance(value, str):
@@ -359,8 +381,8 @@ class ListingEvent(event.EventBase):
         normalized = value.strip()
         return normalized or None
 
-    @model_validator(mode="after")
-    def validate_listing_event(self) -> Self:
+    @pydantic.model_validator(mode="after")
+    def validate_listing_event(self) -> typing.Self:
         if (
             self.issue_price is not None
             and self.issue_price_upper is not None

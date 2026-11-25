@@ -433,6 +433,7 @@ async def scrape_data_table_playwright(
     after_load_func_async=None,
     table_attr_filter: dict[str, str] | None = None,
     filter_skip: int = 0,
+    cache_ttl: int = _HTML_CACHE_TTL,
 ) -> pd.DataFrame:
     """Render a webpage and return one matching HTML table.
 
@@ -444,6 +445,7 @@ async def scrape_data_table_playwright(
             before extraction.
         table_attr_filter: Optional table attributes that must match.
         filter_skip: Number of matching tables to skip.
+        cache_ttl: Maximum age in seconds for cached HTML; defaults to 24 hours.
 
     Returns:
         The selected table as a DataFrame. Returns an empty DataFrame when the
@@ -464,6 +466,7 @@ async def scrape_data_table_playwright(
     html_content = await fetch_webpage_content_playwright(
         url,
         after_load_func_async=after_load_func_async,
+        cache_ttl=cache_ttl,
     )
     if not html_content:
         logger.error("Failed to fetch content from '%s'.", url)

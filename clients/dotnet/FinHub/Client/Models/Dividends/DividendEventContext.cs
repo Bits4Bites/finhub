@@ -11,13 +11,13 @@ public sealed record DividendEventContext
     public required string Exchange { get; init; }
 
     [JsonPropertyName("company_name")]
-    public required string? CompanyName { get; init; }
+    public string? CompanyName { get; init; }
 
     [JsonPropertyName("currency")]
     public required string Currency { get; init; }
 
     [JsonPropertyName("country")]
-    public required string? Country { get; init; }
+    public string? Country { get; init; }
 
     [JsonPropertyName("asset_type")]
     public required string AssetType { get; init; }

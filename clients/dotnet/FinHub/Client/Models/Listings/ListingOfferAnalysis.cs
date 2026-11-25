@@ -17,5 +17,5 @@ public sealed record ListingOfferAnalysis : ListingAnalysisSection
     public required IReadOnlyList<string> UseOfFunds { get; init; }
 
     [JsonPropertyName("dilution_and_escrow")]
-    public required string? DilutionAndEscrow { get; init; }
+    public string? DilutionAndEscrow { get; init; }
 }

@@ -15,7 +15,7 @@ from pydantic import Field, ValidationError, model_validator
 
 from .. import config
 from ..models import ai as models_ai
-from ..models import events_dividends as models_events_dividends
+from ..models import events_div as models_events_dividends
 from ..models import types
 from ..utils import ai_prompt as ai_prompt_utils
 from ..utils import ai_reference as ai_reference_utils

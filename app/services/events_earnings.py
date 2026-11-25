@@ -2,7 +2,7 @@ import datetime
 import typing
 import zoneinfo
 
-from ..models import event as models_event
+from ..models import events_earnings as models_event
 from ..services import crawler_earnings as services_crawler_earnings
 from ..utils import asset as asset_utils
 from ..utils import conv
@@ -42,6 +42,12 @@ async def _get_upcoming_earnings_events(
             "Exchange": "exchange",
             "Company": "corp",
             "Announcement Date": "date",
+            "Market Cap": "market_cap",
+            "EPS": "eps",
+            "EPS Forecast": "eps_forecast",
+            "Revenue": "revenue",
+            "Revenue Forecast": "revenue_forecast",
+            "Currency": "currency",
         },
     )
 
@@ -78,6 +84,12 @@ async def get_asx_upcoming_earnings_events(index: str = "") -> list[models_event
         - ``link`` (str): Company-specific earnings-details URL.
         - ``status`` (str): Announcement status, defaulting to ``"estimated"``.
         - ``report_period`` (str): Reporting period, defaulting to ``"N/A"``.
+        - ``market_cap`` (int): Market capitalization in whole AUD.
+        - ``eps`` (float): Reported earnings per share in AUD; may be negative.
+        - ``eps_forecast`` (float): Forecast earnings per share in AUD; may be negative.
+        - ``revenue`` (int): Reported revenue in whole AUD.
+        - ``revenue_forecast`` (int): Forecast revenue in whole AUD.
+        - ``currency`` (str): Always ``"AUD"``.
 
         Returns an empty list for an unsupported index, no available
         announcements, or no matching constituents.
@@ -94,7 +106,8 @@ async def get_asx_upcoming_earnings_events(index: str = "") -> list[models_event
         The date window uses Australia/Sydney calendar dates and includes both
         endpoints. An index filters constituents without changing this window.
         Announcement order is preserved after filtering. Unavailable dates are
-        omitted, so results may be incomplete.
+        omitted, so results may be incomplete. Missing financial amounts use
+        zero, which does not distinguish an unavailable value from an actual zero.
     """
     asx_indices = ["ASX20", "ASX50", "ASX100", "ASX200", "ASX300"]
     normalized_index = index.upper() if index else ""
@@ -139,6 +152,12 @@ async def get_us_upcoming_earnings_events(index: str = "") -> list[models_event.
         - ``link`` (str): Company-specific earnings-details URL.
         - ``status`` (str): Announcement status, defaulting to ``"estimated"``.
         - ``report_period`` (str): Reporting period, defaulting to ``"N/A"``.
+        - ``market_cap`` (int): Market capitalization in whole USD.
+        - ``eps`` (float): Reported earnings per share in USD; may be negative.
+        - ``eps_forecast`` (float): Forecast earnings per share in USD; may be negative.
+        - ``revenue`` (int): Reported revenue in whole USD.
+        - ``revenue_forecast`` (int): Forecast revenue in whole USD.
+        - ``currency`` (str): Always ``"USD"``.
 
         Returns an empty list for an unsupported index, no usable
         announcements, or no matching constituents.
@@ -156,7 +175,8 @@ async def get_us_upcoming_earnings_events(index: str = "") -> list[models_event.
         endpoints. An index filters constituents without changing this window.
         Other or unidentified venues are excluded. Announcement order is
         preserved after filtering. Unavailable dates are omitted, so results
-        may be incomplete.
+        may be incomplete. Missing financial amounts use zero, which does not
+        distinguish an unavailable value from an actual zero.
     """
     us_indices = ["NASDAQ100", "SP500", "SP400", "SP600"]
     normalized_index = index.upper() if index else ""

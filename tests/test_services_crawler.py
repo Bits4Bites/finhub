@@ -785,6 +785,24 @@ class TestFallbackFetching:
 
 class TestTableScraping:
     @pytest.mark.parametrize(
+        ("cache_ttl", "expected"),
+        [(None, "Before"), (3600, "After")],
+        ids=["shared-default", "hourly-override"],
+    )
+    def test_browser_table_cache_lifetime_can_be_overridden(self, cache_boundary, cache_ttl, expected):
+        url = "https://example.test/table"
+        browser = FakeBrowser(html_by_url={url: _table_html(["State"], [["Before"]])})
+        options = {} if cache_ttl is None else {"cache_ttl": cache_ttl}
+        with _playwright_boundary(browser):
+            first = asyncio.run(crawler_core.scrape_data_table_playwright(url, **options))
+            browser.html_by_url[url] = _table_html(["State"], [["After"]])
+            cache_boundary.advance(3600)
+            refreshed = asyncio.run(crawler_core.scrape_data_table_playwright(url, **options))
+
+        assert first.loc[0, "State"] == "Before"
+        assert refreshed.loc[0, "State"] == expected
+
+    @pytest.mark.parametrize(
         ("public_function", "fetch_target"),
         [
             (
@@ -861,7 +879,7 @@ class TestTableScraping:
         async def prepare(page):
             page.prepared = True
 
-        async def fetch_rendered(_url, *, after_load_func_async=None):
+        async def fetch_rendered(_url, *, after_load_func_async=None, **_kwargs):
             page = SimpleNamespace(prepared=False)
             await after_load_func_async(page)
             visible_value = "READY" if page.prepared else "NOT_READY"
@@ -922,6 +940,75 @@ class TestTableScraping:
 
 
 class TestDividendCrawlers:
+    @pytest.mark.parametrize(
+        ("public_function", "exchange", "suffix"),
+        [
+            (crawler_div.scrape_dividends_asx, "ASX", "/australia"),
+            (crawler_div.scrape_dividends_us, "NYSE", ""),
+        ],
+        ids=["asx", "us"],
+    )
+    def test_announced_dividend_values_refresh_after_one_hour(self, cache_boundary, public_function, exchange, suffix):
+        url = f"https://www.tipranks.com/calendars/dividends/2026-11-20{suffix}"
+        headers = ["Name", "Company", "Dividend Amount", "Dividend Yield", "Payment Date"]
+        browser = FakeBrowser(html_by_url={url: _table_html(headers, [["DIV", "Dividend Co", "N/A", "N/A", "N/A"]])})
+        with (
+            patch("app.services.crawler_div.datetime.datetime", _fixed_datetime(datetime.datetime(2026, 11, 20, 9))),
+            _playwright_boundary(browser),
+            patch(
+                "app.services.crawler_div.market.market_indices.revert_lookup_company",
+                return_value=FakeCompany(exchange, "DIV"),
+            ),
+        ):
+            before = asyncio.run(public_function(datetime.date(2026, 11, 20)))
+            browser.html_by_url[url] = _table_html(headers, [["DIV", "Dividend Co", "$1.25", "4%", "In 5 Days"]])
+            cache_boundary.advance(1800)
+            cached = asyncio.run(public_function(datetime.date(2026, 11, 20)))
+            cache_boundary.advance(1800)
+            published = asyncio.run(public_function(datetime.date(2026, 11, 20)))
+
+        for result in (before, cached):
+            assert result.loc[0, "Div Amount"] == 0.0
+            assert pd.isna(result.loc[0, "Payment Date"])
+        assert published.loc[0, "Div Amount"] == 1.25
+        assert published.loc[0, "Div Yield"] == 0.04
+        assert published.loc[0, "Payment Date"] == "2026-11-25"
+
+    def test_vn_dividend_values_refresh_after_one_hour(self, cache_boundary):
+        url = "https://finance.vietstock.vn/lich-su-kien.htm?from=2026-11-20&to=2026-11-20&page=1&tab=1&group=13"
+        headers = ["Mã CK", "Sàn", "Ngày GDKHQ▼", "Ngày thực hiện", "Tỷ lệ"]
+        browser = FakeBrowser(
+            html_by_url={
+                url: _table_html(
+                    headers,
+                    [["VNM", "HOSE", "20/11/2026", "N/A", "N/A"]],
+                    table_id="event-content",
+                )
+            }
+        )
+        with (
+            patch("app.services.crawler_div.datetime.datetime", _fixed_datetime(datetime.datetime(2026, 11, 20, 9))),
+            patch("app.services.crawler_div.random.uniform", return_value=0.0),
+            _playwright_boundary(browser),
+        ):
+            before = asyncio.run(crawler_div.scrape_dividends_vn(datetime.date(2026, 11, 20)))
+            browser.html_by_url[url] = _table_html(
+                headers,
+                [["VNM", "HOSE", "20/11/2026", "25/11/2026", "15%"]],
+                table_id="event-content",
+            )
+            cache_boundary.advance(1800)
+            cached = asyncio.run(crawler_div.scrape_dividends_vn(datetime.date(2026, 11, 20)))
+            cache_boundary.advance(1800)
+            published = asyncio.run(crawler_div.scrape_dividends_vn(datetime.date(2026, 11, 20)))
+
+        for result in (before, cached):
+            assert result.loc[0, "Div Amount"] == 0.0
+            assert pd.isna(result.loc[0, "Payment Date"])
+        assert published.loc[0, "Div Amount"] == 1500.0
+        assert published.loc[0, "Div Yield"] == 0.15
+        assert published.loc[0, "Payment Date"] == "2026-11-25"
+
     def test_asx_includes_today_and_the_inclusive_end_date_with_zero_numeric_defaults(self):
         today = datetime.date(2026, 11, 16)
         headers = ["Name", "Company", "Dividend Amount", "Dividend Yield", "Market Cap", "Payment Date"]
@@ -1398,6 +1485,60 @@ class TestDividendCrawlers:
 
 
 class TestEarningsCrawlers:
+    @pytest.mark.parametrize(
+        ("public_function", "exchange", "suffix"),
+        [
+            (crawler_earnings.scrape_earnings_asx, "ASX", "/australia"),
+            (crawler_earnings.scrape_earnings_us, "NYSE", ""),
+        ],
+        ids=["asx", "us"],
+    )
+    def test_reported_earnings_refresh_after_one_hour(self, cache_boundary, public_function, exchange, suffix):
+        url = f"https://www.tipranks.com/calendars/earnings/2026-11-20{suffix}"
+        headers = ["Name", "Company", "Market Cap", "EPS / Forecast", "Revenue / Forecast"]
+        browser = FakeBrowser(
+            html_by_url={
+                url: _table_html(
+                    headers,
+                    [["BJ", "BJ Wholesale", "$13.99B", "- / $1.26", "- / $5.97B"]],
+                )
+            }
+        )
+        with (
+            patch(
+                "app.services.crawler_earnings.datetime.datetime",
+                _fixed_datetime(datetime.datetime(2026, 11, 20, 9)),
+            ),
+            _playwright_boundary(browser),
+            patch(
+                "app.services.crawler_earnings.market.market_indices.revert_lookup_company",
+                return_value=FakeCompany(exchange, "BJ"),
+            ),
+        ):
+            before_reporting = asyncio.run(public_function(datetime.date(2026, 11, 20)))
+            browser.html_by_url[url] = _table_html(
+                headers,
+                [
+                    [
+                        "BJ",
+                        "BJ Wholesale",
+                        "$13.99B",
+                        "<span>$1.730</span> / <span>$1.26</span>",
+                        "<span>$6.283B</span> / <span>$5.97B</span>",
+                    ]
+                ],
+            )
+            cache_boundary.advance(1800)
+            cached = asyncio.run(public_function(datetime.date(2026, 11, 20)))
+            cache_boundary.advance(1800)
+            published = asyncio.run(public_function(datetime.date(2026, 11, 20)))
+
+        for result in (before_reporting, cached):
+            assert tuple(result.loc[0, ["EPS", "Revenue"]]) == (0.0, 0)
+        assert tuple(published.loc[0, ["EPS", "Revenue"]]) == (1.73, 6_283_000_000)
+        for result in (before_reporting, cached, published):
+            assert tuple(result.loc[0, ["EPS Forecast", "Revenue Forecast"]]) == (1.26, 5_970_000_000)
+
     @pytest.mark.parametrize(
         ("public_function", "exchange", "currency", "prefix"),
         [

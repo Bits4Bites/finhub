@@ -131,7 +131,8 @@ async def _scrape_earnings_from_tipranks(
     ``tz_info`` overrides ``tz_name``. Skip unavailable dates, reject malformed
     data, and validate tickers per page before merging and canonicalizing once.
     Missing actual/forecast values independently use zero; market wrappers
-    supply exchange and currency.
+    supply exchange and currency. Source pages are cached for one hour so
+    newly reported actuals do not remain unavailable for the rest of the day.
     """
     tz_info = tz_info if tz_info else zoneinfo.ZoneInfo(tz_name)
     urls = []
@@ -144,6 +145,7 @@ async def _scrape_earnings_from_tipranks(
     page_content_list = await crawler_core.fetch_multi_webpages_content_playwright(
         urls,
         delay_between_requests=1.5,
+        cache_ttl=60 * 60,
     )
     frames = []
     rename_map = {
@@ -231,6 +233,7 @@ async def scrape_earnings_asx(end_date: datetime.date) -> pd.DataFrame:
         Missing numeric fields and individual actual/forecast components default
         independently to zero: ``0.0`` for EPS fields and ``0`` for other numeric
         fields. A zero does not distinguish an unavailable value from an actual zero.
+        Dated source pages may be reused for up to one hour.
         Market capitalization and revenues use whole currency units; fractional
         units are discarded toward zero.
 
@@ -285,6 +288,7 @@ async def scrape_earnings_us(end_date: datetime.date) -> pd.DataFrame:
         Missing numeric fields and individual actual/forecast components default
         independently to zero: ``0.0`` for EPS fields and ``0`` for other numeric
         fields. A zero does not distinguish an unavailable value from an actual zero.
+        Dated source pages may be reused for up to one hour.
         Market capitalization and revenues use whole currency units; fractional
         units are discarded toward zero.
 

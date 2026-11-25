@@ -16,8 +16,12 @@ Building the test project builds its reference to `FinHub.Client.Contracts.cspro
 twice. The tests use the repository-root `openapi.json` as their authority. Of the 40 OpenAPI operations, they map
 all 37 client-facing operations to request and response contracts. The server-only `GET /`, `GET /health`, and
 `GET /info` operations remain intentionally outside the client contract surface. The tests compare every client
-component's JSON names, requiredness, nullability, types, integer widths, string formats, and enum wire values, and
-exercise non-obvious converters and raw market-index payloads.
+component's JSON names, nullability, types, integer widths, string formats, and enum wire values. They also verify
+request-body requiredness, ensure nullable members allow omission, and exercise non-obvious converters and raw
+market-index payloads.
+
+Nullable response members do not use C# `required` because the API recursively excludes `null` values, even when
+OpenAPI marks those nullable fields as required. Existing non-nullable required members remain required.
 
 Envelope responses derive from `MyPo.Shared.Api.ApiResp<TData>`. Synchronous `Extra` values use the shared
 `object` contract; `System.Text.Json` materializes JSON objects as `JsonElement`, and callers can use `ExtraAs<T>()`
@@ -141,14 +145,18 @@ responses use HTTP `202`, completed polls can contain the event collection in
 `Data`, and failed polls use HTTP `500`. Async responses require the shared `AsyncTaskInfo` metadata and strict
 `TaskState`; cached tasks expire after one hour.
 
+Dividend event models are in `FinHub.Client.Models.Dividends`, earnings event models are in
+`FinHub.Client.Models.Earnings`, and both inherit `FinHub.Client.Models.Events.EventBase`.
+Response schemas remain in `FinHub.Client.Schemas.Events`.
+
 `EventBase.TimestampStr` is required and non-null for every event. It maps the unformatted `timestamp_str` wire value
 and is the human-readable display label paired with the canonical Unix-seconds `Timestamp`. Its `[JsonIgnore]` computed
 `DateUTC` is a UTC `DateTimeOffset` parsed from `TimestampStr` when valid and otherwise derived from `Timestamp`.
 Dividend `PaymentDate` and earnings `ReportPeriod` remain strings because OpenAPI does not assign date formats.
-`UpcomingDividendEvent.PaymentDate` is required but nullable. Unix timestamps, traded-value metrics, and volume
+`UpcomingDividendEvent.PaymentDate` is nullable and may be absent. Unix timestamps, traded-value metrics, and volume
 metrics use `long`; sample counts, recovery-day ranges, and `Rsi14` use `int`.
 
-An upcoming dividend can contain nullable `DividendEventMetrics` in its `Analysis` property. This Events-domain type
+An upcoming dividend can contain nullable `DividendEventMetrics` in its `Analysis` property. This dividend-domain type
 contains only the current event identity, historical recovery, and technical metrics. It is intentionally distinct
 from `FinHub.Client.Models.Dividends.DividendEventAnalysis` and excludes the removed AI error, search, strategy,
 reasoning, sentiment, adjusted-forecast, expected-profit/loss, confidence, and risk fields.
@@ -181,7 +189,7 @@ contracts. Completed polls can include the standard listing collection in `Data`
 
 Nullable response properties may be absent because the API excludes `null` values. `ListingEvent` inherits the shared
 required, non-null `EventBase.TimestampStr` (`timestamp_str`) contract, while `ListingEvent.IssuePrice` and
-`ListingEvent.CapitalToRaise` are required but nullable. The inherited `ListingEvent.DateUTC` is the ignored computed
+`ListingEvent.CapitalToRaise` are nullable and may be absent. The inherited `ListingEvent.DateUTC` is the ignored computed
 UTC value described above; `ListingEvent.PublicOfferCloseDate` remains a string to match the current OpenAPI contract,
 while formatted analysis dates use `DateOnly` or `DateTimeOffset`.
 
@@ -285,8 +293,8 @@ positions, an optional budget-aware action plan, data-quality metadata, canonica
 `PortfolioConstruction` result discriminator. Synchronous calls use `BuildPortfolioResponse`; async start and
 query-poll calls use `BuildPortfolioAsyncResponse`.
 
-Nullable budget details and nullable enriched holding values remain required members where OpenAPI requires their
-presence; a JSON `null` is distinct from an omitted property.
+Nullable budget details and nullable enriched holding values allow both explicit JSON `null` and omitted properties,
+matching the API's null-excluding responses.
 
 The dispatcher endpoints:
 
@@ -343,8 +351,9 @@ position. Risk levels are limited to `Critical`, `High`, and `Medium`;
 ## Contract namespaces
 
 - `FinHub.Client.Models.AI`: reusable AI contracts for vendor discovery, data quality, evidence, and reference sources.
-- `FinHub.Client.Models.Dividends`: reusable dividend-event analysis domain contracts.
-- `FinHub.Client.Models.Events`: reusable event contracts.
+- `FinHub.Client.Models.Dividends`: dividend events, historical event metrics, and dividend-analysis contracts.
+- `FinHub.Client.Models.Earnings`: earnings-event contracts.
+- `FinHub.Client.Models.Events`: shared market-event base contracts.
 - `FinHub.Client.Models.Listings`: listing-domain contracts shared by listing APIs.
 - `FinHub.Client.Models.Markets`: reusable market-index constituent contracts.
 - `FinHub.Client.Models.Portfolios`: reusable holdings, construction, analysis-union, snapshot, risk, and spotlight contracts.

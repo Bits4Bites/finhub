@@ -17,10 +17,10 @@ public sealed record TickerRecommendation
     public required string Summary { get; init; }
 
     [JsonPropertyName("buy_range")]
-    public required TickerPriceRange? BuyRange { get; init; }
+    public TickerPriceRange? BuyRange { get; init; }
 
     [JsonPropertyName("sell_range")]
-    public required TickerPriceRange? SellRange { get; init; }
+    public TickerPriceRange? SellRange { get; init; }
 
     [JsonPropertyName("reasoning")]
     public required IReadOnlyList<string> Reasoning { get; init; }

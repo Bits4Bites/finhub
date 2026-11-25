@@ -218,8 +218,9 @@ async def ai_get_asx_new_listings() -> list[models_events_listings.ListingEvent]
         events rather than aborting the list. Upcoming price outlooks are explicitly
         subjective and use the issue price only when one is available. Structurally
         valid sources without matching provider citations are retained with
-        ``is_verified=False`` and explicit analysis warnings. Extraction is cached
-        for 24 hours. Listing research, assessment, and an all-completed result list
+        ``is_verified=False`` and explicit analysis warnings. The source page may
+        be cached for up to one hour. Extraction is reused for up to 24 hours while
+        source content is unchanged. Listing research, assessment, and an all-completed result list
         expire after one hour for listings within one day, six hours for listings
         two through seven days away, and 24 hours for later listings; a result list
         uses the shortest included lifetime.
@@ -347,7 +348,10 @@ def _validate_cached_events(cached_events: object) -> list[models_events_listing
 
 
 async def _get_asx_new_listings() -> list[models_events_listings.ListingEvent]:
-    html_content = await services_crawler_core.fetch_webpage_content(_ASX_LISTINGS_URL)
+    html_content = await services_crawler_core.fetch_webpage_content(
+        _ASX_LISTINGS_URL,
+        cache_ttl=60 * 60,
+    )
     if not html_content:
         raise RuntimeError("[ASX Listings] Failed to fetch the ASX upcoming-listings page.")
 

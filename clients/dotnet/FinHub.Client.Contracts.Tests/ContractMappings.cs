@@ -1,7 +1,5 @@
 using System.Reflection;
 using FinHub.Client.Models.AI;
-using FinHub.Client.Models.Dividends;
-using FinHub.Client.Models.Events;
 using FinHub.Client.Schemas;
 using FinHub.Client.Schemas.AIVendors;
 using FinHub.Client.Schemas.DividendAnalysis;
@@ -84,10 +82,6 @@ internal static class ContractMappings
             ["UpcomingEarningsAsyncResponse"] =
                 typeof(GetUpcomingEarningsAsyncResponse),
             ["UpcomingEarningsResponse"] = typeof(GetUpcomingEarningsResponse),
-            ["app__models__event__DividendEventAnalysis"] =
-                typeof(DividendEventMetrics),
-            ["app__models__events_dividends__DividendEventAnalysis"] =
-                typeof(DividendEventAnalysis),
         };
 
     public static IReadOnlyList<EndpointContract> Endpoints { get; } =

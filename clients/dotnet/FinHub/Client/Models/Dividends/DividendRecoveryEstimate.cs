@@ -11,11 +11,11 @@ public sealed record DividendRecoveryEstimate
     public required double SuccessProbability { get; init; }
 
     [JsonPropertyName("days")]
-    public required DividendDayRange? Days { get; init; }
+    public DividendDayRange? Days { get; init; }
 
     [JsonPropertyName("estimated_date_min")]
-    public required DateOnly? EstimatedDateMin { get; init; }
+    public DateOnly? EstimatedDateMin { get; init; }
 
     [JsonPropertyName("estimated_date_max")]
-    public required DateOnly? EstimatedDateMax { get; init; }
+    public DateOnly? EstimatedDateMax { get; init; }
 }

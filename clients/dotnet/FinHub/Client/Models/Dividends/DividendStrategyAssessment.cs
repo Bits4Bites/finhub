@@ -11,25 +11,25 @@ public sealed record DividendStrategyAssessment
     public required DividendStrategyEligibility Eligibility { get; init; }
 
     [JsonPropertyName("ineligibility_reason")]
-    public required string? IneligibilityReason { get; init; }
+    public string? IneligibilityReason { get; init; }
 
     [JsonPropertyName("success_probability")]
     public double? SuccessProbability { get; init; }
 
     [JsonPropertyName("expected_entry_price")]
-    public required DividendNumericRange? ExpectedEntryPrice { get; init; }
+    public DividendNumericRange? ExpectedEntryPrice { get; init; }
 
     [JsonPropertyName("expected_exit_price")]
-    public required DividendNumericRange? ExpectedExitPrice { get; init; }
+    public DividendNumericRange? ExpectedExitPrice { get; init; }
 
     [JsonPropertyName("expected_profit_loss_per_share")]
-    public required DividendNumericRange? ExpectedProfitLossPerShare { get; init; }
+    public DividendNumericRange? ExpectedProfitLossPerShare { get; init; }
 
     [JsonPropertyName("break_even_price")]
-    public required DividendNumericRange? BreakEvenPrice { get; init; }
+    public DividendNumericRange? BreakEvenPrice { get; init; }
 
     [JsonPropertyName("recovery_days")]
-    public required DividendDayRange? RecoveryDays { get; init; }
+    public DividendDayRange? RecoveryDays { get; init; }
 
     [JsonPropertyName("confidence")]
     public required int Confidence { get; init; }

@@ -1,3 +1,12 @@
 # This file has been cleaned up post-releasing version 0.17.1.
 # Generate its content quickly using the following command:
 #   git log origin..HEAD | grep "^\s" > .semrelease/this_release
+#!VERSION=0.18.0
+- refactor(models): reorganize market event models by domain
+- feat(clients/.NET): expose earnings financials in event contracts
+- patch(clients/.NET): accept omitted nullable response fields
+- refactor(clients/.NET): reorganize event models by domain
+- patch(crawler/cache): set page content cache expiration to 1 hour
+- patch(ai_helper): log provider refusal and failure diagnostics
+- patch(ai_tasks): disengage Sol by default, route light tasks to Luna and heavy tasks to Terra
+- patch(msai_spotlight_portfolio): improve validation diagnostics and bound reference-repair warnings

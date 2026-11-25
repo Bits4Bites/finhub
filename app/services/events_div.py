@@ -6,7 +6,7 @@ import zoneinfo
 import starlette.concurrency
 import yfinance as yf
 
-from ..models import event as models_event
+from ..models import events_div as models_event
 from ..services import crawler_div as services_crawler_div
 from ..utils import asset as asset_utils
 from ..utils import conv, yfutils
@@ -223,7 +223,7 @@ async def analyse_dividend_event(
     symbol: str,
     ex_date: str,
     div_amount: float,
-) -> models_event.DividendEventAnalysis | None:
+) -> models_event.DividendEventMetrics | None:
     """Estimate price-drop and recovery behavior for a dividend event.
 
     Args:
@@ -270,7 +270,7 @@ def _analyse_dividend_event_sync(
     symbol: str,
     ex_date: str,
     div_amount: float,
-) -> models_event.DividendEventAnalysis | None:
+) -> models_event.DividendEventMetrics | None:
     """Fetch synchronous market data and calculate dividend-event metrics."""
     yf_ticker = conv.to_yf_symbol_format(symbol)
     ticker = yf.Ticker(yf_ticker) if ticker is None else ticker
@@ -288,7 +288,7 @@ def _analyse_dividend_event_sync(
     if timestamp_str is None:
         raise ValueError("ex_date must use YYYY-MM-DD format")
 
-    result = models_event.DividendEventAnalysis(
+    result = models_event.DividendEventMetrics(
         symbol=info.get("symbol", ""),
         exchange=conv.normalize_exchange_code(info.get("fullExchangeName") or info.get("exchange") or ""),
         company_name=info.get("longName") or info.get("shortName") or "(n/a)",

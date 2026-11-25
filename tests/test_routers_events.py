@@ -5,7 +5,8 @@ from fastapi.testclient import TestClient
 
 from app import config
 from app.main import app
-from app.models import event as models_event
+from app.models import events_div as models_dividends
+from app.models import events_earnings as models_earnings
 from app.models import events_listings as models_events_listings
 from app.routers import events_div as router_events_div
 
@@ -29,8 +30,8 @@ def _dividend_event(
     *,
     timestamp_str: str = "2026-06-10 00:00:00+10:00",
     amount: float = 1.25,
-) -> models_event.UpcomingDividendEvent:
-    return models_event.UpcomingDividendEvent(
+) -> models_dividends.UpcomingDividendEvent:
+    return models_dividends.UpcomingDividendEvent(
         symbol=symbol,
         exchange=symbol.split(":", 1)[0],
         company_name="Example Dividend Co",
@@ -43,8 +44,8 @@ def _dividend_event(
     )
 
 
-def _earnings_event(symbol: str = "NASDAQ:ROUTEUS") -> models_event.UpcomingEarningsEvent:
-    return models_event.UpcomingEarningsEvent(
+def _earnings_event(symbol: str = "NASDAQ:ROUTEUS") -> models_earnings.UpcomingEarningsEvent:
+    return models_earnings.UpcomingEarningsEvent(
         symbol=symbol,
         exchange=symbol.split(":", 1)[0],
         company_name="Example Earnings Co",
@@ -233,7 +234,7 @@ def test_dividend_country_aliases_select_the_documented_market():
 
 def test_major_index_dividend_event_includes_available_analysis(monkeypatch):
     event = _dividend_event("NASDAQ:AAPL")
-    analysis = models_event.DividendEventAnalysis(
+    analysis = models_dividends.DividendEventMetrics(
         symbol="NASDAQ:AAPL",
         exchange="NASDAQ",
         company_name="Apple",
@@ -255,7 +256,7 @@ def test_major_index_dividend_event_includes_available_analysis(monkeypatch):
                 "timestamp_str": ex_date,
             }
         )
-        return models_event.DividendEventAnalysis.model_validate(analysis_data)
+        return models_dividends.DividendEventMetrics.model_validate(analysis_data)
 
     monkeypatch.setattr(
         router_events_div.asset_utils,
@@ -447,6 +448,58 @@ def test_sync_earnings_country_is_required():
     response = client.get("/events/upcoming_earnings")
 
     assert response.status_code == 422
+
+
+@pytest.mark.parametrize(
+    ("country", "exchange", "currency"),
+    [("AU", "ASX", "AUD"), ("US", "NASDAQ", "USD")],
+)
+def test_crawled_earnings_financial_fields_reach_sync_and_async_responses(
+    deferred_task_store, country, exchange, currency
+):
+    html = (
+        "<table><thead><tr><th>Name</th><th>Company Name</th><th>Market Cap</th>"
+        "<th>EPS / Forecast</th><th>Revenue / Forecast</th></tr></thead><tbody>"
+        "<tr><td>KNOWN</td><td>Known Company</td><td>$200B</td>"
+        "<td>-$2.65 / N/A</td><td>$27.067B / $1.001B</td></tr></tbody></table>"
+    )
+    company = mock.Mock()
+    company.extract_exchange_code.return_value = (exchange, "KNOWN")
+
+    async def fetch_pages(urls, **_kwargs):
+        return [html] + [None] * (len(urls) - 1)
+
+    with (
+        mock.patch(
+            "app.services.crawler_earnings.crawler_core.fetch_multi_webpages_content_playwright",
+            new=fetch_pages,
+        ),
+        mock.patch(
+            "app.services.crawler_earnings.market.market_indices.revert_lookup_company",
+            return_value=company,
+        ),
+    ):
+        synchronous = client.get("/events/upcoming_earnings", params={"country": country})
+        started = client.get("/events/start_upcoming_earnings_async", params={"country": country})
+        task_id = started.json()["extra"]["task_id"]
+        deferred_task_store.release()
+        completed = client.get("/events/poll_upcoming_earnings_async", params={"task_id": task_id})
+        reused = client.get("/events/start_upcoming_earnings_async", params={"country": country})
+
+    assert started.status_code == 202
+    assert synchronous.status_code == completed.status_code == reused.status_code == 200
+    assert synchronous.json()["data"] == completed.json()["data"] == reused.json()["data"]
+    event = synchronous.json()["data"][0]
+    assert event["symbol"] == f"{exchange}:KNOWN"
+    expected_financials = {
+        "market_cap": 200_000_000_000,
+        "eps": -2.65,
+        "eps_forecast": 0.0,
+        "revenue": 27_067_000_000,
+        "revenue_forecast": 1_001_000_000,
+        "currency": currency,
+    }
+    assert {field: event[field] for field in expected_financials} == expected_financials
 
 
 def test_listing_country_aliases_select_the_documented_market():

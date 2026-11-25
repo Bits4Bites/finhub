@@ -2,7 +2,7 @@ import datetime
 
 from pydantic import ConfigDict, Field
 
-from ..models import events_dividends as models_events_dividends
+from ..models import events_div as models_events_dividends
 from . import async_task
 from .base_req_resp import BaseRequest, BaseResponse
 

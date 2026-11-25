@@ -18,7 +18,7 @@ public sealed record PortfolioSpotlightAnalysis
     public required DataQuality OverallDataQuality { get; init; }
 
     [JsonPropertyName("snapshot")]
-    public required PortfolioSpotlightSnapshot? Snapshot { get; init; }
+    public PortfolioSpotlightSnapshot? Snapshot { get; init; }
 
     [JsonPropertyName("risks")]
     public required IReadOnlyList<PortfolioSpotlightRiskAction> Risks { get; init; }
