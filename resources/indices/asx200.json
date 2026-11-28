@@ -1,5 +1,5 @@
 {
-    "date": "2026-11-21",
+    "date": "2026-11-28",
     "data": [
         {
             "symbol": "ASX:360",
@@ -524,7 +524,7 @@
         {
             "symbol": "ASX:MI6",
             "company": "MINERALS 260 LIMITED",
-            "sector": ""
+            "sector": "Gold & Silver"
         },
         {
             "symbol": "ASX:MIN",
@@ -900,11 +900,6 @@
             "symbol": "ASX:TWE",
             "company": "TREASURY WINE ESTATES LIMITED",
             "sector": "Food, Beverages & Tobacco, Luxury"
-        },
-        {
-            "symbol": "ASX:VAU",
-            "company": "VAULT MINERALS LIMITED",
-            "sector": "Gold & Silver"
         },
         {
             "symbol": "ASX:VCX",
