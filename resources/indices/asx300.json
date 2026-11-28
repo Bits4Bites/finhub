@@ -1,5 +1,5 @@
 {
-    "date": "2026-11-21",
+    "date": "2026-11-28",
     "data": [
         {
             "symbol": "ASX:360",
@@ -824,7 +824,7 @@
         {
             "symbol": "ASX:MI6",
             "company": "MINERALS 260 LIMITED",
-            "sector": ""
+            "sector": "Gold & Silver"
         },
         {
             "symbol": "ASX:MIN",
@@ -1380,11 +1380,6 @@
             "symbol": "ASX:UNI",
             "company": "UNIVERSAL STORE HOLDINGS LIMITED",
             "sector": "Apparel & Footwear"
-        },
-        {
-            "symbol": "ASX:VAU",
-            "company": "VAULT MINERALS LIMITED",
-            "sector": "Gold & Silver"
         },
         {
             "symbol": "ASX:VCX",
